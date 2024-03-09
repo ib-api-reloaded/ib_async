@@ -6,13 +6,31 @@ from datetime import datetime, timezone
 from typing import Any, cast
 
 from .contract import (
-    ComboLeg, Contract, ContractDescription, ContractDetails,
-    DeltaNeutralContract)
+    ComboLeg,
+    Contract,
+    ContractDescription,
+    ContractDetails,
+    DeltaNeutralContract,
+)
 from .objects import (
-    BarData, CommissionReport, DepthMktDataDescription, Execution, FamilyCode,
-    HistogramData, HistoricalSession, HistoricalTick, HistoricalTickBidAsk,
-    HistoricalTickLast, NewsProvider, PriceIncrement, SmartComponent,
-    SoftDollarTier, TagValue, TickAttribBidAsk, TickAttribLast)
+    BarData,
+    CommissionReport,
+    DepthMktDataDescription,
+    Execution,
+    FamilyCode,
+    HistogramData,
+    HistoricalSession,
+    HistoricalTick,
+    HistoricalTickBidAsk,
+    HistoricalTickLast,
+    NewsProvider,
+    PriceIncrement,
+    SmartComponent,
+    SoftDollarTier,
+    TagValue,
+    TickAttribBidAsk,
+    TickAttribLast,
+)
 from .order import Order, OrderComboLeg, OrderCondition, OrderState
 from .util import UNSET_DOUBLE, ZoneInfo, parseIBDatetime
 from .wrapper import Wrapper
@@ -24,147 +42,102 @@ class Decoder:
     def __init__(self, wrapper: Wrapper, serverVersion: int):
         self.wrapper = wrapper
         self.serverVersion = serverVersion
-        self.logger = logging.getLogger('ib_insync.Decoder')
+        self.logger = logging.getLogger("ib_insync.Decoder")
         self.handlers = {
             1: self.priceSizeTick,
-            2: self.wrap(
-                'tickSize', [int, int, float]),
+            2: self.wrap("tickSize", [int, int, float]),
             3: self.wrap(
-                'orderStatus', [
-                    int, str, float, float, float, int, int,
-                    float, int, str, float], skip=1),
+                "orderStatus",
+                [int, str, float, float, float, int, int, float, int, str, float],
+                skip=1,
+            ),
             4: self.errorMsg,
             5: self.openOrder,
-            6: self.wrap(
-                'updateAccountValue', [str, str, str, str]),
+            6: self.wrap("updateAccountValue", [str, str, str, str]),
             7: self.updatePortfolio,
-            8: self.wrap(
-                'updateAccountTime', [str]),
-            9: self.wrap(
-                'nextValidId', [int]),
+            8: self.wrap("updateAccountTime", [str]),
+            9: self.wrap("nextValidId", [int]),
             10: self.contractDetails,
             11: self.execDetails,
-            12: self.wrap(
-                'updateMktDepth', [int, int, int, int, float, float]),
+            12: self.wrap("updateMktDepth", [int, int, int, int, float, float]),
             13: self.wrap(
-                'updateMktDepthL2',
-                [int, int, str, int, int, float, float, bool]),
-            14: self.wrap(
-                'updateNewsBulletin', [int, int, str, str]),
-            15: self.wrap(
-                'managedAccounts', [str]),
-            16: self.wrap(
-                'receiveFA', [int, str]),
+                "updateMktDepthL2", [int, int, str, int, int, float, float, bool]
+            ),
+            14: self.wrap("updateNewsBulletin", [int, int, str, str]),
+            15: self.wrap("managedAccounts", [str]),
+            16: self.wrap("receiveFA", [int, str]),
             17: self.historicalData,
             18: self.bondContractDetails,
-            19: self.wrap(
-                'scannerParameters', [str]),
+            19: self.wrap("scannerParameters", [str]),
             20: self.scannerData,
             21: self.tickOptionComputation,
-            45: self.wrap(
-                'tickGeneric', [int, int, float]),
-            46: self.wrap(
-                'tickString', [int, int, str]),
+            45: self.wrap("tickGeneric", [int, int, float]),
+            46: self.wrap("tickString", [int, int, str]),
             47: self.wrap(
-                'tickEFP',
-                [int, int, float, str, float, int, str, float, float]),
-            49: self.wrap(
-                'currentTime', [int]),
+                "tickEFP", [int, int, float, str, float, int, str, float, float]
+            ),
+            49: self.wrap("currentTime", [int]),
             50: self.wrap(
-                'realtimeBar',
-                [int, int, float, float, float, float, float, float, int]),
-            51: self.wrap(
-                'fundamentalData', [int, str]),
-            52: self.wrap(
-                'contractDetailsEnd', [int]),
-            53: self.wrap(
-                'openOrderEnd', []),
-            54: self.wrap(
-                'accountDownloadEnd', [str]),
-            55: self.wrap(
-                'execDetailsEnd', [int]),
+                "realtimeBar", [int, int, float, float, float, float, float, float, int]
+            ),
+            51: self.wrap("fundamentalData", [int, str]),
+            52: self.wrap("contractDetailsEnd", [int]),
+            53: self.wrap("openOrderEnd", []),
+            54: self.wrap("accountDownloadEnd", [str]),
+            55: self.wrap("execDetailsEnd", [int]),
             56: self.deltaNeutralValidation,
-            57: self.wrap(
-                'tickSnapshotEnd', [int]),
-            58: self.wrap(
-                'marketDataType', [int, int]),
+            57: self.wrap("tickSnapshotEnd", [int]),
+            58: self.wrap("marketDataType", [int, int]),
             59: self.commissionReport,
             61: self.position,
-            62: self.wrap(
-                'positionEnd', []),
-            63: self.wrap(
-                'accountSummary', [int, str, str, str, str]),
-            64: self.wrap(
-                'accountSummaryEnd', [int]),
-            65: self.wrap(
-                'verifyMessageAPI', [str]),
-            66: self.wrap(
-                'verifyCompleted', [bool, str]),
-            67: self.wrap(
-                'displayGroupList', [int, str]),
-            68: self.wrap(
-                'displayGroupUpdated', [int, str]),
-            69: self.wrap(
-                'verifyAndAuthMessageAPI', [str, str]),
-            70: self.wrap(
-                'verifyAndAuthCompleted', [bool, str]),
+            62: self.wrap("positionEnd", []),
+            63: self.wrap("accountSummary", [int, str, str, str, str]),
+            64: self.wrap("accountSummaryEnd", [int]),
+            65: self.wrap("verifyMessageAPI", [str]),
+            66: self.wrap("verifyCompleted", [bool, str]),
+            67: self.wrap("displayGroupList", [int, str]),
+            68: self.wrap("displayGroupUpdated", [int, str]),
+            69: self.wrap("verifyAndAuthMessageAPI", [str, str]),
+            70: self.wrap("verifyAndAuthCompleted", [bool, str]),
             71: self.positionMulti,
-            72: self.wrap(
-                'positionMultiEnd', [int]),
-            73: self.wrap(
-                'accountUpdateMulti', [int, str, str, str, str, str]),
-            74: self.wrap(
-                'accountUpdateMultiEnd', [int]),
+            72: self.wrap("positionMultiEnd", [int]),
+            73: self.wrap("accountUpdateMulti", [int, str, str, str, str, str]),
+            74: self.wrap("accountUpdateMultiEnd", [int]),
             75: self.securityDefinitionOptionParameter,
-            76: self.wrap(
-                'securityDefinitionOptionParameterEnd', [int], skip=1),
+            76: self.wrap("securityDefinitionOptionParameterEnd", [int], skip=1),
             77: self.softDollarTiers,
             78: self.familyCodes,
             79: self.symbolSamples,
             80: self.mktDepthExchanges,
-            81: self.wrap(
-                'tickReqParams', [int, float, str, int], skip=1),
+            81: self.wrap("tickReqParams", [int, float, str, int], skip=1),
             82: self.smartComponents,
-            83: self.wrap(
-                'newsArticle', [int, int, str], skip=1),
-            84: self.wrap(
-                'tickNews', [int, int, str, str, str, str], skip=1),
+            83: self.wrap("newsArticle", [int, int, str], skip=1),
+            84: self.wrap("tickNews", [int, int, str, str, str, str], skip=1),
             85: self.newsProviders,
-            86: self.wrap(
-                'historicalNews', [int, str, str, str, str], skip=1),
-            87: self.wrap(
-                'historicalNewsEnd', [int, bool], skip=1),
-            88: self.wrap(
-                'headTimestamp', [int, str], skip=1),
+            86: self.wrap("historicalNews", [int, str, str, str, str], skip=1),
+            87: self.wrap("historicalNewsEnd", [int, bool], skip=1),
+            88: self.wrap("headTimestamp", [int, str], skip=1),
             89: self.histogramData,
             90: self.historicalDataUpdate,
-            91: self.wrap(
-                'rerouteMktDataReq', [int, int, str], skip=1),
-            92: self.wrap(
-                'rerouteMktDepthReq', [int, int, str], skip=1),
+            91: self.wrap("rerouteMktDataReq", [int, int, str], skip=1),
+            92: self.wrap("rerouteMktDepthReq", [int, int, str], skip=1),
             93: self.marketRule,
-            94: self.wrap(
-                'pnl', [int, float, float, float], skip=1),
+            94: self.wrap("pnl", [int, float, float, float], skip=1),
             95: self.wrap(
-                'pnlSingle', [int, float, float, float, float, float], skip=1),
+                "pnlSingle", [int, float, float, float, float, float], skip=1
+            ),
             96: self.historicalTicks,
             97: self.historicalTicksBidAsk,
             98: self.historicalTicksLast,
             99: self.tickByTick,
-            100: self.wrap(
-                'orderBound', [int, int, int], skip=1),
+            100: self.wrap("orderBound", [int, int, int], skip=1),
             101: self.completedOrder,
-            102: self.wrap(
-                'completedOrdersEnd', [], skip=1),
-            103: self.wrap(
-                'replaceFAEnd', [int, str], skip=1),
-            104: self.wrap(
-                'wshMetaData', [int, str], skip=1),
-            105: self.wrap(
-                'wshEventData', [int, str], skip=1),
+            102: self.wrap("completedOrdersEnd", [], skip=1),
+            103: self.wrap("replaceFAEnd", [int, str], skip=1),
+            104: self.wrap("wshMetaData", [int, str], skip=1),
+            105: self.wrap("wshEventData", [int, str], skip=1),
             106: self.historicalSchedule,
-            107: self.wrap(
-                'userInfo', [int, str], skip=1)
+            107: self.wrap("userInfo", [int, str], skip=1),
         }
 
     def wrap(self, methodName, types, skip=2):
@@ -179,14 +152,18 @@ class Decoder:
             if method:
                 try:
                     args = [
-                        field if typ is str else
-                        int(field or 0) if typ is int else
-                        float(field or 0) if typ is float else
-                        bool(int(field or 0))
-                        for (typ, field) in zip(types, fields[skip:])]
+                        field
+                        if typ is str
+                        else int(field or 0)
+                        if typ is int
+                        else float(field or 0)
+                        if typ is float
+                        else bool(int(field or 0))
+                        for (typ, field) in zip(types, fields[skip:])
+                    ]
                     method(*args)
                 except Exception:
-                    self.logger.exception(f'Error for {methodName}:')
+                    self.logger.exception(f"Error for {methodName}:")
 
         return handler
 
@@ -197,7 +174,7 @@ class Decoder:
             handler = self.handlers[msgId]
             handler(fields)
         except Exception:
-            self.logger.exception(f'Error handling fields: {fields}')
+            self.logger.exception(f"Error handling fields: {fields}")
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""
@@ -218,20 +195,23 @@ class Decoder:
 
         if price:
             self.wrapper.priceSizeTick(
-                int(reqId), int(tickType), float(price), float(size or 0))
+                int(reqId), int(tickType), float(price), float(size or 0)
+            )
 
     def errorMsg(self, fields):
         _, _, reqId, errorCode, errorString, *fields = fields
-        advancedOrderRejectJson = ''
+        advancedOrderRejectJson = ""
         if self.serverVersion >= 166:
             advancedOrderRejectJson, *fields = fields
         self.wrapper.error(
-            int(reqId), int(errorCode), errorString, advancedOrderRejectJson)
+            int(reqId), int(errorCode), errorString, advancedOrderRejectJson
+        )
 
     def updatePortfolio(self, fields):
         c = Contract()
         (
-            _, _,
+            _,
+            _,
             c.conId,
             c.symbol,
             c.secType,
@@ -249,13 +229,20 @@ class Decoder:
             averageCost,
             unrealizedPNL,
             realizedPNL,
-            accountName) = fields
+            accountName,
+        ) = fields
 
         self.parse(c)
         self.wrapper.updatePortfolio(
-            c, float(position), float(marketPrice),
-            float(marketValue), float(averageCost), float(unrealizedPNL),
-            float(realizedPNL), accountName)
+            c,
+            float(position),
+            float(marketPrice),
+            float(marketValue),
+            float(averageCost),
+            float(unrealizedPNL),
+            float(realizedPNL),
+            accountName,
+        )
 
     def contractDetails(self, fields):
         cd = ContractDetails()
@@ -277,7 +264,8 @@ class Decoder:
             c.tradingClass,
             c.conId,
             cd.minTick,
-            *fields) = fields
+            *fields,
+        ) = fields
         if self.serverVersion < 164:
             fields.pop(0)  # obsolete mdSizeMultiplier
         (
@@ -298,7 +286,8 @@ class Decoder:
             cd.evRule,
             cd.evMultiplier,
             numSecIds,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         numSecIds = int(numSecIds)
         if numSecIds > 0:
@@ -313,7 +302,8 @@ class Decoder:
             cd.marketRuleIds,
             cd.realExpirationDate,
             cd.stockType,
-            *fields) = fields
+            *fields,
+        ) = fields
         if self.serverVersion == 163:
             cd.suggestedSizeIncrement, *fields = fields
         if self.serverVersion >= 164:
@@ -322,9 +312,10 @@ class Decoder:
                 cd.sizeIncrement,
                 cd.suggestedSizeIncrement,
                 # cd.minCashQtySize,
-                *fields) = fields
+                *fields,
+            ) = fields
 
-        times = lastTimes.split('-' if '-' in lastTimes else None)
+        times = lastTimes.split("-" if "-" in lastTimes else None)
         if len(times) > 0:
             c.lastTradeDateOrContractMonth = times[0]
         if len(times) > 1:
@@ -332,7 +323,7 @@ class Decoder:
         if len(times) > 2:
             cd.timeZoneId = times[2]
 
-        cd.longName = cd.longName.encode().decode('unicode-escape')
+        cd.longName = cd.longName.encode().decode("unicode-escape")
         self.parse(cd)
         self.parse(c)
         self.wrapper.contractDetails(int(reqId), cd)
@@ -364,7 +355,8 @@ class Decoder:
             c.tradingClass,
             c.conId,
             cd.minTick,
-            *fields) = fields
+            *fields,
+        ) = fields
         if self.serverVersion < 164:
             fields.pop(0)  # obsolete mdSizeMultiplier
         (
@@ -378,7 +370,8 @@ class Decoder:
             cd.evRule,
             cd.evMultiplier,
             numSecIds,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         numSecIds = int(numSecIds)
         if numSecIds > 0:
@@ -394,9 +387,10 @@ class Decoder:
                 cd.sizeIncrement,
                 cd.suggestedSizeIncrement,
                 # cd.minCashQtySize,
-                *fields) = fields
+                *fields,
+            ) = fields
 
-        times = lastTimes.split('-' if '-' in lastTimes else None)
+        times = lastTimes.split("-" if "-" in lastTimes else None)
         if len(times) > 0:
             cd.maturity = times[0]
         if len(times) > 1:
@@ -443,7 +437,8 @@ class Decoder:
             ex.evMultiplier,
             ex.modelCode,
             ex.lastLiquidity,
-            *fields) = fields
+            *fields,
+        ) = fields
         if self.serverVersion >= 178:
             ex.pendingPriceRevision, *fields = fields
 
@@ -470,7 +465,8 @@ class Decoder:
                 close=float(get()),
                 volume=float(get()),
                 average=float(get()),
-                barCount=int(get()))
+                barCount=int(get()),
+            )
             self.wrapper.historicalData(int(reqId), bar)
 
         self.wrapper.historicalDataEnd(int(reqId), startDateStr, endDateStr)
@@ -487,7 +483,8 @@ class Decoder:
             high=float(get() or 0),
             low=float(get() or 0),
             average=float(get() or 0),
-            volume=float(get() or 0))
+            volume=float(get() or 0),
+        )
 
         self.wrapper.historicalDataUpdate(int(reqId), bar)
 
@@ -514,48 +511,71 @@ class Decoder:
                 benchmark,
                 projection,
                 legsStr,
-                *fields) = fields
+                *fields,
+            ) = fields
 
             self.parse(cd)
             self.parse(c)
             self.wrapper.scannerData(
-                int(reqId), int(rank), cd,
-                distance, benchmark, projection, legsStr)
+                int(reqId), int(rank), cd, distance, benchmark, projection, legsStr
+            )
 
         self.wrapper.scannerDataEnd(int(reqId))
 
     def tickOptionComputation(self, fields):
         _, reqId, tickTypeInt, tickAttrib, *fields = fields
-        impliedVol, delta, optPrice, pvDividend, \
-            gamma, vega, theta, undPrice = fields
+        impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice = fields
 
         self.wrapper.tickOptionComputation(
-            int(reqId), int(tickTypeInt), int(tickAttrib),
-            float(impliedVol), float(delta), float(optPrice),
-            float(pvDividend), float(gamma), float(vega),
-            float(theta), float(undPrice))
+            int(reqId),
+            int(tickTypeInt),
+            int(tickAttrib),
+            float(impliedVol),
+            float(delta),
+            float(optPrice),
+            float(pvDividend),
+            float(gamma),
+            float(vega),
+            float(theta),
+            float(undPrice),
+        )
 
     def deltaNeutralValidation(self, fields):
         _, _, reqId, conId, delta, price = fields
 
         self.wrapper.deltaNeutralValidation(
-            int(reqId), DeltaNeutralContract(
-                int(conId), float(delta or 0), float(price or 0)))
+            int(reqId),
+            DeltaNeutralContract(int(conId), float(delta or 0), float(price or 0)),
+        )
 
     def commissionReport(self, fields):
-        _, _, execId, commission, currency, realizedPNL, \
-            yield_, yieldRedemptionDate = fields
+        (
+            _,
+            _,
+            execId,
+            commission,
+            currency,
+            realizedPNL,
+            yield_,
+            yieldRedemptionDate,
+        ) = fields
 
         self.wrapper.commissionReport(
             CommissionReport(
-                execId, float(commission or 0), currency,
-                float(realizedPNL or 0), float(yield_ or 0),
-                int(yieldRedemptionDate or 0)))
+                execId,
+                float(commission or 0),
+                currency,
+                float(realizedPNL or 0),
+                float(yield_ or 0),
+                int(yieldRedemptionDate or 0),
+            )
+        )
 
     def position(self, fields):
         c = Contract()
         (
-            _, _,
+            _,
+            _,
             account,
             c.conId,
             c.symbol,
@@ -569,16 +589,17 @@ class Decoder:
             c.localSymbol,
             c.tradingClass,
             position,
-            avgCost) = fields
+            avgCost,
+        ) = fields
 
         self.parse(c)
-        self.wrapper.position(
-            account, c, float(position or 0), float(avgCost or 0))
+        self.wrapper.position(account, c, float(position or 0), float(avgCost or 0))
 
     def positionMulti(self, fields):
         c = Contract()
         (
-            _, _,
+            _,
+            _,
             reqId,
             account,
             c.conId,
@@ -594,35 +615,48 @@ class Decoder:
             c.tradingClass,
             position,
             avgCost,
-            modelCode) = fields
+            modelCode,
+        ) = fields
 
         self.parse(c)
         self.wrapper.positionMulti(
-            int(reqId), account, modelCode, c,
-            float(position or 0), float(avgCost or 0))
+            int(reqId), account, modelCode, c, float(position or 0), float(avgCost or 0)
+        )
 
     def securityDefinitionOptionParameter(self, fields):
-        _, reqId, exchange, underlyingConId, tradingClass, multiplier, \
-            n, *fields = fields
+        (
+            _,
+            reqId,
+            exchange,
+            underlyingConId,
+            tradingClass,
+            multiplier,
+            n,
+            *fields,
+        ) = fields
         n = int(n)
 
         expirations = fields[:n]
-        strikes = [float(field) for field in fields[n + 1:]]
+        strikes = [float(field) for field in fields[n + 1 :]]
 
         self.wrapper.securityDefinitionOptionParameter(
-            int(reqId), exchange, underlyingConId, tradingClass,
-            multiplier, expirations, strikes)
+            int(reqId),
+            exchange,
+            underlyingConId,
+            tradingClass,
+            multiplier,
+            expirations,
+            strikes,
+        )
 
     def softDollarTiers(self, fields):
         _, reqId, n, *fields = fields
         get = iter(fields).__next__
 
         tiers = [
-            SoftDollarTier(
-                name=get(),
-                val=get(),
-                displayName=get())
-            for _ in range(int(n))]
+            SoftDollarTier(name=get(), val=get(), displayName=get())
+            for _ in range(int(n))
+        ]
 
         self.wrapper.softDollarTiers(int(reqId), tiers)
 
@@ -631,10 +665,8 @@ class Decoder:
         get = iter(fields).__next__
 
         familyCodes = [
-            FamilyCode(
-                accountID=get(),
-                familyCodeStr=get())
-            for _ in range(int(n))]
+            FamilyCode(accountID=get(), familyCodeStr=get()) for _ in range(int(n))
+        ]
 
         self.wrapper.familyCodes(familyCodes)
 
@@ -645,17 +677,21 @@ class Decoder:
         for _ in range(int(n)):
             cd = ContractDescription()
             cd.contract = c = Contract()
-            c.conId, c.symbol, c.secType, c.primaryExchange, c.currency, \
-                m, *fields = fields
+            (
+                c.conId,
+                c.symbol,
+                c.secType,
+                c.primaryExchange,
+                c.currency,
+                m,
+                *fields,
+            ) = fields
             c.conId = int(c.conId)
             m = int(m)
             cd.derivativeSecTypes = fields[:m]
             fields = fields[m:]
             if self.serverVersion >= 176:
-                (
-                    cd.contract.description,
-                    cd.contract.issuerId,
-                    *fields) = fields
+                (cd.contract.description, cd.contract.issuerId, *fields) = fields
             cds.append(cd)
 
         self.wrapper.symbolSamples(int(reqId), cds)
@@ -665,11 +701,9 @@ class Decoder:
         get = iter(fields).__next__
 
         components = [
-            SmartComponent(
-                bitNumber=int(get()),
-                exchange=get(),
-                exchangeLetter=get())
-            for _ in range(int(n))]
+            SmartComponent(bitNumber=int(get()), exchange=get(), exchangeLetter=get())
+            for _ in range(int(n))
+        ]
 
         self.wrapper.smartComponents(int(reqId), components)
 
@@ -683,8 +717,10 @@ class Decoder:
                 secType=get(),
                 listingExch=get(),
                 serviceDataType=get(),
-                aggGroup=int(get()))
-            for _ in range(int(n))]
+                aggGroup=int(get()),
+            )
+            for _ in range(int(n))
+        ]
 
         self.wrapper.mktDepthExchanges(descriptions)
 
@@ -692,11 +728,7 @@ class Decoder:
         _, n, *fields = fields
         get = iter(fields).__next__
 
-        providers = [
-            NewsProvider(
-                code=get(),
-                name=get())
-            for _ in range(int(n))]
+        providers = [NewsProvider(code=get(), name=get()) for _ in range(int(n))]
 
         self.wrapper.newsProviders(providers)
 
@@ -705,10 +737,8 @@ class Decoder:
         get = iter(fields).__next__
 
         histogram = [
-            HistogramData(
-                price=float(get()),
-                count=int(get()))
-            for _ in range(int(n))]
+            HistogramData(price=float(get()), count=int(get())) for _ in range(int(n))
+        ]
 
         self.wrapper.histogramData(int(reqId), histogram)
 
@@ -717,10 +747,9 @@ class Decoder:
         get = iter(fields).__next__
 
         increments = [
-            PriceIncrement(
-                lowEdge=float(get()),
-                increment=float(get()))
-            for _ in range(int(n))]
+            PriceIncrement(lowEdge=float(get()), increment=float(get()))
+            for _ in range(int(n))
+        ]
 
         self.wrapper.marketRule(int(marketRuleId), increments)
 
@@ -735,8 +764,7 @@ class Decoder:
             price = float(get())
             size = float(get())
             dt = datetime.fromtimestamp(time, timezone.utc)
-            ticks.append(
-                HistoricalTick(dt, price, size))
+            ticks.append(HistoricalTick(dt, price, size))
 
         done = bool(int(get()))
         self.wrapper.historicalTicks(int(reqId), ticks, done)
@@ -750,16 +778,16 @@ class Decoder:
             time = int(get())
             mask = int(get())
             attrib = TickAttribBidAsk(
-                askPastHigh=bool(mask & 1),
-                bidPastLow=bool(mask & 2))
+                askPastHigh=bool(mask & 1), bidPastLow=bool(mask & 2)
+            )
             priceBid = float(get())
             priceAsk = float(get())
             sizeBid = float(get())
             sizeAsk = float(get())
             dt = datetime.fromtimestamp(time, timezone.utc)
             ticks.append(
-                HistoricalTickBidAsk(
-                    dt, attrib, priceBid, priceAsk, sizeBid, sizeAsk))
+                HistoricalTickBidAsk(dt, attrib, priceBid, priceAsk, sizeBid, sizeAsk)
+            )
 
         done = bool(int(get()))
         self.wrapper.historicalTicksBidAsk(int(reqId), ticks, done)
@@ -772,17 +800,15 @@ class Decoder:
         for _ in range(int(n)):
             time = int(get())
             mask = int(get())
-            attrib = TickAttribLast(
-                pastLimit=bool(mask & 1),
-                unreported=bool(mask & 2))
+            attrib = TickAttribLast(pastLimit=bool(mask & 1), unreported=bool(mask & 2))
             price = float(get())
             size = float(get())
             exchange = get()
             specialConditions = get()
             dt = datetime.fromtimestamp(time, timezone.utc)
             ticks.append(
-                HistoricalTickLast(
-                    dt, attrib, price, size, exchange, specialConditions))
+                HistoricalTickLast(dt, attrib, price, size, exchange, specialConditions)
+            )
 
         done = bool(int(get()))
         self.wrapper.historicalTicksLast(int(reqId), ticks, done)
@@ -797,26 +823,39 @@ class Decoder:
             price, size, mask, exchange, specialConditions = fields
             mask = int(mask)
             attrib: Any = TickAttribLast(
-                pastLimit=bool(mask & 1),
-                unreported=bool(mask & 2))
+                pastLimit=bool(mask & 1), unreported=bool(mask & 2)
+            )
 
             self.wrapper.tickByTickAllLast(
-                reqId, tickType, time, float(price), float(size),
-                attrib, exchange, specialConditions)
+                reqId,
+                tickType,
+                time,
+                float(price),
+                float(size),
+                attrib,
+                exchange,
+                specialConditions,
+            )
 
         elif tickType == 3:
             bidPrice, askPrice, bidSize, askSize, mask = fields
             mask = int(mask)
             attrib = TickAttribBidAsk(
-                bidPastLow=bool(mask & 1),
-                askPastHigh=bool(mask & 2))
+                bidPastLow=bool(mask & 1), askPastHigh=bool(mask & 2)
+            )
 
             self.wrapper.tickByTickBidAsk(
-                reqId, time, float(bidPrice), float(askPrice),
-                float(bidSize), float(askSize), attrib)
+                reqId,
+                time,
+                float(bidPrice),
+                float(askPrice),
+                float(bidSize),
+                float(askSize),
+                attrib,
+            )
 
         elif tickType == 4:
-            midPoint, = fields
+            (midPoint,) = fields
 
             self.wrapper.tickByTickMidPoint(reqId, time, float(midPoint))
 
@@ -859,7 +898,8 @@ class Decoder:
             o.faGroup,
             o.faMethod,
             o.faPercentage,
-            *fields) = fields
+            *fields,
+        ) = fields
         if self.serverVersion < 177:
             o.faProfile, *fields = fields
         (
@@ -892,7 +932,8 @@ class Decoder:
             o.volatilityType,
             o.deltaNeutralOrderType,
             o.deltaNeutralAuxPrice,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         if o.deltaNeutralOrderType:
             (
@@ -904,7 +945,8 @@ class Decoder:
                 o.deltaNeutralShortSale,
                 o.deltaNeutralShortSaleSlot,
                 o.deltaNeutralDesignatedLocation,
-                *fields) = fields
+                *fields,
+            ) = fields
         (
             o.continuousUpdate,
             o.referencePriceType,
@@ -913,7 +955,8 @@ class Decoder:
             o.basisPoints,
             o.basisPointsType,
             c.comboLegsDescrip,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         numLegs = int(fields.pop(0))
         c.comboLegs = []
@@ -928,7 +971,8 @@ class Decoder:
                 leg.shortSaleSlot,
                 leg.designatedLocation,
                 leg.exemptCode,
-                *fields) = fields
+                *fields,
+            ) = fields
             self.parse(leg)
             c.comboLegs.append(leg)
 
@@ -945,14 +989,9 @@ class Decoder:
             o.smartComboRoutingParams = []
             for _ in range(numParams):
                 tag, value, *fields = fields
-                o.smartComboRoutingParams.append(
-                    TagValue(tag, value))
+                o.smartComboRoutingParams.append(TagValue(tag, value))
 
-        (
-            o.scaleInitLevelSize,
-            o.scaleSubsLevelSize,
-            increment,
-            *fields) = fields
+        (o.scaleInitLevelSize, o.scaleSubsLevelSize, increment, *fields) = fields
 
         o.scalePriceIncrement = float(increment or UNSET_DOUBLE)
         if 0 < o.scalePriceIncrement < UNSET_DOUBLE:
@@ -964,7 +1003,8 @@ class Decoder:
                 o.scaleInitPosition,
                 o.scaleInitFillQty,
                 o.scaleRandomPercent,
-                *fields) = fields
+                *fields,
+            ) = fields
 
         o.hedgeType = fields.pop(0)
         if o.hedgeType:
@@ -976,12 +1016,14 @@ class Decoder:
             o.clearingIntent,
             o.notHeld,
             dncPresent,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         if int(dncPresent):
             conId, delta, price, *fields = fields
             c.deltaNeutralContract = DeltaNeutralContract(
-                int(conId or 0), float(delta or 0), float(price or 0))
+                int(conId or 0), float(delta or 0), float(price or 0)
+            )
 
         o.algoStrategy = fields.pop(0)
         if o.algoStrategy:
@@ -990,8 +1032,7 @@ class Decoder:
                 o.algoParams = []
                 for _ in range(numParams):
                     tag, value, *fields = fields
-                    o.algoParams.append(
-                        TagValue(tag, value))
+                    o.algoParams.append(TagValue(tag, value))
 
         (
             o.solicited,
@@ -1013,16 +1054,18 @@ class Decoder:
             st.warningText,
             o.randomizeSize,
             o.randomizePrice,
-            *fields) = fields
+            *fields,
+        ) = fields
 
-        if o.orderType in ('PEG BENCH', 'PEGBENCH'):
+        if o.orderType in ("PEG BENCH", "PEGBENCH"):
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,
                 o.peggedChangeAmount,
                 o.referenceChangeAmount,
                 o.referenceExchangeId,
-                *fields) = fields
+                *fields,
+            ) = fields
 
         numConditions = int(fields.pop(0))
         if numConditions > 0:
@@ -1034,10 +1077,7 @@ class Decoder:
                 self.parse(cond)
                 o.conditions.append(cond)
                 fields = fields[n:]
-            (
-                o.conditionsIgnoreRth,
-                o.conditionsCancelOrder,
-                *fields) = fields
+            (o.conditionsIgnoreRth, o.conditionsCancelOrder, *fields) = fields
 
         (
             o.adjustedOrderType,
@@ -1056,7 +1096,8 @@ class Decoder:
             o.isOmsContainer,
             o.discretionaryUpToLimitPrice,
             o.usePriceMgmtAlgo,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         if self.serverVersion >= 159:
             o.duration = fields.pop(0)
@@ -1071,7 +1112,8 @@ class Decoder:
                 o.competeAgainstBestOffset,
                 o.midOffsetAtWhole,
                 o.midOffsetAtHalf,
-                *fields) = fields
+                *fields,
+            ) = fields
 
         self.parse(c)
         self.parse(o)
@@ -1115,7 +1157,8 @@ class Decoder:
             o.faGroup,
             o.faMethod,
             o.faPercentage,
-            *fields) = fields
+            *fields,
+        ) = fields
         if self.serverVersion < 177:
             o.faProfile, *fields = fields
         (
@@ -1142,7 +1185,8 @@ class Decoder:
             o.volatilityType,
             o.deltaNeutralOrderType,
             o.deltaNeutralAuxPrice,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         if o.deltaNeutralOrderType:
             (
@@ -1150,14 +1194,16 @@ class Decoder:
                 o.deltaNeutralShortSale,
                 o.deltaNeutralShortSaleSlot,
                 o.deltaNeutralDesignatedLocation,
-                *fields) = fields
+                *fields,
+            ) = fields
         (
             o.continuousUpdate,
             o.referencePriceType,
             o.trailStopPrice,
             o.trailingPercent,
             c.comboLegsDescrip,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         numLegs = int(fields.pop(0))
         c.comboLegs = []
@@ -1172,7 +1218,8 @@ class Decoder:
                 leg.shortSaleSlot,
                 leg.designatedLocation,
                 leg.exemptCode,
-                *fields) = fields
+                *fields,
+            ) = fields
             self.parse(leg)
             c.comboLegs.append(leg)
 
@@ -1189,13 +1236,8 @@ class Decoder:
             o.smartComboRoutingParams = []
             for _ in range(numParams):
                 tag, value, *fields = fields
-                o.smartComboRoutingParams.append(
-                    TagValue(tag, value))
-        (
-            o.scaleInitLevelSize,
-            o.scaleSubsLevelSize,
-            increment,
-            *fields) = fields
+                o.smartComboRoutingParams.append(TagValue(tag, value))
+        (o.scaleInitLevelSize, o.scaleSubsLevelSize, increment, *fields) = fields
 
         o.scalePriceIncrement = float(increment or UNSET_DOUBLE)
         if 0 < o.scalePriceIncrement < UNSET_DOUBLE:
@@ -1207,23 +1249,20 @@ class Decoder:
                 o.scaleInitPosition,
                 o.scaleInitFillQty,
                 o.scaleRandomPercent,
-                *fields) = fields
+                *fields,
+            ) = fields
 
         o.hedgeType = fields.pop(0)
         if o.hedgeType:
             o.hedgeParam = fields.pop(0)
 
-        (
-            o.clearingAccount,
-            o.clearingIntent,
-            o.notHeld,
-            dncPresent,
-            *fields) = fields
+        (o.clearingAccount, o.clearingIntent, o.notHeld, dncPresent, *fields) = fields
 
         if int(dncPresent):
             conId, delta, price, *fields = fields
             c.deltaNeutralContract = DeltaNeutralContract(
-                int(conId or 0), float(delta or 0), float(price or 0))
+                int(conId or 0), float(delta or 0), float(price or 0)
+            )
 
         o.algoStrategy = fields.pop(0)
         if o.algoStrategy:
@@ -1232,23 +1271,18 @@ class Decoder:
                 o.algoParams = []
                 for _ in range(numParams):
                     tag, value, *fields = fields
-                    o.algoParams.append(
-                        TagValue(tag, value))
-        (
-            o.solicited,
-            st.status,
-            o.randomizeSize,
-            o.randomizePrice,
-            *fields) = fields
+                    o.algoParams.append(TagValue(tag, value))
+        (o.solicited, st.status, o.randomizeSize, o.randomizePrice, *fields) = fields
 
-        if o.orderType in ('PEG BENCH', 'PEGBENCH'):
+        if o.orderType in ("PEG BENCH", "PEGBENCH"):
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,
                 o.peggedChangeAmount,
                 o.referenceChangeAmount,
                 o.referenceExchangeId,
-                *fields) = fields
+                *fields,
+            ) = fields
 
         numConditions = int(fields.pop(0))
         if numConditions > 0:
@@ -1260,10 +1294,7 @@ class Decoder:
                 self.parse(cond)
                 o.conditions.append(cond)
                 fields = fields[n:]
-            (
-                o.conditionsIgnoreRth,
-                o.conditionsCancelOrder,
-                *fields) = fields
+            (o.conditionsIgnoreRth, o.conditionsCancelOrder, *fields) = fields
 
         (
             o.trailStopPrice,
@@ -1281,7 +1312,8 @@ class Decoder:
             o.parentPermId,
             st.completedTime,
             st.completedStatus,
-            *fields) = fields
+            *fields,
+        ) = fields
 
         if self.serverVersion >= 170:
             (
@@ -1290,7 +1322,8 @@ class Decoder:
                 o.competeAgainstBestOffset,
                 o.midOffsetAtWhole,
                 o.midOffsetAtHalf,
-                *fields) = fields
+                *fields,
+            ) = fields
 
         self.parse(c)
         self.parse(o)
@@ -1298,16 +1331,12 @@ class Decoder:
         self.wrapper.completedOrder(c, o, st)
 
     def historicalSchedule(self, fields):
-        (
-            _,
-            reqId,
-            startDateTime,
-            endDateTime,
-            timeZone,
-            count, *fields) = fields
+        (_, reqId, startDateTime, endDateTime, timeZone, count, *fields) = fields
         get = iter(fields).__next__
-        sessions = [HistoricalSession(
-            startDateTime=get(), endDateTime=get(), refDate=get())
-            for _ in range(int(count))]
+        sessions = [
+            HistoricalSession(startDateTime=get(), endDateTime=get(), refDate=get())
+            for _ in range(int(count))
+        ]
         self.wrapper.historicalSchedule(
-            int(reqId), startDateTime, endDateTime, timeZone, sessions)
+            int(reqId), startDateTime, endDateTime, timeZone, sessions
+        )

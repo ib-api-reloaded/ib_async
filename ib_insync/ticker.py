@@ -8,12 +8,19 @@ from eventkit import Event, Op
 
 from ib_insync.contract import Contract
 from ib_insync.objects import (
-    DOMLevel, Dividends, FundamentalRatios, MktDepthData,
-    OptionComputation, TickByTickAllLast, TickByTickBidAsk, TickByTickMidPoint,
-    TickData)
+    DOMLevel,
+    Dividends,
+    FundamentalRatios,
+    MktDepthData,
+    OptionComputation,
+    TickByTickAllLast,
+    TickByTickBidAsk,
+    TickByTickMidPoint,
+    TickData,
+)
 from ib_insync.util import dataclassRepr, isNan
 
-nan = float('nan')
+nan = float("nan")
 
 
 @dataclass
@@ -39,7 +46,7 @@ class Ticker:
         * ``updateEvent`` (ticker: :class:`.Ticker`)
     """
 
-    events: ClassVar = ('updateEvent',)
+    events: ClassVar = ("updateEvent",)
 
     contract: Optional[Contract] = None
     time: Optional[datetime] = None
@@ -47,13 +54,13 @@ class Ticker:
     minTick: float = nan
     bid: float = nan
     bidSize: float = nan
-    bidExchange: str = ''
+    bidExchange: str = ""
     ask: float = nan
     askSize: float = nan
-    askExchange: str = ''
+    askExchange: str = ""
     last: float = nan
     lastSize: float = nan
-    lastExchange: str = ''
+    lastExchange: str = ""
     prevBid: float = nan
     prevBidSize: float = nan
     prevAsk: float = nan
@@ -98,9 +105,9 @@ class Ticker:
     dividends: Optional[Dividends] = None
     fundamentalRatios: Optional[FundamentalRatios] = None
     ticks: List[TickData] = field(default_factory=list)
-    tickByTicks: List[Union[
-        TickByTickAllLast, TickByTickBidAsk, TickByTickMidPoint]] = \
-        field(default_factory=list)
+    tickByTicks: List[
+        Union[TickByTickAllLast, TickByTickBidAsk, TickByTickMidPoint]
+    ] = field(default_factory=list)
     domBids: List[DOMLevel] = field(default_factory=list)
     domAsks: List[DOMLevel] = field(default_factory=list)
     domTicks: List[MktDepthData] = field(default_factory=list)
@@ -112,11 +119,11 @@ class Ticker:
     auctionPrice: float = nan
     auctionImbalance: float = nan
     regulatoryImbalance: float = nan
-    bboExchange: str = ''
+    bboExchange: str = ""
     snapshotPermissions: int = 0
 
     def __post_init__(self):
-        self.updateEvent = TickerUpdateEvent('updateEvent')
+        self.updateEvent = TickerUpdateEvent("updateEvent")
 
     def __eq__(self, other):
         return self is other
@@ -130,8 +137,13 @@ class Ticker:
     def hasBidAsk(self) -> bool:
         """See if this ticker has a valid bid and ask."""
         return (
-            self.bid != -1 and not isNan(self.bid) and self.bidSize > 0
-            and self.ask != -1 and not isNan(self.ask) and self.askSize > 0)
+            self.bid != -1
+            and not isNan(self.bid)
+            and self.bidSize > 0
+            and self.ask != -1
+            and not isNan(self.ask)
+            and self.askSize > 0
+        )
 
     def midpoint(self) -> float:
         """
@@ -184,7 +196,7 @@ class TickerUpdateEvent(Event):
 class Tickfilter(Op):
     """Tick filtering event operators that ``emit(time, price, size)``."""
 
-    __slots__ = ('_tickTypes',)
+    __slots__ = ("_tickTypes",)
 
     def __init__(self, tickTypes, source=None):
         Op.__init__(self, source)
@@ -256,10 +268,9 @@ class Bar:
 
 
 class BarList(List[Bar]):
-
     def __init__(self, *args):
         super().__init__(*args)
-        self.updateEvent = Event('updateEvent')
+        self.updateEvent = Event("updateEvent")
 
     def __eq__(self, other):
         return self is other
@@ -269,7 +280,10 @@ class BarList(List[Bar]):
 
 
 class TimeBars(Op):
-    __slots__ = ('_timer', 'bars',)
+    __slots__ = (
+        "_timer",
+        "bars",
+    )
     __doc__ = Tickfilter.timebars.__doc__
 
     bars: BarList
@@ -297,8 +311,7 @@ class TimeBars(Op):
         if self.bars:
             bar = self.bars[-1]
             if isNan(bar.close) and len(self.bars) > 1:
-                bar.open = bar.high = bar.low = bar.close = \
-                    self.bars[-2].close
+                bar.open = bar.high = bar.low = bar.close = self.bars[-2].close
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(bar)
         self.bars.append(Bar(time))
@@ -309,7 +322,7 @@ class TimeBars(Op):
 
 
 class TickBars(Op):
-    __slots__ = ('_count', 'bars')
+    __slots__ = ("_count", "bars")
     __doc__ = Tickfilter.tickbars.__doc__
 
     bars: BarList
@@ -336,7 +349,7 @@ class TickBars(Op):
 
 
 class VolumeBars(Op):
-    __slots__ = ('_volume', 'bars')
+    __slots__ = ("_volume", "bars")
     __doc__ = Tickfilter.volumebars.__doc__
 
     bars: BarList

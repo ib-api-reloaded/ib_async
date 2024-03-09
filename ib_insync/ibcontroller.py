@@ -85,25 +85,25 @@ class IBC:
 
     twsVersion: int = 0
     gateway: bool = False
-    tradingMode: str = ''
-    twsPath: str = ''
-    twsSettingsPath: str = ''
-    ibcPath: str = ''
-    ibcIni: str = ''
-    javaPath: str = ''
-    userid: str = ''
-    password: str = ''
-    fixuserid: str = ''
-    fixpassword: str = ''
-    on2fatimeout: str = ''
+    tradingMode: str = ""
+    twsPath: str = ""
+    twsSettingsPath: str = ""
+    ibcPath: str = ""
+    ibcIni: str = ""
+    javaPath: str = ""
+    userid: str = ""
+    password: str = ""
+    fixuserid: str = ""
+    fixpassword: str = ""
+    on2fatimeout: str = ""
 
     def __post_init__(self):
-        self._isWindows = sys.platform == 'win32'
+        self._isWindows = sys.platform == "win32"
         if not self.ibcPath:
-            self.ibcPath = '/opt/ibc' if not self._isWindows else 'C:\\IBC'
+            self.ibcPath = "/opt/ibc" if not self._isWindows else "C:\\IBC"
         self._proc = None
         self._monitor = None
-        self._logger = logging.getLogger('ib_insync.IBC')
+        self._logger = logging.getLogger("ib_insync.IBC")
 
     def __enter__(self):
         self.start()
@@ -123,34 +123,36 @@ class IBC:
     async def startAsync(self):
         if self._proc:
             return
-        self._logger.info('Starting')
+        self._logger.info("Starting")
 
         # map from field names to cmd arguments; key=(UnixArg, WindowsArg)
         args = dict(
-            twsVersion=('', ''),
-            gateway=('--gateway', '/Gateway'),
-            tradingMode=('--mode=', '/Mode:'),
-            twsPath=('--tws-path=', '/TwsPath:'),
-            twsSettingsPath=('--tws-settings-path=', ''),
-            ibcPath=('--ibc-path=', '/IbcPath:'),
-            ibcIni=('--ibc-ini=', '/Config:'),
-            javaPath=('--java-path=', '/JavaPath:'),
-            userid=('--user=', '/User:'),
-            password=('--pw=', '/PW:'),
-            fixuserid=('--fix-user=', '/FIXUser:'),
-            fixpassword=('--fix-pw=', '/FIXPW:'),
-            on2fatimeout=('--on2fatimeout=', '/On2FATimeout:'),
+            twsVersion=("", ""),
+            gateway=("--gateway", "/Gateway"),
+            tradingMode=("--mode=", "/Mode:"),
+            twsPath=("--tws-path=", "/TwsPath:"),
+            twsSettingsPath=("--tws-settings-path=", ""),
+            ibcPath=("--ibc-path=", "/IbcPath:"),
+            ibcIni=("--ibc-ini=", "/Config:"),
+            javaPath=("--java-path=", "/JavaPath:"),
+            userid=("--user=", "/User:"),
+            password=("--pw=", "/PW:"),
+            fixuserid=("--fix-user=", "/FIXUser:"),
+            fixpassword=("--fix-pw=", "/FIXPW:"),
+            on2fatimeout=("--on2fatimeout=", "/On2FATimeout:"),
         )
 
         # create shell command
         cmd = [
-            f'{self.ibcPath}\\scripts\\StartIBC.bat' if self._isWindows else
-            f'{self.ibcPath}/scripts/ibcstart.sh']
+            f"{self.ibcPath}\\scripts\\StartIBC.bat"
+            if self._isWindows
+            else f"{self.ibcPath}/scripts/ibcstart.sh"
+        ]
         for k, v in util.dataclassAsDict(self).items():
             arg = args[k][self._isWindows]
             if v:
-                if arg.endswith('=') or arg.endswith(':'):
-                    cmd.append(f'{arg}{v}')
+                if arg.endswith("=") or arg.endswith(":"):
+                    cmd.append(f"{arg}{v}")
                 elif arg:
                     cmd.append(arg)
                 else:
@@ -158,20 +160,21 @@ class IBC:
 
         # run shell command
         self._proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE)
+            *cmd, stdout=asyncio.subprocess.PIPE
+        )
         self._monitor = asyncio.ensure_future(self.monitorAsync())
 
     async def terminateAsync(self):
         if not self._proc:
             return
-        self._logger.info('Terminating')
+        self._logger.info("Terminating")
         if self._monitor:
             self._monitor.cancel()
             self._monitor = None
         if self._isWindows:
             import subprocess
-            subprocess.call(
-                ['taskkill', '/F', '/T', '/PID', str(self._proc.pid)])
+
+            subprocess.call(["taskkill", "/F", "/T", "/PID", str(self._proc.pid)])
         else:
             with suppress(ProcessLookupError):
                 self._proc.terminate()
@@ -245,12 +248,17 @@ class Watchdog:
     """
 
     events = [
-        'startingEvent', 'startedEvent', 'stoppingEvent', 'stoppedEvent',
-        'softTimeoutEvent', 'hardTimeoutEvent']
+        "startingEvent",
+        "startedEvent",
+        "stoppingEvent",
+        "stoppedEvent",
+        "softTimeoutEvent",
+        "hardTimeoutEvent",
+    ]
 
     controller: IBC
     ib: IB
-    host: str = '127.0.0.1'
+    host: str = "127.0.0.1"
     port: int = 7497
     clientId: int = 1
     connectTimeout: float = 2
@@ -258,60 +266,65 @@ class Watchdog:
     appTimeout: float = 20
     retryDelay: float = 2
     readonly: bool = False
-    account: str = ''
+    account: str = ""
     raiseSyncErrors: bool = False
-    probeContract: Contract = Forex('EURUSD')
+    probeContract: Contract = Forex("EURUSD")
     probeTimeout: float = 4
 
     def __post_init__(self):
-        self.startingEvent = Event('startingEvent')
-        self.startedEvent = Event('startedEvent')
-        self.stoppingEvent = Event('stoppingEvent')
-        self.stoppedEvent = Event('stoppedEvent')
-        self.softTimeoutEvent = Event('softTimeoutEvent')
-        self.hardTimeoutEvent = Event('hardTimeoutEvent')
+        self.startingEvent = Event("startingEvent")
+        self.startedEvent = Event("startedEvent")
+        self.stoppingEvent = Event("stoppingEvent")
+        self.stoppedEvent = Event("stoppedEvent")
+        self.softTimeoutEvent = Event("softTimeoutEvent")
+        self.hardTimeoutEvent = Event("hardTimeoutEvent")
         if not self.controller:
-            raise ValueError('No controller supplied')
+            raise ValueError("No controller supplied")
         if not self.ib:
-            raise ValueError('No IB instance supplied')
+            raise ValueError("No IB instance supplied")
         if self.ib.isConnected():
-            raise ValueError('IB instance must not be connected')
+            raise ValueError("IB instance must not be connected")
         self._runner = None
-        self._logger = logging.getLogger('ib_insync.Watchdog')
+        self._logger = logging.getLogger("ib_insync.Watchdog")
 
     def start(self):
-        self._logger.info('Starting')
+        self._logger.info("Starting")
         self.startingEvent.emit(self)
         self._runner = asyncio.ensure_future(self.runAsync())
         return self._runner
 
     def stop(self):
-        self._logger.info('Stopping')
+        self._logger.info("Stopping")
         self.stoppingEvent.emit(self)
         self.ib.disconnect()
         self._runner = None
 
     async def runAsync(self):
-
         def onTimeout(idlePeriod):
             if not waiter.done():
                 waiter.set_result(None)
 
         def onError(reqId, errorCode, errorString, contract):
             if errorCode in {100, 1100} and not waiter.done():
-                waiter.set_exception(Warning(f'Error {errorCode}'))
+                waiter.set_exception(Warning(f"Error {errorCode}"))
 
         def onDisconnected():
             if not waiter.done():
-                waiter.set_exception(Warning('Disconnected'))
+                waiter.set_exception(Warning("Disconnected"))
 
         while self._runner:
             try:
                 await self.controller.startAsync()
                 await asyncio.sleep(self.appStartupTime)
                 await self.ib.connectAsync(
-                    self.host, self.port, self.clientId, self.connectTimeout,
-                    self.readonly, self.account, self.raiseSyncErrors)
+                    self.host,
+                    self.port,
+                    self.clientId,
+                    self.connectTimeout,
+                    self.readonly,
+                    self.account,
+                    self.raiseSyncErrors,
+                )
                 self.startedEvent.emit(self)
                 self.ib.setTimeout(self.appTimeout)
                 self.ib.timeoutEvent += onTimeout
@@ -322,17 +335,17 @@ class Watchdog:
                     waiter: asyncio.Future = asyncio.Future()
                     await waiter
                     # soft timeout, probe the app with a historical request
-                    self._logger.debug('Soft timeout')
+                    self._logger.debug("Soft timeout")
                     self.softTimeoutEvent.emit(self)
                     probe = self.ib.reqHistoricalDataAsync(
-                        self.probeContract, '', '30 S', '5 secs',
-                        'MIDPOINT', False)
+                        self.probeContract, "", "30 S", "5 secs", "MIDPOINT", False
+                    )
                     bars = None
                     with suppress(asyncio.TimeoutError):
                         bars = await asyncio.wait_for(probe, self.probeTimeout)
                     if not bars:
                         self.hardTimeoutEvent.emit(self)
-                        raise Warning('Hard timeout')
+                        raise Warning("Hard timeout")
                     self.ib.setTimeout(self.appTimeout)
 
             except ConnectionRefusedError:
@@ -351,8 +364,8 @@ class Watchdog:
                     await asyncio.sleep(self.retryDelay)
 
 
-if __name__ == '__main__':
-    ibc = IBC(1012, gateway=True, tradingMode='paper')
+if __name__ == "__main__":
+    ibc = IBC(1012, gateway=True, tradingMode="paper")
     ib = IB()
     app = Watchdog(ibc, ib, appStartupTime=15)
     app.start()

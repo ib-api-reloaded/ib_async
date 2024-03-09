@@ -20,8 +20,8 @@ class Connection(asyncio.Protocol):
     """
 
     def __init__(self):
-        self.hasData = Event('hasData')
-        self.disconnected = Event('disconnected')
+        self.hasData = Event("hasData")
+        self.disconnected = Event("disconnected")
         self.reset()
 
     def reset(self):
@@ -36,8 +36,7 @@ class Connection(asyncio.Protocol):
             await self.disconnected
         self.reset()
         loop = getLoop()
-        self.transport, _ = await loop.create_connection(
-            lambda: self, host, port)
+        self.transport, _ = await loop.create_connection(lambda: self, host, port)
 
     def disconnect(self):
         if self.transport:
@@ -55,7 +54,7 @@ class Connection(asyncio.Protocol):
 
     def connection_lost(self, exc):
         self.transport = None
-        msg = str(exc) if exc else ''
+        msg = str(exc) if exc else ""
         self.disconnected.emit(msg)
 
     def data_received(self, data):

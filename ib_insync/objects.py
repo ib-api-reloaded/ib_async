@@ -9,39 +9,39 @@ from eventkit import Event
 from .contract import Contract, ScanData, TagValue
 from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER
 
-nan = float('nan')
+nan = float("nan")
 
 
 @dataclass
 class ScannerSubscription:
     numberOfRows: int = -1
-    instrument: str = ''
-    locationCode: str = ''
-    scanCode: str = ''
+    instrument: str = ""
+    locationCode: str = ""
+    scanCode: str = ""
     abovePrice: float = UNSET_DOUBLE
     belowPrice: float = UNSET_DOUBLE
     aboveVolume: int = UNSET_INTEGER
     marketCapAbove: float = UNSET_DOUBLE
     marketCapBelow: float = UNSET_DOUBLE
-    moodyRatingAbove: str = ''
-    moodyRatingBelow: str = ''
-    spRatingAbove: str = ''
-    spRatingBelow: str = ''
-    maturityDateAbove: str = ''
-    maturityDateBelow: str = ''
+    moodyRatingAbove: str = ""
+    moodyRatingBelow: str = ""
+    spRatingAbove: str = ""
+    spRatingBelow: str = ""
+    maturityDateAbove: str = ""
+    maturityDateBelow: str = ""
     couponRateAbove: float = UNSET_DOUBLE
     couponRateBelow: float = UNSET_DOUBLE
     excludeConvertible: bool = False
     averageOptionVolumeAbove: int = UNSET_INTEGER
-    scannerSettingPairs: str = ''
-    stockTypeFilter: str = ''
+    scannerSettingPairs: str = ""
+    stockTypeFilter: str = ""
 
 
 @dataclass
 class SoftDollarTier:
-    name: str = ''
-    val: str = ''
-    displayName: str = ''
+    name: str = ""
+    val: str = ""
+    displayName: str = ""
 
     def __bool__(self):
         return bool(self.name or self.val or self.displayName)
@@ -49,11 +49,11 @@ class SoftDollarTier:
 
 @dataclass
 class Execution:
-    execId: str = ''
+    execId: str = ""
     time: datetime = field(default=EPOCH)
-    acctNumber: str = ''
-    exchange: str = ''
-    side: str = ''
+    acctNumber: str = ""
+    exchange: str = ""
+    side: str = ""
     shares: float = 0.0
     price: float = 0.0
     permId: int = 0
@@ -62,19 +62,19 @@ class Execution:
     liquidation: int = 0
     cumQty: float = 0.0
     avgPrice: float = 0.0
-    orderRef: str = ''
-    evRule: str = ''
+    orderRef: str = ""
+    evRule: str = ""
     evMultiplier: float = 0.0
-    modelCode: str = ''
+    modelCode: str = ""
     lastLiquidity: int = 0
     pendingPriceRevision: bool = False
 
 
 @dataclass
 class CommissionReport:
-    execId: str = ''
+    execId: str = ""
     commission: float = 0.0
-    currency: str = ''
+    currency: str = ""
     realizedPNL: float = 0.0
     yield_: float = 0.0
     yieldRedemptionDate: int = 0
@@ -83,12 +83,12 @@ class CommissionReport:
 @dataclass
 class ExecutionFilter:
     clientId: int = 0
-    acctCode: str = ''
-    time: str = ''
-    symbol: str = ''
-    secType: str = ''
-    exchange: str = ''
-    side: str = ''
+    acctCode: str = ""
+    time: str = ""
+    symbol: str = ""
+    secType: str = ""
+    exchange: str = ""
+    side: str = ""
 
 
 @dataclass
@@ -143,23 +143,23 @@ class HistogramData:
 
 @dataclass
 class NewsProvider:
-    code: str = ''
-    name: str = ''
+    code: str = ""
+    name: str = ""
 
 
 @dataclass
 class DepthMktDataDescription:
-    exchange: str = ''
-    secType: str = ''
-    listingExch: str = ''
-    serviceDataType: str = ''
+    exchange: str = ""
+    secType: str = ""
+    listingExch: str = ""
+    serviceDataType: str = ""
     aggGroup: int = UNSET_INTEGER
 
 
 @dataclass
 class PnL:
-    account: str = ''
-    modelCode: str = ''
+    account: str = ""
+    modelCode: str = ""
     dailyPnL: float = nan
     unrealizedPnL: float = nan
     realizedPnL: float = nan
@@ -168,15 +168,15 @@ class PnL:
 @dataclass
 class TradeLogEntry:
     time: datetime
-    status: str = ''
-    message: str = ''
+    status: str = ""
+    message: str = ""
     errorCode: int = 0
 
 
 @dataclass
 class PnLSingle:
-    account: str = ''
-    modelCode: str = ''
+    account: str = ""
+    modelCode: str = ""
     conId: int = 0
     dailyPnL: float = nan
     unrealizedPnL: float = nan
@@ -187,28 +187,28 @@ class PnLSingle:
 
 @dataclass
 class HistoricalSession:
-    startDateTime: str = ''
-    endDateTime: str = ''
-    refDate: str = ''
+    startDateTime: str = ""
+    endDateTime: str = ""
+    refDate: str = ""
 
 
 @dataclass
 class HistoricalSchedule:
-    startDateTime: str = ''
-    endDateTime: str = ''
-    timeZone: str = ''
+    startDateTime: str = ""
+    endDateTime: str = ""
+    timeZone: str = ""
     sessions: List[HistoricalSession] = field(default_factory=list)
 
 
 @dataclass
 class WshEventData:
     conId: int = UNSET_INTEGER
-    filter: str = ''
+    filter: str = ""
     fillWatchlist: bool = False
     fillPortfolio: bool = False
     fillCompetitors: bool = False
-    startDate: str = ''
-    endDate: str = ''
+    startDate: str = ""
+    endDate: str = ""
     totalLimit: int = UNSET_INTEGER
 
 
@@ -419,7 +419,7 @@ class BarDataList(List[BarData]):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.updateEvent = Event('updateEvent')
+        self.updateEvent = Event("updateEvent")
 
     def __eq__(self, other):
         return self is other
@@ -447,7 +447,7 @@ class RealTimeBarList(List[RealTimeBar]):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.updateEvent = Event('updateEvent')
+        self.updateEvent = Event("updateEvent")
 
     def __eq__(self, other):
         return self is other
@@ -471,7 +471,7 @@ class ScanDataList(List[ScanData]):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.updateEvent = Event('updateEvent')
+        self.updateEvent = Event("updateEvent")
 
     def __eq__(self, other):
         return self is other
@@ -481,14 +481,13 @@ class ScanDataList(List[ScanData]):
 
 
 class DynamicObject:
-
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
     def __repr__(self):
         clsName = self.__class__.__name__
-        kwargs = ', '.join(f'{k}={v!r}' for k, v in self.__dict__.items())
-        return f'{clsName}({kwargs})'
+        kwargs = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items())
+        return f"{clsName}({kwargs})"
 
 
 class FundamentalRatios(DynamicObject):

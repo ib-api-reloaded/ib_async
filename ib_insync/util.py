@@ -8,8 +8,7 @@ import signal
 import sys
 import time
 from dataclasses import fields, is_dataclass
-from typing import (
-    AsyncIterator, Awaitable, Callable, Iterator, List, Optional, Union)
+from typing import AsyncIterator, Awaitable, Callable, Iterator, List, Optional, Union
 
 import eventkit as ev
 
@@ -25,7 +24,7 @@ Event to emit global exceptions.
 """
 
 EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
-UNSET_INTEGER = 2 ** 31 - 1
+UNSET_INTEGER = 2**31 - 1
 UNSET_DOUBLE = sys.float_info.max
 
 Time_t = Union[dt.time, dt.datetime]
@@ -40,6 +39,7 @@ def df(objs, labels: Optional[List[str]] = None):
     """
     import pandas as pd
     from .objects import DynamicObject
+
     if objs:
         objs = list(objs)
         obj = objs[0]
@@ -51,7 +51,7 @@ def df(objs, labels: Optional[List[str]] = None):
         else:
             df = pd.DataFrame.from_records(objs)
         if isinstance(obj, tuple):
-            _fields = getattr(obj, '_fields', None)
+            _fields = getattr(obj, "_fields", None)
             if _fields:
                 # assume it's a namedtuple
                 df.columns = _fields
@@ -69,7 +69,7 @@ def dataclassAsDict(obj) -> dict:
     This is a non-recursive variant of ``dataclasses.asdict``.
     """
     if not is_dataclass(obj):
-        raise TypeError(f'Object {obj} is not a dataclass')
+        raise TypeError(f"Object {obj} is not a dataclass")
     return {field.name: getattr(obj, field.name) for field in fields(obj)}
 
 
@@ -79,7 +79,7 @@ def dataclassAsTuple(obj) -> tuple:
     This is a non-recursive variant of ``dataclasses.astuple``.
     """
     if not is_dataclass(obj):
-        raise TypeError(f'Object {obj} is not a dataclass')
+        raise TypeError(f"Object {obj} is not a dataclass")
     return tuple(getattr(obj, field.name) for field in fields(obj))
 
 
@@ -89,13 +89,15 @@ def dataclassNonDefaults(obj) -> dict:
     default values and return as ``dict``.
     """
     if not is_dataclass(obj):
-        raise TypeError(f'Object {obj} is not a dataclass')
+        raise TypeError(f"Object {obj} is not a dataclass")
     values = [getattr(obj, field.name) for field in fields(obj)]
     return {
-        field.name: value for field, value in zip(fields(obj), values)
+        field.name: value
+        for field, value in zip(fields(obj), values)
         if value != field.default
         and value == value
-        and not (isinstance(value, list) and value == [])}
+        and not (isinstance(value, list) and value == [])
+    }
 
 
 def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
@@ -104,7 +106,7 @@ def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
     ``dataclass`` source objects and/or from keyword arguments.
     """
     if not is_dataclass(obj):
-        raise TypeError(f'Object {obj} is not a dataclass')
+        raise TypeError(f"Object {obj} is not a dataclass")
     for srcObj in srcObjs:
         obj.__dict__.update(dataclassAsDict(srcObj))
     obj.__dict__.update(**kwargs)
@@ -118,8 +120,8 @@ def dataclassRepr(obj) -> str:
     """
     attrs = dataclassNonDefaults(obj)
     clsName = obj.__class__.__qualname__
-    kwargs = ', '.join(f'{k}={v!r}' for k, v in attrs.items())
-    return f'{clsName}({kwargs})'
+    kwargs = ", ".join(f"{k}={v!r}" for k, v in attrs.items())
+    return f"{clsName}({kwargs})"
 
 
 def isnamedtupleinstance(x):
@@ -128,7 +130,7 @@ def isnamedtupleinstance(x):
     b = t.__bases__
     if len(b) != 1 or b[0] != tuple:
         return False
-    f = getattr(t, '_fields', None)
+    f = getattr(t, "_fields", None)
     if not isinstance(f, tuple):
         return False
     return all(type(n) is str for n in f)
@@ -155,7 +157,7 @@ def tree(obj):
         return str(obj)
 
 
-def barplot(bars, title='', upColor='blue', downColor='red'):
+def barplot(bars, title="", upColor="blue", downColor="red"):
     """
     Create candlestick plot for the given bars. The bars can be given as
     a DataFrame or as a list of bar objects.
@@ -166,9 +168,8 @@ def barplot(bars, title='', upColor='blue', downColor='red'):
     from matplotlib.patches import Rectangle
 
     if isinstance(bars, pd.DataFrame):
-        ohlcTups = [
-            tuple(v) for v in bars[['open', 'high', 'low', 'close']].values]
-    elif bars and hasattr(bars[0], 'open_'):
+        ohlcTups = [tuple(v) for v in bars[["open", "high", "low", "close"]].values]
+    elif bars and hasattr(bars[0], "open_"):
         ohlcTups = [(b.open_, b.high, b.low, b.close) for b in bars]
     else:
         ohlcTups = [(b.open, b.high, b.low, b.close) for b in bars]
@@ -184,17 +185,9 @@ def barplot(bars, title='', upColor='blue', downColor='red'):
         else:
             color = downColor
             bodyHi, bodyLo = open_, close
-        line = Line2D(
-            xdata=(n, n),
-            ydata=(low, bodyLo),
-            color=color,
-            linewidth=1)
+        line = Line2D(xdata=(n, n), ydata=(low, bodyLo), color=color, linewidth=1)
         ax.add_line(line)
-        line = Line2D(
-            xdata=(n, n),
-            ydata=(high, bodyHi),
-            color=color,
-            linewidth=1)
+        line = Line2D(xdata=(n, n), ydata=(high, bodyHi), color=color, linewidth=1)
         ax.add_line(line)
         rect = Rectangle(
             xy=(n - 0.3, bodyLo),
@@ -203,7 +196,7 @@ def barplot(bars, title='', upColor='blue', downColor='red'):
             edgecolor=color,
             facecolor=color,
             alpha=0.4,
-            antialiased=True
+            antialiased=True,
         )
         ax.add_patch(rect)
 
@@ -220,11 +213,10 @@ def logToFile(path, level=logging.INFO):
     """Create a log handler that logs to the given file."""
     logger = logging.getLogger()
     if logger.handlers:
-        logging.getLogger('ib_insync').setLevel(level)
+        logging.getLogger("ib_insync").setLevel(level)
     else:
         logger.setLevel(level)
-    formatter = logging.Formatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s')
+    formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
     handler = logging.FileHandler(path)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -234,17 +226,18 @@ def logToConsole(level=logging.INFO):
     """Create a log handler that logs to the console."""
     logger = logging.getLogger()
     stdHandlers = [
-        h for h in logger.handlers
-        if type(h) is logging.StreamHandler and h.stream is sys.stderr]
+        h
+        for h in logger.handlers
+        if type(h) is logging.StreamHandler and h.stream is sys.stderr
+    ]
     if stdHandlers:
         # if a standard stream handler already exists, use it and
         # set the log level for the ib_insync namespace only
-        logging.getLogger('ib_insync').setLevel(level)
+        logging.getLogger("ib_insync").setLevel(level)
     else:
         # else create a new handler
         logger.setLevel(level)
-        formatter = logging.Formatter(
-            '%(asctime)s %(name)s %(levelname)s %(message)s')
+        formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
         handler = logging.StreamHandler()
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -257,42 +250,42 @@ def isNan(x: float) -> bool:
 
 def formatSI(n: float) -> str:
     """Format the integer or float n to 3 significant digits + SI prefix."""
-    s = ''
+    s = ""
     if n < 0:
         n = -n
-        s += '-'
+        s += "-"
     if type(n) is int and n < 1000:
-        s = str(n) + ' '
+        s = str(n) + " "
     elif n < 1e-22:
-        s = '0.00 '
+        s = "0.00 "
     else:
         assert n < 9.99e26
         log = int(math.floor(math.log10(n)))
         i, j = divmod(log, 3)
         for _try in range(2):
-            templ = '%.{}f'.format(2 - j)
+            templ = "%.{}f".format(2 - j)
             val = templ % (n * 10 ** (-3 * i))
-            if val != '1000':
+            if val != "1000":
                 break
             i += 1
             j = 0
-        s += val + ' '
+        s += val + " "
         if i != 0:
-            s += 'yzafpnum kMGTPEZY'[i + 8]
+            s += "yzafpnum kMGTPEZY"[i + 8]
     return s
 
 
 class timeit:
     """Context manager for timing."""
 
-    def __init__(self, title='Run'):
+    def __init__(self, title="Run"):
         self.title = title
 
     def __enter__(self):
         self.t0 = time.time()
 
     def __exit__(self, *_args):
-        print(self.title + ' took ' + formatSI(time.time() - self.t0) + 's')
+        print(self.title + " took " + formatSI(time.time() - self.t0) + "s")
 
 
 def run(*awaitables: Awaitable, timeout: Optional[float] = None):
@@ -387,8 +380,7 @@ def sleep(secs: float = 0.02) -> bool:
     return True
 
 
-def timeRange(start: Time_t, end: Time_t, step: float) \
-        -> Iterator[dt.datetime]:
+def timeRange(start: Time_t, end: Time_t, step: float) -> Iterator[dt.datetime]:
     """
     Iterator that waits periodically until certain time points are
     reached while yielding those time points.
@@ -428,9 +420,8 @@ def waitUntil(t: Time_t) -> bool:
 
 
 async def timeRangeAsync(
-        start: Time_t,
-        end: Time_t,
-        step: float) -> AsyncIterator[dt.datetime]:
+    start: Time_t, end: Time_t, step: float
+) -> AsyncIterator[dt.datetime]:
     """Async version of :meth:`timeRange`."""
     assert step > 0
     delta = dt.timedelta(seconds=step)
@@ -456,6 +447,7 @@ async def waitUntilAsync(t: Time_t) -> bool:
 def patchAsyncio():
     """Patch asyncio to allow nested event loops."""
     import nest_asyncio
+
     nest_asyncio.apply()
 
 
@@ -469,7 +461,7 @@ def startLoop():
     patchAsyncio()
 
 
-def useQt(qtLib: str = 'PyQt5', period: float = 0.01):
+def useQt(qtLib: str = "PyQt5", period: float = 0.01):
     """
     Run combined Qt5/asyncio event loop.
 
@@ -482,6 +474,7 @@ def useQt(qtLib: str = 'PyQt5', period: float = 0.01):
           * PySide6
         period: Period in seconds to poll Qt.
     """
+
     def qt_step():
         loop.call_later(period, qt_step)
         if not stack:
@@ -491,19 +484,22 @@ def useQt(qtLib: str = 'PyQt5', period: float = 0.01):
             stack.append((qloop, timer))
         qloop, timer = stack.pop()
         timer.start(0)
-        qloop.exec() if qtLib == 'PyQt6' else qloop.exec_()
+        qloop.exec() if qtLib == "PyQt6" else qloop.exec_()
         timer.stop()
         stack.append((qloop, timer))
         qApp.processEvents()  # type: ignore
 
-    if qtLib not in ('PyQt5', 'PyQt6', 'PySide2', 'PySide6'):
-        raise RuntimeError(f'Unknown Qt library: {qtLib}')
+    if qtLib not in ("PyQt5", "PyQt6", "PySide2", "PySide6"):
+        raise RuntimeError(f"Unknown Qt library: {qtLib}")
     from importlib import import_module
-    qc = import_module(qtLib + '.QtCore')
-    qw = import_module(qtLib + '.QtWidgets')
+
+    qc = import_module(qtLib + ".QtCore")
+    qw = import_module(qtLib + ".QtWidgets")
     global qApp
-    qApp = (qw.QApplication.instance()     # type: ignore
-            or qw.QApplication(sys.argv))  # type: ignore
+    qApp = (  # type: ignore
+        qw.QApplication.instance()  # type: ignore
+        or qw.QApplication(sys.argv)
+    )  # type: ignore
     loop = getLoop()
     stack: list = []
     qt_step()
@@ -512,15 +508,16 @@ def useQt(qtLib: str = 'PyQt5', period: float = 0.01):
 def formatIBDatetime(t: Union[dt.date, dt.datetime, str, None]) -> str:
     """Format date or datetime to string that IB uses."""
     if not t:
-        s = ''
+        s = ""
     elif isinstance(t, dt.datetime):
         # convert to UTC timezone
         t = t.astimezone(tz=dt.timezone.utc)
-        s = t.strftime('%Y%m%d %H:%M:%S UTC')
+        s = t.strftime("%Y%m%d %H:%M:%S UTC")
     elif isinstance(t, dt.date):
-        t = dt.datetime(
-            t.year, t.month, t.day, 23, 59, 59).astimezone(tz=dt.timezone.utc)
-        s = t.strftime('%Y%m%d %H:%M:%S UTC')
+        t = dt.datetime(t.year, t.month, t.day, 23, 59, 59).astimezone(
+            tz=dt.timezone.utc
+        )
+        s = t.strftime("%Y%m%d %H:%M:%S UTC")
     else:
         s = t
     return s
@@ -536,15 +533,15 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
         t = dt.date(y, m, d)
     elif s.isdigit():
         t = dt.datetime.fromtimestamp(int(s), dt.timezone.utc)
-    elif s.count(' ') >= 2 and '  ' not in s:
+    elif s.count(" ") >= 2 and "  " not in s:
         # 20221125 10:00:00 Europe/Amsterdam
-        s0, s1, s2 = s.split(' ', 2)
-        t = dt.datetime.strptime(s0 + s1, '%Y%m%d%H:%M:%S')
+        s0, s1, s2 = s.split(" ", 2)
+        t = dt.datetime.strptime(s0 + s1, "%Y%m%d%H:%M:%S")
         t = t.replace(tzinfo=ZoneInfo(s2))
     else:
         # YYYYmmdd  HH:MM:SS
         # or
         # YYYY-mm-dd HH:MM:SS.0
-        ss = s.replace(' ', '').replace('-', '')[:16]
-        t = dt.datetime.strptime(ss, '%Y%m%d%H:%M:%S')
+        ss = s.replace(" ", "").replace("-", "")[:16]
+        t = dt.datetime.strptime(ss, "%Y%m%d%H:%M:%S")
     return t

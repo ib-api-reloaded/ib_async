@@ -8,10 +8,16 @@ from ib_insync.contract import *  # noqa
 
 
 class TickerTable(qt.QTableWidget):
-
     headers = [
-        'symbol', 'bidSize', 'bid', 'ask', 'askSize',
-        'last', 'lastSize', 'close']
+        "symbol",
+        "bidSize",
+        "bid",
+        "ask",
+        "askSize",
+        "last",
+        "lastSize",
+        "close",
+    ]
 
     def __init__(self, parent=None):
         qt.QTableWidget.__init__(self, parent)
@@ -29,12 +35,13 @@ class TickerTable(qt.QTableWidget):
         self.insertRow(row)
         self.conId2Row[ticker.contract.conId] = row
         for col in range(len(self.headers)):
-            item = qt.QTableWidgetItem('-')
+            item = qt.QTableWidgetItem("-")
             self.setItem(row, col, item)
         item = self.item(row, 0)
-        item.setText(ticker.contract.symbol + (
-            ticker.contract.currency if ticker.contract.secType == 'CASH'
-            else ''))
+        item.setText(
+            ticker.contract.symbol
+            + (ticker.contract.currency if ticker.contract.secType == "CASH" else "")
+        )
         self.resizeColumnsToContents()
 
     def clearTickers(self):
@@ -53,13 +60,12 @@ class TickerTable(qt.QTableWidget):
 
 
 class Window(qt.QWidget):
-
     def __init__(self, host, port, clientId):
         qt.QWidget.__init__(self)
-        self.edit = qt.QLineEdit('', self)
+        self.edit = qt.QLineEdit("", self)
         self.edit.editingFinished.connect(self.add)
         self.table = TickerTable()
-        self.connectButton = qt.QPushButton('Connect')
+        self.connectButton = qt.QPushButton("Connect")
         self.connectButton.clicked.connect(self.onConnectButtonClicked)
         layout = qt.QVBoxLayout(self)
         layout.addWidget(self.edit)
@@ -70,13 +76,16 @@ class Window(qt.QWidget):
         self.ib = IB()
         self.ib.pendingTickersEvent += self.table.onPendingTickers
 
-    def add(self, text=''):
+    def add(self, text=""):
         text = text or self.edit.text()
         if text:
             contract = eval(text)
-            if (contract and self.ib.qualifyContracts(contract)
-                    and contract not in self.table):
-                ticker = self.ib.reqMktData(contract, '', False, False, None)
+            if (
+                contract
+                and self.ib.qualifyContracts(contract)
+                and contract not in self.table
+            ):
+                ticker = self.ib.reqMktData(contract, "", False, False, None)
                 self.table.addTicker(ticker)
             self.edit.setText(text)
 
@@ -84,14 +93,20 @@ class Window(qt.QWidget):
         if self.ib.isConnected():
             self.ib.disconnect()
             self.table.clearTickers()
-            self.connectButton.setText('Connect')
+            self.connectButton.setText("Connect")
         else:
             self.ib.connect(*self.connectInfo)
             self.ib.reqMarketDataType(2)
-            self.connectButton.setText('Disonnect')
+            self.connectButton.setText("Disonnect")
             for symbol in (
-                    'EURUSD', 'USDJPY', 'EURGBP', 'USDCAD',
-                    'EURCHF', 'AUDUSD', 'NZDUSD'):
+                "EURUSD",
+                "USDJPY",
+                "EURGBP",
+                "USDCAD",
+                "EURCHF",
+                "AUDUSD",
+                "NZDUSD",
+            ):
                 self.add(f"Forex('{symbol}')")
             self.add("Stock('TSLA', 'SMART', 'USD')")
 
@@ -100,11 +115,11 @@ class Window(qt.QWidget):
         loop.stop()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     util.patchAsyncio()
     util.useQt()
     # util.useQt('PySide6')
-    window = Window('127.0.0.1', 7497, 1)
+    window = Window("127.0.0.1", 7497, 1)
     window.resize(600, 400)
     window.show()
     IB.run()
