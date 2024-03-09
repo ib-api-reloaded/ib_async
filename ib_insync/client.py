@@ -249,14 +249,14 @@ class Client:
             raise ConnectionError("Not connected")
 
         msg = io.StringIO()
-        empty = (None, UNSET_INTEGER, UNSET_DOUBLE) if makeEmpty else (None,)
+        empty = {None, UNSET_INTEGER, UNSET_DOUBLE} if makeEmpty else {None}
         for field in fields:
             typ = type(field)
             if field in empty:
                 s = ""
             elif typ is str:
                 s = field
-            elif type is int:
+            elif typ is int:
                 s = str(field)
             elif typ is float:
                 s = "Infinite" if field == math.inf else str(field)
@@ -289,6 +289,7 @@ class Client:
 
             msg.write(s)
             msg.write("\0")
+
         self.sendMsg(msg.getvalue())
 
     def sendMsg(self, msg: str):
