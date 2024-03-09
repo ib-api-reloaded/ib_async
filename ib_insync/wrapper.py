@@ -775,7 +775,7 @@ class Wrapper:
             self._logger.error(f"priceSizeTick: Unknown reqId: {reqId}")
             return
         # https://interactivebrokers.github.io/tws-api/tick_types.html
-        if tickType in (1, 66):
+        if tickType in {1, 66}:
             if price == ticker.bid and size == ticker.bidSize:
                 return
             if price != ticker.bid:
@@ -784,7 +784,7 @@ class Wrapper:
             if size != ticker.bidSize:
                 ticker.prevBidSize = ticker.bidSize
                 ticker.bidSize = size
-        elif tickType in (2, 67):
+        elif tickType in {2, 67}:
             if price == ticker.ask and size == ticker.askSize:
                 return
             if price != ticker.ask:
@@ -793,20 +793,20 @@ class Wrapper:
             if size != ticker.askSize:
                 ticker.prevAskSize = ticker.askSize
                 ticker.askSize = size
-        elif tickType in (4, 68):
+        elif tickType in {4, 68}:
             if price != ticker.last:
                 ticker.prevLast = ticker.last
                 ticker.last = price
             if size != ticker.lastSize:
                 ticker.prevLastSize = ticker.lastSize
                 ticker.lastSize = size
-        elif tickType in (6, 72):
+        elif tickType in {6, 72}:
             ticker.high = price
-        elif tickType in (7, 73):
+        elif tickType in {7, 73}:
             ticker.low = price
-        elif tickType in (9, 75):
+        elif tickType in {9, 75}:
             ticker.close = price
-        elif tickType in (14, 76):
+        elif tickType in {14, 76}:
             ticker.open = price
         elif tickType == 15:
             ticker.low13week = price
@@ -824,9 +824,9 @@ class Wrapper:
             ticker.auctionPrice = price
         elif tickType == 37:
             ticker.markPrice = price
-        elif tickType in (50, 103):
+        elif tickType in {50, 103}:
             ticker.bidYield = price
-        elif tickType in (51, 104):
+        elif tickType in {51, 104}:
             ticker.askYield = price
         elif tickType == 52:
             ticker.lastYield = price
@@ -842,26 +842,26 @@ class Wrapper:
             return
         price = -1.0
         # https://interactivebrokers.github.io/tws-api/tick_types.html
-        if tickType in (0, 69):
+        if tickType in {0, 69}:
             if size == ticker.bidSize:
                 return
             price = ticker.bid
             ticker.prevBidSize = ticker.bidSize
             ticker.bidSize = size
-        elif tickType in (3, 70):
+        elif tickType in {3, 70}:
             if size == ticker.askSize:
                 return
             price = ticker.ask
             ticker.prevAskSize = ticker.askSize
             ticker.askSize = size
-        elif tickType in (5, 71):
+        elif tickType in {5, 71}:
             price = ticker.last
             if isNan(price):
                 return
             if size != ticker.lastSize:
                 ticker.prevLastSize = ticker.lastSize
                 ticker.lastSize = size
-        elif tickType in (8, 74):
+        elif tickType in {8, 74}:
             ticker.volume = size
         elif tickType == 21:
             ticker.avVolume = size
@@ -992,7 +992,7 @@ class Wrapper:
                         d[k] = float(v)  # type: ignore
                         d[k] = int(v)  # type: ignore
                 ticker.fundamentalRatios = FundamentalRatios(**d)
-            elif tickType in (48, 77):
+            elif tickType in {48, 77}:
                 # RT Volume or RT Trade Volume string format:
                 # price;size;ms since epoch;total volume;VWAP;single trade
                 # example:
@@ -1158,13 +1158,13 @@ class Wrapper:
         if ticker:
             # reply from reqMktData
             # https://interactivebrokers.github.io/tws-api/tick_types.html
-            if tickType in (10, 80):
+            if tickType in {10, 80}:
                 ticker.bidGreeks = comp
-            elif tickType in (11, 81):
+            elif tickType in {11, 81}:
                 ticker.askGreeks = comp
-            elif tickType in (12, 82):
+            elif tickType in {12, 82}:
                 ticker.lastGreeks = comp
-            elif tickType in (13, 83):
+            elif tickType in {13, 83}:
                 ticker.modelGreeks = comp
             self.pendingTickers.add(ticker)
         elif reqId in self._futures:

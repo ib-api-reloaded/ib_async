@@ -489,7 +489,7 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
         stack.append((qloop, timer))
         qApp.processEvents()  # type: ignore
 
-    if qtLib not in ("PyQt5", "PyQt6", "PySide2", "PySide6"):
+    if qtLib not in {"PyQt5", "PyQt6", "PySide2", "PySide6"}:
         raise RuntimeError(f"Unknown Qt library: {qtLib}")
     from importlib import import_module
 

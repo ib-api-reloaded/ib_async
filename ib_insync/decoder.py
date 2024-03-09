@@ -819,7 +819,7 @@ class Decoder:
         tickType = int(tickType)
         time = int(time)
 
-        if tickType in (1, 2):
+        if tickType in {1, 2}:
             price, size, mask, exchange, specialConditions = fields
             mask = int(mask)
             attrib: Any = TickAttribLast(
@@ -1057,7 +1057,7 @@ class Decoder:
             *fields,
         ) = fields
 
-        if o.orderType in ("PEG BENCH", "PEGBENCH"):
+        if o.orderType in {"PEG BENCH", "PEGBENCH"}:
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,
@@ -1274,7 +1274,7 @@ class Decoder:
                     o.algoParams.append(TagValue(tag, value))
         (o.solicited, st.status, o.randomizeSize, o.randomizePrice, *fields) = fields
 
-        if o.orderType in ("PEG BENCH", "PEGBENCH"):
+        if o.orderType in {"PEG BENCH", "PEGBENCH"}:
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,
