@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 import ib_insync as ibi

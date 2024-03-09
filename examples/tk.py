@@ -1,4 +1,3 @@
-import asyncio
 import tkinter as tk
 
 from ib_insync import IB, util
