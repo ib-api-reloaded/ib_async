@@ -133,7 +133,7 @@ def isnamedtupleinstance(x):
     f = getattr(t, "_fields", None)
     if not isinstance(f, tuple):
         return False
-    return all(type(n) is str for n in f)
+    return all(isinstance(n, str) for n in f)
 
 
 def tree(obj):
@@ -254,7 +254,7 @@ def formatSI(n: float) -> str:
     if n < 0:
         n = -n
         s += "-"
-    if type(n) is int and n < 1000:
+    if isinstance(n, int) and n < 1000:
         s = str(n) + " "
     elif n < 1e-22:
         s = "0.00 "
