@@ -183,6 +183,7 @@ class Decoder:
             if typ is str:
                 continue
             v = getattr(obj, field.name)
+
             if typ is int:
                 setattr(obj, field.name, int(v) if v else field.default)
             elif typ is float:
@@ -203,6 +204,7 @@ class Decoder:
         advancedOrderRejectJson = ""
         if self.serverVersion >= 166:
             advancedOrderRejectJson, *fields = fields
+
         self.wrapper.error(
             int(reqId), int(errorCode), errorString, advancedOrderRejectJson
         )
@@ -268,6 +270,7 @@ class Decoder:
         ) = fields
         if self.serverVersion < 164:
             fields.pop(0)  # obsolete mdSizeMultiplier
+
         (
             c.multiplier,
             cd.orderTypes,
@@ -295,6 +298,7 @@ class Decoder:
             for _ in range(numSecIds):
                 tag, value, *fields = fields
                 cd.secIdList += [TagValue(tag, value)]
+
         (
             cd.aggGroup,
             cd.underSymbol,
@@ -304,8 +308,10 @@ class Decoder:
             cd.stockType,
             *fields,
         ) = fields
+
         if self.serverVersion == 163:
             cd.suggestedSizeIncrement, *fields = fields
+
         if self.serverVersion >= 164:
             (
                 cd.minSize,
@@ -316,10 +322,13 @@ class Decoder:
             ) = fields
 
         times = lastTimes.split("-" if "-" in lastTimes else None)
+
         if len(times) > 0:
             c.lastTradeDateOrContractMonth = times[0]
+
         if len(times) > 1:
             cd.lastTradeTime = times[1]
+
         if len(times) > 2:
             cd.timeZoneId = times[2]
 
@@ -333,6 +342,7 @@ class Decoder:
         cd.contract = c = Contract()
         if self.serverVersion < 164:
             fields.pop(0)
+
         (
             _,
             reqId,
@@ -357,8 +367,10 @@ class Decoder:
             cd.minTick,
             *fields,
         ) = fields
+
         if self.serverVersion < 164:
             fields.pop(0)  # obsolete mdSizeMultiplier
+
         (
             cd.orderTypes,
             cd.validExchanges,
@@ -391,10 +403,13 @@ class Decoder:
             ) = fields
 
         times = lastTimes.split("-" if "-" in lastTimes else None)
+
         if len(times) > 0:
             cd.maturity = times[0]
+
         if len(times) > 1:
             cd.lastTradeTime = times[1]
+
         if len(times) > 2:
             cd.timeZoneId = times[2]
 
@@ -449,6 +464,7 @@ class Decoder:
             tz = self.wrapper.ib.TimezoneTWS
             if tz:
                 time = time.replace(tzinfo=ZoneInfo(str(tz)))
+
         ex.time = time.astimezone(timezone.utc)
         self.wrapper.execDetails(int(reqId), c, ex)
 
@@ -836,7 +852,6 @@ class Decoder:
                 exchange,
                 specialConditions,
             )
-
         elif tickType == 3:
             bidPrice, askPrice, bidSize, askSize, mask = fields
             mask = int(mask)
@@ -853,7 +868,6 @@ class Decoder:
                 float(askSize),
                 attrib,
             )
-
         elif tickType == 4:
             (midPoint,) = fields
 
@@ -902,6 +916,7 @@ class Decoder:
         ) = fields
         if self.serverVersion < 177:
             o.faProfile, *fields = fields
+
         (
             o.modelCode,
             o.goodTillDate,
@@ -947,6 +962,7 @@ class Decoder:
                 o.deltaNeutralDesignatedLocation,
                 *fields,
             ) = fields
+
         (
             o.continuousUpdate,
             o.referencePriceType,
@@ -1101,10 +1117,13 @@ class Decoder:
 
         if self.serverVersion >= 159:
             o.duration = fields.pop(0)
+
         if self.serverVersion >= 160:
             o.postToAts = fields.pop(0)
+
         if self.serverVersion >= 162:
             o.autoCancelParent = fields.pop(0)
+
         if self.serverVersion >= 170:
             (
                 o.minTradeQty,
@@ -1161,6 +1180,7 @@ class Decoder:
         ) = fields
         if self.serverVersion < 177:
             o.faProfile, *fields = fields
+
         (
             o.modelCode,
             o.goodTillDate,
@@ -1196,6 +1216,7 @@ class Decoder:
                 o.deltaNeutralDesignatedLocation,
                 *fields,
             ) = fields
+
         (
             o.continuousUpdate,
             o.referencePriceType,

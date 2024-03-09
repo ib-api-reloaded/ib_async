@@ -87,7 +87,7 @@ class Client:
     MinClientVersion = 157
     MaxClientVersion = 178
 
-    (DISCONNECTED, CONNECTING, CONNECTED) = range(3)
+    DISCONNECTED, CONNECTING, CONNECTED = range(3)
 
     def __init__(self, wrapper):
         self.wrapper = wrapper
@@ -148,6 +148,7 @@ class Client:
         """Get statistics about the connection."""
         if not self.isReady():
             raise ConnectionError("Not connected")
+
         return ConnectionStats(
             self._startTime,
             time.time() - self._startTime,
@@ -161,6 +162,7 @@ class Client:
         """Get new request ID."""
         if not self.isReady():
             raise ConnectionError("Not connected")
+
         newId = self._reqIdSeq
         self._reqIdSeq += 1
         return newId
@@ -284,6 +286,7 @@ class Client:
                 )
             else:
                 s = str(field)
+
             msg.write(s)
             msg.write("\0")
         self.sendMsg(msg.getvalue())
@@ -295,14 +298,17 @@ class Client:
         msgs = self._msgQ
         while times and t - times[0] > self.RequestsInterval:
             times.popleft()
+
         if msg:
             msgs.append(msg)
+
         while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
             msg = msgs.popleft()
             self.conn.sendMsg(self._prefix(msg.encode()))
             times.append(t)
             if self._logger.isEnabledFor(logging.DEBUG):
                 self._logger.debug(">>> %s", msg[:-1].replace("\0", ","))
+
         if msgs:
             if not self._isThrottling:
                 self._isThrottling = True
@@ -330,11 +336,13 @@ class Client:
         while True:
             if len(self._data) <= 4:
                 break
+
             # 4 byte prefix tells the message length
             msgEnd = 4 + struct.unpack(">I", self._data[:4])[0]
             if len(self._data) < msgEnd:
                 # insufficient data for now
                 break
+
             msg = self._data[4:msgEnd].decode(errors="backslashreplace")
             self._data = self._data[msgEnd:]
             fields = msg.split("\0")
@@ -386,13 +394,17 @@ class Client:
             msg = "Peer closed connection."
             if not wasReady:
                 msg += f" clientId {self.clientId} already in use?"
+
         if msg:
             self._logger.error(msg)
             self.apiError.emit(msg)
+
         self.wrapper.setEventsDone()
         if wasReady:
             self.wrapper.connectionClosed()
+
         self.reset()
+
         if wasReady:
             self.apiEnd.emit()
 
@@ -491,8 +503,10 @@ class Client:
             order.faMethod,
             order.faPercentage,
         ]
+
         if version < 177:
             fields += [order.faProfile]
+
         fields += [
             order.modelCode,
             order.shortSaleSlot,
@@ -631,14 +645,19 @@ class Client:
 
         if version >= 158:
             fields += [order.duration]
+
         if version >= 160:
             fields += [order.postToAts]
+
         if version >= 162:
             fields += [order.autoCancelParent]
+
         if version >= 166:
             fields += [order.advancedErrorOverride]
+
         if version >= 169:
             fields += [order.manualOrderTime]
+
         if version >= 170:
             if contract.exchange == "IBKRATS":
                 fields += [order.minTradeQty]
@@ -690,8 +709,10 @@ class Client:
             contract.secIdType,
             contract.secId,
         ]
+
         if self.serverVersion() >= 176:
             fields += [contract.issuerId]
+
         self.send(*fields)
 
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):

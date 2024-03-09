@@ -309,18 +309,23 @@ class Wrapper:
         self.lastTime = datetime.now(timezone.utc)
         if self._timeoutHandle:
             self._timeoutHandle.cancel()
+
         self._timeoutHandle = None
         self._timeout = timeout
+
         if timeout:
             self._setTimer(timeout)
 
     def _setTimer(self, delay: float = 0):
         if self.lastTime == datetime.min:
             return
+
         now = datetime.now(timezone.utc)
         diff = (now - self.lastTime).total_seconds()
+
         if not delay:
             delay = self._timeout - diff
+
         if delay > 0:
             loop = getLoop()
             self._timeoutHandle = loop.call_later(delay, self._setTimer)
@@ -404,10 +409,12 @@ class Wrapper:
             account,
         )
         portfolioItems = self.portfolio[account]
+
         if posSize == 0:
             portfolioItems.pop(contract.conId, None)
         else:
             portfolioItems[contract.conId] = portfItem
+
         self._logger.info(f"updatePortfolio: {portfItem}")
         self.ib.updatePortfolioEvent.emit(portfItem)
 
@@ -417,14 +424,18 @@ class Wrapper:
         contract = Contract.create(**dataclassAsDict(contract))
         position = Position(account, contract, posSize, avgCost)
         positions = self.positions[account]
+
         if posSize == 0:
             positions.pop(contract.conId, None)
         else:
             positions[contract.conId] = position
+
         self._logger.info(f"position: {position}")
         results = self._results.get("positions")
+
         if results is not None:
             results.append(position)
+
         self.ib.positionEvent.emit(position)
 
     def positionEnd(self):
@@ -450,6 +461,7 @@ class Wrapper:
         pnl = self.reqId2PnL.get(reqId)
         if not pnl:
             return
+
         pnl.dailyPnL = dailyPnL
         pnl.unrealizedPnL = unrealizedPnL
         pnl.realizedPnL = realizedPnL
@@ -467,6 +479,7 @@ class Wrapper:
         pnlSingle = self.reqId2PnlSingle.get(reqId)
         if not pnlSingle:
             return
+
         pnlSingle.position = pos
         pnlSingle.dailyPnL = dailyPnL
         pnlSingle.unrealizedPnL = unrealizedPnL
@@ -510,8 +523,10 @@ class Wrapper:
                 trade = Trade(contract, order, orderStatus, [], [])
                 self.trades[key] = trade
                 self._logger.info(f"openOrder: {trade}")
+
             self.permId2Trade.setdefault(order.permId, trade)
             results = self._results.get("openOrders")
+
             if results is None:
                 self.ib.openOrderEvent.emit(trade)
             else:
@@ -531,6 +546,7 @@ class Wrapper:
         orderStatus = OrderStatus(orderId=order.orderId, status=orderState.status)
         trade = Trade(contract, order, orderStatus, [], [])
         self._results["completedOrders"].append(trade)
+
         if order.permId not in self.permId2Trade:
             self.trades[order.permId] = trade
             self.permId2Trade[order.permId] = trade
@@ -571,6 +587,7 @@ class Wrapper:
             )
             curr = dataclassAsDict(trade.orderStatus)
             isChanged = curr != {**curr, **new}
+
             if isChanged:
                 dataclassUpdate(trade.orderStatus, **new)
                 msg = ""
@@ -611,14 +628,17 @@ class Wrapper:
         if execution.orderId == UNSET_INTEGER:
             # bug in TWS: executions of manual orders have unset value
             execution.orderId = 0
+
         trade = self.permId2Trade.get(execution.permId)
         if not trade:
             key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
             trade = self.trades.get(key)
+
         if trade and contract == trade.contract:
             contract = trade.contract
         else:
             contract = Contract.create(**dataclassAsDict(contract))
+
         execId = execution.execId
         isLive = reqId not in self._futures
         time = self.lastTime if isLive else execution.time
@@ -638,6 +658,7 @@ class Wrapper:
                     self._logger.info(f"execDetails: {fill}")
                     self.ib.execDetailsEvent.emit(trade, fill)
                     trade.fillEvent(trade, fill)
+
         if not isLive:
             self._results[reqId].append(fill)
 
@@ -647,8 +668,10 @@ class Wrapper:
     def commissionReport(self, commissionReport: CommissionReport):
         if commissionReport.yield_ == UNSET_DOUBLE:
             commissionReport.yield_ = 0.0
+
         if commissionReport.realizedPNL == UNSET_DOUBLE:
             commissionReport.realizedPNL = 0.0
+
         fill = self.fills.get(commissionReport.execId)
         if fill:
             report = dataclassUpdate(fill.commissionReport, commissionReport)
@@ -722,10 +745,12 @@ class Wrapper:
         bars = self.reqId2Subscriber.get(reqId)
         if not bars:
             return
+
         bar.date = parseIBDatetime(bar.date)  # type: ignore
         lastDate = bars[-1].date
         if bar.date < lastDate:
             return
+
         hasNewBar = len(bars) == 0 or bar.date > lastDate
         if hasNewBar:
             bars.append(bar)
@@ -733,6 +758,7 @@ class Wrapper:
             bars[-1] = bar
         else:
             return
+
         self.ib.barUpdateEvent.emit(bars, hasNewBar)
         bars.updateEvent.emit(bars, hasNewBar)
 
@@ -747,6 +773,7 @@ class Wrapper:
         result = self._results.get(reqId)
         if result is not None:
             result += ticks
+
         if done:
             self._endReq(reqId)
 
@@ -756,6 +783,7 @@ class Wrapper:
         result = self._results.get(reqId)
         if result is not None:
             result += ticks
+
         if done:
             self._endReq(reqId)
 
@@ -765,6 +793,7 @@ class Wrapper:
         result = self._results.get(reqId)
         if result is not None:
             result += ticks
+
         if done:
             self._endReq(reqId)
 
@@ -774,6 +803,7 @@ class Wrapper:
         if not ticker:
             self._logger.error(f"priceSizeTick: Unknown reqId: {reqId}")
             return
+
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tickType in {1, 66}:
             if price == ticker.bid and size == ticker.bidSize:
@@ -830,9 +860,11 @@ class Wrapper:
             ticker.askYield = price
         elif tickType == 52:
             ticker.lastYield = price
+
         if price or size:
             tick = TickData(self.lastTime, tickType, price, size)
             ticker.ticks.append(tick)
+
         self.pendingTickers.add(ticker)
 
     def tickSize(self, reqId: int, tickType: int, size: float):
@@ -840,6 +872,7 @@ class Wrapper:
         if not ticker:
             self._logger.error(f"tickSize: Unknown reqId: {reqId}")
             return
+
         price = -1.0
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tickType in {0, 69}:
@@ -885,9 +918,11 @@ class Wrapper:
             ticker.avOptionVolume = size
         elif tickType == 89:
             ticker.shortableShares = size
+
         if price or size:
             tick = TickData(self.lastTime, tickType, price, size)
             ticker.ticks.append(tick)
+
         self.pendingTickers.add(ticker)
 
     def tickSnapshotEnd(self, reqId: int):
@@ -908,12 +943,15 @@ class Wrapper:
         if not ticker:
             self._logger.error(f"tickByTickAllLast: Unknown reqId: {reqId}")
             return
+
         if price != ticker.last:
             ticker.prevLast = ticker.last
             ticker.last = price
+
         if size != ticker.lastSize:
             ticker.prevLastSize = ticker.lastSize
             ticker.lastSize = size
+
         tick = TickByTickAllLast(
             tickType,
             self.lastTime,
@@ -923,6 +961,7 @@ class Wrapper:
             exchange,
             specialConditions,
         )
+
         ticker.tickByTicks.append(tick)
         self.pendingTickers.add(ticker)
 
@@ -940,18 +979,23 @@ class Wrapper:
         if not ticker:
             self._logger.error(f"tickByTickBidAsk: Unknown reqId: {reqId}")
             return
+
         if bidPrice != ticker.bid:
             ticker.prevBid = ticker.bid
             ticker.bid = bidPrice
+
         if bidSize != ticker.bidSize:
             ticker.prevBidSize = ticker.bidSize
             ticker.bidSize = bidSize
+
         if askPrice != ticker.ask:
             ticker.prevAsk = ticker.ask
             ticker.ask = askPrice
+
         if askSize != ticker.askSize:
             ticker.prevAskSize = ticker.askSize
             ticker.askSize = askSize
+
         tick = TickByTickBidAsk(
             self.lastTime, bidPrice, askPrice, bidSize, askSize, tickAttribBidAsk
         )
@@ -963,6 +1007,7 @@ class Wrapper:
         if not ticker:
             self._logger.error(f"tickByTickMidPoint: Unknown reqId: {reqId}")
             return
+
         tick = TickByTickMidPoint(self.lastTime, midPoint)
         ticker.tickByTicks.append(tick)
         self.pendingTickers.add(ticker)
@@ -971,6 +1016,7 @@ class Wrapper:
         ticker = self.reqId2Ticker.get(reqId)
         if not ticker:
             return
+
         try:
             if tickType == 32:
                 ticker.bidExchange = value
@@ -1043,11 +1089,13 @@ class Wrapper:
         ticker = self.reqId2Ticker.get(reqId)
         if not ticker:
             return
+
         try:
             value = float(value)
         except ValueError:
             self._logger.error(f"genericTick: malformed value: {value!r}")
             return
+
         if tickType == 23:
             ticker.histVolatility = value
         elif tickType == 24:
@@ -1064,6 +1112,7 @@ class Wrapper:
             ticker.volumeRate = value
         elif tickType == 58:
             ticker.rtHistVolatility = value
+
         tick = TickData(self.lastTime, tickType, value, 0)
         ticker.ticks.append(tick)
         self.pendingTickers.add(ticker)
@@ -1074,6 +1123,7 @@ class Wrapper:
         ticker = self.reqId2Ticker.get(reqId)
         if not ticker:
             return
+
         ticker.minTick = minTick
         ticker.bboExchange = bboExchange
         ticker.snapshotPermissions = snapshotPermissions
@@ -1196,6 +1246,7 @@ class Wrapper:
         dataList = self.reqId2Subscriber.get(reqId)
         if dataList is None:
             dataList = self._results.get(reqId)
+
         if dataList is not None:
             if rank == 0:
                 dataList.clear()
@@ -1207,6 +1258,7 @@ class Wrapper:
             self._endReq(reqId)
         else:
             dataList = self.reqId2Subscriber.get(reqId)
+
         if dataList is not None:
             self.ib.scannerDataEvent.emit(dataList)
             dataList.updateEvent.emit(dataList)
@@ -1332,6 +1384,7 @@ class Wrapper:
         if errorCode == 110 and isRequest:
             # whatIf request failed
             isWarning = False
+
         if (
             errorCode == 110
             and trade
@@ -1364,6 +1417,7 @@ class Wrapper:
                 # something is wrong with the order, cancel it
                 if advancedOrderRejectJson:
                     trade.advancedError = advancedOrderRejectJson
+
                 if not trade.isDone():
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)

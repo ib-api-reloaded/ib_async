@@ -50,6 +50,7 @@ def df(objs, labels: Optional[List[str]] = None):
             df = pd.DataFrame.from_records(o.__dict__ for o in objs)
         else:
             df = pd.DataFrame.from_records(objs)
+
         if isinstance(obj, tuple):
             _fields = getattr(obj, "_fields", None)
             if _fields:
@@ -57,9 +58,11 @@ def df(objs, labels: Optional[List[str]] = None):
                 df.columns = _fields
     else:
         df = None
+
     if labels:
         exclude = [label for label in df if label not in labels]
         df = df.drop(exclude, axis=1)
+
     return df
 
 
@@ -70,6 +73,7 @@ def dataclassAsDict(obj) -> dict:
     """
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
+
     return {field.name: getattr(obj, field.name) for field in fields(obj)}
 
 
@@ -80,6 +84,7 @@ def dataclassAsTuple(obj) -> tuple:
     """
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
+
     return tuple(getattr(obj, field.name) for field in fields(obj))
 
 
@@ -90,7 +95,9 @@ def dataclassNonDefaults(obj) -> dict:
     """
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
+
     values = [getattr(obj, field.name) for field in fields(obj)]
+
     return {
         field.name: value
         for field, value in zip(fields(obj), values)
@@ -107,8 +114,10 @@ def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
     """
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
+
     for srcObj in srcObjs:
         obj.__dict__.update(dataclassAsDict(srcObj))
+
     obj.__dict__.update(**kwargs)
     return obj
 
@@ -130,9 +139,11 @@ def isnamedtupleinstance(x):
     b = t.__bases__
     if len(b) != 1 or b[0] != tuple:
         return False
+
     f = getattr(t, "_fields", None)
     if not isinstance(f, tuple):
         return False
+
     return all(isinstance(n, str) for n in f)
 
 
@@ -143,18 +154,23 @@ def tree(obj):
     """
     if isinstance(obj, (bool, int, float, str, bytes)):
         return obj
-    elif isinstance(obj, (dt.date, dt.time)):
+
+    if isinstance(obj, (dt.date, dt.time)):
         return obj.isoformat()
-    elif isinstance(obj, dict):
+
+    if isinstance(obj, dict):
         return {k: tree(v) for k, v in obj.items()}
-    elif isnamedtupleinstance(obj):
+
+    if isnamedtupleinstance(obj):
         return {f: tree(getattr(obj, f)) for f in obj._fields}
-    elif isinstance(obj, (list, tuple, set)):
+
+    if isinstance(obj, (list, tuple, set)):
         return [tree(i) for i in obj]
-    elif is_dataclass(obj):
+
+    if is_dataclass(obj):
         return {obj.__class__.__qualname__: tree(dataclassNonDefaults(obj))}
-    else:
-        return str(obj)
+
+    return str(obj)
 
 
 def barplot(bars, title="", upColor="blue", downColor="red"):
@@ -216,6 +232,7 @@ def logToFile(path, level=logging.INFO):
         logging.getLogger("ib_insync").setLevel(level)
     else:
         logger.setLevel(level)
+
     formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
     handler = logging.FileHandler(path)
     handler.setFormatter(formatter)
@@ -230,6 +247,7 @@ def logToConsole(level=logging.INFO):
         for h in logger.handlers
         if type(h) is logging.StreamHandler and h.stream is sys.stderr
     ]
+
     if stdHandlers:
         # if a standard stream handler already exists, use it and
         # set the log level for the ib_insync namespace only
@@ -254,6 +272,7 @@ def formatSI(n: float) -> str:
     if n < 0:
         n = -n
         s += "-"
+
     if isinstance(n, int) and n < 1000:
         s = str(n) + " "
     elif n < 1e-22:
@@ -272,6 +291,7 @@ def formatSI(n: float) -> str:
         s += val + " "
         if i != 0:
             s += "yzafpnum kMGTPEZY"[i + 8]
+
     return s
 
 
@@ -303,12 +323,14 @@ def run(*awaitables: Awaitable, timeout: Optional[float] = None):
     if not awaitables:
         if loop.is_running():
             return
+
         loop.run_forever()
         result = None
         if sys.version_info >= (3, 7):
             all_tasks = asyncio.all_tasks(loop)  # type: ignore
         else:
             all_tasks = asyncio.Task.all_tasks()  # type: ignore
+
         if all_tasks:
             # cancel pending tasks
             f = asyncio.gather(*all_tasks)
@@ -322,6 +344,7 @@ def run(*awaitables: Awaitable, timeout: Optional[float] = None):
             future = awaitables[0]
         else:
             future = asyncio.gather(*awaitables)
+
         if timeout:
             future = asyncio.wait_for(future, timeout)
         task = asyncio.ensure_future(future)
@@ -399,6 +422,7 @@ def timeRange(start: Time_t, end: Time_t, step: float) -> Iterator[dt.datetime]:
     now = dt.datetime.now(tz)
     while t < now:
         t += delta
+
     while t <= _fillDate(end):
         waitUntil(t)
         yield t
@@ -424,12 +448,14 @@ async def timeRangeAsync(
 ) -> AsyncIterator[dt.datetime]:
     """Async version of :meth:`timeRange`."""
     assert step > 0
+
     delta = dt.timedelta(seconds=step)
     t = _fillDate(start)
     tz = dt.timezone.utc if t.tzinfo else None
     now = dt.datetime.now(tz)
     while t < now:
         t += delta
+
     while t <= _fillDate(end):
         await waitUntilAsync(t)
         yield t
@@ -441,6 +467,7 @@ async def waitUntilAsync(t: Time_t) -> bool:
     now = dt.datetime.now(t.tzinfo)
     secs = (_fillDate(t) - now).total_seconds()
     await asyncio.sleep(secs)
+
     return True
 
 
@@ -520,6 +547,7 @@ def formatIBDatetime(t: Union[dt.date, dt.datetime, str, None]) -> str:
         s = t.strftime("%Y%m%d %H:%M:%S UTC")
     else:
         s = t
+
     return s
 
 
@@ -544,4 +572,5 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
         # YYYY-mm-dd HH:MM:SS.0
         ss = s.replace(" ", "").replace("-", "")[:16]
         t = dt.datetime.strptime(ss, "%Y%m%d%H:%M:%S")
+
     return t

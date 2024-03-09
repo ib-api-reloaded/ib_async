@@ -130,8 +130,10 @@ class Contract:
             "NEWS": Contract,
             "EVENT": Contract,
         }.get(secType, Contract)
+
         if cls is not Contract:
             kwargs.pop("secType", "")
+
         return cls(**kwargs)
 
     def isHashable(self) -> bool:
@@ -152,11 +154,13 @@ class Contract:
     def __hash__(self):
         if not self.isHashable():
             raise ValueError(f"Contract {self} can't be hashed")
+
         if self.secType == "CONTFUT":
             # CONTFUT gets the same conId as the front contract, invert it here
             h = -self.conId
         else:
             h = self.conId
+
         return h
 
     def __repr__(self):
@@ -328,6 +332,7 @@ class Forex(Contract):
             assert len(pair) == 6
             symbol = symbol or pair[:3]
             currency = currency or pair[3:]
+
         Contract.__init__(
             self, "CASH", symbol=symbol, exchange=exchange, currency=currency, **kwargs
         )
