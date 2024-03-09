@@ -85,7 +85,7 @@ class Window(qt.QWidget):
                 and self.ib.qualifyContracts(contract)
                 and contract not in self.table
             ):
-                ticker = self.ib.reqMktData(contract, "", False, False, None)
+                ticker = self.ib.reqMktData(contract, "", False, False)
                 self.table.addTicker(ticker)
             self.edit.setText(text)
 
