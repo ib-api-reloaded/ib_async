@@ -1,4 +1,10 @@
-|Build| |Group| |PyVersion| |Status| |PyPiVersion| |License| |Downloads| |Docs|
+|Build| |PyVersion| |Status| |PyPiVersion| |License| |Downloads| |Docs|
+
+Update
+======
+
+Under new management. See `discussions <https://github.com/mattsta/ib_insync/discussions>`_ to help.
+
 
 Introduction
 ============
@@ -86,8 +92,7 @@ The complete `API documentation <https://ib-insync.readthedocs.io/api.html>`_.
 Discussion
 ----------
 
-The `insync user group <https://groups.io/g/insync>`_ is the place to discuss
-IB-insync and anything related to it.
+See the GitHub discussions tab here for now: https://github.com/mattsta/ib_insync/discussions
 
 Disclaimer
 ----------
@@ -101,10 +106,6 @@ Good luck and enjoy,
 :author: Ewald de Wit <ewald.de.wit@gmail.com>
 
 .. _`Interactive Brokers Python API`: http://interactivebrokers.github.io
-
-.. |Group| image:: https://img.shields.io/badge/groups.io-insync-green.svg
-   :alt: Join the user group
-   :target: https://groups.io/g/insync
 
 .. |PyPiVersion| image:: https://img.shields.io/pypi/v/ib_insync.svg
    :alt: PyPi
