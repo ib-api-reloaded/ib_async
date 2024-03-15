@@ -99,11 +99,12 @@ Disclaimer
 
 The software is provided on the conditions of the simplified BSD license.
 
-This project is not affiliated with Interactive Brokers Group, Inc.'s.
+This project is not affiliated with Interactive Brokers Group, Inc.
 
 Good luck and enjoy,
 
-:author: Ewald de Wit <ewald.de.wit@gmail.com>
+:author (original, sadly passed): Ewald de Wit
+:author (active replacement): https://github.com/mattsta
 
 .. _`Interactive Brokers Python API`: http://interactivebrokers.github.io
 
@@ -132,5 +133,5 @@ Good luck and enjoy,
    :alt: Number of downloads
    :target: https://pepy.tech/project/ib-insync
 
-.. |Build| image:: https://github.com/erdewit/ib_insync/actions/workflows/test.yml/badge.svg?branch=master
-   :target: https://github.com/erdewit/ib_insync/actions
+.. |Build| image:: https://github.com/ip-api-reloaded/ib_async/actions/workflows/test.yml/badge.svg?branch=next
+   :target: https://github.com/ib-api-reloaded/ib_async/actions
