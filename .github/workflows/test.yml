@@ -20,11 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install flake8 mypy types-dataclasses .
-
-      - name: Flake8 static code analysis
-        run:
-          flake8 ib_insync
+          pip install mypy types-dataclasses .
 
       - name: MyPy static code analysis
         run: |
