@@ -5,17 +5,23 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",
+    "myst_parser",
 ]
 
 templates_path = ["_templates"]
-source_suffix = ".rst"
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".txt": "markdown",
+    ".md": "markdown",
+}
+suppress_warnings = ["myst.xref_missing", "myst.iref_ambiguous"]
 master_doc = "index"
-project = "ib_insync"
-copyright = "2023, Ewald de Wit"
-author = "Ewald de Wit"
+project = "ib_async"
+html_show_copyright = False
+author = "Originally Ewald de Wit; Currently Matt Stancliff"
 
 __version__ = ""
-exec(open("../ib_insync/version.py").read())
+exec(open("../ib_async/version.py").read())
 version = ".".join(__version__.split(".")[:2])
 release = __version__
 
@@ -25,7 +31,7 @@ pygments_style = "sphinx"
 todo_include_todos = False
 html_theme = "sphinx_rtd_theme"
 html_theme_options = {
-    "canonical_url": "https://ib_insync.readthedocs.io",
+    "canonical_url": "https://ib-api-reloaded.github.io/ib_async",
     "logo_only": False,
     "display_version": True,
     "prev_next_buttons_location": "bottom",
@@ -43,11 +49,11 @@ intersphinx_mapping = {
     "eventkit": ("https://eventkit.readthedocs.io/en/latest", None),
 }
 
-github_url = "https://github.com/erdewit/ib_insync"
+github_url = "https://github.com/ib-api-reloaded/ib_async"
 
 extlinks = {
-    "issue": ("https://github.com/erdewit/ib_insync/issues/%s", "issue %s"),
-    "pull": ("https://github.com/erdewit/ib_insync/pull/%s", "pull %s"),
+    "issue": ("https://github.com/ib-api-reloaded/ib_async/issues/%s", "issue %s"),
+    "pull": ("https://github.com/ib-api-reloaded/ib_async/pull/%s", "pull %s"),
 }
 
 autoclass_content = "both"

@@ -1,4 +1,4 @@
-ib_insync/__pycache__
+ib_async/__pycache__
 dist
 build
 .vscode
@@ -9,7 +9,7 @@ build
 .pydevproject
 .mypy_cache
 .eggs
-docs/html/.buildinfo
-docs/html/.doctrees
-docs/doctrees
-ib_insync.egg-info
+html
+doctrees
+ib_async.egg-info
+poetry.lock

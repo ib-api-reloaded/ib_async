@@ -1,0 +1,38 @@
+# Adapted from https://tomasfarias.dev/articles/sphinx-docs-with-poetry-and-github-pages/
+name: docs
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: 3.12
+    - uses: abatilo/actions-poetry@v2
+    - name: install
+      run: poetry install --with=docs
+    - name: Build documentation
+      run: |
+        mkdir html
+        touch html/.nojekyll
+        poetry run sphinx-build -b html docs html
+    - name: Deploy documentation
+      if: ${{ github.event_name == 'push' }}
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        branch: gh-pages
+        folder: html

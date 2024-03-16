@@ -1,6 +1,6 @@
 import pytest
 
-import ib_insync as ibi
+import ib_async as ibi
 
 pytestmark = pytest.mark.asyncio
 

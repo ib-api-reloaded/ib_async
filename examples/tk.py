@@ -1,7 +1,7 @@
 import tkinter as tk
 
-from ib_insync import IB, util
-from ib_insync.contract import *  # noqa
+from ib_async import IB, util
+from ib_async.contract import *  # noqa
 
 util.patchAsyncio()
 

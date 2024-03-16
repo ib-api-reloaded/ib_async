@@ -1,0 +1,56 @@
+[tool.poetry]
+name = "ib_async"
+version = "1.0.0"
+description = "Python sync/async framework for Interactive Brokers API"
+authors = ["Ewald de Wit"]
+maintainers = ["Matt Stancliff <matt@matt.sh>"]
+license = "BSD"
+readme = "README.md"
+repository = "https://github.com/ib-api-reloaded/ib_async"
+include = ["ib_async/py.typed"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+]
+keywords = ["ibapi", "tws", "asyncio", "jupyter", "interactive", "brokers", "async", "ib_insync"]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+eventkit = "*"
+nest_asyncio = "*"
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/ib-api-reloaded/ib_async/issues"
+
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+pytest-asyncio = ">=0.23"
+
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx-autodoc-typehints = "^2.0.0"
+sphinx-rtd-theme = "^2.0.0"
+myst-parser = "^2.0.0"
+
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = true
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

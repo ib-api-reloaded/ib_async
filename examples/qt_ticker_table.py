@@ -1,8 +1,8 @@
 import PyQt5.QtWidgets as qt
 # import PySide6.QtWidgets as qt
 
-from ib_insync import IB, util
-from ib_insync.contract import *  # noqa
+from ib_async import IB, util
+from ib_async.contract import *  # noqa
 
 
 class TickerTable(qt.QTableWidget):

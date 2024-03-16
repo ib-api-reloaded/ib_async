@@ -17,50 +17,50 @@ from IB.
 IB
 --
 
-.. automodule:: ib_insync.ib
+.. automodule:: ib_async.ib
 
 Client
 ------
 
-.. automodule:: ib_insync.client
+.. automodule:: ib_async.client
 
 Order
 -----
 
-.. automodule:: ib_insync.order
+.. automodule:: ib_async.order
 
 Contract
 --------
 
-.. automodule:: ib_insync.contract
+.. automodule:: ib_async.contract
 
 Ticker
 --------
 
-.. automodule:: ib_insync.ticker
+.. automodule:: ib_async.ticker
 
 Objects
 -------
 
-.. automodule:: ib_insync.objects
+.. automodule:: ib_async.objects
 
-.. autoclass:: ib_insync.wrapper.RequestError
+.. autoclass:: ib_async.wrapper.RequestError
 
 Utilities
 ---------
 
-.. automodule:: ib_insync.util
+.. automodule:: ib_async.util
 
 FlexReport
 ----------
 
-.. automodule:: ib_insync.flexreport
+.. automodule:: ib_async.flexreport
 
 IBC
 ---
-.. autoclass:: ib_insync.ibcontroller.IBC
+.. autoclass:: ib_async.ibcontroller.IBC
 
 Watchdog
 --------
-.. autoclass:: ib_insync.ibcontroller.Watchdog
+.. autoclass:: ib_async.ibcontroller.Watchdog
 

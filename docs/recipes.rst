@@ -18,7 +18,7 @@ and further back in time until there is no more data returned.
 .. code-block:: python
 
     import datetime
-    from ib_insync import *
+    from ib_async import *
 
     ib = IB()
     ib.connect('127.0.0.1', 7497, clientId=1)
@@ -156,7 +156,7 @@ is needed to get corporate event data.
 
 .. code-block:: python
 
-    from ib_insync import *
+    from ib_async import *
 
     ib = IB()
     ib.connect('127.0.0.1', 7497, clientId=1)
@@ -235,7 +235,7 @@ Integration with PyQt5 or PySide2
 
 .. image:: images/qt-tickertable.png
 
-`This example <https://github.com/erdewit/ib_insync/blob/master/examples/qt_ticker_table.py>`_
+`This example <https://github.com/ib-api-reloaded/ib_async/blob/master/examples/qt_ticker_table.py>`_
 of a ticker table shows how to integrate both
 realtime streaming and synchronous API requests in a single-threaded
 Qt application.
@@ -258,17 +258,17 @@ Integration with Tkinter
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 To integrate with the Tkinter event loop, take a look at
-`this example app <https://github.com/erdewit/ib_insync/blob/master/examples/tk.py>`_.
+`this example app <https://github.com/ib-api-reloaded/ib_async/blob/master/examples/tk.py>`_.
 
 Integration with PyGame
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-By calling ``ib.sleep`` from within the PyGame run loop, ib_insync can periodically
+By calling ``ib.sleep`` from within the PyGame run loop, ib_async can periodically
 run for short whiles and keep up to date:
 
 .. code-block:: python
 
-    import ib_insync as ibi
+    import ib_async as ibi
     import pygame
 
 
