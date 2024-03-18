@@ -40,7 +40,7 @@ Version 0.9.86
 
 Version 0.9.85
 ^^^^^^^^^^^^^^
- * Fixed: :issue:`586`: Revert socket protocol back to version 176.
+* Fixed: :issue:`586`: Revert socket protocol back to version 176.
 
 Version 0.9.84
 ^^^^^^^^^^^^^^
