@@ -19,6 +19,7 @@ This is the first version under new management after the unexpected passing of `
 * Removed helper scripts for packaging and building docs
 * Removed docs-generated HTML from repository
 * Auto-build docs and update github docs site on every push
+* Documentation now auto-builds and is hosted on github pages instead of readthedocs
 
 
 Original ``ib_insync`` Changelog (2017-2023)
