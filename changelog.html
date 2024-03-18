@@ -4,19 +4,19 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; ib_async 0.9.86 documentation</title>
+  <title>ib_async Changelog &mdash; ib_async 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
   
-    <link rel="canonical" href="https://ib_async.readthedocs.iochangelog.html"/>
+    <link rel="canonical" href="https://ib-api-reloaded.github.io/ib_asyncchangelog.html"/>
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=b76974d2"></script>
+        <script src="_static/documentation_options.js?v=8d563738"></script>
         <script src="_static/doctools.js?v=888ff710"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -38,7 +38,7 @@
             ib_async
           </a>
               <div class="version">
-                0.9
+                1.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -54,8 +54,13 @@
 <li class="toctree-l1"><a class="reference internal" href="notebooks.html">Notebooks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="recipes.html">Code recipes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Changelog</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#id1">0.9</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id1">1.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#version-1-0-0">Version 1.0.0</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#original-ib-insync-changelog-2017-2023">Original <code class="docutils literal notranslate"><span class="pre">ib_insync</span></code> Changelog (2017-2023)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">0.9</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-86">Version 0.9.86</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-85">Version 0.9.85</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-84">Version 0.9.84</a></li>
@@ -145,7 +150,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-0">Version 0.9.0</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#id2">0.8</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id3">0.8</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-17">Version 0.8.17</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-16">Version 0.8.16</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-15">Version 0.8.15</a></li>
@@ -166,14 +171,14 @@
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-0">Version 0.8.0</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#id3">0.7</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id4">0.7</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-3">Version 0.7.3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-2">Version 0.7.2</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-1">Version 0.7.1</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-0">Version 0.7.0</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#id4">0.6</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id5">0.6</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-6-1">Version 0.6.1</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-6-0">Version 0.6.0</a></li>
 </ul>
@@ -197,7 +202,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Changelog</li>
+      <li class="breadcrumb-item active"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/changelog.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -207,10 +212,33 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="changelog">
-<h1>Changelog<a class="headerlink" href="#changelog" title="Link to this heading"></a></h1>
+  <section id="ib-async-changelog">
+<h1><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog<a class="headerlink" href="#ib-async-changelog" title="Link to this heading"></a></h1>
 <section id="id1">
-<h2>0.9<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<h2>1.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<section id="version-1-0-0">
+<h3>Version 1.0.0<a class="headerlink" href="#version-1-0-0" title="Link to this heading"></a></h3>
+<p>This is the first version under new management after the unexpected passing of <a class="reference external" href="https://github.com/erdewit/ib_insync">Ewald de Wit</a> on March 11, 2024. We wish to maintain his legacy while continuing to improve the project going forward. We are resetting the project name, development practices, modernization levels, and project structure to hopefully grow more contributors over time.</p>
+<ul class="simple">
+<li><p>Renamed ib_insync to ib_async everywhere</p></li>
+<li><p>Increased minimum Python version from 3.6 (2016) to 3.10 (2021)</p></li>
+<li><p>Removed dependencies for supporting Python versions less than 3.9</p></li>
+<li><p>Converted README.rst to README.md</p></li>
+<li><p>Updated IBKR API links to new ibkrcampus instead of old github docs</p></li>
+<li><p>Removed setup.{py,cfg} to use Poetry for installing, docs, packaging</p></li>
+<li><p>Converted links from /erdewit/ account to new /ib-api-reloaded/ org</p></li>
+<li><p>Removed helper scripts for packaging and building docs</p></li>
+<li><p>Removed docs-generated HTML from repository</p></li>
+<li><p>Auto-build docs and update github docs site on every push</p></li>
+</ul>
+</section>
+</section>
+<section id="original-ib-insync-changelog-2017-2023">
+<h2>Original <code class="docutils literal notranslate"><span class="pre">ib_insync</span></code> Changelog (2017-2023)<a class="headerlink" href="#original-ib-insync-changelog-2017-2023" title="Link to this heading"></a></h2>
+<p>Note: due to the project moving to a github organization, all auto-generated links below to mentioned issues and PRs don’t work anymore. You can use the issue numbers in the <a class="reference external" href="https://github.com/erdewit/ib_insync/issues">original ib_insync repo</a> for historical reference.</p>
+</section>
+<section id="id2">
+<h2>0.9<a class="headerlink" href="#id2" title="Link to this heading"></a></h2>
 <section id="version-0-9-86">
 <h3>Version 0.9.86<a class="headerlink" href="#version-0-9-86" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -554,7 +582,7 @@ Completed orders are automatically synced on connect and are available from
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">ibapi</span></code> package from IB is no longer needed, ib_async handles its own
 socket protocol encoding and decoding now.</p></li>
-<li><p>Documentation moved to <a class="reference external" href="https://ib-insync.readthedocs.io">readthedocs</a> as
+<li><p>Documentation moved to readthedocs as
 rawgit will cease operation later this year.</p></li>
 <li><p>Blocking requests will now raise <code class="docutils literal notranslate"><span class="pre">ConnectionError</span></code> on a connection failure.
 This also goes for <code class="docutils literal notranslate"><span class="pre">util.run</span></code>, <code class="docutils literal notranslate"><span class="pre">util.timeRange</span></code>, etc.</p></li>
@@ -923,8 +951,8 @@ and <code class="docutils literal notranslate"><span class="pre">cancelOrderEven
 </ul>
 </section>
 </section>
-<section id="id2">
-<h2>0.8<a class="headerlink" href="#id2" title="Link to this heading"></a></h2>
+<section id="id3">
+<h2>0.8<a class="headerlink" href="#id3" title="Link to this heading"></a></h2>
 <section id="version-0-8-17">
 <h3>Version 0.8.17<a class="headerlink" href="#version-0-8-17" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -1061,8 +1089,8 @@ the request parameters.</p></li>
 </ul>
 </section>
 </section>
-<section id="id3">
-<h2>0.7<a class="headerlink" href="#id3" title="Link to this heading"></a></h2>
+<section id="id4">
+<h2>0.7<a class="headerlink" href="#id4" title="Link to this heading"></a></h2>
 <section id="version-0-7-3">
 <h3>Version 0.7.3<a class="headerlink" href="#version-0-7-3" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -1091,8 +1119,8 @@ the request parameters.</p></li>
 </ul>
 </section>
 </section>
-<section id="id4">
-<h2>0.6<a class="headerlink" href="#id4" title="Link to this heading"></a></h2>
+<section id="id5">
+<h2>0.6<a class="headerlink" href="#id5" title="Link to this heading"></a></h2>
 <section id="version-0-6-1">
 <h3>Version 0.6.1<a class="headerlink" href="#version-0-6-1" title="Link to this heading"></a></h3>
 <ul class="simple">

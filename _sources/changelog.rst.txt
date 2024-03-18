@@ -1,9 +1,34 @@
-Changelog
-=========
+``ib_async`` Changelog
+======================
+
+1.0
+---
+
+Version 1.0.0
+^^^^^^^^^^^^^
+
+This is the first version under new management after the unexpected passing of `Ewald de Wit <https://github.com/erdewit/ib_insync>`_ on March 11, 2024. We wish to maintain his legacy while continuing to improve the project going forward. We are resetting the project name, development practices, modernization levels, and project structure to hopefully grow more contributors over time.
+
+* Renamed ib_insync to ib_async everywhere
+* Increased minimum Python version from 3.6 (2016) to 3.10 (2021)
+* Removed dependencies for supporting Python versions less than 3.9
+* Converted README.rst to README.md
+* Updated IBKR API links to new ibkrcampus instead of old github docs
+* Removed setup.{py,cfg} to use Poetry for installing, docs, packaging
+* Converted links from /erdewit/ account to new /ib-api-reloaded/ org
+* Removed helper scripts for packaging and building docs
+* Removed docs-generated HTML from repository
+* Auto-build docs and update github docs site on every push
+
+
+Original ``ib_insync`` Changelog (2017-2023)
+--------------------------------------------
+
+
+Note: due to the project moving to a github organization, all auto-generated links below to mentioned issues and PRs don't work anymore. You can use the issue numbers in the `original ib_insync repo <https://github.com/erdewit/ib_insync/issues>`_ for historical reference.
 
 0.9
 ---
-
 
 Version 0.9.86
 ^^^^^^^^^^^^^^
@@ -303,7 +328,7 @@ Version 0.9.47
 
 * ``ibapi`` package from IB is no longer needed, ib_async handles its own
   socket protocol encoding and decoding now.
-* Documentation moved to `readthedocs <https://ib-insync.readthedocs.io>`_ as
+* Documentation moved to readthedocs as
   rawgit will cease operation later this year.
 * Blocking requests will now raise ``ConnectionError`` on a connection failure.
   This also goes for ``util.run``, ``util.timeRange``, etc.

@@ -4,19 +4,19 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async &mdash; ib_async 0.9.86 documentation</title>
+  <title>ib_async &mdash; ib_async 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
   
-    <link rel="canonical" href="https://ib_async.readthedocs.ioreadme.html"/>
+    <link rel="canonical" href="https://ib-api-reloaded.github.io/ib_asyncreadme.html"/>
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=b76974d2"></script>
+        <script src="_static/documentation_options.js?v=8d563738"></script>
         <script src="_static/doctools.js?v=888ff710"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -38,7 +38,7 @@
             ib_async
           </a>
               <div class="version">
-                0.9
+                1.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -71,7 +71,7 @@
 <li class="toctree-l1"><a class="reference internal" href="notebooks.html">Notebooks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="recipes.html">Code recipes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
-<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="links.html">Links</a></li>
 </ul>
 
@@ -99,7 +99,7 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/actions"><img alt="Build" src="https://github.com/ib-api-reloaded/ib_async/actions/workflows/test.yml/badge.svg?branch=next" /></a> <a class="reference internal" href="#"><span class="xref myst"><img alt="PyVersion" src="https://img.shields.io/badge/python-3.10+-blue.svg" /></span></a> <!-- [![Status](https://img.shields.io/badge/status-beta-green.svg)](#) --> <a class="reference external" href="https://pypi.python.org/pypi/ib_async"><img alt="PyPiVersion" src="https://img.shields.io/pypi/v/ib_async.svg" /></a> <a class="reference internal" href="#"><span class="xref myst"><img alt="License" src="https://img.shields.io/badge/license-BSD-blue.svg" /></span></a> <!-- [![Downloads](https://static.pepy.tech/badge/ib-insync)](https://pepy.tech/project/ib-insync) --> <a class="reference external" href="https://ib-insync.readthedocs.io/api.html"><img alt="Docs" src="https://img.shields.io/badge/Documentation-green.svg" /></a></p>
+  <p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/actions"><img alt="Build" src="https://github.com/ib-api-reloaded/ib_async/actions/workflows/test.yml/badge.svg?branch=next" /></a> <a class="reference internal" href="#"><span class="xref myst"><img alt="PyVersion" src="https://img.shields.io/badge/python-3.10+-blue.svg" /></span></a> <!-- [![Status](https://img.shields.io/badge/status-beta-green.svg)](#) --> <a class="reference external" href="https://pypi.python.org/pypi/ib_async"><img alt="PyPiVersion" src="https://img.shields.io/pypi/v/ib_async.svg" /></a> <a class="reference internal" href="#"><span class="xref myst"><img alt="License" src="https://img.shields.io/badge/license-BSD-blue.svg" /></span></a> <!-- [![Downloads](https://static.pepy.tech/badge/ib-insync)](https://pepy.tech/project/ib-insync) --> <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/"><img alt="Docs" src="https://img.shields.io/badge/Documentation-green.svg" /></a></p>
 <section id="ib-async">
 <h1>ib_async<a class="headerlink" href="#ib-async" title="Link to this heading"></a></h1>
 <section id="update">
@@ -108,13 +108,13 @@
 </section>
 <section id="introduction">
 <h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading"></a></h2>
-<p>The goal of the IB-insync library is to make working with the
+<p>The goal of the <code class="docutils literal notranslate"><span class="pre">ib_async</span></code> library is to make working with the
 <a class="reference external" href="https://ibkrcampus.com/ibkr-api-page/twsapi-doc/">Trader Workstation API</a>
 from Interactive Brokers as easy as possible.</p>
 <p>The main features are:</p>
 <ul class="simple">
 <li><p>An easy to use linear style of programming;</p></li>
-<li><p>An <a class="reference external" href="https://ib-insync.readthedocs.io/api.html#module-ib_async.ib">IB component</a>
+<li><p>An <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/api.html#module-ib_async.ib">IB component</a>
 that automatically keeps in sync with the TWS or IB Gateway application;</p></li>
 <li><p>A fully asynchonous framework based on
 <a class="reference external" href="https://docs.python.org/3/library/asyncio.html">asyncio</a>
@@ -124,9 +124,9 @@ for advanced users;</p></li>
 <li><p>Interactive operation with live data in Jupyter notebooks.</p></li>
 </ul>
 <p>Be sure to take a look at the
-<a class="reference external" href="https://ib-insync.readthedocs.io/notebooks.html">notebooks</a>,
-the <a class="reference external" href="https://ib-insync.readthedocs.io/recipes.html">recipes</a>
-and the <a class="reference external" href="https://ib-insync.readthedocs.io/api.html">API docs</a>.</p>
+<a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/notebooks.html">notebooks</a>,
+the <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/recipes.html">recipes</a>
+and the <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/api.html">API docs</a>.</p>
 </section>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
