@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ib_async.flexreport &mdash; ib_async 0.9.86 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+    <link rel="canonical" href="https://ib_async.readthedocs.io_modules/ib_async/flexreport.html"/>
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=b76974d2"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            ib_async
+          </a>
+              <div class="version">
+                0.9
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../readme.html">ib_async</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../notebooks.html">Notebooks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../recipes.html">Code recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../code.html">Source code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../links.html">Links</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">ib_async</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ib_async.flexreport</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ib_async.flexreport</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Access to account statement webservice.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">xml.etree.ElementTree</span> <span class="k">as</span> <span class="nn">et</span>
+<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">suppress</span>
+<span class="kn">from</span> <span class="nn">urllib.request</span> <span class="kn">import</span> <span class="n">urlopen</span>
+
+<span class="kn">from</span> <span class="nn">ib_async</span> <span class="kn">import</span> <span class="n">util</span>
+<span class="kn">from</span> <span class="nn">ib_async.objects</span> <span class="kn">import</span> <span class="n">DynamicObject</span>
+
+<span class="n">_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;ib_async.flexreport&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="FlexError">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexError">[docs]</a>
+<span class="k">class</span> <span class="nc">FlexError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+
+<div class="viewcode-block" id="FlexReport">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport">[docs]</a>
+<span class="k">class</span> <span class="nc">FlexReport</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    To obtain a token:</span>
+
+<span class="sd">    * Login to web portal</span>
+<span class="sd">    * Go to Settings</span>
+<span class="sd">    * Click on &quot;Configure Flex Web Service&quot;</span>
+<span class="sd">    * Generate token</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span>
+    <span class="n">root</span><span class="p">:</span> <span class="n">et</span><span class="o">.</span><span class="n">Element</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">queryId</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Download a report by giving a valid ``token`` and ``queryId``,</span>
+<span class="sd">        or load from file by giving a valid ``path``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">token</span> <span class="ow">and</span> <span class="n">queryId</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">token</span><span class="p">,</span> <span class="n">queryId</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">path</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+<div class="viewcode-block" id="FlexReport.topics">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.topics">[docs]</a>
+    <span class="k">def</span> <span class="nf">topics</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the set of topics that can be extracted from this report.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">tag</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">iter</span><span class="p">()</span> <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">attrib</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FlexReport.extract">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.extract">[docs]</a>
+    <span class="k">def</span> <span class="nf">extract</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">topic</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">parseNumbers</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Extract items of given topic and return as list of objects.</span>
+
+<span class="sd">        The topic is a string like TradeConfirm, ChangeInDividendAccrual,</span>
+<span class="sd">        Order, etc.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">cls</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">topic</span><span class="p">,</span> <span class="p">(</span><span class="n">DynamicObject</span><span class="p">,),</span> <span class="p">{})</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="bp">cls</span><span class="p">(</span><span class="o">**</span><span class="n">node</span><span class="o">.</span><span class="n">attrib</span><span class="p">)</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">iter</span><span class="p">(</span><span class="n">topic</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="n">parseNumbers</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">d</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="vm">__dict__</span>
+                <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">with</span> <span class="n">suppress</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+                        <span class="n">d</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+                        <span class="n">d</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+
+<div class="viewcode-block" id="FlexReport.df">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.df">[docs]</a>
+    <span class="k">def</span> <span class="nf">df</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">topic</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">parseNumbers</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Same as extract but return the result as a pandas DataFrame.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">util</span><span class="o">.</span><span class="n">df</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="n">topic</span><span class="p">,</span> <span class="n">parseNumbers</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="FlexReport.download">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.download">[docs]</a>
+    <span class="k">def</span> <span class="nf">download</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">queryId</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Download report for the given ``token`` and ``queryId``.&quot;&quot;&quot;</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;https://gdcdyn.interactivebrokers.com&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;/Universal/servlet/FlexStatementService.SendRequest?&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;t=</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&amp;q=</span><span class="si">{</span><span class="n">queryId</span><span class="si">}</span><span class="s2">&amp;v=3&quot;</span>
+        <span class="p">)</span>
+        <span class="n">resp</span> <span class="o">=</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+        <span class="n">root</span> <span class="o">=</span> <span class="n">et</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">elem</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;Status&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">elem</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">elem</span><span class="o">.</span><span class="n">text</span> <span class="o">==</span> <span class="s2">&quot;Success&quot;</span><span class="p">:</span>
+            <span class="n">elem</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;ReferenceCode&quot;</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">elem</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">code</span> <span class="o">=</span> <span class="n">elem</span><span class="o">.</span><span class="n">text</span>
+            <span class="n">elem</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;Url&quot;</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">elem</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="n">baseUrl</span> <span class="o">=</span> <span class="n">elem</span><span class="o">.</span><span class="n">text</span>
+            <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Statement is being prepared...&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">elem</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;ErrorCode&quot;</span><span class="p">)</span>
+            <span class="n">errorCode</span> <span class="o">=</span> <span class="n">elem</span><span class="o">.</span><span class="n">text</span> <span class="k">if</span> <span class="n">elem</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">elem</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;ErrorMessage&quot;</span><span class="p">)</span>
+            <span class="n">errorMsg</span> <span class="o">=</span> <span class="n">elem</span><span class="o">.</span><span class="n">text</span> <span class="k">if</span> <span class="n">elem</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">raise</span> <span class="n">FlexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">errorCode</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">errorMsg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">baseUrl</span><span class="si">}</span><span class="s2">?q=</span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">&amp;t=</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">resp</span> <span class="o">=</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">et</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tag</span> <span class="o">==</span> <span class="s2">&quot;code&quot;</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">text</span>
+                <span class="k">if</span> <span class="n">msg</span> <span class="ow">and</span> <span class="n">msg</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;Statement generation in progress&quot;</span><span class="p">):</span>
+                    <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;still working...&quot;</span><span class="p">)</span>
+                    <span class="k">continue</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">FlexError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            <span class="k">break</span>
+        <span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Statement retrieved.&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FlexReport.load">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.load">[docs]</a>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load report from XML file.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">et</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FlexReport.save">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.save">[docs]</a>
+    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Save report to XML file.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span></div>
+</div>
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">util</span><span class="o">.</span><span class="n">logToConsole</span><span class="p">()</span>
+    <span class="n">report</span> <span class="o">=</span> <span class="n">FlexReport</span><span class="p">(</span><span class="s2">&quot;945692423458902392892687&quot;</span><span class="p">,</span> <span class="s2">&quot;272555&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">report</span><span class="o">.</span><span class="n">topics</span><span class="p">())</span>
+    <span class="n">trades</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="s2">&quot;Trade&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">trades</span><span class="p">)</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p></p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
