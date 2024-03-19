@@ -4,7 +4,7 @@
 
 ## Update
 
-Under new management. See [original discussions](https://github.com/mattsta/ib_async/discussions) for recent history. Create new discussions or PRs or issues under https://github.com/ib-api-reloaded/ib_async for ongoing updates.
+Under new management. See [original discussions](https://github.com/mattsta/ib_insync/discussions) for recent history. Create new discussions or PRs or issues under [the new primary repo](https://github.com/ib-api-reloaded/ib_async) for ongoing updates.
 
 New contributions welcome. We are open to adding more maintainers with commit access if your updates and understanding of IBKR/TWS and Python are all high quality.
 
@@ -44,15 +44,15 @@ Requirements:
 
 - Python 3.10 or higher
   - We plan to support Python releases [2 years back](https://devguide.python.org/versions/) which allows us to continue adding newer features and performance improvements over time.
-- A running IB Gateway application
-    - stable: https://www.interactivebrokers.com/en/trading/ibgateway-stable.php
-    - latest: https://www.interactivebrokers.com/en/trading/ibgateway-latest.php
+- A running IB Gateway application (or TWS with API mode enabled)
+    - [stable gateway](https://www.interactivebrokers.com/en/trading/ibgateway-stable.php) — updated every few months
+    - [latest gateway](https://www.interactivebrokers.com/en/trading/ibgateway-latest.php) — updated weekly
 - Make sure the [API port is enabled](https://ibkrcampus.com/ibkr-api-page/twsapi-doc/#tws-download) and 'Download open orders on connection' is checked.
 - You may also want to increase the Java memory usage under `Configure->Settings->Memory Allocation` to 4096 MB minimum to prevent gateway crashes when loading bulk data.
 
 The ibapi package from IB is not needed. `ib_async` implements the full IBKR API protocol internally.
 
-## Building Manually
+## Build Manually
 
 First, install poetry:
 
@@ -72,20 +72,26 @@ poetry install
 poetry install --with=docs,dev
 ```
 
-## Generating Docs
+## Generate Docs
 
 ```
 poetry install --with=docs
 poetry run sphinx-build -b html docs html
 ```
 
-## Build Packages
+## Check Types
+
+```
+poetry run mypy ib_async
+```
+
+## Build Package
 
 ```
 poetry build
 ```
 
-## Upload Package
+## Upload Package (if maintaining)
 
 ```
 poetry install
