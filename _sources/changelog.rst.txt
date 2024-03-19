@@ -9,6 +9,16 @@ Version 1.0.0
 
 This is the first version under new management after the unexpected passing of `Ewald de Wit <https://github.com/erdewit/ib_insync>`_ on March 11, 2024. We wish to maintain his legacy while continuing to improve the project going forward. We are resetting the project name, development practices, modernization levels, and project structure to hopefully grow more contributors over time.
 
+This version update does not include any feature improvements and is functionally equivalent to the final version of ``ib_insync 0.9.86``.
+
+Code Cleanup:
+
+* Reformatted all code with ruff and improved readability throughout
+* Now uses sets for membership checking everywhere
+* Fixed a technical error around API message formatting
+
+Project Changes:
+
 * Renamed ib_insync to ib_async everywhere
 * Increased minimum Python version from 3.6 (2016) to 3.10 (2021)
 * Removed dependencies for supporting Python versions less than 3.9

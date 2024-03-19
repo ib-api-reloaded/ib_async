@@ -53,14 +53,15 @@
 <li class="toctree-l2"><a class="reference internal" href="#update">Update</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#building-manually">Building Manually</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#build-manually">Build Manually</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#installing-only-library">Installing Only Library</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#install-everything-enable-docs-dev-testing">Install Everything (enable docs + dev testing)</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#generating-docs">Generating Docs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#build-packages">Build Packages</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#upload-package">Upload Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generate-docs">Generate Docs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#check-types">Check Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#build-package">Build Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#upload-package-if-maintaining">Upload Package (if maintaining)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#example">Example</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#documentation">Documentation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#disclaimer">Disclaimer</a></li>
@@ -104,7 +105,7 @@
 <h1>ib_async<a class="headerlink" href="#ib-async" title="Link to this heading"></a></h1>
 <section id="update">
 <h2>Update<a class="headerlink" href="#update" title="Link to this heading"></a></h2>
-<p>Under new management. See <a class="reference external" href="https://github.com/mattsta/ib_async/discussions">original discussions</a> for recent history. Create new discussions or PRs or issues under https://github.com/ib-api-reloaded/ib_async for ongoing updates.</p>
+<p>Under new management. See <a class="reference external" href="https://github.com/mattsta/ib_insync/discussions">original discussions</a> for recent history. Create new discussions or PRs or issues under <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async">the new primary repo</a> for ongoing updates.</p>
 <p>New contributions welcome. We are open to adding more maintainers with commit access if your updates and understanding of IBKR/TWS and Python are all high quality.</p>
 <p>This is a small project with a userbase of widely varying experience and knowledge, so if you open issues which are more about IBKR problems and less about client problems, we may not be able to assist you unless your problem is a direct client issue and not one of many IBKR API edge cases. Feel free to open <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/discussions">Discussion topics</a> about anything if you are unsure about a problem being IBKR, our client, or your own code usage.</p>
 </section>
@@ -142,10 +143,10 @@ and the <a class="reference external" href="https://ib-api-reloaded.github.io/ib
 <li><p>We plan to support Python releases <a class="reference external" href="https://devguide.python.org/versions/">2 years back</a> which allows us to continue adding newer features and performance improvements over time.</p></li>
 </ul>
 </li>
-<li><p>A running IB Gateway application</p>
+<li><p>A running IB Gateway application (or TWS with API mode enabled)</p>
 <ul>
-<li><p>stable: https://www.interactivebrokers.com/en/trading/ibgateway-stable.php</p></li>
-<li><p>latest: https://www.interactivebrokers.com/en/trading/ibgateway-latest.php</p></li>
+<li><p><a class="reference external" href="https://www.interactivebrokers.com/en/trading/ibgateway-stable.php">stable gateway</a> — updated every few months</p></li>
+<li><p><a class="reference external" href="https://www.interactivebrokers.com/en/trading/ibgateway-latest.php">latest gateway</a> — updated weekly</p></li>
 </ul>
 </li>
 <li><p>Make sure the <a class="reference external" href="https://ibkrcampus.com/ibkr-api-page/twsapi-doc/#tws-download">API port is enabled</a> and ‘Download open orders on connection’ is checked.</p></li>
@@ -153,8 +154,8 @@ and the <a class="reference external" href="https://ib-api-reloaded.github.io/ib
 </ul>
 <p>The ibapi package from IB is not needed. <code class="docutils literal notranslate"><span class="pre">ib_async</span></code> implements the full IBKR API protocol internally.</p>
 </section>
-<section id="building-manually">
-<h2>Building Manually<a class="headerlink" href="#building-manually" title="Link to this heading"></a></h2>
+<section id="build-manually">
+<h2>Build Manually<a class="headerlink" href="#build-manually" title="Link to this heading"></a></h2>
 <p>First, install poetry:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">poetry</span> <span class="o">-</span><span class="n">U</span>
 </pre></div>
@@ -172,21 +173,27 @@ and the <a class="reference external" href="https://ib-api-reloaded.github.io/ib
 </div>
 </section>
 </section>
-<section id="generating-docs">
-<h2>Generating Docs<a class="headerlink" href="#generating-docs" title="Link to this heading"></a></h2>
+<section id="generate-docs">
+<h2>Generate Docs<a class="headerlink" href="#generate-docs" title="Link to this heading"></a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">poetry</span> <span class="n">install</span> <span class="o">--</span><span class="k">with</span><span class="o">=</span><span class="n">docs</span>
 <span class="n">poetry</span> <span class="n">run</span> <span class="n">sphinx</span><span class="o">-</span><span class="n">build</span> <span class="o">-</span><span class="n">b</span> <span class="n">html</span> <span class="n">docs</span> <span class="n">html</span>
 </pre></div>
 </div>
 </section>
-<section id="build-packages">
-<h2>Build Packages<a class="headerlink" href="#build-packages" title="Link to this heading"></a></h2>
+<section id="check-types">
+<h2>Check Types<a class="headerlink" href="#check-types" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">poetry</span> <span class="n">run</span> <span class="n">mypy</span> <span class="n">ib_async</span>
+</pre></div>
+</div>
+</section>
+<section id="build-package">
+<h2>Build Package<a class="headerlink" href="#build-package" title="Link to this heading"></a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">poetry</span> <span class="n">build</span>
 </pre></div>
 </div>
 </section>
-<section id="upload-package">
-<h2>Upload Package<a class="headerlink" href="#upload-package" title="Link to this heading"></a></h2>
+<section id="upload-package-if-maintaining">
+<h2>Upload Package (if maintaining)<a class="headerlink" href="#upload-package-if-maintaining" title="Link to this heading"></a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">poetry</span> <span class="n">install</span>
 <span class="n">poetry</span> <span class="n">config</span> <span class="n">pypi</span><span class="o">-</span><span class="n">token</span><span class="o">.</span><span class="n">pypi</span> <span class="n">your</span><span class="o">-</span><span class="n">api</span><span class="o">-</span><span class="n">token</span>
 <span class="n">poetry</span> <span class="n">publish</span> <span class="o">--</span><span class="n">build</span>
