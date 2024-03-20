@@ -13,3 +13,5 @@ html
 doctrees
 ib_async.egg-info
 poetry.lock
+*.csv
+*.json

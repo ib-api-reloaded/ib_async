@@ -244,53 +244,82 @@ class Client:
         self.reset()
 
     def send(self, *fields, makeEmpty=True):
-        """Serialize and send the given fields using the IB socket protocol."""
+        """Serialize and send the given fields using the IB socket protocol.
+
+        if 'makeEmpty' is True (default), then the IBKR values representing "no value"
+        become the empty string."""
         if not self.isConnected():
             raise ConnectionError("Not connected")
 
-        msg = io.StringIO()
-        empty = {None, UNSET_INTEGER, UNSET_DOUBLE} if makeEmpty else {None}
-        for field in fields:
-            typ = type(field)
-            if field in empty:
-                s = ""
-            elif typ is str:
-                s = field
-            elif typ is int:
-                s = str(field)
-            elif typ is float:
-                s = "Infinite" if field == math.inf else str(field)
-            elif typ is bool:
-                s = "1" if field else "0"
-            elif typ is list:
-                # list of TagValue
-                s = "".join(f"{v.tag}={v.value};" for v in field)
-            elif isinstance(field, Contract):
-                c = field
-                s = "\0".join(
-                    str(f)
-                    for f in (
-                        c.conId,
-                        c.symbol,
-                        c.secType,
-                        c.lastTradeDateOrContractMonth,
-                        c.strike,
-                        c.right,
-                        c.multiplier,
-                        c.exchange,
-                        c.primaryExchange,
-                        c.currency,
-                        c.localSymbol,
-                        c.tradingClass,
-                    )
+        # fmt: off
+        FORMAT_HANDLERS = {
+            # Contracts are formatted in IBKR null delimiter format
+            Contract: lambda c: "\0".join([
+                str(f)
+                for f in (
+                    c.conId,
+                    c.symbol,
+                    c.secType,
+                    c.lastTradeDateOrContractMonth,
+                    c.strike,
+                    c.right,
+                    c.multiplier,
+                    c.exchange,
+                    c.primaryExchange,
+                    c.currency,
+                    c.localSymbol,
+                    c.tradingClass,
                 )
-            else:
-                s = str(field)
+            ]),
 
+            # Float conversion has 3 stages:
+            #  - Convert 'IBKR unset' double to empty (if requested)
+            #  - Convert infinity to 'Infinite' string (if appropriate)
+            #  - else, convert float to string normally
+            float: lambda f: ""
+            if (makeEmpty and f == UNSET_DOUBLE)
+            else ("Infinite" if (f == math.inf) else str(f)),
+
+            # Int conversion has 2 stages:
+            #  - Convert 'IBKR unset' to empty (if requested)
+            #  - else, convert int to string normally
+            int: lambda f: "" if makeEmpty and f == UNSET_INTEGER else str(f),
+
+            # None is always just an empty string.
+            # (due to a quirk of Python, 'type(None)' is how you properly generate the NoneType value)
+            type(None): lambda _: "",
+
+            # Strings are always strings
+            str: lambda s: s,
+
+            # Bools become strings "1" or "0"
+            bool: lambda b: "1" if b else "0",
+
+            # Lists of tags become semicolon-appended KV pairs
+            list: lambda l: "".join([f"{v.tag}={v.value};" for v in l]),
+        }
+        # fmt: on
+
+        # start of new message
+        msg = io.StringIO()
+
+        for field in fields:
+            # Fetch type converter for this field (falls back to 'str(field)' as a default for unmatched types)
+            # (extra `isinstance()` wrapper needed here because Contract subclasses are their own type, but we want
+            #  to only match against the Contract parent class for formatting operations)
+            convert = FORMAT_HANDLERS.get(
+                Contract if isinstance(field, Contract) else type(field), str
+            )
+
+            # Convert field to IBKR protocol string part
+            s = convert(field)
+
+            # Append converted IBKR protocol string to message buffer
             msg.write(s)
             msg.write("\0")
 
-        self.sendMsg(msg.getvalue())
+        generated = msg.getvalue()
+        self.sendMsg(generated)
 
     def sendMsg(self, msg: str):
         loop = getLoop()

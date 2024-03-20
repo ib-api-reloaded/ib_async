@@ -153,7 +153,9 @@ class Contract:
 
     def __hash__(self):
         if not self.isHashable():
-            raise ValueError(f"Contract {self} can't be hashed")
+            raise ValueError(
+                f"Contract {self} can't be hashed because no 'conId' value exists. Resolve contract to populate 'conId'."
+            )
 
         if self.secType == "CONTFUT":
             # CONTFUT gets the same conId as the front contract, invert it here

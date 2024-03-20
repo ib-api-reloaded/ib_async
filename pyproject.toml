@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ib_async"
-version = "1.0.0"
+version = "1.0.1"
 description = "Python sync/async framework for Interactive Brokers API"
 authors = ["Ewald de Wit"]
 maintainers = ["Matt Stancliff <matt@matt.sh>"]
@@ -35,6 +35,7 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
 pytest-asyncio = ">=0.23"
+pandas = "^2.2.1"
 
 
 [tool.poetry.group.docs]
@@ -49,6 +50,10 @@ myst-parser = "^2.0.0"
 [tool.mypy]
 ignore_missing_imports = true
 check_untyped_defs = true
+
+
+[tool.pytest.ini_options]
+asyncio_mode="auto"
 
 
 [build-system]
