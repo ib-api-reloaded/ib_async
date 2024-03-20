@@ -248,11 +248,18 @@ class Client:
         if not self.isConnected():
             raise ConnectionError("Not connected")
 
+        def is_field_hashable(field):
+            try:
+                hash(field)
+                return True
+            except Exception:
+                return False
+
         msg = io.StringIO()
         empty = {None, UNSET_INTEGER, UNSET_DOUBLE} if makeEmpty else {None}
         for field in fields:
             typ = type(field)
-            if field in empty:
+            if is_field_hashable(field) and field in empty:
                 s = ""
             elif typ is str:
                 s = field
