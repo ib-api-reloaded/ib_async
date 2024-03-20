@@ -7,7 +7,7 @@ import math
 import struct
 import time
 from collections import deque
-from typing import Deque, List, Optional
+from typing import Deque, List, Optional, Callable, Any
 
 from eventkit import Event
 
@@ -252,7 +252,7 @@ class Client:
             raise ConnectionError("Not connected")
 
         # fmt: off
-        FORMAT_HANDLERS = {
+        FORMAT_HANDLERS: dict[Any, Callable[[Any], str]] = {
             # Contracts are formatted in IBKR null delimiter format
             Contract: lambda c: "\0".join([
                 str(f)
