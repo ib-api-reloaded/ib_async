@@ -4,8 +4,15 @@
 1.0
 ---
 
-Version 1.0.0
-^^^^^^^^^^^^^
+Version 1.0.1 (2024-03-20)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Fixed :issue:`4`: Messaging sending bug for unresolved contracts due to cleanup in 1.0.0
+
+Solved this messaging sending bug by refactoring message parsing logic to be more stable. Also added a test case verifying it works as expected now.
+
+Version 1.0.0 (2024-03-18)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This is the first version under new management after the unexpected passing of `Ewald de Wit <https://github.com/erdewit/ib_insync>`_ on March 11, 2024. We wish to maintain his legacy while continuing to improve the project going forward. We are resetting the project name, development practices, modernization levels, and project structure to hopefully grow more contributors over time.
 

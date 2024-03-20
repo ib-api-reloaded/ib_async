@@ -56,7 +56,8 @@
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#id1">1.0</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#version-1-0-0">Version 1.0.0</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#version-1-0-1-2024-03-20">Version 1.0.1 (2024-03-20)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#version-1-0-0-2024-03-18">Version 1.0.0 (2024-03-18)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#original-ib-insync-changelog-2017-2023">Original <code class="docutils literal notranslate"><span class="pre">ib_insync</span></code> Changelog (2017-2023)</a></li>
@@ -216,8 +217,15 @@
 <h1><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog<a class="headerlink" href="#ib-async-changelog" title="Link to this heading"></a></h1>
 <section id="id1">
 <h2>1.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
-<section id="version-1-0-0">
-<h3>Version 1.0.0<a class="headerlink" href="#version-1-0-0" title="Link to this heading"></a></h3>
+<section id="version-1-0-1-2024-03-20">
+<h3>Version 1.0.1 (2024-03-20)<a class="headerlink" href="#version-1-0-1-2024-03-20" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/4">issue 4</a>: Messaging sending bug for unresolved contracts due to cleanup in 1.0.0</p></li>
+</ul>
+<p>Solved this messaging sending bug by refactoring message parsing logic to be more stable. Also added a test case verifying it works as expected now.</p>
+</section>
+<section id="version-1-0-0-2024-03-18">
+<h3>Version 1.0.0 (2024-03-18)<a class="headerlink" href="#version-1-0-0-2024-03-18" title="Link to this heading"></a></h3>
 <p>This is the first version under new management after the unexpected passing of <a class="reference external" href="https://github.com/erdewit/ib_insync">Ewald de Wit</a> on March 11, 2024. We wish to maintain his legacy while continuing to improve the project going forward. We are resetting the project name, development practices, modernization levels, and project structure to hopefully grow more contributors over time.</p>
 <p>This version update does not include any feature improvements and is functionally equivalent to the final version of <code class="docutils literal notranslate"><span class="pre">ib_insync</span> <span class="pre">0.9.86</span></code>.</p>
 <p>Code Cleanup:</p>

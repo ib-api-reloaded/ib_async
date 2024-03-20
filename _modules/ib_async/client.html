@@ -369,53 +369,82 @@
 <div class="viewcode-block" id="Client.send">
 <a class="viewcode-back" href="../../api.html#ib_async.client.Client.send">[docs]</a>
     <span class="k">def</span> <span class="nf">send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">fields</span><span class="p">,</span> <span class="n">makeEmpty</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Serialize and send the given fields using the IB socket protocol.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Serialize and send the given fields using the IB socket protocol.</span>
+
+<span class="sd">        if &#39;makeEmpty&#39; is True (default), then the IBKR values representing &quot;no value&quot;</span>
+<span class="sd">        become the empty string.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">isConnected</span><span class="p">():</span>
             <span class="k">raise</span> <span class="ne">ConnectionError</span><span class="p">(</span><span class="s2">&quot;Not connected&quot;</span><span class="p">)</span>
 
-        <span class="n">msg</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
-        <span class="n">empty</span> <span class="o">=</span> <span class="p">{</span><span class="kc">None</span><span class="p">,</span> <span class="n">UNSET_INTEGER</span><span class="p">,</span> <span class="n">UNSET_DOUBLE</span><span class="p">}</span> <span class="k">if</span> <span class="n">makeEmpty</span> <span class="k">else</span> <span class="p">{</span><span class="kc">None</span><span class="p">}</span>
-        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">:</span>
-            <span class="n">typ</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">empty</span><span class="p">:</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-            <span class="k">elif</span> <span class="n">typ</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="n">field</span>
-            <span class="k">elif</span> <span class="n">typ</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">typ</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;Infinite&quot;</span> <span class="k">if</span> <span class="n">field</span> <span class="o">==</span> <span class="n">math</span><span class="o">.</span><span class="n">inf</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">typ</span> <span class="ow">is</span> <span class="nb">bool</span><span class="p">:</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;1&quot;</span> <span class="k">if</span> <span class="n">field</span> <span class="k">else</span> <span class="s2">&quot;0&quot;</span>
-            <span class="k">elif</span> <span class="n">typ</span> <span class="ow">is</span> <span class="nb">list</span><span class="p">:</span>
-                <span class="c1"># list of TagValue</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="o">.</span><span class="n">tag</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">v</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">;&quot;</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">field</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">Contract</span><span class="p">):</span>
-                <span class="n">c</span> <span class="o">=</span> <span class="n">field</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\0</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-                    <span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
-                    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="p">(</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">conId</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">symbol</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">secType</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">lastTradeDateOrContractMonth</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">strike</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">right</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">multiplier</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">exchange</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">primaryExchange</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">currency</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">localSymbol</span><span class="p">,</span>
-                        <span class="n">c</span><span class="o">.</span><span class="n">tradingClass</span><span class="p">,</span>
-                    <span class="p">)</span>
+        <span class="c1"># fmt: off</span>
+        <span class="n">FORMAT_HANDLERS</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="c1"># Contracts are formatted in IBKR null delimiter format</span>
+            <span class="n">Contract</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="s2">&quot;</span><span class="se">\0</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="p">(</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">conId</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">symbol</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">secType</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">lastTradeDateOrContractMonth</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">strike</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">right</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">multiplier</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">exchange</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">primaryExchange</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">currency</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">localSymbol</span><span class="p">,</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">tradingClass</span><span class="p">,</span>
                 <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">s</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+            <span class="p">]),</span>
 
+            <span class="c1"># Float conversion has 3 stages:</span>
+            <span class="c1">#  - Convert &#39;IBKR unset&#39; double to empty (if requested)</span>
+            <span class="c1">#  - Convert infinity to &#39;Infinite&#39; string (if appropriate)</span>
+            <span class="c1">#  - else, convert float to string normally</span>
+            <span class="nb">float</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">f</span><span class="p">:</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">makeEmpty</span> <span class="ow">and</span> <span class="n">f</span> <span class="o">==</span> <span class="n">UNSET_DOUBLE</span><span class="p">)</span>
+            <span class="k">else</span> <span class="p">(</span><span class="s2">&quot;Infinite&quot;</span> <span class="k">if</span> <span class="p">(</span><span class="n">f</span> <span class="o">==</span> <span class="n">math</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="p">)),</span>
+
+            <span class="c1"># Int conversion has 2 stages:</span>
+            <span class="c1">#  - Convert &#39;IBKR unset&#39; to empty (if requested)</span>
+            <span class="c1">#  - else, convert int to string normally</span>
+            <span class="nb">int</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">f</span><span class="p">:</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="n">makeEmpty</span> <span class="ow">and</span> <span class="n">f</span> <span class="o">==</span> <span class="n">UNSET_INTEGER</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">f</span><span class="p">),</span>
+
+            <span class="c1"># None is always just an empty string.</span>
+            <span class="c1"># (due to a quirk of Python, &#39;type(None)&#39; is how you properly generate the NoneType value)</span>
+            <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">):</span> <span class="k">lambda</span> <span class="n">_</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+
+            <span class="c1"># Strings are always strings</span>
+            <span class="nb">str</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="p">,</span>
+
+            <span class="c1"># Bools become strings &quot;1&quot; or &quot;0&quot;</span>
+            <span class="nb">bool</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">b</span><span class="p">:</span> <span class="s2">&quot;1&quot;</span> <span class="k">if</span> <span class="n">b</span> <span class="k">else</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>
+
+            <span class="c1"># Lists of tags become semicolon-appended KV pairs</span>
+            <span class="nb">list</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">l</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="o">.</span><span class="n">tag</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">v</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">;&quot;</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">l</span><span class="p">]),</span>
+        <span class="p">}</span>
+        <span class="c1"># fmt: on</span>
+
+        <span class="c1"># start of new message</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">:</span>
+            <span class="c1"># Fetch type converter for this field (falls back to &#39;str(field)&#39; as a default for unmatched types)</span>
+            <span class="c1"># (extra `isinstance()` wrapper needed here because Contract subclasses are their own type, but we want</span>
+            <span class="c1">#  to only match against the Contract parent class for formatting operations)</span>
+            <span class="n">convert</span> <span class="o">=</span> <span class="n">FORMAT_HANDLERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="n">Contract</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">Contract</span><span class="p">)</span> <span class="k">else</span> <span class="nb">type</span><span class="p">(</span><span class="n">field</span><span class="p">),</span> <span class="nb">str</span>
+            <span class="p">)</span>
+
+            <span class="c1"># Convert field to IBKR protocol string part</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">convert</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+
+            <span class="c1"># Append converted IBKR protocol string to message buffer</span>
             <span class="n">msg</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
             <span class="n">msg</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\0</span><span class="s2">&quot;</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">sendMsg</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span></div>
+        <span class="n">generated</span> <span class="o">=</span> <span class="n">msg</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sendMsg</span><span class="p">(</span><span class="n">generated</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Client.sendMsg">

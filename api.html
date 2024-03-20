@@ -4050,6 +4050,8 @@ is raised. Set to 0 to disable timeout.</p></li>
 <dt class="sig sig-object py" id="ib_async.client.Client.send">
 <span class="sig-name descname"><span class="pre">send</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">fields</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">makeEmpty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ib_async/client.html#Client.send"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ib_async.client.Client.send" title="Link to this definition"></a></dt>
 <dd><p>Serialize and send the given fields using the IB socket protocol.</p>
+<p>if ‘makeEmpty’ is True (default), then the IBKR values representing “no value”
+become the empty string.</p>
 </dd></dl>
 
 <dl class="py method">

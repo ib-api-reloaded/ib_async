@@ -243,7 +243,9 @@
 
     <span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">isHashable</span><span class="p">():</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Contract </span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> can&#39;t be hashed&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Contract </span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> can&#39;t be hashed because no &#39;conId&#39; value exists. Resolve contract to populate &#39;conId&#39;.&quot;</span>
+            <span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">secType</span> <span class="o">==</span> <span class="s2">&quot;CONTFUT&quot;</span><span class="p">:</span>
             <span class="c1"># CONTFUT gets the same conId as the front contract, invert it here</span>
