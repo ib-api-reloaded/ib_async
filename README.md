@@ -139,6 +139,15 @@ The complete [API documentation](https://ib-api-reloaded.github.io/ib_async/api.
 
 [Changelog](https://ib-api-reloaded.github.io/ib_async/changelog.html).
 
+## Community Resources
+
+If you have other public work related to `ib_async` or `ib_insync` open an issue and we can keep an active list here.
+
+Projects below are not endorsed by any entity and are purely for reference or entertainment purposes.
+
+- Adi's livestream VODs about using IBKR APIs: [Interactive Brokers API in Python](https://www.youtube.com/playlist?list=PLCZZtBmmgxn8CFKysCkcl-B1tqRgCCNIX)
+- Matt's IBKR python CLI: [icli](http://github.com/mattsta/icli)
+
 ## Disclaimer
 
 The software is provided on the conditions of the simplified BSD license.
