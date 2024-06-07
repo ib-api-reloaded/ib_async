@@ -1964,6 +1964,7 @@ class IB:
         readonly: bool = False,
         account: str = "",
         raiseSyncErrors: bool = False,
+        fast: bool = True
     ):
         clientId = int(clientId)
         self.wrapper.clientId = clientId
@@ -1980,44 +1981,47 @@ class IB:
             if not account and len(accounts) == 1:
                 account = accounts[0]
 
-            # prepare initializing requests
-            reqs: Dict = {}  # name -> request
-            reqs["positions"] = self.reqPositionsAsync()
-            if not readonly:
-                reqs["open orders"] = self.reqOpenOrdersAsync()
+            async def doreqs():
+                # prepare initializing requests
+                reqs: Dict = {}  # name -> request
+                reqs["positions"] = self.reqPositionsAsync()
+                if not readonly and not fast:
+                    reqs["open orders"] = self.reqOpenOrdersAsync()
 
-            if not readonly and self.client.serverVersion() >= 150:
-                reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
+                if not readonly and self.client.serverVersion() >= 150:
+                    reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
 
-            if account:
-                reqs["account updates"] = self.reqAccountUpdatesAsync(account)
+                if account:
+                    reqs["account updates"] = self.reqAccountUpdatesAsync(account)
 
-            if len(accounts) <= self.MaxSyncedSubAccounts:
-                for acc in accounts:
-                    reqs[f"account updates for {acc}"] = (
-                        self.reqAccountUpdatesMultiAsync(acc)
-                    )
+                if len(accounts) <= self.MaxSyncedSubAccounts:
+                    for acc in accounts:
+                        reqs[f"account updates for {acc}"] = (
+                            self.reqAccountUpdatesMultiAsync(acc)
+                        )
 
-            # run initializing requests concurrently and log if any times out
-            tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
-            errors = []
-            resps = await asyncio.gather(*tasks, return_exceptions=True)
-            for name, resp in zip(reqs, resps):
-                if isinstance(resp, asyncio.TimeoutError):
-                    msg = f"{name} request timed out"
+                # run initializing requests concurrently and log if any times out
+                tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
+                errors = []
+                resps = await asyncio.gather(*tasks, return_exceptions=True)
+                for name, resp in zip(reqs, resps):
+                    if isinstance(resp, asyncio.TimeoutError):
+                        msg = f"{name} request timed out"
+                        errors.append(msg)
+                        self._logger.error(msg)
+
+                # the request for executions must come after all orders are in
+                try:
+                    await asyncio.wait_for(self.reqExecutionsAsync(), timeout)
+                except asyncio.TimeoutError:
+                    msg = "executions request timed out"
                     errors.append(msg)
                     self._logger.error(msg)
 
-            # the request for executions must come after all orders are in
-            try:
-                await asyncio.wait_for(self.reqExecutionsAsync(), timeout)
-            except asyncio.TimeoutError:
-                msg = "executions request timed out"
-                errors.append(msg)
-                self._logger.error(msg)
-
-            if raiseSyncErrors and len(errors) > 0:
-                raise ConnectionError(errors)
+                if raiseSyncErrors and len(errors) > 0:
+                    raise ConnectionError(errors)
+            if not fast:
+                await doreqs()
 
             # final check if socket is still ready
             if not self.client.isReady():
