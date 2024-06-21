@@ -110,6 +110,7 @@ from ib_async import *
 ib = IB()
 ib.connect('127.0.0.1', 7497, clientId=1)
 
+ib.reqMarketDataType(4)  # Use free, delayed, frozen data
 contract = Forex('EURUSD')
 bars = ib.reqHistoricalData(
     contract, endDateTime='', durationStr='30 D',
