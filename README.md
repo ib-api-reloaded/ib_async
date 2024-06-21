@@ -36,7 +36,7 @@ and the [API docs](https://ib-api-reloaded.github.io/ib_async/api.html).
 
 ## Installation
 
-```
+```sh
 pip install ib_async
 ```
 
@@ -56,44 +56,44 @@ The ibapi package from IB is not needed. `ib_async` implements the full IBKR API
 
 First, install poetry:
 
-```
+```sh
 pip install poetry -U
 ```
 
 ### Installing Only Library
 
-```
+```sh
 poetry install
 ```
 
 ### Install Everything (enable docs + dev testing)
 
-```
+```sh
 poetry install --with=docs,dev
 ```
 
 ## Generate Docs
 
-```
+```sh
 poetry install --with=docs
 poetry run sphinx-build -b html docs html
 ```
 
 ## Check Types
 
-```
+```sh
 poetry run mypy ib_async
 ```
 
 ## Build Package
 
-```
+```sh
 poetry build
 ```
 
 ## Upload Package (if maintaining)
 
-```
+```sh
 poetry install
 poetry config pypi-token.pypi your-api-token
 poetry publish --build
@@ -110,6 +110,7 @@ from ib_async import *
 ib = IB()
 ib.connect('127.0.0.1', 7497, clientId=1)
 
+ib.reqMarketDataType(4)  # Use Free, delayed, frozen data
 contract = Forex('EURUSD')
 bars = ib.reqHistoricalData(
     contract, endDateTime='', durationStr='30 D',
@@ -122,7 +123,7 @@ print(df)
 
 Output:
 
-```
+```text
                    date      open      high       low     close  volume
 0   2019-11-19 23:15:00  1.107875  1.108050  1.107725  1.107825      -1
 1   2019-11-20 00:00:00  1.107825  1.107925  1.107675  1.107825      -1
