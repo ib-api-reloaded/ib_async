@@ -103,7 +103,10 @@ def dataclassNonDefaults(obj) -> dict:
         for field, value in zip(fields(obj), values)
         if value != field.default
         and value == value
-        and not (isinstance(value, list) and value == [])
+        and not (
+            (isinstance(value, list) and value == [])
+            or (isinstance(value, dict) and value == {})
+        )
     }
 
 
