@@ -199,7 +199,7 @@ Output::
 
     Dividends(past12Months=1.2, next12Months=1.2, nextDate=datetime.date(2019, 2, 6), nextAmount=0.3)
 
-Fundemental ratios
+Fundamental ratios
 ^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
