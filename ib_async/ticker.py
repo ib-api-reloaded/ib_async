@@ -109,7 +109,9 @@ class Ticker:
         Union[TickByTickAllLast, TickByTickBidAsk, TickByTickMidPoint]
     ] = field(default_factory=list)
     domBids: List[DOMLevel] = field(default_factory=list)
+    domBidsDict: dict[int, DOMLevel] = field(default_factory=dict)
     domAsks: List[DOMLevel] = field(default_factory=list)
+    domAsksDict: dict[int, DOMLevel] = field(default_factory=dict)
     domTicks: List[MktDepthData] = field(default_factory=list)
     bidGreeks: Optional[OptionComputation] = None
     askGreeks: Optional[OptionComputation] = None

@@ -1479,6 +1479,8 @@ class IB:
         ticker = self.wrapper.startTicker(reqId, contract, "mktDepth")
         ticker.domBids.clear()
         ticker.domAsks.clear()
+        ticker.domBidsDict.clear()
+        ticker.domAsksDict.clear()
         self.client.reqMktDepth(reqId, contract, numRows, isSmartDepth, mktDepthOptions)
         return ticker
 

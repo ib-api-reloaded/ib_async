@@ -1162,16 +1162,44 @@ class Wrapper:
         # side: 0 = ask, 1 = bid
         ticker = self.reqId2Ticker[reqId]
 
-        dom = ticker.domBids if side else ticker.domAsks
-        if operation == 0:
-            dom.insert(position, DOMLevel(price, size, marketMaker))
-        elif operation == 1:
+        # 'dom' is a dict so we can address position updates directly
+        dom = ticker.domBidsDict if side else ticker.domAsksDict
+
+        # if you're curious when these operations run and what they do, enable this too:
+        # fmt: off
+        # print("BID" if side else "ASK", "OPERATION", operation, "at position", position, "for price", price, "at qty", size)
+        # assert list(dom.keys()) == list(range(0, len(dom))), f"Keys aren't sequential? {dom} :: {ticker}"
+        # fmt: on
+
+        if operation in {0, 1}:
+            # '0' is INSERT NEW
+            # '1' is UPDATE EXISTING
+            # We are using the same operation for "insert or overwrite" directly.
             dom[position] = DOMLevel(price, size, marketMaker)
         elif operation == 2:
-            if position < len(dom):
+            # '2' is DELETE EXISTING
+            size = 0
+            try:
                 level = dom.pop(position)
                 price = level.price
-                size = 0
+            except:
+                # invalid position requested for removal, so ignore the request
+                pass
+
+        # To retain the original API structure, we convert all sorted dict
+        # values into lists for users to consume.
+        # Users can also read ticker.domBidsDict or ticker.domAsksDict directly.
+        values = list(dom.values())
+        if side:
+            # Update BID for users
+            ticker.domBids = values
+        else:
+            # Update ASK for users
+            ticker.domAsks = values
+
+        # TODO: add optional debugging check. In a correctly working system, we should
+        #       technically always have sequential bid and ask position entries, but
+        #       in the past we have seen gaps or missing values.
 
         tick = MktDepthData(
             self.lastTime, position, marketMaker, operation, side, price, size
@@ -1448,6 +1476,8 @@ class Wrapper:
                 ]
                 ticker.domAsks.clear()
                 ticker.domBids.clear()
+                ticker.domBidsDict.clear()
+                ticker.domAsksDict.clear()
                 self.pendingTickers.add(ticker)
         elif errorCode == 10225:
             # Bust event occurred, current subscription is deactivated.
