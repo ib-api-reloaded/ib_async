@@ -267,15 +267,9 @@ class Wrapper:
         """
         ticker = self.tickers.get(id(contract))
         if not ticker:
-            ticker = Ticker(
-                contract=contract,
-                ticks=[],
-                tickByTicks=[],
-                domBids=[],
-                domAsks=[],
-                domTicks=[],
-            )
+            ticker = Ticker(contract=contract)
             self.tickers[id(contract)] = ticker
+
         self.reqId2Ticker[reqId] = ticker
         self._reqId2Contract[reqId] = contract
         self.ticker2ReqId[tickType][ticker] = reqId
