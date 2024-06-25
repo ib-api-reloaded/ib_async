@@ -163,7 +163,7 @@ class Decoder:
                     ]
                     method(*args)
                 except Exception:
-                    self.logger.exception(f"Error for {methodName}:")
+                    self.logger.exception(f"Error for {methodName}({args}):")
 
         return handler
 
