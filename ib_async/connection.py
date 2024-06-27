@@ -41,7 +41,15 @@ class Connection(asyncio.Protocol):
     def disconnect(self):
         if self.transport:
             self.transport.write_eof()
-            self.transport.close()
+            try:
+                # sometimes the loop is already closed, but we don't
+                # want the user to get a runtime exception from deep in
+                # this library, so we just hide any failure to double close
+                # the event loop.
+                self.transport.close()
+            except RuntimeError:
+                # prevents: raise RuntimeError('Event loop is closed')
+                pass
 
     def isConnected(self):
         return self.transport is not None
