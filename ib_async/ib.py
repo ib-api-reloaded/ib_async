@@ -8,6 +8,7 @@ import time
 from typing import Awaitable, Dict, Iterator, List, Optional, Union
 
 from eventkit import Event
+from enum import Flag, auto
 
 import ib_async.util as util
 from ib_async.client import Client
@@ -52,6 +53,27 @@ from ib_async.order import (
 )
 from ib_async.ticker import Ticker
 from ib_async.wrapper import Wrapper
+
+
+class StartupFetch(Flag):
+    POSITIONS = auto()
+    ORDERS_OPEN = auto()
+    ORDERS_COMPLETE = auto()
+    ACCOUNT_UPDATES = auto()
+    SUB_ACCOUNT_UPDATES = auto()
+    EXECUTIONS = auto()
+
+
+StartupFetchNONE = StartupFetch(0)
+
+StartupFetchALL = (
+    StartupFetch.POSITIONS
+    | StartupFetch.ORDERS_OPEN
+    | StartupFetch.ORDERS_COMPLETE
+    | StartupFetch.ACCOUNT_UPDATES
+    | StartupFetch.SUB_ACCOUNT_UPDATES
+    | StartupFetch.EXECUTIONS
+)
 
 
 class IB:
@@ -311,6 +333,7 @@ class IB:
         readonly: bool = False,
         account: str = "",
         raiseSyncErrors: bool = False,
+        fetchFields: StartupFetch = StartupFetchALL,
     ):
         """
         Connect to a running TWS or IB gateway application.
@@ -333,10 +356,21 @@ class IB:
             raiseSyncErrors: When ``True`` this will cause an initial
               sync request error to raise a `ConnectionError``.
               When ``False`` the error will only be logged at error level.
+           fetchFields: By default, all account data is loaded and cached
+              when a new connection is made. You can optionally disable all
+              or some of the account attribute fetching during a connection
+              using the StartupFetch field flags.
         """
         return self._run(
             self.connectAsync(
-                host, port, clientId, timeout, readonly, account, raiseSyncErrors
+                host,
+                port,
+                clientId,
+                timeout,
+                readonly,
+                account,
+                raiseSyncErrors,
+                fetchFields,
             )
         )
 
@@ -1966,6 +2000,7 @@ class IB:
         readonly: bool = False,
         account: str = "",
         raiseSyncErrors: bool = False,
+        fetchFields: StartupFetch = StartupFetchALL,
     ):
         clientId = int(clientId)
         self.wrapper.clientId = clientId
@@ -1983,22 +2018,27 @@ class IB:
                 account = accounts[0]
 
             # prepare initializing requests
-            reqs: Dict = {}  # name -> request
+            # name -> request
+            reqs: dict[str, Awaitable[Any]] = {}
             reqs["positions"] = self.reqPositionsAsync()
             if not readonly:
-                reqs["open orders"] = self.reqOpenOrdersAsync()
+                if fetchFields & StartupFetch.ORDERS_OPEN:
+                    reqs["open orders"] = self.reqOpenOrdersAsync()
 
             if not readonly and self.client.serverVersion() >= 150:
-                reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
+                if fetchFields & StartupFetch.ORDERS_COMPLETE:
+                    reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
 
             if account:
-                reqs["account updates"] = self.reqAccountUpdatesAsync(account)
+                if fetchFields & StartupFetch.ACCOUNT_UPDATES:
+                    reqs["account updates"] = self.reqAccountUpdatesAsync(account)
 
             if len(accounts) <= self.MaxSyncedSubAccounts:
-                for acc in accounts:
-                    reqs[f"account updates for {acc}"] = (
-                        self.reqAccountUpdatesMultiAsync(acc)
-                    )
+                if fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES:
+                    for acc in accounts:
+                        reqs[f"account updates for {acc}"] = (
+                            self.reqAccountUpdatesMultiAsync(acc)
+                        )
 
             # run initializing requests concurrently and log if any times out
             tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
@@ -2011,12 +2051,13 @@ class IB:
                     self._logger.error(msg)
 
             # the request for executions must come after all orders are in
-            try:
-                await asyncio.wait_for(self.reqExecutionsAsync(), timeout)
-            except asyncio.TimeoutError:
-                msg = "executions request timed out"
-                errors.append(msg)
-                self._logger.error(msg)
+            if fetchFields & StartupFetch.EXECUTIONS:
+                try:
+                    await asyncio.wait_for(self.reqExecutionsAsync(), timeout)
+                except asyncio.TimeoutError:
+                    msg = "executions request timed out"
+                    errors.append(msg)
+                    self._logger.error(msg)
 
             if raiseSyncErrors and len(errors) > 0:
                 raise ConnectionError(errors)

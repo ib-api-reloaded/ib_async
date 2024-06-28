@@ -31,7 +31,7 @@ from .contract import (
     Warrant,
 )
 from .flexreport import FlexError, FlexReport
-from .ib import IB
+from .ib import IB, StartupFetch, StartupFetchNONE, StartupFetchALL
 from .ibcontroller import IBC, Watchdog
 from .objects import (
     AccountValue,
@@ -204,6 +204,9 @@ __all__ = [
     "__version_info__",
     "RequestError",
     "Wrapper",
+    "StartupFetch",
+    "StartupFetchALL",
+    "StartupFetchNONE",
 ]
 
 
