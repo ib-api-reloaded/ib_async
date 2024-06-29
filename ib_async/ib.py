@@ -5,7 +5,7 @@ import copy
 import datetime
 import logging
 import time
-from typing import Awaitable, Dict, Iterator, List, Optional, Union
+from typing import Any, Awaitable, Dict, Iterator, List, Optional, Union
 
 from eventkit import Event
 from enum import Flag, auto
