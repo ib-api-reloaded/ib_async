@@ -4,6 +4,19 @@
 1.0
 ---
 
+Version 1.0.2 (2024-06-29)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+General improvements and minor correctness fixes.
+
+* Fixed :issue:`28`: Add ability to optionally disable account data synchronization on startup. If you are an advanced user, you may not need all your data synchronized on startup (which can slow down the initial connections due to the multiple sequential request loading) or you may want to control when the account data is loaded on your own schedule.
+* Fixed :issue:`33`: Improved reliability of L2 depth of market reporting
+* Fixed :issue:`10` and :issue:`11`: Fixed links in documentation
+* Fixed :issue:`16`: Fixed documentation typo
+* Fixed :issue:`32`: Use delayed data instead of denied data in example notebooks
+* Improved error logging if a wrapped method fails
+* Removed a potential exception when shutting down the event loop from within a larger system
+
 Version 1.0.1 (2024-03-20)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 

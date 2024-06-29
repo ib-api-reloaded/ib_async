@@ -359,7 +359,10 @@ class IB:
            fetchFields: By default, all account data is loaded and cached
               when a new connection is made. You can optionally disable all
               or some of the account attribute fetching during a connection
-              using the StartupFetch field flags.
+              using the StartupFetch field flags. See ``StartupFetch`` in ``ib.py``
+              for member details. There is also StartupFetchNONE and StartupFetchALL
+              as shorthand. Individual flag field members can be added or removed
+              to the ``fetchFields`` parameter as needed.
         """
         return self._run(
             self.connectAsync(
