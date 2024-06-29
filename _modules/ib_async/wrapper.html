@@ -16,7 +16,7 @@
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
         <script src="../../_static/documentation_options.js?v=8d563738"></script>
-        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../genindex.html" />
@@ -352,15 +352,9 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">ticker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tickers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">contract</span><span class="p">))</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ticker</span><span class="p">:</span>
-            <span class="n">ticker</span> <span class="o">=</span> <span class="n">Ticker</span><span class="p">(</span>
-                <span class="n">contract</span><span class="o">=</span><span class="n">contract</span><span class="p">,</span>
-                <span class="n">ticks</span><span class="o">=</span><span class="p">[],</span>
-                <span class="n">tickByTicks</span><span class="o">=</span><span class="p">[],</span>
-                <span class="n">domBids</span><span class="o">=</span><span class="p">[],</span>
-                <span class="n">domAsks</span><span class="o">=</span><span class="p">[],</span>
-                <span class="n">domTicks</span><span class="o">=</span><span class="p">[],</span>
-            <span class="p">)</span>
+            <span class="n">ticker</span> <span class="o">=</span> <span class="n">Ticker</span><span class="p">(</span><span class="n">contract</span><span class="o">=</span><span class="n">contract</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">tickers</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">contract</span><span class="p">)]</span> <span class="o">=</span> <span class="n">ticker</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">reqId2Ticker</span><span class="p">[</span><span class="n">reqId</span><span class="p">]</span> <span class="o">=</span> <span class="n">ticker</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_reqId2Contract</span><span class="p">[</span><span class="n">reqId</span><span class="p">]</span> <span class="o">=</span> <span class="n">contract</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ticker2ReqId</span><span class="p">[</span><span class="n">tickType</span><span class="p">][</span><span class="n">ticker</span><span class="p">]</span> <span class="o">=</span> <span class="n">reqId</span>
@@ -1247,16 +1241,44 @@
         <span class="c1"># side: 0 = ask, 1 = bid</span>
         <span class="n">ticker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">reqId2Ticker</span><span class="p">[</span><span class="n">reqId</span><span class="p">]</span>
 
-        <span class="n">dom</span> <span class="o">=</span> <span class="n">ticker</span><span class="o">.</span><span class="n">domBids</span> <span class="k">if</span> <span class="n">side</span> <span class="k">else</span> <span class="n">ticker</span><span class="o">.</span><span class="n">domAsks</span>
-        <span class="k">if</span> <span class="n">operation</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">dom</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">position</span><span class="p">,</span> <span class="n">DOMLevel</span><span class="p">(</span><span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">marketMaker</span><span class="p">))</span>
-        <span class="k">elif</span> <span class="n">operation</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="c1"># &#39;dom&#39; is a dict so we can address position updates directly</span>
+        <span class="n">dom</span> <span class="o">=</span> <span class="n">ticker</span><span class="o">.</span><span class="n">domBidsDict</span> <span class="k">if</span> <span class="n">side</span> <span class="k">else</span> <span class="n">ticker</span><span class="o">.</span><span class="n">domAsksDict</span>
+
+        <span class="c1"># if you&#39;re curious when these operations run and what they do, enable this too:</span>
+        <span class="c1"># fmt: off</span>
+        <span class="c1"># print(&quot;BID&quot; if side else &quot;ASK&quot;, &quot;OPERATION&quot;, operation, &quot;at position&quot;, position, &quot;for price&quot;, price, &quot;at qty&quot;, size)</span>
+        <span class="c1"># assert list(dom.keys()) == list(range(0, len(dom))), f&quot;Keys aren&#39;t sequential? {dom} :: {ticker}&quot;</span>
+        <span class="c1"># fmt: on</span>
+
+        <span class="k">if</span> <span class="n">operation</span> <span class="ow">in</span> <span class="p">{</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">}:</span>
+            <span class="c1"># &#39;0&#39; is INSERT NEW</span>
+            <span class="c1"># &#39;1&#39; is UPDATE EXISTING</span>
+            <span class="c1"># We are using the same operation for &quot;insert or overwrite&quot; directly.</span>
             <span class="n">dom</span><span class="p">[</span><span class="n">position</span><span class="p">]</span> <span class="o">=</span> <span class="n">DOMLevel</span><span class="p">(</span><span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">marketMaker</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">operation</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">position</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">dom</span><span class="p">):</span>
+            <span class="c1"># &#39;2&#39; is DELETE EXISTING</span>
+            <span class="n">size</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">try</span><span class="p">:</span>
                 <span class="n">level</span> <span class="o">=</span> <span class="n">dom</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
                 <span class="n">price</span> <span class="o">=</span> <span class="n">level</span><span class="o">.</span><span class="n">price</span>
-                <span class="n">size</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="c1"># invalid position requested for removal, so ignore the request</span>
+                <span class="k">pass</span>
+
+        <span class="c1"># To retain the original API structure, we convert all sorted dict</span>
+        <span class="c1"># values into lists for users to consume.</span>
+        <span class="c1"># Users can also read ticker.domBidsDict or ticker.domAsksDict directly.</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dom</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">side</span><span class="p">:</span>
+            <span class="c1"># Update BID for users</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">domBids</span> <span class="o">=</span> <span class="n">values</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Update ASK for users</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">domAsks</span> <span class="o">=</span> <span class="n">values</span>
+
+        <span class="c1"># TODO: add optional debugging check. In a correctly working system, we should</span>
+        <span class="c1">#       technically always have sequential bid and ask position entries, but</span>
+        <span class="c1">#       in the past we have seen gaps or missing values.</span>
 
         <span class="n">tick</span> <span class="o">=</span> <span class="n">MktDepthData</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">lastTime</span><span class="p">,</span> <span class="n">position</span><span class="p">,</span> <span class="n">marketMaker</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="n">side</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span>
@@ -1533,6 +1555,8 @@
                 <span class="p">]</span>
                 <span class="n">ticker</span><span class="o">.</span><span class="n">domAsks</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
                 <span class="n">ticker</span><span class="o">.</span><span class="n">domBids</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+                <span class="n">ticker</span><span class="o">.</span><span class="n">domBidsDict</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+                <span class="n">ticker</span><span class="o">.</span><span class="n">domAsksDict</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">pendingTickers</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">ticker</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">errorCode</span> <span class="o">==</span> <span class="mi">10225</span><span class="p">:</span>
             <span class="c1"># Bust event occurred, current subscription is deactivated.</span>
