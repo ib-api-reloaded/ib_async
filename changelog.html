@@ -56,6 +56,7 @@
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#id1">1.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#version-1-0-2-2024-06-29">Version 1.0.2 (2024-06-29)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-1-2024-03-20">Version 1.0.1 (2024-03-20)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-0-2024-03-18">Version 1.0.0 (2024-03-18)</a></li>
 </ul>
@@ -217,6 +218,19 @@
 <h1><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog<a class="headerlink" href="#ib-async-changelog" title="Link to this heading"></a></h1>
 <section id="id1">
 <h2>1.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<section id="version-1-0-2-2024-06-29">
+<h3>Version 1.0.2 (2024-06-29)<a class="headerlink" href="#version-1-0-2-2024-06-29" title="Link to this heading"></a></h3>
+<p>General improvements and minor correctness fixes.</p>
+<ul class="simple">
+<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/28">issue 28</a>: Add ability to optionally disable account data synchronization on startup. If you are an advanced user, you may not need all your data synchronized on startup (which can slow down the initial connections due to the multiple sequential request loading) or you may want to control when the account data is loaded on your own schedule.</p></li>
+<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/33">issue 33</a>: Improved reliability of L2 depth of market reporting</p></li>
+<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/10">issue 10</a> and <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/11">issue 11</a>: Fixed links in documentation</p></li>
+<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/16">issue 16</a>: Fixed documentation typo</p></li>
+<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/32">issue 32</a>: Use delayed data instead of denied data in example notebooks</p></li>
+<li><p>Improved error logging if a wrapped method fails</p></li>
+<li><p>Removed a potential exception when shutting down the event loop from within a larger system</p></li>
+</ul>
+</section>
 <section id="version-1-0-1-2024-03-20">
 <h3>Version 1.0.1 (2024-03-20)<a class="headerlink" href="#version-1-0-1-2024-03-20" title="Link to this heading"></a></h3>
 <ul class="simple">

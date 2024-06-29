@@ -1873,7 +1873,10 @@ When <code class="docutils literal notranslate"><span class="pre">False</span></
 </dd>
 <dt>fetchFields: By default, all account data is loaded and cached</dt><dd><p>when a new connection is made. You can optionally disable all
 or some of the account attribute fetching during a connection
-using the StartupFetch field flags.</p>
+using the StartupFetch field flags. See <code class="docutils literal notranslate"><span class="pre">StartupFetch</span></code> in <code class="docutils literal notranslate"><span class="pre">ib.py</span></code>
+for member details. There is also StartupFetchNONE and StartupFetchALL
+as shorthand. Individual flag field members can be added or removed
+to the <code class="docutils literal notranslate"><span class="pre">fetchFields</span></code> parameter as needed.</p>
 </dd>
 </dl>
 </p></li>
