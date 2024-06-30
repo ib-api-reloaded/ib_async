@@ -436,18 +436,14 @@ class Wrapper:
         self._endReq("positions")
 
     def positionMulti(
-        self,
-        reqId: int,
-        account: str,
-        modelCode: str,
-        contract: Contract,
-        pos: float,
-        avgCost: float,
-    ):
-        pass
+            self, reqId: int, account: str, modelCode: str,
+            contract: Contract, pos: float, avgCost: float):
+        results = self._results.get(reqId) ; 
+        if results is not None:
+            results.append({'account':account,'modelCode':modelCode , 'symbol':contract.symbol,'secType':contract.secType,'currency':contract.currency,'position':pos , 'avgCost':avgCost } )
 
     def positionMultiEnd(self, reqId: int):
-        pass
+        self._endReq(reqId)
 
     def pnl(
         self, reqId: int, dailyPnL: float, unrealizedPnL: float, realizedPnL: float
@@ -1519,3 +1515,6 @@ class Wrapper:
                 ticker.time = self.lastTime
                 ticker.updateEvent.emit(ticker)
             self.ib.pendingTickersEvent.emit(self.pendingTickers)
+
+    
+        
