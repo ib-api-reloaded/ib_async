@@ -495,7 +495,11 @@ class Wrapper:
         """
         if order.whatIf:
             # response to whatIfOrder
-            if orderState.initMarginChange != str(UNSET_DOUBLE):
+            #This if statement is changed as UNSET_DOUBLE and orderState.initMarginChange were not equal to start with
+            #Hence the request would get dropped even withour the orderState being populated
+            #I have been using this library with this modification for more than a month now and
+            #this fix works to solve the issue for whatIfOrder feature
+            if orderState.initMarginChange != str(UNSET_DOUBLE).upper().replace("+",""):
                 self._endReq(order.orderId, orderState)
         else:
             key = self.orderKey(order.clientId, order.orderId, order.permId)
