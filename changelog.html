@@ -56,6 +56,7 @@
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#id1">1.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#version-1-0-3-2024-07-06">Version 1.0.3 (2024-07-06)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-2-2024-06-29">Version 1.0.2 (2024-06-29)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-1-2024-03-20">Version 1.0.1 (2024-03-20)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-0-2024-03-18">Version 1.0.0 (2024-03-18)</a></li>
@@ -218,6 +219,15 @@
 <h1><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog<a class="headerlink" href="#ib-async-changelog" title="Link to this heading"></a></h1>
 <section id="id1">
 <h2>1.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<section id="version-1-0-3-2024-07-06">
+<h3>Version 1.0.3 (2024-07-06)<a class="headerlink" href="#version-1-0-3-2024-07-06" title="Link to this heading"></a></h3>
+<p>General improvements and minor correctness fixes.</p>
+<ul class="simple">
+<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/42">issue 42</a>: Order preview requests would often fail for non-limit-order types due to incorrect value comparison. This has previous attempted fixes over the years, but we finally found the proper fix to the other fixes. Now order preview requests work properly for all order types.</p></li>
+<li><p>Now market depth data is removed from the <code class="docutils literal notranslate"><span class="pre">Ticker</span></code> object when a market depth request is stopped because the data isn’t being live updated anymore.</p></li>
+<li><p>Added <a class="reference external" href="https://github.com/quantbelt/ib_fundamental">ib_fundamental</a> to community utility listing in README</p></li>
+</ul>
+</section>
 <section id="version-1-0-2-2024-06-29">
 <h3>Version 1.0.2 (2024-06-29)<a class="headerlink" href="#version-1-0-2-2024-06-29" title="Link to this heading"></a></h3>
 <p>General improvements and minor correctness fixes.</p>

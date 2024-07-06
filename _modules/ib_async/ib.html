@@ -1817,6 +1817,13 @@
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">endTicker</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="s2">&quot;mktDepth&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">ticker</span> <span class="k">else</span> <span class="mi">0</span>
         <span class="k">if</span> <span class="n">ticker</span> <span class="ow">and</span> <span class="n">reqId</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">cancelMktDepth</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="n">isSmartDepth</span><span class="p">)</span>
+
+            <span class="c1"># clear market depth state from live ticker since it is not longer</span>
+            <span class="c1"># being updated after the cancel request.</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">domBids</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">domAsks</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">domBidsDict</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">domAsksDict</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;cancelMktDepth: No reqId found for contract </span><span class="si">{</span><span class="n">contract</span><span class="si">}</span><span class="s2">&quot;</span>

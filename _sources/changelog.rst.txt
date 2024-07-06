@@ -4,6 +4,15 @@
 1.0
 ---
 
+Version 1.0.3 (2024-07-06)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+General improvements and minor correctness fixes.
+
+* Fixed :issue:`42`: Order preview requests would often fail for non-limit-order types due to incorrect value comparison. This has previous attempted fixes over the years, but we finally found the proper fix to the other fixes. Now order preview requests work properly for all order types.
+* Now market depth data is removed from the ``Ticker`` object when a market depth request is stopped because the data isn't being live updated anymore.
+* Added `ib_fundamental <https://github.com/quantbelt/ib_fundamental>`_ to community utility listing in README
+
 Version 1.0.2 (2024-06-29)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
