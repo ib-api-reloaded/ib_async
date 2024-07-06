@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ib_async"
-version = "1.0.2"
+version = "1.0.3"
 description = "Python sync/async framework for Interactive Brokers API"
 authors = ["Ewald de Wit"]
 maintainers = ["Matt Stancliff <matt@matt.sh>"]
