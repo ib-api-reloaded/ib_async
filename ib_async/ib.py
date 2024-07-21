@@ -155,7 +155,7 @@ class IB:
           Is emitted after disconnecting from TWS/gateway.
 
         * ``updateEvent`` ():
-          Is emitted after a network packet has been handeled.
+          Is emitted after a network packet has been handled.
 
         * ``pendingTickersEvent`` (tickers: Set[:class:`.Ticker`]):
           Emits the set of tickers that have been updated during the last
