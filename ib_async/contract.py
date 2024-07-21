@@ -582,6 +582,22 @@ class ContractDetails:
         return self._parseSessions(self.liquidHours)
 
     def _parseSessions(self, s: str) -> List[TradingSession]:
+        """Parse the IBKR session date range text format into native Python objects.
+
+        Note: The IBKR date range format looks like:
+            timeZoneId='US/Eastern',
+            tradingHours='20240721:CLOSED;20240722:0400-20240722:2000;20240723:0400-20240723:'
+                '2000;20240724:0400-20240724:2000;20240725:0400-20240725:2000;'
+                '20240726:0400-20240726:2000',
+            liquidHours='20240721:CLOSED;20240722:0930-20240722:1600;20240723:0930-20240723:'
+                '1600;20240724:0930-20240724:1600;20240725:0930-20240725:1600;'
+                '20240726:0930-20240726:1600',
+        """
+
+        # if the time values don't exist, we can't parse anything, so return nothing.
+        if not (s or self.timeZoneId):
+            return []
+
         tz = util.ZoneInfo(self.timeZoneId)
         sessions = []
         for sess in s.split(";"):
