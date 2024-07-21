@@ -213,10 +213,10 @@ __all__ = [
 # compatibility with old Object
 for obj in locals().copy().values():
     if dataclasses.is_dataclass(obj):
-        obj.dict = util.dataclassAsDict
-        obj.tuple = util.dataclassAsTuple
-        obj.update = util.dataclassUpdate
-        obj.nonDefaults = util.dataclassNonDefaults
+        obj.dict = util.dataclassAsDict  # type: ignore
+        obj.tuple = util.dataclassAsTuple  # type: ignore
+        obj.update = util.dataclassUpdate  # type: ignore
+        obj.nonDefaults = util.dataclassNonDefaults  # type: ignore
 
 del sys
 del dataclasses

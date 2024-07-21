@@ -421,11 +421,8 @@ class BarDataList(List[BarData]):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self is other
-
-    def __hash__(self):
-        return id(self)
 
 
 class RealTimeBarList(List[RealTimeBar]):
@@ -449,11 +446,8 @@ class RealTimeBarList(List[RealTimeBar]):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self is other
-
-    def __hash__(self):
-        return id(self)
 
 
 class ScanDataList(List[ScanData]):
@@ -475,9 +469,6 @@ class ScanDataList(List[ScanData]):
 
     def __eq__(self, other):
         return self is other
-
-    def __hash__(self):
-        return id(self)
 
 
 class DynamicObject:

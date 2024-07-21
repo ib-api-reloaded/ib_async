@@ -274,11 +274,8 @@ class BarList(List[Bar]):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self is other
-
-    def __hash__(self):
-        return id(self)
 
 
 class TimeBars(Op):
