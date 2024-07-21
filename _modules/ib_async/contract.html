@@ -738,6 +738,22 @@
 
 
     <span class="k">def</span> <span class="nf">_parseSessions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">TradingSession</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse the IBKR session date range text format into native Python objects.</span>
+
+<span class="sd">        Note: The IBKR date range format looks like:</span>
+<span class="sd">            timeZoneId=&#39;US/Eastern&#39;,</span>
+<span class="sd">            tradingHours=&#39;20240721:CLOSED;20240722:0400-20240722:2000;20240723:0400-20240723:&#39;</span>
+<span class="sd">                &#39;2000;20240724:0400-20240724:2000;20240725:0400-20240725:2000;&#39;</span>
+<span class="sd">                &#39;20240726:0400-20240726:2000&#39;,</span>
+<span class="sd">            liquidHours=&#39;20240721:CLOSED;20240722:0930-20240722:1600;20240723:0930-20240723:&#39;</span>
+<span class="sd">                &#39;1600;20240724:0930-20240724:1600;20240725:0930-20240725:1600;&#39;</span>
+<span class="sd">                &#39;20240726:0930-20240726:1600&#39;,</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># if the time values don&#39;t exist, we can&#39;t parse anything, so return nothing.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">s</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeZoneId</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
         <span class="n">tz</span> <span class="o">=</span> <span class="n">util</span><span class="o">.</span><span class="n">ZoneInfo</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timeZoneId</span><span class="p">)</span>
         <span class="n">sessions</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">sess</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">):</span>
