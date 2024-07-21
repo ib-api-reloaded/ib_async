@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async Changelog &mdash; ib_async 1.0.0 documentation</title>
+  <title>ib_async Changelog &mdash; ib_async 1.0.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
@@ -16,7 +16,7 @@
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=8d563738"></script>
+        <script src="_static/documentation_options.js?v=baaebd52"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -223,7 +223,7 @@
 <h3>Version 1.0.3 (2024-07-06)<a class="headerlink" href="#version-1-0-3-2024-07-06" title="Link to this heading"></a></h3>
 <p>General improvements and minor correctness fixes.</p>
 <ul class="simple">
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/42">issue 42</a>: Order preview requests would often fail for non-limit-order types due to incorrect value comparison. This has previous attempted fixes over the years, but we finally found the proper fix to the other fixes. Now order preview requests work properly for all order types.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/42">issue 42</a>: Order preview requests would often fail for non-limit-order types due to incorrect value comparison. This has previous attempted fixes over the years, but we finally found the proper fix to the other fixes. Now order preview requests work properly for all order types.</p></li>
 <li><p>Now market depth data is removed from the <code class="docutils literal notranslate"><span class="pre">Ticker</span></code> object when a market depth request is stopped because the data isn’t being live updated anymore.</p></li>
 <li><p>Added <a class="reference external" href="https://github.com/quantbelt/ib_fundamental">ib_fundamental</a> to community utility listing in README</p></li>
 </ul>
@@ -232,11 +232,11 @@
 <h3>Version 1.0.2 (2024-06-29)<a class="headerlink" href="#version-1-0-2-2024-06-29" title="Link to this heading"></a></h3>
 <p>General improvements and minor correctness fixes.</p>
 <ul class="simple">
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/28">issue 28</a>: Add ability to optionally disable account data synchronization on startup. If you are an advanced user, you may not need all your data synchronized on startup (which can slow down the initial connections due to the multiple sequential request loading) or you may want to control when the account data is loaded on your own schedule.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/33">issue 33</a>: Improved reliability of L2 depth of market reporting</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/10">issue 10</a> and <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/11">issue 11</a>: Fixed links in documentation</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/16">issue 16</a>: Fixed documentation typo</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/32">issue 32</a>: Use delayed data instead of denied data in example notebooks</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/28">issue 28</a>: Add ability to optionally disable account data synchronization on startup. If you are an advanced user, you may not need all your data synchronized on startup (which can slow down the initial connections due to the multiple sequential request loading) or you may want to control when the account data is loaded on your own schedule.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/33">issue 33</a>: Improved reliability of L2 depth of market reporting</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/10">issue 10</a> and <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/11">issue 11</a>: Fixed links in documentation</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/16">issue 16</a>: Fixed documentation typo</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/32">issue 32</a>: Use delayed data instead of denied data in example notebooks</p></li>
 <li><p>Improved error logging if a wrapped method fails</p></li>
 <li><p>Removed a potential exception when shutting down the event loop from within a larger system</p></li>
 </ul>
@@ -244,7 +244,7 @@
 <section id="version-1-0-1-2024-03-20">
 <h3>Version 1.0.1 (2024-03-20)<a class="headerlink" href="#version-1-0-1-2024-03-20" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/4">issue 4</a>: Messaging sending bug for unresolved contracts due to cleanup in 1.0.0</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/4">issue 4</a>: Messaging sending bug for unresolved contracts due to cleanup in 1.0.0</p></li>
 </ul>
 <p>Solved this messaging sending bug by refactoring message parsing logic to be more stable. Also added a test case verifying it works as expected now.</p>
 </section>
@@ -283,15 +283,15 @@
 <section id="version-0-9-86">
 <h3>Version 0.9.86<a class="headerlink" href="#version-0-9-86" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/588">issue 588</a>: Fixed account summary tag.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/589">issue 589</a>: Fixed more account summary tags.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/588">issue 588</a>: Fixed account summary tag.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/589">issue 589</a>: Fixed more account summary tags.</p></li>
 <li><p>pull:<cite>598</cite>: Year updates</p></li>
 </ul>
 </section>
 <section id="version-0-9-85">
 <h3>Version 0.9.85<a class="headerlink" href="#version-0-9-85" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/586">issue 586</a>: Revert socket protocol back to version 176.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/586">issue 586</a>: Revert socket protocol back to version 176.</p></li>
 </ul>
 </section>
 <section id="version-0-9-84">
@@ -312,15 +312,15 @@ the (blocking) convenience methods <code class="docutils literal notranslate"><s
 <section id="version-0-9-82">
 <h3>Version 0.9.82<a class="headerlink" href="#version-0-9-82" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/534">issue 534</a>: Session parsing for Forex contracts.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/536">issue 536</a>: Handle empty session field.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/541">issue 541</a>: Remove superfluous closing bracket.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/542">issue 542</a>: Use float size for <code class="docutils literal notranslate"><span class="pre">pnlSingle</span></code>.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/544">issue 544</a>: Cancel head-time request after completion.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/545">issue 545</a>: Return <code class="docutils literal notranslate"><span class="pre">Trade</span></code> instead of <code class="docutils literal notranslate"><span class="pre">Order</span></code> for
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/534">issue 534</a>: Session parsing for Forex contracts.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/536">issue 536</a>: Handle empty session field.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/541">issue 541</a>: Remove superfluous closing bracket.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/542">issue 542</a>: Use float size for <code class="docutils literal notranslate"><span class="pre">pnlSingle</span></code>.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/544">issue 544</a>: Cancel head-time request after completion.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/545">issue 545</a>: Return <code class="docutils literal notranslate"><span class="pre">Trade</span></code> instead of <code class="docutils literal notranslate"><span class="pre">Order</span></code> for
 <code class="docutils literal notranslate"><span class="pre">reqOpenOrders</span></code> and <code class="docutils literal notranslate"><span class="pre">reqAllOpenOrders</span></code>.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/553">pull 553</a>: Volume bar added.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/565">pull 565</a>: Typo fix.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/553">pull 553</a>: Volume bar added.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/565">pull 565</a>: Typo fix.</p></li>
 </ul>
 </section>
 <section id="version-0-9-81">
@@ -349,25 +349,25 @@ the (blocking) convenience methods <code class="docutils literal notranslate"><s
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">account</span></code> parameter to <code class="docutils literal notranslate"><span class="pre">ib.portfolio()</span></code>.</p></li>
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">IBC.on2fatimeout</span></code> field.</p></li>
 <li><p>Removed obsolete <code class="docutils literal notranslate"><span class="pre">IBController</span></code>.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/530">issue 530</a>: Use explicit timezone in requests as per new API requirement.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/530">issue 530</a>: Use explicit timezone in requests as per new API requirement.</p></li>
 </ul>
 </section>
 <section id="version-0-9-77">
 <h3>Version 0.9.77<a class="headerlink" href="#version-0-9-77" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/528">pull 528</a>: Fixes regression in <code class="docutils literal notranslate"><span class="pre">client.py</span></code>.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/528">pull 528</a>: Fixes regression in <code class="docutils literal notranslate"><span class="pre">client.py</span></code>.</p></li>
 </ul>
 </section>
 <section id="version-0-9-76">
 <h3>Version 0.9.76<a class="headerlink" href="#version-0-9-76" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/525">issue 525</a>: For <code class="docutils literal notranslate"><span class="pre">whatIf</span></code> request treat error 110 as failure.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/525">issue 525</a>: For <code class="docutils literal notranslate"><span class="pre">whatIf</span></code> request treat error 110 as failure.</p></li>
 </ul>
 </section>
 <section id="version-0-9-75">
 <h3>Version 0.9.75<a class="headerlink" href="#version-0-9-75" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/524">issue 524</a>: Use fix from Papakipos for issue with <code class="docutils literal notranslate"><span class="pre">FlexReport</span></code> downloading.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/524">issue 524</a>: Use fix from Papakipos for issue with <code class="docutils literal notranslate"><span class="pre">FlexReport</span></code> downloading.</p></li>
 </ul>
 </section>
 <section id="version-0-9-74">
@@ -380,14 +380,14 @@ the (blocking) convenience methods <code class="docutils literal notranslate"><s
 <section id="version-0-9-73">
 <h3>Version 0.9.73<a class="headerlink" href="#version-0-9-73" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/523">pull 523</a>: Fix <code class="docutils literal notranslate"><span class="pre">completedOrder</span></code> parsing for new socket protocol.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/523">pull 523</a>: Fix <code class="docutils literal notranslate"><span class="pre">completedOrder</span></code> parsing for new socket protocol.</p></li>
 </ul>
 </section>
 <section id="version-0-9-72">
 <h3>Version 0.9.72<a class="headerlink" href="#version-0-9-72" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/507">pull 507</a>: Fixes <code class="docutils literal notranslate"><span class="pre">bondContractDetails</span></code> request.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/502">issue 502</a>: Treat error 110 as a warning.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/507">pull 507</a>: Fixes <code class="docutils literal notranslate"><span class="pre">bondContractDetails</span></code> request.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/502">issue 502</a>: Treat error 110 as a warning.</p></li>
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">manualOrderTime</span></code> and <code class="docutils literal notranslate"><span class="pre">manualCancelOrderTime</span></code> for audit trails.</p></li>
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">PEG</span> <span class="pre">MID</span></code> and <code class="docutils literal notranslate"><span class="pre">PEG</span> <span class="pre">BEST</span></code> order types.</p></li>
 <li><p>Added contract fields <code class="docutils literal notranslate"><span class="pre">description</span></code> and <code class="docutils literal notranslate"><span class="pre">issuerId</span></code>.</p></li>
@@ -398,11 +398,11 @@ the (blocking) convenience methods <code class="docutils literal notranslate"><s
 <section id="version-0-9-71">
 <h3>Version 0.9.71<a class="headerlink" href="#version-0-9-71" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/453">pull 453</a>: Added support for <code class="docutils literal notranslate"><span class="pre">bidExchange</span></code> and <code class="docutils literal notranslate"><span class="pre">askExchange</span></code> fields to <code class="docutils literal notranslate"><span class="pre">Ticker</span></code>.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/489">pull 489</a>: <code class="docutils literal notranslate"><span class="pre">Watchdog.start()</span></code> now returns a <code class="docutils literal notranslate"><span class="pre">Future</span></code>.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/439">issue 439</a>: Set <code class="docutils literal notranslate"><span class="pre">marketDataType</span></code> directly on <code class="docutils literal notranslate"><span class="pre">Ticker</span></code>.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/441">issue 441</a>: Add explicit timezone of None to accomodate pandas Timestamp.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/471">issue 471</a>: Revised <code class="docutils literal notranslate"><span class="pre">Ticker.marketPrice()</span></code> calculation.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/453">pull 453</a>: Added support for <code class="docutils literal notranslate"><span class="pre">bidExchange</span></code> and <code class="docutils literal notranslate"><span class="pre">askExchange</span></code> fields to <code class="docutils literal notranslate"><span class="pre">Ticker</span></code>.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/489">pull 489</a>: <code class="docutils literal notranslate"><span class="pre">Watchdog.start()</span></code> now returns a <code class="docutils literal notranslate"><span class="pre">Future</span></code>.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/439">issue 439</a>: Set <code class="docutils literal notranslate"><span class="pre">marketDataType</span></code> directly on <code class="docutils literal notranslate"><span class="pre">Ticker</span></code>.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/441">issue 441</a>: Add explicit timezone of None to accomodate pandas Timestamp.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/471">issue 471</a>: Revised <code class="docutils literal notranslate"><span class="pre">Ticker.marketPrice()</span></code> calculation.</p></li>
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">minTick</span></code>, <code class="docutils literal notranslate"><span class="pre">bboExchange</span></code> and <code class="docutils literal notranslate"><span class="pre">snapshotPermissions</span></code> fields to <code class="docutils literal notranslate"><span class="pre">Ticker</span></code>.</p></li>
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">minSize</span></code>, <code class="docutils literal notranslate"><span class="pre">sizeIncrement</span></code> and <code class="docutils literal notranslate"><span class="pre">suggestedSizeIncrement</span></code> fields to <code class="docutils literal notranslate"><span class="pre">ContractDetails</span></code>.</p></li>
 <li><p>Added <code class="docutils literal notranslate"><span class="pre">IB.reqHistoricalSchedule</span></code> request.</p></li>
@@ -416,20 +416,20 @@ the (blocking) convenience methods <code class="docutils literal notranslate"><s
 <section id="version-0-9-70">
 <h3>Version 0.9.70<a class="headerlink" href="#version-0-9-70" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/413">issue 413</a>: Set the appropriate events as done on disconnect.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/413">issue 413</a>: Set the appropriate events as done on disconnect.</p></li>
 <li><p>Exported symbols are now static so that the VSCode/PyLance code analyzer can understand it.</p></li>
 </ul>
 </section>
 <section id="version-0-9-69">
 <h3>Version 0.9.69<a class="headerlink" href="#version-0-9-69" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/403">issue 403</a>: Change validity test for whatIfOrder response.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/403">issue 403</a>: Change validity test for whatIfOrder response.</p></li>
 </ul>
 </section>
 <section id="version-0-9-68">
 <h3>Version 0.9.68<a class="headerlink" href="#version-0-9-68" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/402">issue 402</a>: Downloading historical ticks for crypto currencies.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/402">issue 402</a>: Downloading historical ticks for crypto currencies.</p></li>
 </ul>
 </section>
 <section id="version-0-9-67">
@@ -437,46 +437,46 @@ the (blocking) convenience methods <code class="docutils literal notranslate"><s
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Crypto</span></code> security class added. To accommodate fractional crypto currency sizes,
 all the various <code class="docutils literal notranslate"><span class="pre">size</span></code> and <code class="docutils literal notranslate"><span class="pre">volume</span></code> fields that were of type <code class="docutils literal notranslate"><span class="pre">int</span></code> are now of type <code class="docutils literal notranslate"><span class="pre">float</span></code>.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/385">pull 385</a>: Get day trades remaining for next four days in <code class="docutils literal notranslate"><span class="pre">IB.accountSummary</span></code>.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/361">issue 361</a>: Prevent <code class="docutils literal notranslate"><span class="pre">util.logToConsole</span></code> and <code class="docutils literal notranslate"><span class="pre">util.logToFile</span></code> from messing with the root logger.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/370">issue 370</a>: Catch <code class="docutils literal notranslate"><span class="pre">asyncio.CancelledError</span></code> during connect.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/371">issue 371</a>: Fix type annotation for <code class="docutils literal notranslate"><span class="pre">reqMarketRuleAsync</span></code>.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/380">issue 380</a>: Reject bogus <code class="docutils literal notranslate"><span class="pre">whatIf</span></code> order response.</p></li>
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/389">issue 389</a>: Add <code class="docutils literal notranslate"><span class="pre">TradeLogEntry.errorCode</span></code> field.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/385">pull 385</a>: Get day trades remaining for next four days in <code class="docutils literal notranslate"><span class="pre">IB.accountSummary</span></code>.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/361">issue 361</a>: Prevent <code class="docutils literal notranslate"><span class="pre">util.logToConsole</span></code> and <code class="docutils literal notranslate"><span class="pre">util.logToFile</span></code> from messing with the root logger.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/370">issue 370</a>: Catch <code class="docutils literal notranslate"><span class="pre">asyncio.CancelledError</span></code> during connect.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/371">issue 371</a>: Fix type annotation for <code class="docutils literal notranslate"><span class="pre">reqMarketRuleAsync</span></code>.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/380">issue 380</a>: Reject bogus <code class="docutils literal notranslate"><span class="pre">whatIf</span></code> order response.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/389">issue 389</a>: Add <code class="docutils literal notranslate"><span class="pre">TradeLogEntry.errorCode</span></code> field.</p></li>
 </ul>
 </section>
 <section id="version-0-9-66">
 <h3>Version 0.9.66<a class="headerlink" href="#version-0-9-66" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/360">issue 360</a>: Improved disconnect.</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/360">issue 360</a>: Improved disconnect.</p></li>
 <li><p>Fixed issue with duplicate orderId.</p></li>
 <li><p>Update <code class="docutils literal notranslate"><span class="pre">Order</span></code> default values to work with the latest beta TWS/gateway.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/348">pull 348</a>: Added PySide6 support.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/348">pull 348</a>: Added PySide6 support.</p></li>
 </ul>
 </section>
 <section id="version-0-9-65">
 <h3>Version 0.9.65<a class="headerlink" href="#version-0-9-65" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/337">issue 337</a>.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/317">pull 317</a>: Update and order’s <code class="docutils literal notranslate"><span class="pre">totalQuantity</span></code>, <code class="docutils literal notranslate"><span class="pre">lmtPrice</span></code>, <code class="docutils literal notranslate"><span class="pre">auxPrice</span></code> and <code class="docutils literal notranslate"><span class="pre">orderType</span></code>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/337">issue 337</a>.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/317">pull 317</a>: Update and order’s <code class="docutils literal notranslate"><span class="pre">totalQuantity</span></code>, <code class="docutils literal notranslate"><span class="pre">lmtPrice</span></code>, <code class="docutils literal notranslate"><span class="pre">auxPrice</span></code> and <code class="docutils literal notranslate"><span class="pre">orderType</span></code>
 when the order is modified externally.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/332">pull 332</a>: Typo.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/332">pull 332</a>: Typo.</p></li>
 </ul>
 </section>
 <section id="version-0-9-64">
 <h3>Version 0.9.64<a class="headerlink" href="#version-0-9-64" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed: <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/309">issue 309</a>: Aggregate past fills into the <code class="docutils literal notranslate"><span class="pre">Trade</span></code> they belong to upon connect.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">ContFut</span></code> objects are now hashable (<a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/310">issue 310</a>).</p></li>
-<li><p>Added <code class="docutils literal notranslate"><span class="pre">Watchdog.probeTimeout</span></code> parameter (<a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/307">issue 307</a>).</p></li>
+<li><p>Fixed: <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/309">issue 309</a>: Aggregate past fills into the <code class="docutils literal notranslate"><span class="pre">Trade</span></code> they belong to upon connect.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ContFut</span></code> objects are now hashable (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/310">issue 310</a>).</p></li>
+<li><p>Added <code class="docutils literal notranslate"><span class="pre">Watchdog.probeTimeout</span></code> parameter (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/307">issue 307</a>).</p></li>
 </ul>
 </section>
 <section id="version-0-9-63">
 <h3>Version 0.9.63<a class="headerlink" href="#version-0-9-63" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/282">issue 282</a>: <code class="docutils literal notranslate"><span class="pre">util.Qt()</span></code> also works with the ProactorEventLoop
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/282">issue 282</a>: <code class="docutils literal notranslate"><span class="pre">util.Qt()</span></code> also works with the ProactorEventLoop
 (default on Windows) now.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/303">issue 303</a>: A regression in TWS 480.4l+ is bypassed now to avoid
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/303">issue 303</a>: A regression in TWS 480.4l+ is bypassed now to avoid
 <code class="docutils literal notranslate"><span class="pre">IB.connect()</span></code> timeouts. Request timeouts during syncing are logged as errors but will let
 the connect proceed.</p></li>
 </ul>
@@ -485,16 +485,16 @@ the connect proceed.</p></li>
 <h3>Version 0.9.62<a class="headerlink" href="#version-0-9-62" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">IB.TimezoneTWS</span></code> field added, for when the TWS timezone differs from the
-local system timezone (<a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/287">issue 287</a>).</p></li>
+local system timezone (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/287">issue 287</a>).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">IB.RaiseRequestErrors</span></code> field added, can be set to <code class="docutils literal notranslate"><span class="pre">True</span></code> to raise
 <code class="docutils literal notranslate"><span class="pre">RequestError</span></code> when certain requests fail, instead of returning
-empty data (<a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/296">pull 296</a>).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">IB.accountSummaryAsync()</span></code> method added (<a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/267">issue 267</a>).</p></li>
+empty data (<a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/296">pull 296</a>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">IB.accountSummaryAsync()</span></code> method added (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/267">issue 267</a>).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Watchdog.probeContract</span></code> field added, to use a contract other then EURUSD
-for probing the data connection (<a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/298">issue 298</a>).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">Ticker.rtTime</span></code> added (<a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/274">issue 274</a>, <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/275">pull 275</a>). Please note that this
+for probing the data connection (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/298">issue 298</a>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Ticker.rtTime</span></code> added (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/274">issue 274</a>, <a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/275">pull 275</a>). Please note that this
 timestamp appears to be mostly bogus.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/270">issue 270</a>: Clear ticker depth data when canceling market
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/270">issue 270</a>: Clear ticker depth data when canceling market
 depth subscription.</p></li>
 <li><p>Fixed issue with duplicate order IDs.</p></li>
 </ul>
@@ -513,16 +513,16 @@ the <code class="docutils literal notranslate"><span class="pre">reqMktData</spa
 cancels the request after timing out.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">BracketOrder</span></code> is iterable again.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">IB.waitOnUpdate()</span></code> returns <code class="docutils literal notranslate"><span class="pre">False</span></code> on timeout now.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/210">pull 210</a>: Fix decoding of execDetails time.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/215">pull 215</a>: New scanner notebook added, courtesy of C. Valcarcel.</p></li>
-<li><p><a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/220">pull 220</a>: Added <code class="docutils literal notranslate"><span class="pre">readonly</span></code> option for Watchdog.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/221">issue 221</a>: Delayed close ticks handling by <code class="docutils literal notranslate"><span class="pre">Ticker</span></code>.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/224">issue 224</a>: Added timeout for <code class="docutils literal notranslate"><span class="pre">completedOrders</span></code> request during connect.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/227">issue 227</a>: <code class="docutils literal notranslate"><span class="pre">IB.MaxSyncedSubAccounts</span></code> added.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/230">issue 230</a>: Fixed <code class="docutils literal notranslate"><span class="pre">IB.reqHistogramData</span></code> method.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/235">issue 235</a>: <code class="docutils literal notranslate"><span class="pre">Order.discretionaryAmt</span></code> is now of type <code class="docutils literal notranslate"><span class="pre">float</span></code> (was <code class="docutils literal notranslate"><span class="pre">int</span></code>).</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/236">issue 236</a>: <code class="docutils literal notranslate"><span class="pre">ticker.updateEvent</span></code> is now fired for any change made to the ticker.</p></li>
-<li><p>Fixed <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/245">issue 245</a>: Emit <code class="docutils literal notranslate"><span class="pre">trade.statusEvent</span></code> when order is implicitly canceled by a problem.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/210">pull 210</a>: Fix decoding of execDetails time.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/215">pull 215</a>: New scanner notebook added, courtesy of C. Valcarcel.</p></li>
+<li><p><a class="extlink-pull reference external" href="https://github.com/ib-api-reloaded/ib_async/pull/220">pull 220</a>: Added <code class="docutils literal notranslate"><span class="pre">readonly</span></code> option for Watchdog.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/221">issue 221</a>: Delayed close ticks handling by <code class="docutils literal notranslate"><span class="pre">Ticker</span></code>.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/224">issue 224</a>: Added timeout for <code class="docutils literal notranslate"><span class="pre">completedOrders</span></code> request during connect.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/227">issue 227</a>: <code class="docutils literal notranslate"><span class="pre">IB.MaxSyncedSubAccounts</span></code> added.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/230">issue 230</a>: Fixed <code class="docutils literal notranslate"><span class="pre">IB.reqHistogramData</span></code> method.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/235">issue 235</a>: <code class="docutils literal notranslate"><span class="pre">Order.discretionaryAmt</span></code> is now of type <code class="docutils literal notranslate"><span class="pre">float</span></code> (was <code class="docutils literal notranslate"><span class="pre">int</span></code>).</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/236">issue 236</a>: <code class="docutils literal notranslate"><span class="pre">ticker.updateEvent</span></code> is now fired for any change made to the ticker.</p></li>
+<li><p>Fixed <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/245">issue 245</a>: Emit <code class="docutils literal notranslate"><span class="pre">trade.statusEvent</span></code> when order is implicitly canceled by a problem.</p></li>
 <li><p>You can now <a class="reference external" href="https://github.com/sponsors/erdewit">sponsor the development of IB-insync!</a></p></li>
 </ul>
 </section>
