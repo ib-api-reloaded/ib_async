@@ -228,6 +228,16 @@ class StopLimitOrder(Order):
         )
 
 
+class MarketOnCloseOrder(Order):
+    __slots__ = ()
+
+    def __init__(self, action: str, totalQuantity: float, **kwargs):
+        Order.__init__(
+            self, orderType="MOC", action=action,
+            totalQuantity=totalQuantity, **kwargs
+        )
+
+
 @dataclass
 class OrderStatus:
     orderId: int = 0
