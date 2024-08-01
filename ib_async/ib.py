@@ -973,7 +973,8 @@ class IB:
 
     def reqPnL(self, account: str, modelCode: str = "") -> PnL:
         """
-        Start a subscription for profit and loss events.
+        Start a subscription for profit and loss events if 
+        not subscribed already.
 
         Returns a :class:`.PnL` object that is kept live updated.
         The result can also be queried from :meth:`.pnl`.
@@ -985,15 +986,17 @@ class IB:
             modelCode: If specified, filter for this account model.
         """
         key = (account, modelCode)
-        assert key not in self.wrapper.pnlKey2ReqId
-
-        reqId = self.client.getReqId()
-        self.wrapper.pnlKey2ReqId[key] = reqId
-        pnl = PnL(account, modelCode)
-        self.wrapper.reqId2PnL[reqId] = pnl
-        self.client.reqPnL(reqId, account, modelCode)
-
-        return pnl
+        if key not in self.wrapper.pnlKey2ReqId:
+            reqId = self.client.getReqId()
+            self.wrapper.pnlKey2ReqId[key] = reqId
+            pnl = PnL(account, modelCode)
+            self.wrapper.reqId2PnL[reqId] = pnl
+            self.client.reqPnL(reqId, account, modelCode)
+            return pnl
+        else:
+            reqId = self.wrapper.pnlKey2ReqId[key]
+            pnl = self.wrapper.reqId2PnL[reqId]
+            return pnl
 
     def cancelPnL(self, account, modelCode: str = ""):
         """
