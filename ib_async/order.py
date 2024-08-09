@@ -1,5 +1,6 @@
 """Order types used by Interactive Brokers."""
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import ClassVar, FrozenSet, List, NamedTuple
 
@@ -279,6 +280,55 @@ class OrderState:
     warningText: str = ""
     completedTime: str = ""
     completedStatus: str = ""
+
+    def transform(self, transformer):
+        """Convert the numeric values of this OrderState into a new OrderState transformed by 'using'"""
+        return dataclasses.replace(
+            self,
+            initMarginBefore=transformer(self.initMarginBefore),
+            maintMarginBefore=transformer(self.maintMarginBefore),
+            equityWithLoanBefore=transformer(self.equityWithLoanBefore),
+            initMarginChange=transformer(self.initMarginChange),
+            maintMarginChange=transformer(self.maintMarginChange),
+            equityWithLoanChange=transformer(self.equityWithLoanChange),
+            initMarginAfter=transformer(self.initMarginAfter),
+            maintMarginAfter=transformer(self.maintMarginAfter),
+            equityWithLoanAfter=transformer(self.equityWithLoanAfter),
+            commission=transformer(self.commission),
+            minCommission=transformer(self.minCommission),
+            maxCommission=transformer(self.maxCommission),
+        )
+
+    def numeric(self, digits: int = 2):
+        """Return a new OrderState with the current values values to floats instead of strings as returned from IBKR directly."""
+
+        def floatOrNone(what, precision) -> float | None:
+            """Attempt to convert input to a float, but if we fail (value is just empty string) return None"""
+            try:
+                # convert
+                floated = float(what)
+
+                # if the conversion is IBKR speak for "this value is not set" then give us None
+                if floated == UNSET_DOUBLE:
+                    return None
+
+                # else, round to the requested precision
+                return round(floated, precision)
+            except:
+                # initial conversion failed so just return None in its place
+                return None
+
+        return self.transform(lambda x: floatOrNone(x, digits))
+
+    def formatted(self, digits: int = 2):
+        """Return a new OrderState with the current values as formatted strings."""
+        return self.numeric(8).transform(
+            # 300000.21 -> 300,000.21
+            # 0.0 -> 0.00
+            # 431.342000000001 -> 431.34
+            # Note: we need 'is not None' here because 'x=0' is a valid numeric input too
+            lambda x: f"{x:,.{digits}f}" if x is not None else None
+        )
 
 
 @dataclass
