@@ -1424,10 +1424,33 @@ class Wrapper:
         self, reqId: int, errorCode: int, errorString: str, advancedOrderRejectJson: str
     ):
         # https://interactivebrokers.github.io/tws-api/message_codes.html
+        # https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#api-error-codes
         isRequest = reqId in self._futures
-        trade = self.trades.get((self.clientId, reqId))
-        warningCodes = {110, 165, 202, 399, 404, 434, 492, 10167}
+        trade = None
+
+        # reqId is a local orderId, but is delivered as -1 if this is a non-order-related error
+        if reqId != -1:
+            trade = self.trades.get((self.clientId, reqId))
+
+        # Warnings are currently:
+        # 110 - The price does not conform to the minimum price variation for this contract.
+        # 165 - Historical market Data Service query message.
+        # 321 - Server error when validating an API client request.
+        # 329 - Order modify failed. Cannot change to the new order type.
+        # 399 - Order message error
+        # 404 -	Shares for this order are not immediately available for short sale. The order will be held while we attempt to locate the shares.
+        # 434 -	The order size cannot be zero.
+        # 492 - ? not listed
+        # 10167 ? not listed
+        # Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
+        # TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
+
+        # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
+        # 202 - Order cancelled - Reason:
+
+        warningCodes = frozenset({110, 165, 321, 329, 399, 404, 434, 492, 10167})
         isWarning = errorCode in warningCodes or 2100 <= errorCode < 2200
+
         if errorCode == 110 and isRequest:
             # whatIf request failed
             isWarning = False
@@ -1440,16 +1463,25 @@ class Wrapper:
             # invalid price for a new order must cancel it
             isWarning = False
 
-        msg = (
-            f'{"Warning" if isWarning else "Error"} '
-            f'{errorCode}, reqId {reqId}: {errorString}'
-        )
+        msg = f'{"Warning" if isWarning else "Error"} {errorCode}, reqId {reqId}: {errorString}'
+
         contract = self._reqId2Contract.get(reqId)
         if contract:
             msg += f", contract: {contract}"
 
         if isWarning:
-            self._logger.info(msg)
+            # Record warnings into the trade object, but unlike the _error_ case,
+            # DO NOT delete the trade object because the order is STILL LIVE at the broker.
+            if trade:
+                status = trade.orderStatus.status = OrderStatus.ValidationError
+                logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)
+                trade.log.append(logEntry)
+                self._logger.warning(f"IBKR API validation warning: {trade}")
+                self.ib.orderStatusEvent.emit(trade)
+                trade.statusEvent.emit(trade)
+            else:
+                # else, this is a non-trade-related warning message
+                self._logger.info(msg)
         else:
             self._logger.error(msg)
             if isRequest:
@@ -1459,12 +1491,15 @@ class Wrapper:
                     self._endReq(reqId, error, success=False)
                 else:
                     self._endReq(reqId)
-
             elif trade:
                 # something is wrong with the order, cancel it
                 if advancedOrderRejectJson:
                     trade.advancedError = advancedOrderRejectJson
 
+                # Errors can mean two things:
+                #  - new order is REJECTED
+                #  - existing order is server-canceled (DAY orders, margin problems)
+                #  - modification to *existing* order just has an update error, but the order is STILL LIVE
                 if not trade.isDone():
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)

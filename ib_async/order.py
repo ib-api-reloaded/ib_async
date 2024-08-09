@@ -249,15 +249,24 @@ class OrderStatus:
     Submitted: ClassVar[str] = "Submitted"
     ApiPending: ClassVar[str] = "ApiPending"
     ApiCancelled: ClassVar[str] = "ApiCancelled"
+    ApiUpdate: ClassVar[str] = "ApiUpdate"
     Cancelled: ClassVar[str] = "Cancelled"
     Filled: ClassVar[str] = "Filled"
     Inactive: ClassVar[str] = "Inactive"
+    ValidationError: ClassVar[str] = "ValidationError"
 
     DoneStates: ClassVar[FrozenSet[str]] = frozenset(
         ["Filled", "Cancelled", "ApiCancelled"]
     )
     ActiveStates: ClassVar[FrozenSet[str]] = frozenset(
-        ["PendingSubmit", "ApiPending", "PreSubmitted", "Submitted"]
+        [
+            "PendingSubmit",
+            "ApiPending",
+            "PreSubmitted",
+            "Submitted",
+            "ValidationError",
+            "ApiUpdate",
+        ]
     )
 
 
