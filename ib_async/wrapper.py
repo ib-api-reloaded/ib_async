@@ -5,7 +5,19 @@ import logging
 from collections import defaultdict
 from contextlib import suppress
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING, Tuple, Union, cast
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Set,
+    TYPE_CHECKING,
+    Tuple,
+    Union,
+    cast,
+    Final,
+    TypeAlias,
+)
 
 from ib_async.contract import (
     Contract,
@@ -73,7 +85,31 @@ if TYPE_CHECKING:
     from ib_async.ib import IB
 
 
-OrderKeyType = Union[int, Tuple[int, int]]
+OrderKeyType: TypeAlias = int | tuple[int, int]
+TickDict: TypeAlias = dict[int, str]
+
+GENERIC_TICK_MAP: Final[TickDict] = {
+    23: "histVolatility",
+    24: "impliedVolatility",
+    31: "indexFuturePremium",
+    46: "shortable",
+    49: "halted",
+    54: "tradeCount",
+    55: "tradeRate",
+    56: "volumeRate",
+    58: "rtHistVolatility",
+}
+
+GREEKS_TICK_MAP: Final[TickDict] = {
+    10: "bidGreeks",
+    80: "bidGreeks",
+    11: "askGreeks",
+    81: "askGreeks",
+    12: "lastGreeks",
+    82: "lastGreeks",
+    13: "modelGreeks",
+    83: "modelGreeks",
+}
 
 
 class RequestError(Exception):
@@ -1087,25 +1123,16 @@ class Wrapper:
         try:
             value = float(value)
         except ValueError:
-            self._logger.error(f"genericTick: malformed value: {value!r}")
+            self._logger.error(
+                f"[tickType {tickType}] genericTick: malformed value: {value!r}"
+            )
             return
 
-        if tickType == 23:
-            ticker.histVolatility = value
-        elif tickType == 24:
-            ticker.impliedVolatility = value
-        elif tickType == 31:
-            ticker.indexFuturePremium = value
-        elif tickType == 49:
-            ticker.halted = value
-        elif tickType == 54:
-            ticker.tradeCount = value
-        elif tickType == 55:
-            ticker.tradeRate = value
-        elif tickType == 56:
-            ticker.volumeRate = value
-        elif tickType == 58:
-            ticker.rtHistVolatility = value
+        assert (
+            tickType in GENERIC_TICK_MAP
+        ), f"Received tick {tickType=} {value=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+
+        setattr(ticker, GENERIC_TICK_MAP[tickType], value)
 
         tick = TickData(self.lastTime, tickType, value, 0)
         ticker.ticks.append(tick)
@@ -1230,14 +1257,12 @@ class Wrapper:
         if ticker:
             # reply from reqMktData
             # https://interactivebrokers.github.io/tws-api/tick_types.html
-            if tickType in {10, 80}:
-                ticker.bidGreeks = comp
-            elif tickType in {11, 81}:
-                ticker.askGreeks = comp
-            elif tickType in {12, 82}:
-                ticker.lastGreeks = comp
-            elif tickType in {13, 83}:
-                ticker.modelGreeks = comp
+
+            assert (
+                tickType in GREEKS_TICK_MAP
+            ), f"Received tick {tickType=} {tickAttrib=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+
+            setattr(ticker, GREEKS_TICK_MAP[tickType], comp)
             self.pendingTickers.add(ticker)
         elif reqId in self._futures:
             # reply from calculateImpliedVolatility or calculateOptionPrice
