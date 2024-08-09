@@ -902,33 +902,29 @@ class Wrapper:
                 price = self.defaultEmptyPrice
                 size = self.defaultEmptySize
 
-            # only update if there is a new price/size combination
-            if (price, size) != (ticker.bid, ticker.bidSize):
-                ticker.prevBid = ticker.bid
-                ticker.prevBidSize = ticker.bidSize
-                ticker.bid = price
-                ticker.bidSize = size
+            ticker.prevBid = ticker.bid
+            ticker.prevBidSize = ticker.bidSize
+            ticker.bid = price
+            ticker.bidSize = size
         elif tickType in {2, 67}:
             if size == 0:
                 price = self.defaultEmptyPrice
                 size = self.defaultEmptySize
 
-            if (price, size) != (ticker.ask, ticker.askSize):
-                ticker.prevAsk = ticker.ask
-                ticker.prevAskSize = ticker.askSize
-                ticker.ask = price
-                ticker.askSize = size
+            ticker.prevAsk = ticker.ask
+            ticker.prevAskSize = ticker.askSize
+            ticker.ask = price
+            ticker.askSize = size
         elif tickType in {4, 68}:
             # for 'last' values, price can be valid with size=0 for updates like 'last SPX price' since SPX doesn't trade
             if price == -1 and size == 0:
                 price = self.defaultEmptyPrice
                 size = self.defaultEmptySize
 
-            if (price, size) != (ticker.last, ticker.lastSize):
-                ticker.prevLast = ticker.last
-                ticker.prevLastSize = ticker.lastSize
-                ticker.last = price
-                ticker.lastSize = size
+            ticker.prevLast = ticker.last
+            ticker.prevLastSize = ticker.lastSize
+            ticker.last = price
+            ticker.lastSize = size
         else:
             assert (
                 tickType in PRICE_TICK_MAP
