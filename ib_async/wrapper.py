@@ -88,6 +88,50 @@ if TYPE_CHECKING:
 OrderKeyType: TypeAlias = int | tuple[int, int]
 TickDict: TypeAlias = dict[int, str]
 
+PRICE_TICK_MAP: Final[TickDict] = {
+    6: "high",
+    72: "high",
+    7: "low",
+    73: "low",
+    9: "close",
+    75: "close",
+    14: "open",
+    76: "open",
+    15: "low13week",
+    16: "high13week",
+    17: "low26week",
+    18: "high26week",
+    19: "low52week",
+    20: "high52week",
+    35: "auctionPrice",
+    37: "markPrice",
+    50: "bidYield",
+    103: "bidYield",
+    51: "askYield",
+    104: "askYield",
+    52: "lastYield",
+}
+
+
+SIZE_TICK_MAP: Final[TickDict] = {
+    8: "volume",
+    74: "volume",
+    63: "volumeRate3Min",
+    64: "volumeRate5Min",
+    65: "volumeRate10Min",
+    21: "avVolume",
+    27: "callOpenInterest",
+    28: "putOpenInterest",
+    29: "callVolume",
+    30: "putVolume",
+    34: "auctionVolume",
+    36: "auctionImbalance",
+    61: "regulatoryImbalance",
+    86: "futuresOpenInterest",
+    87: "avOptionVolume",
+    89: "shortableShares",
+}
+
 GENERIC_TICK_MAP: Final[TickDict] = {
     23: "histVolatility",
     24: "impliedVolatility",
@@ -860,36 +904,12 @@ class Wrapper:
             if size != ticker.lastSize:
                 ticker.prevLastSize = ticker.lastSize
                 ticker.lastSize = size
-        elif tickType in {6, 72}:
-            ticker.high = price
-        elif tickType in {7, 73}:
-            ticker.low = price
-        elif tickType in {9, 75}:
-            ticker.close = price
-        elif tickType in {14, 76}:
-            ticker.open = price
-        elif tickType == 15:
-            ticker.low13week = price
-        elif tickType == 16:
-            ticker.high13week = price
-        elif tickType == 17:
-            ticker.low26week = price
-        elif tickType == 18:
-            ticker.high26week = price
-        elif tickType == 19:
-            ticker.low52week = price
-        elif tickType == 20:
-            ticker.high52week = price
-        elif tickType == 35:
-            ticker.auctionPrice = price
-        elif tickType == 37:
-            ticker.markPrice = price
-        elif tickType in {50, 103}:
-            ticker.bidYield = price
-        elif tickType in {51, 104}:
-            ticker.askYield = price
-        elif tickType == 52:
-            ticker.lastYield = price
+        else:
+            assert (
+                tickType in PRICE_TICK_MAP
+            ), f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+
+            setattr(ticker, PRICE_TICK_MAP[tickType], price)
 
         if price or size:
             tick = TickData(self.lastTime, tickType, price, size)
@@ -924,30 +944,12 @@ class Wrapper:
             if size != ticker.lastSize:
                 ticker.prevLastSize = ticker.lastSize
                 ticker.lastSize = size
-        elif tickType in {8, 74}:
-            ticker.volume = size
-        elif tickType == 21:
-            ticker.avVolume = size
-        elif tickType == 27:
-            ticker.callOpenInterest = size
-        elif tickType == 28:
-            ticker.putOpenInterest = size
-        elif tickType == 29:
-            ticker.callVolume = size
-        elif tickType == 30:
-            ticker.putVolume = size
-        elif tickType == 34:
-            ticker.auctionVolume = size
-        elif tickType == 36:
-            ticker.auctionImbalance = size
-        elif tickType == 61:
-            ticker.regulatoryImbalance = size
-        elif tickType == 86:
-            ticker.futuresOpenInterest = size
-        elif tickType == 87:
-            ticker.avOptionVolume = size
-        elif tickType == 89:
-            ticker.shortableShares = size
+        else:
+            assert (
+                tickType in SIZE_TICK_MAP
+            ), f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+
+            setattr(ticker, SIZE_TICK_MAP[tickType], price)
 
         if price or size:
             tick = TickData(self.lastTime, tickType, price, size)
@@ -1054,6 +1056,10 @@ class Wrapper:
                 ticker.askExchange = value
             elif tickType == 84:
                 ticker.lastExchange = value
+            elif tickType == 45:
+                ticker.lastTimestamp = datetime.fromtimestamp(
+                    int(value), self.defaultTimezone
+                )
             elif tickType == 47:
                 # https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html
                 d = dict(

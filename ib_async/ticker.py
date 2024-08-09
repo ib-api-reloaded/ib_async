@@ -61,6 +61,7 @@ class Ticker:
     last: float = nan
     lastSize: float = nan
     lastExchange: str = ""
+    lastTimestamp: datetime | None = None
     prevBid: float = nan
     prevBidSize: float = nan
     prevAsk: float = nan
@@ -92,6 +93,10 @@ class Ticker:
     tradeCount: float = nan
     tradeRate: float = nan
     volumeRate: float = nan
+    volumeRate3Min: float = nan
+    volumeRate5Min: float = nan
+    volumeRate10Min: float = nan
+    shortable: float = nan
     shortableShares: float = nan
     indexFuturePremium: float = nan
     futuresOpenInterest: float = nan
