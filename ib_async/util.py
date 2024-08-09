@@ -101,7 +101,8 @@ def dataclassNonDefaults(obj) -> dict:
     return {
         field.name: value
         for field, value in zip(fields(obj), values)
-        if value != field.default
+        if value is not None
+        and value != field.default
         and value == value
         and not (
             (isinstance(value, list) and value == [])

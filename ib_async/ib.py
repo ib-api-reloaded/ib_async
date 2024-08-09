@@ -23,6 +23,7 @@ from ib_async.objects import (
     HistogramData,
     HistoricalNews,
     HistoricalSchedule,
+    IBDefaults,
     NewsArticle,
     NewsBulletin,
     NewsProvider,
@@ -271,9 +272,9 @@ class IB:
     MaxSyncedSubAccounts: int = 50
     TimezoneTWS: str = ""
 
-    def __init__(self):
+    def __init__(self, defaults: IBDefaults = IBDefaults()):
         self._createEvents()
-        self.wrapper = Wrapper(self)
+        self.wrapper = Wrapper(self, defaults=defaults)
         self.client = Client(self.wrapper)
         self.errorEvent += self._onError
         self.client.apiEnd += self.disconnectedEvent
@@ -779,7 +780,7 @@ class IB:
         """
         orderId = order.orderId or self.client.getReqId()
         self.client.placeOrder(orderId, contract, order)
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(self.wrapper.defaultTimezone)
         key = self.wrapper.orderKey(self.wrapper.clientId, orderId, order.permId)
         trade = self.wrapper.trades.get(key)
         if trade:
@@ -814,7 +815,7 @@ class IB:
             manualCancelOrderTime: For audit trail.
         """
         self.client.cancelOrder(order.orderId, manualCancelOrderTime)
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(self.wrapper.defaultTimezone)
         key = self.wrapper.orderKey(order.clientId, order.orderId, order.permId)
         trade = self.wrapper.trades.get(key)
         if trade:

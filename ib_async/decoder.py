@@ -465,7 +465,7 @@ class Decoder:
             if tz:
                 time = time.replace(tzinfo=ZoneInfo(str(tz)))
 
-        ex.time = time.astimezone(timezone.utc)
+        ex.time = time.astimezone(self.wrapper.defaultTimezone)
         self.wrapper.execDetails(int(reqId), c, ex)
 
     def historicalData(self, fields):
@@ -779,7 +779,7 @@ class Decoder:
             get()
             price = float(get())
             size = float(get())
-            dt = datetime.fromtimestamp(time, timezone.utc)
+            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
             ticks.append(HistoricalTick(dt, price, size))
 
         done = bool(int(get()))
@@ -800,7 +800,7 @@ class Decoder:
             priceAsk = float(get())
             sizeBid = float(get())
             sizeAsk = float(get())
-            dt = datetime.fromtimestamp(time, timezone.utc)
+            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
             ticks.append(
                 HistoricalTickBidAsk(dt, attrib, priceBid, priceAsk, sizeBid, sizeAsk)
             )
@@ -821,7 +821,7 @@ class Decoder:
             size = float(get())
             exchange = get()
             specialConditions = get()
-            dt = datetime.fromtimestamp(time, timezone.utc)
+            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
             ticks.append(
                 HistoricalTickLast(dt, attrib, price, size, exchange, specialConditions)
             )
@@ -914,6 +914,7 @@ class Decoder:
             o.faPercentage,
             *fields,
         ) = fields
+
         if self.serverVersion < 177:
             o.faProfile, *fields = fields
 

@@ -54,6 +54,7 @@ from .objects import (
     HistoricalTick,
     HistoricalTickBidAsk,
     HistoricalTickLast,
+    IBDefaults,
     MktDepthData,
     NewsArticle,
     NewsBulletin,

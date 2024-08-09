@@ -163,8 +163,10 @@ class Order:
         attrs = dataclassNonDefaults(self)
         if self.__class__ is not Order:
             attrs.pop("orderType", None)
+
         if not self.softDollarTier:
             attrs.pop("softDollarTier")
+
         clsName = self.__class__.__qualname__
         kwargs = ", ".join(f"{k}={v!r}" for k, v in attrs.items())
         return f"{clsName}({kwargs})"

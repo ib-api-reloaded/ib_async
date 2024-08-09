@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import ClassVar, List, Optional, Union
+from typing import Any, ClassVar, List, Optional, Union
 
 from eventkit import Event, Op
 
@@ -11,6 +11,7 @@ from ib_async.objects import (
     DOMLevel,
     Dividends,
     FundamentalRatios,
+    IBDefaults,
     MktDepthData,
     OptionComputation,
     TickByTickAllLast,
@@ -48,8 +49,8 @@ class Ticker:
 
     events: ClassVar = ("updateEvent",)
 
-    contract: Optional[Contract] = None
-    time: Optional[datetime] = None
+    contract: Contract | None = None
+    time: datetime | None = None
     marketDataType: int = 1
     minTick: float = nan
     bid: float = nan
@@ -129,8 +130,72 @@ class Ticker:
     bboExchange: str = ""
     snapshotPermissions: int = 0
 
+    defaults: IBDefaults = field(default_factory=IBDefaults)
+    created: bool = False
+
     def __post_init__(self):
-        self.updateEvent = TickerUpdateEvent("updateEvent")
+        # when copying a dataclass, the __post_init__ runs again, so we
+        # want to make sure if this was _already_ created, we don't overwrite
+        # everything with _another_ post_init clear.
+        if not self.created:
+            self.updateEvent = TickerUpdateEvent("updateEvent")
+            self.minTick = self.defaults.unset
+            self.bid = self.defaults.unset
+            self.bidSize = self.defaults.unset
+            self.ask = self.defaults.unset
+            self.askSize = self.defaults.unset
+            self.last = self.defaults.unset
+            self.lastSize = self.defaults.unset
+            self.prevBid = self.defaults.unset
+            self.prevBidSize = self.defaults.unset
+            self.prevAsk = self.defaults.unset
+            self.prevAskSize = self.defaults.unset
+            self.prevLast = self.defaults.unset
+            self.prevLastSize = self.defaults.unset
+            self.volume = self.defaults.unset
+            self.open = self.defaults.unset
+            self.high = self.defaults.unset
+            self.low = self.defaults.unset
+            self.close = self.defaults.unset
+            self.vwap = self.defaults.unset
+            self.low13week = self.defaults.unset
+            self.high13week = self.defaults.unset
+            self.low26week = self.defaults.unset
+            self.high26week = self.defaults.unset
+            self.low52week = self.defaults.unset
+            self.high52week = self.defaults.unset
+            self.bidYield = self.defaults.unset
+            self.askYield = self.defaults.unset
+            self.lastYield = self.defaults.unset
+            self.markPrice = self.defaults.unset
+            self.halted = self.defaults.unset
+            self.rtHistVolatility = self.defaults.unset
+            self.rtVolume = self.defaults.unset
+            self.rtTradeVolume = self.defaults.unset
+            self.avVolume = self.defaults.unset
+            self.tradeCount = self.defaults.unset
+            self.tradeRate = self.defaults.unset
+            self.volumeRate = self.defaults.unset
+            self.volumeRate3Min = self.defaults.unset
+            self.volumeRate5Min = self.defaults.unset
+            self.volumeRate10Min = self.defaults.unset
+            self.shortable = self.defaults.unset
+            self.shortableShares = self.defaults.unset
+            self.indexFuturePremium = self.defaults.unset
+            self.futuresOpenInterest = self.defaults.unset
+            self.putOpenInterest = self.defaults.unset
+            self.callOpenInterest = self.defaults.unset
+            self.putVolume = self.defaults.unset
+            self.callVolume = self.defaults.unset
+            self.avOptionVolume = self.defaults.unset
+            self.histVolatility = self.defaults.unset
+            self.impliedVolatility = self.defaults.unset
+            self.auctionVolume = self.defaults.unset
+            self.auctionPrice = self.defaults.unset
+            self.auctionImbalance = self.defaults.unset
+            self.regulatoryImbalance = self.defaults.unset
+
+            self.created = True
 
     def __eq__(self, other):
         return self is other
@@ -141,23 +206,29 @@ class Ticker:
     __repr__ = dataclassRepr
     __str__ = dataclassRepr
 
+    def isUnset(self, value) -> bool:
+        # if default value is nan and value is nan, it is unset.
+        # else, if value matches default value, it is unset.
+        dev = self.defaults.unset
+        return (dev != dev and value != value) or (value == dev)
+
     def hasBidAsk(self) -> bool:
         """See if this ticker has a valid bid and ask."""
         return (
             self.bid != -1
-            and not isNan(self.bid)
+            and not self.isUnset(self.bid)
             and self.bidSize > 0
             and self.ask != -1
-            and not isNan(self.ask)
+            and not self.isUnset(self.ask)
             and self.askSize > 0
         )
 
     def midpoint(self) -> float:
         """
-        Return average of bid and ask, or NaN if no valid bid and ask
+        Return average of bid and ask, or defaults.unset if no valid bid and ask
         are available.
         """
-        return (self.bid + self.ask) * 0.5 if self.hasBidAsk() else nan
+        return (self.bid + self.ask) * 0.5 if self.hasBidAsk() else self.defaults.unset
 
     def marketPrice(self) -> float:
         """
@@ -173,6 +244,7 @@ class Ticker:
                 price = self.midpoint()
         else:
             price = self.last
+
         return price
 
 
@@ -302,8 +374,10 @@ class TimeBars(Op):
         if not self.bars:
             return
         bar = self.bars[-1]
+
         if isNan(bar.open):
             bar.open = bar.high = bar.low = price
+
         bar.high = max(bar.high, price)
         bar.low = min(bar.low, price)
         bar.close = price
@@ -314,10 +388,12 @@ class TimeBars(Op):
     def _on_timer(self, time):
         if self.bars:
             bar = self.bars[-1]
-            if isNan(bar.close) and len(self.bars) > 1:
+            if self.isUnset(bar.close) and len(self.bars) > 1:
                 bar.open = bar.high = bar.low = bar.close = self.bars[-2].close
+
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(bar)
+
         self.bars.append(Bar(time))
 
     def _on_timer_done(self, timer):
