@@ -472,6 +472,16 @@ class Client:
 
     def placeOrder(self, orderId, contract, order):
         version = self.serverVersion()
+
+        # IBKR API BUG FIX:
+        # IBKR sometimes back-populates the 'volatility' field into live orders, but then if we try to
+        # modify an order using cached order objects, IBKR rejects modifications because 'volatility'
+        # is not allowed to be set (even though _they_ added it to our previously submitted order).
+        # Solution: if an order is NOT a VOL order, delete the 'volatility' value to prevent this error.
+        if order.orderType != "VOL":
+            # ONLY volatility orders ("VOL") can have 'volatility' set when sending API data.
+            order.volatility = None
+
         fields = [
             3,
             orderId,
