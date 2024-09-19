@@ -2,13 +2,25 @@
 
 import asyncio
 import datetime as dt
+import functools
 import logging
 import math
 import signal
 import sys
 import time
 from dataclasses import fields, is_dataclass
-from typing import AsyncIterator, Awaitable, Callable, Iterator, List, Optional, Union
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Final,
+    Iterator,
+    List,
+    Optional,
+    TypeAlias,
+    Union,
+)
 
 import eventkit as ev
 
@@ -23,11 +35,11 @@ globalErrorEvent = ev.Event()
 Event to emit global exceptions.
 """
 
-EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
-UNSET_INTEGER = 2**31 - 1
-UNSET_DOUBLE = sys.float_info.max
+EPOCH: Final = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+UNSET_INTEGER: Final = 2**31 - 1
+UNSET_DOUBLE: Final = sys.float_info.max
 
-Time_t = Union[dt.time, dt.datetime]
+Time_t: TypeAlias = dt.time | dt.datetime
 
 
 def df(objs, labels: Optional[List[str]] = None):
@@ -38,6 +50,7 @@ def df(objs, labels: Optional[List[str]] = None):
       labels: If supplied, retain only the given labels and drop the rest.
     """
     import pandas as pd
+
     from .objects import DynamicObject
 
     if objs:
@@ -77,7 +90,7 @@ def dataclassAsDict(obj) -> dict:
     return {field.name: getattr(obj, field.name) for field in fields(obj)}
 
 
-def dataclassAsTuple(obj) -> tuple:
+def dataclassAsTuple(obj) -> tuple[Any, ...]:
     """
     Return dataclass values as ``tuple``.
     This is a non-recursive variant of ``dataclasses.astuple``.
@@ -88,7 +101,7 @@ def dataclassAsTuple(obj) -> tuple:
     return tuple(getattr(obj, field.name) for field in fields(obj))
 
 
-def dataclassNonDefaults(obj) -> dict:
+def dataclassNonDefaults(obj) -> dict[str, Any]:
     """
     For a ``dataclass`` instance get the fields that are different from the
     default values and return as ``dict``.
@@ -182,8 +195,8 @@ def barplot(bars, title="", upColor="blue", downColor="red"):
     Create candlestick plot for the given bars. The bars can be given as
     a DataFrame or as a list of bar objects.
     """
-    import pandas as pd
     import matplotlib.pyplot as plt
+    import pandas as pd
     from matplotlib.lines import Line2D
     from matplotlib.patches import Rectangle
 
@@ -482,9 +495,17 @@ def patchAsyncio():
     nest_asyncio.apply()
 
 
+@functools.cache
 def getLoop():
-    """Get the asyncio event loop for the current thread."""
-    return asyncio.get_event_loop_policy().get_event_loop()
+    """Get asyncio event loop or create one if it doesn't exist."""
+    try:
+        # https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.get_running_loop
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop
 
 
 def startLoop():
@@ -528,8 +549,7 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
     qw = import_module(qtLib + ".QtWidgets")
     global qApp
     qApp = (  # type: ignore
-        qw.QApplication.instance()  # type: ignore
-        or qw.QApplication(sys.argv)
+        qw.QApplication.instance() or qw.QApplication(sys.argv)  # type: ignore
     )  # type: ignore
     loop = getLoop()
     stack: list = []
