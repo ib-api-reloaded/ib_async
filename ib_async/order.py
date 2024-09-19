@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import ClassVar, NamedTuple
@@ -418,6 +419,7 @@ class Trade:
     log: list[TradeLogEntry] = field(default_factory=list)
     advancedError: str = ""
 
+    # TODO: replace these with an enum?
     events: ClassVar = (
         "statusEvent",
         "modifyEvent",

@@ -327,6 +327,7 @@ class Wrapper:
         for future in self._futures.values():
             if not future.done():
                 future.set_exception(error)
+
         globalErrorEvent.emit(error)
         self.reset()
 
@@ -338,8 +339,10 @@ class Wrapper:
         future: asyncio.Future = asyncio.Future()
         self._futures[key] = future
         self._results[key] = container if container is not None else []
+
         if contract:
             self._reqId2Contract[key] = contract
+
         return future
 
     def _endReq(self, key, result=None, success=True):
@@ -352,6 +355,7 @@ class Wrapper:
         if future:
             if result is None:
                 result = self._results.pop(key, [])
+
             if not future.done():
                 if success:
                     future.set_result(result)
@@ -517,9 +521,11 @@ class Wrapper:
         position = Position(account, contract, posSize, avgCost)
         positions = self.positions[account]
 
+        # if this updates position to 0 quantity, remove the position
         if posSize == 0:
             positions.pop(contract.conId, None)
         else:
+            # else, add or replace the position in-place
             positions[contract.conId] = position
 
         self._logger.info(f"position: {position}")
@@ -1093,6 +1099,7 @@ class Wrapper:
         tick = TickByTickBidAsk(
             self.lastTime, bidPrice, askPrice, bidSize, askSize, tickAttribBidAsk
         )
+
         ticker.tickByTicks.append(tick)
         self.pendingTickers.add(ticker)
 

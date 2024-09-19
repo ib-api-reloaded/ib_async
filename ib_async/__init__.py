@@ -93,6 +93,7 @@ from .order import (
     OrderComboLeg,
     OrderCondition,
     OrderState,
+    OrderStateNumeric,
     OrderStatus,
     PercentChangeCondition,
     PriceCondition,

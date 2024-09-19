@@ -48,6 +48,7 @@ from ib_async.order import (
     LimitOrder,
     Order,
     OrderState,
+    OrderStateNumeric,
     OrderStatus,
     StopOrder,
     Trade,
@@ -1458,9 +1459,11 @@ class IB:
         """
         reqId = self.client.getReqId()
         ticker = self.wrapper.startTicker(reqId, contract, tickType)
+
         self.client.reqTickByTickData(
             reqId, contract, tickType, numberOfTicks, ignoreSize
         )
+
         return ticker
 
     def cancelTickByTickData(self, contract: Contract, tickType: str) -> bool:
