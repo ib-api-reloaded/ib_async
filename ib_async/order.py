@@ -1,5 +1,7 @@
 """Order types used by Interactive Brokers."""
 
+from __future__ import annotations
+
 import dataclasses
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -107,15 +109,15 @@ class Order:
     clearingAccount: str = ""
     clearingIntent: str = ""
     algoStrategy: str = ""
-    algoParams: List[TagValue] = field(default_factory=list)
-    smartComboRoutingParams: List[TagValue] = field(default_factory=list)
+    algoParams: list[TagValue] = field(default_factory=list)
+    smartComboRoutingParams: list[TagValue] = field(default_factory=list)
     algoId: str = ""
     whatIf: bool = False
     notHeld: bool = False
     solicited: bool = False
     modelCode: str = ""
-    orderComboLegs: List["OrderComboLeg"] = field(default_factory=list)
-    orderMiscOptions: List[TagValue] = field(default_factory=list)
+    orderComboLegs: list[OrderComboLeg] = field(default_factory=list)
+    orderMiscOptions: list[TagValue] = field(default_factory=list)
     referenceContractId: int = 0
     peggedChangeAmount: float = 0.0
     isPeggedChangeAmountDecrease: bool = False
@@ -128,7 +130,7 @@ class Order:
     adjustedTrailingAmount: float | Decimal = UNSET_DOUBLE
     adjustableTrailingUnit: int = 0
     lmtPriceOffset: float | Decimal = UNSET_DOUBLE
-    conditions: List["OrderCondition"] = field(default_factory=list)
+    conditions: list[OrderCondition] = field(default_factory=list)
     conditionsCancelOrder: bool = False
     conditionsIgnoreRth: bool = False
     extOperator: str = ""
@@ -311,7 +313,7 @@ class OrderState:
             maxCommission=transformer(self.maxCommission),
         )
 
-    def numeric(self, digits: int = 2):
+    def numeric(self, digits: int = 2) -> OrderStateNumeric:
         """Return a new OrderState with the current values values to floats instead of strings as returned from IBKR directly."""
 
         def floatOrNone(what, precision) -> float | None:
@@ -344,8 +346,27 @@ class OrderState:
 
 
 @dataclass
+class OrderStateNumeric(OrderState):
+    """Just a type helper for mypy to check against if you convert OrderState to .numeric().
+
+    Usage:
+
+    state_numeric: OrderStateNumeric = state.numeric(digits=2)"""
+
+    initMarginBefore: float = float("nan")  # type: ignore
+    maintMarginBefore: float = float("nan")  # type: ignore
+    equityWithLoanBefore: float = float("nan")  # type: ignore
+    initMarginChange: float = float("nan")  # type: ignore
+    maintMarginChange: float = float("nan")  # type: ignore
+    equityWithLoanChange: float = float("nan")  # type: ignore
+    initMarginAfter: float = float("nan")  # type: ignore
+    maintMarginAfter: float = float("nan")  # type: ignore
+    equityWithLoanAfter: float = float("nan")  # type: ignore
+
+
+@dataclass
 class OrderComboLeg:
-    price: float = UNSET_DOUBLE
+    price: float | Decimal = UNSET_DOUBLE
 
 
 @dataclass
@@ -366,9 +387,9 @@ class Trade:
 
     contract: Contract = field(default_factory=Contract)
     order: Order = field(default_factory=Order)
-    orderStatus: "OrderStatus" = field(default_factory=OrderStatus)
-    fills: List[Fill] = field(default_factory=list)
-    log: List[TradeLogEntry] = field(default_factory=list)
+    orderStatus: OrderStatus = field(default_factory=OrderStatus)
+    fills: list[Fill] = field(default_factory=list)
+    log: list[TradeLogEntry] = field(default_factory=list)
     advancedError: str = ""
 
     events: ClassVar = (
