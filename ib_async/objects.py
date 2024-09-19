@@ -1,5 +1,7 @@
 """Object hierarchy."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import date as date_, datetime, timezone
 from typing import Any, List, NamedTuple, Optional, Union
@@ -321,19 +323,66 @@ class Fill(NamedTuple):
     time: datetime
 
 
-class OptionComputation(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class OptionComputation:
     tickAttrib: int
-    impliedVol: Optional[float]
-    delta: Optional[float]
-    optPrice: Optional[float]
-    pvDividend: Optional[float]
-    gamma: Optional[float]
-    vega: Optional[float]
-    theta: Optional[float]
-    undPrice: Optional[float]
+    impliedVol: float | None = None
+    delta: float | None = None
+    optPrice: float | None = None
+    pvDividend: float | None = None
+    gamma: float | None = None
+    vega: float | None = None
+    theta: float | None = None
+    undPrice: float | None = None
+
+    def __add__(self, other: OptionComputation) -> OptionComputation:
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Cannot add {type(self)} and {type(other)}")
+
+        return self.__class__(
+            tickAttrib=0,
+            impliedVol=(self.impliedVol or 0) + (other.impliedVol or 0),
+            delta=(self.delta or 0) + (other.delta or 0),
+            optPrice=(self.optPrice or 0) + (other.optPrice or 0),
+            gamma=(self.gamma or 0) + (other.gamma or 0),
+            vega=(self.vega or 0) + (other.vega or 0),
+            theta=(self.theta or 0) + (other.theta or 0),
+            undPrice=self.undPrice,
+        )
+
+    def __sub__(self, other: OptionComputation) -> OptionComputation:
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Cannot subtract {type(self)} and {type(other)}")
+
+        return self.__class__(
+            tickAttrib=0,
+            impliedVol=(self.impliedVol or 0) - (other.impliedVol or 0),
+            delta=(self.delta or 0) - (other.delta or 0),
+            optPrice=(self.optPrice or 0) - (other.optPrice or 0),
+            gamma=(self.gamma or 0) - (other.gamma or 0),
+            vega=(self.vega or 0) - (other.vega or 0),
+            theta=(self.theta or 0) - (other.theta or 0),
+            undPrice=self.undPrice,
+        )
+
+    def __mul__(self, other: int | float) -> OptionComputation:
+        if not isinstance(other, (int, float)):
+            raise TypeError(f"Cannot multiply {type(self)} and {type(other)}")
+
+        return self.__class__(
+            tickAttrib=0,
+            impliedVol=(self.impliedVol or 0) * other,
+            delta=(self.delta or 0) * other,
+            optPrice=(self.optPrice or 0) * other,
+            gamma=(self.gamma or 0) * other,
+            vega=(self.vega or 0) * other,
+            theta=(self.theta or 0) * other,
+            undPrice=self.undPrice,
+        )
 
 
-class OptionChain(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class OptionChain:
     exchange: str
     underlyingConId: int
     tradingClass: str
