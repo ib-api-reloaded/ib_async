@@ -248,6 +248,11 @@ class OrderStatus:
     whyHeld: str = ""
     mktCapPrice: float = 0.0
 
+    @property
+    def total(self) -> float:
+        """Helper property to return the total size of this requested order."""
+        return self.filled + self.remaining
+
     PendingSubmit: ClassVar[str] = "PendingSubmit"
     PendingCancel: ClassVar[str] = "PendingCancel"
     PreSubmitted: ClassVar[str] = "PreSubmitted"
