@@ -391,26 +391,30 @@ class OptionChain:
     strikes: List[float]
 
 
-class Dividends(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class Dividends:
     past12Months: Optional[float]
     next12Months: Optional[float]
     nextDate: Optional[date_]
     nextAmount: Optional[float]
 
 
-class NewsArticle(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class NewsArticle:
     articleType: int
     articleText: str
 
 
-class HistoricalNews(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class HistoricalNews:
     time: datetime
     providerCode: str
     articleId: str
     headline: str
 
 
-class NewsTick(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class NewsTick:
     timeStamp: int
     providerCode: str
     articleId: str
@@ -418,25 +422,29 @@ class NewsTick(NamedTuple):
     extraData: str
 
 
-class NewsBulletin(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class NewsBulletin:
     msgId: int
     msgType: int
     message: str
     origExchange: str
 
 
-class FamilyCode(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class FamilyCode:
     accountID: str
     familyCodeStr: str
 
 
-class SmartComponent(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class SmartComponent:
     bitNumber: int
     exchange: str
     exchangeLetter: str
 
 
-class ConnectionStats(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class ConnectionStats:
     startTime: float
     duration: float
     numBytesRecv: int
