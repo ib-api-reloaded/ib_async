@@ -925,14 +925,29 @@ class Wrapper:
             ticker.askSize = size
         elif tickType in {4, 68}:
             # for 'last' values, price can be valid with size=0 for updates like 'last SPX price' since SPX doesn't trade
-            if price == -1 and size == 0:
+            # Workaround: for TICK-NYSE, it is valid to have price=-1, size=0 because it can float between -10,000 and 10,000
+            #             and it also never reports a size. As a workaround, check if ticker.close exists as a proxy for "not TICK-NYSE"
+            #             because TICK-NYSE never has open/close values populated.
+            if price == -1 and size == 0 and ticker.close > 0:
                 price = self.defaultEmptyPrice
                 size = self.defaultEmptySize
+
+            # BUG? IBKR is sometimes sending a GOOD VALUE followed by a PREVIOUS value all under tickType=4?
+            # e.g. I get the SPX close delivered first with size=0, then I get another data point with size=1 priced one point lower,
+            # but since the older price is delivered second, it replaces the "last" value with a wrong value? Not sure if it's
+            # an IBKR data problem or a logic problem somewhere here?
+            # More research: IBKR also shows the bad value in their own app, so there is a data bug in their own server logic somewhere.
+
+            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: BEFORE {ticker=}")
+            # self._logger.error(f"[{tickType=}] SETTING {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
 
             ticker.prevLast = ticker.last
             ticker.prevLastSize = ticker.lastSize
             ticker.last = price
             ticker.lastSize = size
+
+            # self._logger.error(f"[{tickType=}] SET {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
+            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: AFTER {ticker=}")
         else:
             assert (
                 tickType in PRICE_TICK_MAP
