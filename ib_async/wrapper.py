@@ -1022,15 +1022,14 @@ class Wrapper:
             self._logger.error(f"tickByTickAllLast: Unknown reqId: {reqId}")
             return
 
-        if size == 0:
+        if price == -1 and size == 0:
             price = self.defaultEmptyPrice
             size = self.defaultEmptySize
 
-        if (price, size) != (ticker.last, ticker.lastSize):
-            ticker.prevLast = ticker.last
-            ticker.prevLastSize = ticker.lastSize
-            ticker.last = price
-            ticker.lastSize = size
+        ticker.prevLast = ticker.last
+        ticker.prevLastSize = ticker.lastSize
+        ticker.last = price
+        ticker.lastSize = size
 
         tick = TickByTickAllLast(
             tickType,
@@ -1147,15 +1146,14 @@ class Wrapper:
                 price = float(priceStr)
                 size = float(sizeStr)
 
-                if price and size:
-                    if ticker.prevLast != ticker.last:
-                        ticker.prevLast = ticker.last
-                        ticker.last = price
-                    if ticker.prevLastSize != ticker.lastSize:
-                        ticker.prevLastSize = ticker.lastSize
-                        ticker.lastSize = size
-                    tick = TickData(self.lastTime, tickType, price, size)
-                    ticker.ticks.append(tick)
+                ticker.prevLast = ticker.last
+                ticker.prevLastSize = ticker.lastSize
+
+                ticker.last = price
+                ticker.lastSize = size
+
+                tick = TickData(self.lastTime, tickType, price, size)
+                ticker.ticks.append(tick)
             elif tickType == 59:
                 # Dividend tick:
                 # https://interactivebrokers.github.io/tws-api/tick_types.html#ib_dividends
