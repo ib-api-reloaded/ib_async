@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import ClassVar, FrozenSet, List, NamedTuple
+from typing import ClassVar, NamedTuple
 
 from eventkit import Event
 
@@ -265,14 +265,35 @@ class OrderStatus:
     Inactive: ClassVar[str] = "Inactive"
     ValidationError: ClassVar[str] = "ValidationError"
 
-    DoneStates: ClassVar[FrozenSet[str]] = frozenset(
-        ["Filled", "Cancelled", "ApiCancelled"]
+    # order has either been completed, cancelled, or destroyed by IBKR's risk management
+    DoneStates: ClassVar[frozenset[str]] = frozenset(
+        ["Filled", "Cancelled", "ApiCancelled", "Inactive"]
     )
-    ActiveStates: ClassVar[FrozenSet[str]] = frozenset(
+
+    # order is capable of executing at sometime in the future
+    ActiveStates: ClassVar[frozenset[str]] = frozenset(
         [
             "PendingSubmit",
             "ApiPending",
             "PreSubmitted",
+            "Submitted",
+            "ValidationError",
+            "ApiUpdate",
+        ]
+    )
+
+    # order hasn't triggered "live" yet (but it could become live and execute before we receive a notice)
+    WaitingStates: ClassVar[frozenset[str]] = frozenset(
+        [
+            "PendingSubmit",
+            "ApiPending",
+            "PreSubmitted",
+        ]
+    )
+
+    # order is live and "working" at the broker against public exchanges
+    WorkingStates: ClassVar[frozenset[str]] = frozenset(
+        [
             "Submitted",
             "ValidationError",
             "ApiUpdate",
@@ -416,6 +437,14 @@ class Trade:
         self.cancelEvent = Event("cancelEvent")
         self.cancelledEvent = Event("cancelledEvent")
 
+    def isWaiting(self) -> bool:
+        """True if sent to IBKR but not "Submitted" for live execution yet."""
+        return self.orderStatus.status in OrderStatus.WaitingStates
+
+    def isWorking(self) -> bool:
+        """True if sent to IBKR but not "Submitted" for live execution yet."""
+        return self.orderStatus.status in OrderStatus.WorkingStates
+
     def isActive(self) -> bool:
         """True if eligible for execution, false otherwise."""
         return self.orderStatus.status in OrderStatus.ActiveStates
@@ -430,11 +459,12 @@ class Trade:
         if self.contract.secType == "BAG":
             # don't count fills for the leg contracts
             fills = [f for f in fills if f.contract.secType == "BAG"]
-        return sum(f.execution.shares for f in fills)
+
+        return sum([f.execution.shares for f in fills])
 
     def remaining(self) -> float:
         """Number of shares remaining to be filled."""
-        return self.order.totalQuantity - self.filled()
+        return float(self.order.totalQuantity) - self.filled()
 
 
 class BracketOrder(NamedTuple):
