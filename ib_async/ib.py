@@ -2096,25 +2096,47 @@ class IB:
 
         return self
 
-    async def qualifyContractsAsync(self, *contracts: Contract) -> List[Contract]:
+    async def qualifyContractsAsync(
+        self, *contracts: Contract, returnAll: bool = False
+    ) -> list[Contract | None]:
+        """Looks up all contract details, but only returns matching Contract objects.
+
+        If 'returnAll' is True, instead of returning 'None' on an ambiguous contract request,
+        the return slot will have a list of the matching contracts. Previously the conflicts
+        were only sent to the log, which isn't useful if you are logging to a file and not watching
+        immediately.
+
+        Note: return value has elements in same position as input request. If a contract
+              cannot be qualified (bad values, ambiguous), the return value for the contract
+              position in the result is None.
+        """
         detailsLists = await asyncio.gather(
-            *(self.reqContractDetailsAsync(c) for c in contracts)
+            *[self.reqContractDetailsAsync(c) for c in contracts]
         )
-        result = []
+
+        # self._logger.warning(f"Got details: {detailsLists=}")
+
+        result: list[Contract | None] = []
         for contract, detailsList in zip(contracts, detailsLists):
             if not detailsList:
                 self._logger.warning(f"Unknown contract: {contract}")
+                result.append(None)
             elif len(detailsList) > 1:
                 possibles = [details.contract for details in detailsList]
                 self._logger.warning(
                     f"Ambiguous contract: {contract}, " f"possibles are {possibles}"
                 )
+                if returnAll:
+                    result.append(possibles)
+                else:
+                    result.append(None)
             else:
                 c = detailsList[0].contract
                 assert c
                 if contract.exchange == "SMART":
                     # overwriting 'SMART' exchange can create invalid contract
                     c.exchange = contract.exchange
+
                 util.dataclassUpdate(contract, c)
                 result.append(contract)
 
