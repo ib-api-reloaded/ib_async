@@ -141,9 +141,10 @@ class Contract:
         """
         See if this contract can be hashed by conId.
 
-        Note: Bag contracts always get conId=28812380, so they're not hashable.
+        Note: Bag contracts always get conId=28812380, so they're not hashable by conId,
+              but we generate a synthetic hash for them based on leg details instead.
         """
-        return bool(self.conId and self.conId != 28812380 and self.secType != "BAG")
+        return bool(self.conId)
 
     def __eq__(self, other):
         return isinstance(other, Contract) and (
@@ -152,10 +153,21 @@ class Contract:
             or util.dataclassAsDict(self) == util.dataclassAsDict(other)
         )
 
-    def __hash__(self):
+    def __hash__(self) -> int:
+        if self.secType == "BAG":
+            return hash(
+                tuple(
+                    [
+                        util.dataclassAsTuple(b)
+                        for b in sorted(self.comboLegs, key=lambda x: x.conId)
+                    ]
+                    + [self.symbol, self.exchange]
+                )
+            )
+
         if not self.isHashable():
             raise ValueError(
-                f"Contract {self} can't be hashed because no 'conId' value exists. Resolve contract to populate 'conId'."
+                f"Contract {self} can't be hashed because no 'conId' value exists. Qualify contract to populate 'conId'."
             )
 
         if self.secType == "CONTFUT":
