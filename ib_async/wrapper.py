@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import time
+
 from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -238,6 +240,11 @@ class Wrapper:
     lastTime: datetime = field(init=False)
     """ UTC time of last network packet arrival. """
 
+    # Like 'lastTime' but in time.time() float format instead of a datetime object
+    # (not to be confused with 'lastTimestamp' of Ticker objects which is the timestamp
+    #  of the last trade event)
+    time: float = field(init=False)
+
     accounts: List[str] = field(init=False)
     clientId: int = field(init=False)
     wshMetaReqId: int = field(init=False)
@@ -287,6 +294,7 @@ class Wrapper:
         self.pnlKey2ReqId = {}
         self.pnlSingleKey2ReqId = {}
         self.lastTime = datetime.min
+        self.time = -1
         self.accounts = []
         self.clientId = -1
         self.wshMetaReqId = 0
@@ -1623,10 +1631,12 @@ class Wrapper:
 
     def tcpDataArrived(self):
         self.lastTime = datetime.now(self.defaultTimezone)
+        self.time = time.time()
         for ticker in self.pendingTickers:
             ticker.ticks = []
             ticker.tickByTicks = []
             ticker.domTicks = []
+
         self.pendingTickers = set()
 
     def tcpDataProcessed(self):
@@ -1634,5 +1644,7 @@ class Wrapper:
         if self.pendingTickers:
             for ticker in self.pendingTickers:
                 ticker.time = self.lastTime
+                ticker.timestamp = self.time
                 ticker.updateEvent.emit(ticker)
+
             self.ib.pendingTickersEvent.emit(self.pendingTickers)

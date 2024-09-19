@@ -51,6 +51,7 @@ class Ticker:
 
     contract: Contract | None = None
     time: datetime | None = None
+    timestamp: float | None = None
     marketDataType: int = 1
     minTick: float = nan
     bid: float = nan
