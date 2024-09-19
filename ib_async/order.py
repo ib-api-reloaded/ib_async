@@ -2,6 +2,7 @@
 
 import dataclasses
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import ClassVar, FrozenSet, List, NamedTuple
 
 from eventkit import Event
@@ -25,8 +26,8 @@ class Order:
     action: str = ""
     totalQuantity: float = 0.0
     orderType: str = ""
-    lmtPrice: float = UNSET_DOUBLE
-    auxPrice: float = UNSET_DOUBLE
+    lmtPrice: float | Decimal | None = UNSET_DOUBLE
+    auxPrice: float | Decimal | None = UNSET_DOUBLE
     tif: str = ""
     activeStartTime: str = ""
     activeStopTime: str = ""
@@ -46,10 +47,10 @@ class Order:
     rule80A: str = ""
     allOrNone: bool = False
     minQty: int = UNSET_INTEGER
-    percentOffset: float = UNSET_DOUBLE
+    percentOffset: float | Decimal = UNSET_DOUBLE
     overridePercentageConstraints: bool = False
-    trailStopPrice: float = UNSET_DOUBLE
-    trailingPercent: float = UNSET_DOUBLE
+    trailStopPrice: float | Decimal = UNSET_DOUBLE
+    trailingPercent: float | Decimal = UNSET_DOUBLE
     faGroup: str = ""
     faProfile: str = ""  # obsolete
     faMethod: str = ""
@@ -62,20 +63,20 @@ class Order:
     discretionaryAmt: float = 0.0
     eTradeOnly: bool = False
     firmQuoteOnly: bool = False
-    nbboPriceCap: float = UNSET_DOUBLE
+    nbboPriceCap: float | Decimal = UNSET_DOUBLE
     optOutSmartRouting: bool = False
     auctionStrategy: int = 0
-    startingPrice: float = UNSET_DOUBLE
-    stockRefPrice: float = UNSET_DOUBLE
-    delta: float = UNSET_DOUBLE
-    stockRangeLower: float = UNSET_DOUBLE
-    stockRangeUpper: float = UNSET_DOUBLE
+    startingPrice: float | Decimal = UNSET_DOUBLE
+    stockRefPrice: float | Decimal = UNSET_DOUBLE
+    delta: float | Decimal = UNSET_DOUBLE
+    stockRangeLower: float | Decimal = UNSET_DOUBLE
+    stockRangeUpper: float | Decimal = UNSET_DOUBLE
     randomizePrice: bool = False
     randomizeSize: bool = False
-    volatility: float = UNSET_DOUBLE
+    volatility: float | Decimal = UNSET_DOUBLE
     volatilityType: int = UNSET_INTEGER
     deltaNeutralOrderType: str = ""
-    deltaNeutralAuxPrice: float = UNSET_DOUBLE
+    deltaNeutralAuxPrice: float | Decimal = UNSET_DOUBLE
     deltaNeutralConId: int = 0
     deltaNeutralSettlingFirm: str = ""
     deltaNeutralClearingAccount: str = ""
@@ -86,14 +87,14 @@ class Order:
     deltaNeutralDesignatedLocation: str = ""
     continuousUpdate: bool = False
     referencePriceType: int = UNSET_INTEGER
-    basisPoints: float = UNSET_DOUBLE
+    basisPoints: float | Decimal = UNSET_DOUBLE
     basisPointsType: int = UNSET_INTEGER
     scaleInitLevelSize: int = UNSET_INTEGER
     scaleSubsLevelSize: int = UNSET_INTEGER
-    scalePriceIncrement: float = UNSET_DOUBLE
-    scalePriceAdjustValue: float = UNSET_DOUBLE
+    scalePriceIncrement: float | Decimal = UNSET_DOUBLE
+    scalePriceAdjustValue: float | Decimal = UNSET_DOUBLE
     scalePriceAdjustInterval: int = UNSET_INTEGER
-    scaleProfitOffset: float = UNSET_DOUBLE
+    scaleProfitOffset: float | Decimal = UNSET_DOUBLE
     scaleAutoReset: bool = False
     scaleInitPosition: int = UNSET_INTEGER
     scaleInitFillQty: int = UNSET_INTEGER
@@ -121,18 +122,18 @@ class Order:
     referenceChangeAmount: float = 0.0
     referenceExchangeId: str = ""
     adjustedOrderType: str = ""
-    triggerPrice: float = UNSET_DOUBLE
-    adjustedStopPrice: float = UNSET_DOUBLE
-    adjustedStopLimitPrice: float = UNSET_DOUBLE
-    adjustedTrailingAmount: float = UNSET_DOUBLE
+    triggerPrice: float | Decimal | None = UNSET_DOUBLE
+    adjustedStopPrice: float | Decimal = UNSET_DOUBLE
+    adjustedStopLimitPrice: float | Decimal = UNSET_DOUBLE
+    adjustedTrailingAmount: float | Decimal = UNSET_DOUBLE
     adjustableTrailingUnit: int = 0
-    lmtPriceOffset: float = UNSET_DOUBLE
+    lmtPriceOffset: float | Decimal = UNSET_DOUBLE
     conditions: List["OrderCondition"] = field(default_factory=list)
     conditionsCancelOrder: bool = False
     conditionsIgnoreRth: bool = False
     extOperator: str = ""
     softDollarTier: SoftDollarTier = field(default_factory=SoftDollarTier)
-    cashQty: float = UNSET_DOUBLE
+    cashQty: float | Decimal = UNSET_DOUBLE
     mifid2DecisionMaker: str = ""
     mifid2DecisionAlgo: str = ""
     mifid2ExecutionTrader: str = ""
@@ -141,7 +142,7 @@ class Order:
     isOmsContainer: bool = False
     discretionaryUpToLimitPrice: bool = False
     autoCancelDate: str = ""
-    filledQuantity: float = UNSET_DOUBLE
+    filledQuantity: float | Decimal = UNSET_DOUBLE
     refFuturesConId: int = 0
     autoCancelParent: bool = False
     shareholder: str = ""
@@ -155,9 +156,9 @@ class Order:
     manualOrderTime: str = ""
     minTradeQty: int = UNSET_INTEGER
     minCompeteSize: int = UNSET_INTEGER
-    competeAgainstBestOffset: float = UNSET_DOUBLE
-    midOffsetAtWhole: float = UNSET_DOUBLE
-    midOffsetAtHalf: float = UNSET_DOUBLE
+    competeAgainstBestOffset: float | Decimal = UNSET_DOUBLE
+    midOffsetAtWhole: float | Decimal = UNSET_DOUBLE
+    midOffsetAtHalf: float | Decimal = UNSET_DOUBLE
 
     def __repr__(self):
         attrs = dataclassNonDefaults(self)
