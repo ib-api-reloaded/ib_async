@@ -129,6 +129,7 @@ class Contract:
             "CRYPTO": Crypto,
             "NEWS": Contract,
             "EVENT": Contract,
+            "EC": Contract,  # Event Contracts (binary yes/no results)
         }.get(secType, Contract)
 
         if cls is not Contract:
