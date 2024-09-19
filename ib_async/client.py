@@ -478,8 +478,8 @@ class Client:
         # modify an order using cached order objects, IBKR rejects modifications because 'volatility'
         # is not allowed to be set (even though _they_ added it to our previously submitted order).
         # Solution: if an order is NOT a VOL order, delete the 'volatility' value to prevent this error.
-        if order.orderType != "VOL":
-            # ONLY volatility orders ("VOL") can have 'volatility' set when sending API data.
+        if not order.orderType.startswith("VOL"):
+            # ONLY volatility orders can have 'volatility' set when sending API data.
             order.volatility = None
 
         fields = [
