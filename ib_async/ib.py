@@ -2098,7 +2098,7 @@ class IB:
 
     async def qualifyContractsAsync(
         self, *contracts: Contract, returnAll: bool = False
-    ) -> list[Contract | None]:
+    ) -> list[Contract | list[Contract | None] | None]:
         """Looks up all contract details, but only returns matching Contract objects.
 
         If 'returnAll' is True, instead of returning 'None' on an ambiguous contract request,
@@ -2116,7 +2116,7 @@ class IB:
 
         # self._logger.warning(f"Got details: {detailsLists=}")
 
-        result: list[Contract | None] = []
+        result: list[Contract | list[Contract | None] | None] = []
         for contract, detailsList in zip(contracts, detailsLists):
             if not detailsList:
                 self._logger.warning(f"Unknown contract: {contract}")
