@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date as date_, datetime, timezone
+from datetime import date as date_, datetime, timezone, tzinfo
 from typing import Any, List, NamedTuple, Optional, Union
 
 from eventkit import Event
@@ -559,4 +559,4 @@ class IBDefaults:
     unset: Any = nan
 
     # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
-    timezone: timezone = timezone.utc
+    timezone: tzinfo = timezone.utc

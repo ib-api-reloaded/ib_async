@@ -131,7 +131,7 @@ class Ticker:
     bboExchange: str = ""
     snapshotPermissions: int = 0
 
-    defaults: IBDefaults = field(default_factory=IBDefaults)
+    defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
     created: bool = False
 
     def __post_init__(self):
