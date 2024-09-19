@@ -144,9 +144,11 @@ class IBC:
 
         # create shell command
         cmd = [
-            f"{self.ibcPath}\\scripts\\StartIBC.bat"
-            if self._isWindows
-            else f"{self.ibcPath}/scripts/ibcstart.sh"
+            (
+                f"{self.ibcPath}\\scripts\\StartIBC.bat"
+                if self._isWindows
+                else f"{self.ibcPath}/scripts/ibcstart.sh"
+            )
         ]
         for k, v in util.dataclassAsDict(self).items():
             arg = args[k][self._isWindows]

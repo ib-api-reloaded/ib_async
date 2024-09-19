@@ -7,7 +7,7 @@ import math
 import struct
 import time
 from collections import deque
-from typing import Deque, List, Optional, Callable, Any
+from typing import Any, Callable, Deque, List, Optional
 
 from eventkit import Event
 
@@ -15,7 +15,7 @@ from .connection import Connection
 from .contract import Contract
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
-from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
+from .util import dataclassAsTuple, getLoop, run, UNSET_DOUBLE, UNSET_INTEGER
 
 
 class Client:

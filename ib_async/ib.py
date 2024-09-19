@@ -5,10 +5,10 @@ import copy
 import datetime
 import logging
 import time
+from enum import auto, Flag
 from typing import Any, Awaitable, Dict, Iterator, List, Optional, Union
 
 from eventkit import Event
-from enum import Flag, auto
 
 import ib_async.util as util
 from ib_async.client import Client

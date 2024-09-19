@@ -32,7 +32,7 @@ from .objects import (
     TickAttribLast,
 )
 from .order import Order, OrderComboLeg, OrderCondition, OrderState
-from .util import UNSET_DOUBLE, ZoneInfo, parseIBDatetime
+from .util import parseIBDatetime, UNSET_DOUBLE, ZoneInfo
 from .wrapper import Wrapper
 
 
@@ -152,13 +152,19 @@ class Decoder:
             if method:
                 try:
                     args = [
-                        field
-                        if typ is str
-                        else int(field or 0)
-                        if typ is int
-                        else float(field or 0)
-                        if typ is float
-                        else bool(int(field or 0))
+                        (
+                            field
+                            if typ is str
+                            else (
+                                int(field or 0)
+                                if typ is int
+                                else (
+                                    float(field or 0)
+                                    if typ is float
+                                    else bool(int(field or 0))
+                                )
+                            )
+                        )
                         for (typ, field) in zip(types, fields[skip:])
                     ]
                     method(*args)

@@ -31,7 +31,7 @@ from .contract import (
     Warrant,
 )
 from .flexreport import FlexError, FlexReport
-from .ib import IB, StartupFetch, StartupFetchNONE, StartupFetchALL
+from .ib import IB, StartupFetch, StartupFetchALL, StartupFetchNONE
 from .ibcontroller import IBC, Watchdog
 from .objects import (
     AccountValue,
@@ -39,9 +39,9 @@ from .objects import (
     BarDataList,
     CommissionReport,
     ConnectionStats,
-    DOMLevel,
     DepthMktDataDescription,
     Dividends,
+    DOMLevel,
     Execution,
     ExecutionFilter,
     FamilyCode,

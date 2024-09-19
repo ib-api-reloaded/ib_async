@@ -12,7 +12,7 @@ from eventkit import Event
 
 from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry
-from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassNonDefaults
+from .util import dataclassNonDefaults, UNSET_DOUBLE, UNSET_INTEGER
 
 
 @dataclass

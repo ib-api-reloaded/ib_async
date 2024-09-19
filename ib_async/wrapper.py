@@ -10,16 +10,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import (
     Any,
+    cast,
     Dict,
+    Final,
     List,
     Optional,
     Set,
-    TYPE_CHECKING,
     Tuple,
-    Union,
-    cast,
-    Final,
+    TYPE_CHECKING,
     TypeAlias,
+    Union,
 )
 
 from ib_async.contract import (
@@ -34,9 +34,9 @@ from ib_async.objects import (
     BarData,
     BarDataList,
     CommissionReport,
-    DOMLevel,
     DepthMktDataDescription,
     Dividends,
+    DOMLevel,
     Execution,
     FamilyCode,
     Fill,
@@ -75,13 +75,13 @@ from ib_async.objects import (
 from ib_async.order import Order, OrderState, OrderStatus, Trade
 from ib_async.ticker import Ticker
 from ib_async.util import (
-    UNSET_DOUBLE,
-    UNSET_INTEGER,
     dataclassAsDict,
     dataclassUpdate,
     getLoop,
     globalErrorEvent,
     parseIBDatetime,
+    UNSET_DOUBLE,
+    UNSET_INTEGER,
 )
 
 if TYPE_CHECKING:
@@ -1131,9 +1131,7 @@ class Wrapper:
             elif tickType == 47:
                 # https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html
                 d = dict(
-                    t.split("=")  # type: ignore
-                    for t in value.split(";")
-                    if t
+                    t.split("=") for t in value.split(";") if t  # type: ignore
                 )  # type: ignore
                 for k, v in d.items():
                     with suppress(ValueError):

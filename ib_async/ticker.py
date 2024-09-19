@@ -8,8 +8,8 @@ from eventkit import Event, Op
 
 from ib_async.contract import Contract
 from ib_async.objects import (
-    DOMLevel,
     Dividends,
+    DOMLevel,
     FundamentalRatios,
     IBDefaults,
     MktDepthData,
