@@ -1415,22 +1415,27 @@ class IB:
         )
         return ticker
 
-    def cancelMktData(self, contract: Contract):
+    def cancelMktData(self, contract: Contract) -> bool:
         """
         Unsubscribe from realtime streaming tick data.
 
         Args:
-            contract: The exact contract object that was used to
-                subscribe with.
+            contract: The contract of a previously subscribed ticker to unsubscribe.
+
+        Returns:
+            Returns True if cancel was successful.
+            Returns False if 'contract' was not found.
         """
         ticker = self.ticker(contract)
         reqId = self.wrapper.endTicker(ticker, "mktData") if ticker else 0
+
         if reqId:
             self.client.cancelMktData(reqId)
-        else:
-            self._logger.error(
-                "cancelMktData: " f"No reqId found for contract {contract}"
-            )
+            return True
+
+        self._logger.error("cancelMktData: " f"No reqId found for contract {contract}")
+
+        return False
 
     def reqTickByTickData(
         self,
@@ -1458,20 +1463,26 @@ class IB:
         )
         return ticker
 
-    def cancelTickByTickData(self, contract: Contract, tickType: str):
+    def cancelTickByTickData(self, contract: Contract, tickType: str) -> bool:
         """
         Unsubscribe from tick-by-tick data
 
         Args:
-            contract: The exact contract object that was used to
-                subscribe with.
+            contract: The contract of a previously subscribed ticker to unsubscribe.
+
+        Returns:
+            Returns True if cancel was successful.
+            Returns False if 'contract' was not found.
         """
         ticker = self.ticker(contract)
         reqId = self.wrapper.endTicker(ticker, tickType) if ticker else 0
+
         if reqId:
             self.client.cancelTickByTickData(reqId)
-        else:
-            self._logger.error(f"cancelMktData: No reqId found for contract {contract}")
+            return True
+
+        self._logger.error(f"cancelMktData: No reqId found for contract {contract}")
+        return False
 
     def reqSmartComponents(self, bboExchange: str) -> List[SmartComponent]:
         """
