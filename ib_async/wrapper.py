@@ -210,7 +210,7 @@ class Wrapper:
     """ msgId -> NewsBulletin """
 
     tickers: Dict[int, Ticker] = field(init=False)
-    """ id(Contract) -> Ticker """
+    """ hash(Contract) -> Ticker """
 
     pendingTickers: Set[Ticker] = field(init=False)
 
@@ -355,10 +355,10 @@ class Wrapper:
         Start a tick request that has the reqId associated with the contract.
         Return the ticker.
         """
-        ticker = self.tickers.get(id(contract))
+        ticker = self.tickers.get(hash(contract))
         if not ticker:
             ticker = Ticker(contract=contract, defaults=self.defaults)
-            self.tickers[id(contract)] = ticker
+            self.tickers[hash(contract)] = ticker
 
         self.reqId2Ticker[reqId] = ticker
         self._reqId2Contract[reqId] = contract
