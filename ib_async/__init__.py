@@ -135,6 +135,8 @@ __all__ = [
     "FlexError",
     "FlexReport",
     "IB",
+    "IBDefaults",
+    "OrderStateNumeric",
     "IBC",
     "Watchdog",
     "AccountValue",

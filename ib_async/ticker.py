@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, ClassVar, List, Optional, Union
+from typing import ClassVar, Optional, Union
 
 from eventkit import Event, Op
 
@@ -111,15 +111,15 @@ class Ticker:
     impliedVolatility: float = nan
     dividends: Optional[Dividends] = None
     fundamentalRatios: Optional[FundamentalRatios] = None
-    ticks: List[TickData] = field(default_factory=list)
-    tickByTicks: List[
+    ticks: list[TickData] = field(default_factory=list)
+    tickByTicks: list[
         Union[TickByTickAllLast, TickByTickBidAsk, TickByTickMidPoint]
     ] = field(default_factory=list)
-    domBids: List[DOMLevel] = field(default_factory=list)
+    domBids: list[DOMLevel] = field(default_factory=list)
     domBidsDict: dict[int, DOMLevel] = field(default_factory=dict)
-    domAsks: List[DOMLevel] = field(default_factory=list)
+    domAsks: list[DOMLevel] = field(default_factory=list)
     domAsksDict: dict[int, DOMLevel] = field(default_factory=dict)
-    domTicks: List[MktDepthData] = field(default_factory=list)
+    domTicks: list[MktDepthData] = field(default_factory=list)
     bidGreeks: Optional[OptionComputation] = None
     askGreeks: Optional[OptionComputation] = None
     lastGreeks: Optional[OptionComputation] = None
@@ -347,7 +347,7 @@ class Bar:
     count: int = 0
 
 
-class BarList(List[Bar]):
+class BarList(list[Bar]):
     def __init__(self, *args):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")

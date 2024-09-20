@@ -296,7 +296,7 @@ class Client:
             bool: lambda b: "1" if b else "0",
 
             # Lists of tags become semicolon-appended KV pairs
-            list: lambda l: "".join([f"{v.tag}={v.value};" for v in l]),
+            list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
         }
         # fmt: on
 

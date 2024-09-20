@@ -7,20 +7,8 @@ import time
 from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import (
-    Any,
-    cast,
-    Dict,
-    Final,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    TYPE_CHECKING,
-    TypeAlias,
-    Union,
-)
+from datetime import datetime
+from typing import Any, cast, Final, Optional, TYPE_CHECKING, TypeAlias, Union
 
 from ib_async.contract import (
     Contract,
@@ -185,56 +173,56 @@ class Wrapper:
     # reference back to IB so wrapper can access API methods
     ib: "IB"
 
-    accountValues: Dict[tuple, AccountValue] = field(init=False)
+    accountValues: dict[tuple, AccountValue] = field(init=False)
     """ (account, tag, currency, modelCode) -> AccountValue """
 
-    acctSummary: Dict[tuple, AccountValue] = field(init=False)
+    acctSummary: dict[tuple, AccountValue] = field(init=False)
     """ (account, tag, currency) -> AccountValue """
 
-    portfolio: Dict[str, Dict[int, PortfolioItem]] = field(init=False)
+    portfolio: dict[str, dict[int, PortfolioItem]] = field(init=False)
     """ account -> conId -> PortfolioItem """
 
-    positions: Dict[str, Dict[int, Position]] = field(init=False)
+    positions: dict[str, dict[int, Position]] = field(init=False)
     """ account -> conId -> Position """
 
-    trades: Dict[OrderKeyType, Trade] = field(init=False)
+    trades: dict[OrderKeyType, Trade] = field(init=False)
     """ (client, orderId) or permId -> Trade """
 
-    permId2Trade: Dict[int, Trade] = field(init=False)
+    permId2Trade: dict[int, Trade] = field(init=False)
     """ permId -> Trade """
 
-    fills: Dict[str, Fill] = field(init=False)
+    fills: dict[str, Fill] = field(init=False)
     """ execId -> Fill """
 
-    newsTicks: List[NewsTick] = field(init=False)
+    newsTicks: list[NewsTick] = field(init=False)
 
-    msgId2NewsBulletin: Dict[int, NewsBulletin] = field(init=False)
+    msgId2NewsBulletin: dict[int, NewsBulletin] = field(init=False)
     """ msgId -> NewsBulletin """
 
-    tickers: Dict[int, Ticker] = field(init=False)
+    tickers: dict[int, Ticker] = field(init=False)
     """ hash(Contract) -> Ticker """
 
-    pendingTickers: Set[Ticker] = field(init=False)
+    pendingTickers: set[Ticker] = field(init=False)
 
-    reqId2Ticker: Dict[int, Ticker] = field(init=False)
+    reqId2Ticker: dict[int, Ticker] = field(init=False)
     """ reqId -> Ticker """
 
-    ticker2ReqId: Dict[Union[int, str], Dict[Ticker, int]] = field(init=False)
+    ticker2ReqId: dict[Union[int, str], dict[Ticker, int]] = field(init=False)
     """ tickType -> Ticker -> reqId """
 
-    reqId2Subscriber: Dict[int, Any] = field(init=False)
+    reqId2Subscriber: dict[int, Any] = field(init=False)
     """ live bars or live scan data """
 
-    reqId2PnL: Dict[int, PnL] = field(init=False)
+    reqId2PnL: dict[int, PnL] = field(init=False)
     """ reqId -> PnL """
 
-    reqId2PnlSingle: Dict[int, PnLSingle] = field(init=False)
+    reqId2PnlSingle: dict[int, PnLSingle] = field(init=False)
     """ reqId -> PnLSingle """
 
-    pnlKey2ReqId: Dict[tuple, int] = field(init=False)
+    pnlKey2ReqId: dict[tuple, int] = field(init=False)
     """ (account, modelCode) -> reqId """
 
-    pnlSingleKey2ReqId: Dict[tuple, int] = field(init=False)
+    pnlSingleKey2ReqId: dict[tuple, int] = field(init=False)
     """ (account, modelCode, conId) -> reqId """
 
     lastTime: datetime = field(init=False)
@@ -245,17 +233,17 @@ class Wrapper:
     #  of the last trade event)
     time: float = field(init=False)
 
-    accounts: List[str] = field(init=False)
+    accounts: list[str] = field(init=False)
     clientId: int = field(init=False)
     wshMetaReqId: int = field(init=False)
     wshEventReqId: int = field(init=False)
-    _reqId2Contract: Dict[int, Contract] = field(init=False)
+    _reqId2Contract: dict[int, Contract] = field(init=False)
     _timeout: float = field(init=False)
 
-    _futures: Dict[Any, asyncio.Future] = field(init=False)
+    _futures: dict[Any, asyncio.Future] = field(init=False)
     """ _futures and _results are linked by key. """
 
-    _results: Dict[Any, Any] = field(init=False)
+    _results: dict[Any, Any] = field(init=False)
     """ _futures and _results are linked by key. """
 
     _logger: logging.Logger = field(
@@ -798,11 +786,11 @@ class Wrapper:
         self._endReq(reqId)
 
     def symbolSamples(
-        self, reqId: int, contractDescriptions: List[ContractDescription]
+        self, reqId: int, contractDescriptions: list[ContractDescription]
     ):
         self._endReq(reqId, contractDescriptions)
 
-    def marketRule(self, marketRuleId: int, priceIncrements: List[PriceIncrement]):
+    def marketRule(self, marketRuleId: int, priceIncrements: list[PriceIncrement]):
         self._endReq(f"marketRule-{marketRuleId}", priceIncrements)
 
     def marketDataType(self, reqId: int, marketDataId: int):
@@ -867,7 +855,7 @@ class Wrapper:
         except ValueError as exc:
             self._endReq(reqId, exc, False)
 
-    def historicalTicks(self, reqId: int, ticks: List[HistoricalTick], done: bool):
+    def historicalTicks(self, reqId: int, ticks: list[HistoricalTick], done: bool):
         result = self._results.get(reqId)
         if result is not None:
             result += ticks
@@ -876,7 +864,7 @@ class Wrapper:
             self._endReq(reqId)
 
     def historicalTicksBidAsk(
-        self, reqId: int, ticks: List[HistoricalTickBidAsk], done: bool
+        self, reqId: int, ticks: list[HistoricalTickBidAsk], done: bool
     ):
         result = self._results.get(reqId)
         if result is not None:
@@ -886,7 +874,7 @@ class Wrapper:
             self._endReq(reqId)
 
     def historicalTicksLast(
-        self, reqId: int, ticks: List[HistoricalTickLast], done: bool
+        self, reqId: int, ticks: list[HistoricalTickLast], done: bool
     ):
         result = self._results.get(reqId)
         if result is not None:
@@ -1131,7 +1119,9 @@ class Wrapper:
             elif tickType == 47:
                 # https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html
                 d = dict(
-                    t.split("=") for t in value.split(";") if t  # type: ignore
+                    t.split("=")
+                    for t in value.split(";")
+                    if t  # type: ignore
                 )  # type: ignore
                 for k, v in d.items():
                     with suppress(ValueError):
@@ -1236,7 +1226,7 @@ class Wrapper:
         self._endReq(reqId, components)
 
     def mktDepthExchanges(
-        self, depthMktDataDescriptions: List[DepthMktDataDescription]
+        self, depthMktDataDescriptions: list[DepthMktDataDescription]
     ):
         self._endReq("mktDepthExchanges", depthMktDataDescriptions)
 
@@ -1286,7 +1276,7 @@ class Wrapper:
             try:
                 level = dom.pop(position)
                 price = level.price
-            except:
+            except Exception as _:
                 # invalid position requested for removal, so ignore the request
                 pass
 
@@ -1393,7 +1383,7 @@ class Wrapper:
             self.ib.scannerDataEvent.emit(dataList)
             dataList.updateEvent.emit(dataList)
 
-    def histogramData(self, reqId: int, items: List[HistogramData]):
+    def histogramData(self, reqId: int, items: list[HistogramData]):
         result = [HistogramData(item.price, item.count) for item in items]
         self._endReq(reqId, result)
 
@@ -1404,8 +1394,8 @@ class Wrapper:
         underlyingConId: int,
         tradingClass: str,
         multiplier: str,
-        expirations: List[str],
-        strikes: List[float],
+        expirations: list[str],
+        strikes: list[float],
     ):
         chain = OptionChain(
             exchange, underlyingConId, tradingClass, multiplier, expirations, strikes
@@ -1415,7 +1405,7 @@ class Wrapper:
     def securityDefinitionOptionParameterEnd(self, reqId: int):
         self._endReq(reqId)
 
-    def newsProviders(self, newsProviders: List[NewsProvider]):
+    def newsProviders(self, newsProviders: list[NewsProvider]):
         newsProviders = [NewsProvider(code=p.code, name=p.name) for p in newsProviders]
         self._endReq("newsProviders", newsProviders)
 
@@ -1481,7 +1471,7 @@ class Wrapper:
         startDateTime: str,
         endDateTime: str,
         timeZone: str,
-        sessions: List[HistoricalSession],
+        sessions: list[HistoricalSession],
     ):
         schedule = HistoricalSchedule(startDateTime, endDateTime, timeZone, sessions)
         self._endReq(reqId, schedule)
@@ -1497,10 +1487,10 @@ class Wrapper:
     def userInfo(self, reqId: int, whiteBrandingId: str):
         self._endReq(reqId)
 
-    def softDollarTiers(self, reqId: int, tiers: List[SoftDollarTier]):
+    def softDollarTiers(self, reqId: int, tiers: list[SoftDollarTier]):
         pass
 
-    def familyCodes(self, familyCodes: List[FamilyCode]):
+    def familyCodes(self, familyCodes: list[FamilyCode]):
         pass
 
     def error(

@@ -2,7 +2,7 @@
 
 import dataclasses
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, cast
 
 from .contract import (
