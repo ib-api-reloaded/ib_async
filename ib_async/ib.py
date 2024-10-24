@@ -1138,7 +1138,7 @@ class IB:
         bars.barSize = barSize
         bars.whatToShow = whatToShow
         bars.useRTH = useRTH
-        bars.realTimeBarsOptions = list(realTimeBarsOptions or [])
+        bars.realTimeBarsOptions = realTimeBarsOptions or []
         self.wrapper.startSubscription(reqId, bars, contract)
         self.client.reqRealTimeBars(
             reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
@@ -1654,10 +1654,8 @@ class IB:
         dataList = ScanDataList()
         dataList.reqId = reqId
         dataList.subscription = subscription
-        dataList.scannerSubscriptionOptions = list(scannerSubscriptionOptions or [])
-        dataList.scannerSubscriptionFilterOptions = list(
-            scannerSubscriptionFilterOptions or []
-        )
+        dataList.scannerSubscriptionOptions = scannerSubscriptionOptions or []
+        dataList.scannerSubscriptionFilterOptions = scannerSubscriptionFilterOptions or []
         self.wrapper.startSubscription(reqId, dataList)
         self.client.reqScannerSubscription(
             reqId,
@@ -2311,7 +2309,7 @@ class IB:
         bars.useRTH = useRTH
         bars.formatDate = formatDate
         bars.keepUpToDate = keepUpToDate
-        bars.chartOptions = list(chartOptions or [])
+        bars.chartOptions = chartOptions or []
         future = self.wrapper.startReq(reqId, contract, container=bars)
         if keepUpToDate:
             self.wrapper.startSubscription(reqId, bars, contract)
@@ -2446,8 +2444,8 @@ class IB:
     ) -> ScanDataList:
         dataList = self.reqScannerSubscription(
             subscription,
-            list(scannerSubscriptionOptions or []),
-            list(scannerSubscriptionFilterOptions or []),
+            scannerSubscriptionOptions or [],
+            scannerSubscriptionFilterOptions or [],
         )
 
         future = self.wrapper.startReq(dataList.reqId, container=dataList)
