@@ -1506,6 +1506,7 @@ class Wrapper:
             trade = self.trades.get((self.clientId, reqId))
 
         # Warnings are currently:
+        # 105 - Order being modified does not match the original order. (?)
         # 110 - The price does not conform to the minimum price variation for this contract.
         # 165 - Historical market Data Service query message.
         # 321 - Server error when validating an API client request.
@@ -1521,7 +1522,7 @@ class Wrapper:
         # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
         # 202 - Order cancelled - Reason:
 
-        warningCodes = frozenset({110, 165, 321, 329, 399, 404, 434, 492, 10167})
+        warningCodes = frozenset({105, 110, 165, 321, 329, 399, 404, 434, 492, 10167})
         isWarning = errorCode in warningCodes or 2100 <= errorCode < 2200
 
         if errorCode == 110 and isRequest:
