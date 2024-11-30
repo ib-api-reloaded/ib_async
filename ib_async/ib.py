@@ -2133,10 +2133,36 @@ class IB:
                 self._logger.warning(f"Unknown contract: {contract}")
                 result.append(None)
             elif len(detailsList) > 1:
-                possibles = [details.contract for details in detailsList]
+                # BUG FIX:
+                #  - IBKR is returning EC _and_ FOP contracts for only FOP requests,
+                #    which is clearly incorrect, so now if an input request has `secType`
+                #    defined, we only return matching `secType` contracts.
+                if contract.secType:
+                    possibles = [
+                        details.contract
+                        for details in detailsList
+                        if contract.secType == details.contract.secType  # type: ignore
+                    ]
+
+                    # if our match instrument type filter resolved to only _one_ matching
+                    # contract, then we found a single usable result to add.
+                    if len(possibles) == 1:
+                        c = possibles[0]
+                        if contract.exchange == "SMART":
+                            # Allow contracts to become more generic if SMART requested as input
+                            c.exchange = contract.exchange  # type: ignore
+
+                        util.dataclassUpdate(contract, c)
+                        result.append(contract)
+                        continue
+                else:
+                    # else, return all matches if no specific secType requested
+                    possibles = [details.contract for details in detailsList]
+
                 self._logger.warning(
                     f"Ambiguous contract: {contract}, " f"possibles are {possibles}"
                 )
+
                 if returnAll:
                     result.append(possibles)
                 else:
