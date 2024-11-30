@@ -48,6 +48,7 @@ from ib_async.order import (
     LimitOrder,
     Order,
     OrderState,
+    OrderStateNumeric,
     OrderStatus,
     StopOrder,
     Trade,
