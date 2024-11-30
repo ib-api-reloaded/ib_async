@@ -1113,9 +1113,13 @@ class Wrapper:
             elif tickType == 84:
                 ticker.lastExchange = value
             elif tickType == 45:
-                ticker.lastTimestamp = datetime.fromtimestamp(
-                    int(value), self.defaultTimezone
-                )
+                timestamp = int(value)
+
+                # only populate if timestamp isn't '0' (we don't want to report "last trade: 20,000 days ago")
+                if timestamp:
+                    ticker.lastTimestamp = datetime.fromtimestamp(
+                        timestamp, self.defaultTimezone
+                    )
             elif tickType == 47:
                 # https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html
                 d = dict(
