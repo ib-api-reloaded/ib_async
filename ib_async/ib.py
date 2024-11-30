@@ -379,16 +379,17 @@ class IB:
             )
         )
 
-    def disconnect(self):
+    def disconnect(self) -> str | None:
         """
         Disconnect from a TWS or IB gateway application.
         This will clear all session state.
         """
         if not self.client.isConnected():
-            return
+            return None
 
         stats = self.client.connectionStats()
-        self._logger.info(
+
+        status = (
             f"Disconnecting from {self.client.host}:{self.client.port}, "
             f"{util.formatSI(stats.numBytesSent)}B sent "
             f"in {stats.numMsgSent} messages, "
@@ -396,8 +397,15 @@ class IB:
             f"in {stats.numMsgRecv} messages, "
             f"session time {util.formatSI(stats.duration)}s."
         )
+
+        self._logger.info(status)
         self.client.disconnect()
         self.disconnectedEvent.emit()
+
+        # clear ALL internal state from this connection
+        self.wrapper.reset()
+
+        return status
 
     def isConnected(self) -> bool:
         """Is there an API connection to TWS or IB gateway?"""
