@@ -95,6 +95,7 @@ from .order import (
     OrderStatus,
     PercentChangeCondition,
     PriceCondition,
+    SnapMidOrder,
     StopLimitOrder,
     StopOrder,
     TimeCondition,
