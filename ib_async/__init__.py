@@ -195,6 +195,7 @@ __all__ = [
     "OrderStatus",
     "PercentChangeCondition",
     "PriceCondition",
+    "SnapMidOrder",
     "StopLimitOrder",
     "StopOrder",
     "TimeCondition",
