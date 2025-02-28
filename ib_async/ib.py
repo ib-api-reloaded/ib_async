@@ -1297,7 +1297,6 @@ class IB:
         endDateTime: Union[datetime.datetime, datetime.date, str, None] = "",
         useRTH: bool = True,
     ) -> Awaitable[HistoricalSchedule]:
-        print("yo")
         reqId = self.client.getReqId()
         future = self.wrapper.startReq(reqId, contract)
         end = util.formatIBDatetime(endDateTime)
