@@ -1236,6 +1236,33 @@ class IB:
         self.client.cancelHistoricalData(bars.reqId)
         self.wrapper.endSubscription(bars)
 
+    def reqHistoricalScheduleGeneral(
+        self,
+        contract: Contract,
+        bar_size: str,
+        endDateTime: Union[datetime.datetime, datetime.date, str, None] = "",
+        useRTH: bool = True,
+    ) -> HistoricalSchedule:
+        """
+        Request historical schedule.
+
+        This method is blocking.
+
+        Args:
+            contract: Contract of interest.
+            bar_size: IB barSize arg, e.g. "2 Y"
+            endDateTime: Can be set to '' to indicate the current time,
+                or it can be given as a datetime.date or datetime.datetime,
+                or it can be given as a string in 'yyyyMMdd HH:mm:ss' format.
+                If no timezone is given then the TWS login timezone is used.
+            useRTH: If True then show schedule for Regular Trading Hours,
+                if False then for extended hours.
+        """
+        return self._run(
+            self.reqHistoricalScheduleAsync(contract, bar_size, endDateTime, useRTH)
+        )
+
+
     def reqHistoricalSchedule(
         self,
         contract: Contract,
@@ -1258,9 +1285,35 @@ class IB:
             useRTH: If True then show schedule for Regular Trading Hours,
                 if False then for extended hours.
         """
+	bar_size = f"{numDays} D"
         return self._run(
-            self.reqHistoricalScheduleAsync(contract, numDays, endDateTime, useRTH)
+            self.reqHistoricalScheduleAsync(contract, bar_size, endDateTime, useRTH)
         )
+
+    def reqHistoricalScheduleAsync(
+        self,
+        contract: Contract,
+        bar_size: Str,
+        endDateTime: Union[datetime.datetime, datetime.date, str, None] = "",
+        useRTH: bool = True,
+    ) -> Awaitable[HistoricalSchedule]:
+        reqId = self.client.getReqId()
+        future = self.wrapper.startReq(reqId, contract)
+        end = util.formatIBDatetime(endDateTime)
+        self.client.reqHistoricalData(
+            reqId,
+            contract,
+            end,
+            bar_size,
+            "1 day",
+            "SCHEDULE",
+            useRTH,
+            1,
+            False,
+            None,
+        )
+
+        return future
 
     def reqHistoricalTicks(
         self,
@@ -2301,31 +2354,6 @@ class IB:
             bars.clear()
 
         return bars
-
-    def reqHistoricalScheduleAsync(
-        self,
-        contract: Contract,
-        numDays: int,
-        endDateTime: Union[datetime.datetime, datetime.date, str, None] = "",
-        useRTH: bool = True,
-    ) -> Awaitable[HistoricalSchedule]:
-        reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
-        end = util.formatIBDatetime(endDateTime)
-        self.client.reqHistoricalData(
-            reqId,
-            contract,
-            end,
-            f"{numDays} D",
-            "1 day",
-            "SCHEDULE",
-            useRTH,
-            1,
-            False,
-            None,
-        )
-
-        return future
 
     def reqHistoricalTicksAsync(
         self,
