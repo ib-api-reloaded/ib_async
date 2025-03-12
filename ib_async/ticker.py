@@ -23,7 +23,7 @@ from ib_async.util import dataclassRepr, isNan
 nan = float("nan")
 
 
-@dataclass
+@dataclass(slots=True)
 class Ticker:
     """
     Current market data such as bid, ask, last price, etc. for a contract.
@@ -123,6 +123,7 @@ class Ticker:
     regulatoryImbalance: float = nan
     bboExchange: str = ""
     snapshotPermissions: int = 0
+    updateEvent: Event = field(init=False)
 
     def __post_init__(self):
         self.updateEvent = TickerUpdateEvent("updateEvent")
@@ -258,7 +259,7 @@ class Midpoints(Tickfilter):
             self.emit(ticker.time, ticker.midpoint(), 0)
 
 
-@dataclass
+@dataclass(slots=True)
 class Bar:
     time: Optional[datetime]
     open: float = nan
@@ -266,6 +267,7 @@ class Bar:
     low: float = nan
     close: float = nan
     volume: int = 0
+    wap: float = 0
     count: int = 0
 
 
@@ -302,6 +304,11 @@ class TimeBars(Op):
         bar.high = max(bar.high, price)
         bar.low = min(bar.low, price)
         bar.close = price
+        # wap
+        if (bar.volume + size) == 0:
+            bar.wap = bar.wap
+        else:
+            bar.wap = ((bar.wap * bar.volume) + (price * size)) / (bar.volume + size)
         bar.volume += size
         bar.count += 1
         self.bars.updateEvent.emit(self.bars, False)
@@ -310,7 +317,9 @@ class TimeBars(Op):
         if self.bars:
             bar = self.bars[-1]
             if isNan(bar.close) and len(self.bars) > 1:
-                bar.open = bar.high = bar.low = bar.close = self.bars[-2].close
+                bar.open = bar.high = bar.low = bar.close = bar.wap = self.bars[
+                    -2
+                ].close
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(bar)
         self.bars.append(Bar(time))
@@ -333,16 +342,25 @@ class TickBars(Op):
 
     def on_source(self, time, price, size):
         if not self.bars or self.bars[-1].count == self._count:
-            bar = Bar(time, price, price, price, price, size, 1)
+            bar = Bar(time, price, price, price, price, size, price, 1)
             self.bars.append(bar)
         else:
             bar = self.bars[-1]
             bar.high = max(bar.high, price)
             bar.low = min(bar.low, price)
             bar.close = price
+            # wap
+            if (bar.volume + size) == 0:
+                bar.wap = bar.wap
+            else:
+                bar.wap = ((bar.wap * bar.volume) + (price * size)) / (
+                    bar.volume + size
+                )
             bar.volume += size
             bar.count += 1
         if bar.count == self._count:
+            if bar.wap == 0:
+                bar.wap = bar.close
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(self.bars)
 
@@ -360,15 +378,24 @@ class VolumeBars(Op):
 
     def on_source(self, time, price, size):
         if not self.bars or self.bars[-1].volume >= self._volume:
-            bar = Bar(time, price, price, price, price, size, 1)
+            bar = Bar(time, price, price, price, price, size, price, 1)
             self.bars.append(bar)
         else:
             bar = self.bars[-1]
             bar.high = max(bar.high, price)
             bar.low = min(bar.low, price)
+            # wap
             bar.close = price
+            if (bar.volume + size) == 0:
+                bar.wap = bar.wap
+            else:
+                bar.wap = ((bar.wap * bar.volume) + (price * size)) / (
+                    bar.volume + size
+                )
             bar.volume += size
             bar.count += 1
         if bar.volume >= self._volume:
+            if bar.wap == 0:
+                bar.wap = bar.close
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(self.bars)
