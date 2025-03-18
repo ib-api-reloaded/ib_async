@@ -8,8 +8,8 @@ from eventkit import Event, Op
 
 from ib_async.contract import Contract
 from ib_async.objects import (
-    DOMLevel,
     Dividends,
+    DOMLevel,
     FundamentalRatios,
     MktDepthData,
     OptionComputation,
@@ -267,7 +267,7 @@ class Bar:
     low: float = nan
     close: float = nan
     volume: int = 0
-    wap: float = 0
+    wap: float = nan
     count: int = 0
 
 
@@ -305,10 +305,10 @@ class TimeBars(Op):
         bar.low = min(bar.low, price)
         bar.close = price
         # wap
-        if (bar.volume + size) == 0:
-            bar.wap = bar.wap
-        else:
-            bar.wap = ((bar.wap * bar.volume) + (price * size)) / (bar.volume + size)
+        if (bar.volume + size) != 0:  # Prevent division by zero on empty bar
+            bar.wap = (
+                ((bar.wap if not isNan(bar.wap) else 0) * bar.volume) + (price * size)
+            ) / (bar.volume + size)
         bar.volume += size
         bar.count += 1
         self.bars.updateEvent.emit(self.bars, False)
@@ -350,19 +350,22 @@ class TickBars(Op):
             bar.low = min(bar.low, price)
             bar.close = price
             # wap
-            if (bar.volume + size) == 0:
-                bar.wap = bar.wap
-            else:
-                bar.wap = ((bar.wap * bar.volume) + (price * size)) / (
-                    bar.volume + size
-                )
+            if (bar.volume + size) != 0:  # Prevent division by zero on empty bar
+                bar.wap = (
+                    ((bar.wap if not isNan(bar.wap) else 0) * bar.volume)
+                    + (price * size)
+                ) / (bar.volume + size)
             bar.volume += size
             bar.count += 1
-        if bar.count == self._count:
-            if bar.wap == 0:
+        if bar.count == self._count:  # full bar
+            if isNan(bar.wap):
                 bar.wap = bar.close
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(self.bars)
+        else:  # partial bar
+            if isNan(bar.wap):
+                bar.wap = bar.close
+            self.bars.updateEvent.emit(self.bars, False)
 
 
 class VolumeBars(Op):
@@ -385,17 +388,19 @@ class VolumeBars(Op):
             bar.high = max(bar.high, price)
             bar.low = min(bar.low, price)
             # wap
-            bar.close = price
-            if (bar.volume + size) == 0:
-                bar.wap = bar.wap
-            else:
-                bar.wap = ((bar.wap * bar.volume) + (price * size)) / (
-                    bar.volume + size
-                )
+            if (bar.volume + size) != 0:  # Prevent division by zero on empty bar
+                bar.wap = (
+                    ((bar.wap if not isNan(bar.wap) else 0) * bar.volume)
+                    + (price * size)
+                ) / (bar.volume + size)
             bar.volume += size
             bar.count += 1
-        if bar.volume >= self._volume:
-            if bar.wap == 0:
+        if bar.volume >= self._volume:  # full bar
+            if isNan(bar.wap):
                 bar.wap = bar.close
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(self.bars)
+        else:  # partial bar
+            if isNan(bar.wap):
+                bar.wap = bar.close
+            self.bars.updateEvent.emit(self.bars, False)
