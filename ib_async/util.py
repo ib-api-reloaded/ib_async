@@ -554,6 +554,12 @@ def formatIBDatetime(t: Union[dt.date, dt.datetime, str, None]) -> str:
     return s
 
 
+pythonTimeZonesByIb = {
+    "US/Central": "America/Chicago",
+    "US/Eastern": "America/New_York",
+}
+
+
 def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
     """Parse string in IB date or datetime format to datetime."""
     if len(s) == 8:
@@ -568,6 +574,10 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
         # 20221125 10:00:00 Europe/Amsterdam
         s0, s1, s2 = s.split(" ", 2)
         t = dt.datetime.strptime(s0 + s1, "%Y%m%d%H:%M:%S")
+        # Some zone names IB uses are unknown in python, map them
+        if s2 in pythonTimeZonesByIb:
+            s2 = pythonTimeZonesByIb[s2]
+
         t = t.replace(tzinfo=ZoneInfo(s2))
     else:
         # YYYYmmdd  HH:MM:SS
