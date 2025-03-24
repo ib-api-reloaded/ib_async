@@ -491,48 +491,68 @@ def startLoop():
     patchAsyncio()
 
 
-def useQt(qtLib: str = "PyQt5", period: float = 0.01):
+def useQt(qtLib: str = "PySide6", period: float = 0.01, qtContext=None):
     """
-    Run combined Qt5/asyncio event loop.
-
+    Runs the combined Qt/asyncio event loop.
+    
+    If qtContext is None or an instance of QApplication, the main QApplication event loop is used.
+    If a QThread or QEventLoop is provided instead, a separate QEventLoop is used in that thread.
+    
     Args:
-        qtLib: Name of Qt library to use:
-
-          * PyQt5
-          * PyQt6
-          * PySide2
-          * PySide6
-        period: Period in seconds to poll Qt.
+        qtLib: The name of the Qt library to be used (e.g., "PySide6").
+        period: The period in seconds at which Qt events are polled.
+        qtContext: Either a QApplication, a QThread, or a QEventLoop.
     """
+    if qtLib not in {"PyQt5", "PyQt6", "PySide2", "PySide6"}:
+        raise RuntimeError(f"Unknown Qt library: {qtLib}")
+    from importlib import import_module
 
-    def qt_step():
-        loop.call_later(period, qt_step)
+    # Import the required modules
+    qc = import_module(qtLib + ".QtCore")
+    qw = import_module(qtLib + ".QtWidgets")
+    
+    # Type check: If nothing is provided, use the QApplication
+    if qtContext is None:
+        qtContext = qw.QApplication.instance() or qw.QApplication(sys.argv)
+        isMain = True
+    elif isinstance(qtContext, qw.QApplication):
+        isMain = True
+    elif isinstance(qtContext, qc.QThread):
+        # Create a separate QEventLoop in the worker thread
+        qtContext = qc.QEventLoop()
+        isMain = False
+    elif isinstance(qtContext, qc.QEventLoop):
+        isMain = False
+    else:
+        raise TypeError("qtContext must be a QApplication, a QThread, or a QEventLoop.")
+
+    loop = getLoop()
+    stack = []
+
+    def qt_step(context):
+        # Schedule the next call of the qt_step() function
+        loop.call_later(period, qt_step, context)
         if not stack:
+            # Create a QEventLoop and a QTimer (for internal use only)
+            # For a worker context (non-main) we create a fresh QEventLoop.
             qloop = qc.QEventLoop()
             timer = qc.QTimer()
             timer.timeout.connect(qloop.quit)
             stack.append((qloop, timer))
         qloop, timer = stack.pop()
         timer.start(0)
-        qloop.exec() if qtLib == "PyQt6" else qloop.exec_()
+        # Start the Qt event loop (exec or exec_ depending on the Qt version)
+        if qtLib in ["PyQt6", "PySide6"]:
+            qloop.exec()
+        else:
+            qloop.exec_()
         timer.stop()
         stack.append((qloop, timer))
-        qApp.processEvents()  # type: ignore
+        # Only in the main context do we call processEvents()
+        if isMain:
+            context.processEvents()
 
-    if qtLib not in {"PyQt5", "PyQt6", "PySide2", "PySide6"}:
-        raise RuntimeError(f"Unknown Qt library: {qtLib}")
-    from importlib import import_module
-
-    qc = import_module(qtLib + ".QtCore")
-    qw = import_module(qtLib + ".QtWidgets")
-    global qApp
-    qApp = (  # type: ignore
-        qw.QApplication.instance()  # type: ignore
-        or qw.QApplication(sys.argv)
-    )  # type: ignore
-    loop = getLoop()
-    stack: list = []
-    qt_step()
+    qt_step(qtContext)
 
 
 def formatIBDatetime(t: Union[dt.date, dt.datetime, str, None]) -> str:
