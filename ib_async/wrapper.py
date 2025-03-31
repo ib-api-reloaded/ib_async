@@ -1002,9 +1002,9 @@ class Wrapper:
         else:
             assert (
                 tickType in SIZE_TICK_MAP
-            ), f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+            ), f"Received tick {tickType=} {size=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
 
-            setattr(ticker, SIZE_TICK_MAP[tickType], price)
+            setattr(ticker, SIZE_TICK_MAP[tickType], size)
 
         if price or size:
             tick = TickData(self.lastTime, tickType, price, size)
