@@ -947,7 +947,7 @@ class IB:
         """
         return self._run(self.reqCompletedOrdersAsync(apiOnly))
 
-    def reqExecutions(self, execFilter: Optional[ExecutionFilter] = None) -> List[Fill]:
+    def reqExecutions(self, execFilter: ExecutionFilter) -> List[Fill]:
         """
         It is recommended to use :meth:`.fills`  or
         :meth:`.executions` instead.
@@ -2063,7 +2063,9 @@ class IB:
             # the request for executions must come after all orders are in
             if fetchFields & StartupFetch.EXECUTIONS:
                 try:
-                    await asyncio.wait_for(self.reqExecutionsAsync(), timeout)
+                    execFilter = ExecutionFilter()
+                    execFilter.clientId = clientId
+                    await asyncio.wait_for(self.reqExecutionsAsync(execFilter), timeout)
                 except asyncio.TimeoutError:
                     msg = "executions request timed out"
                     errors.append(msg)
@@ -2207,7 +2209,9 @@ class IB:
     def reqExecutionsAsync(
         self, execFilter: Optional[ExecutionFilter] = None
     ) -> Awaitable[List[Fill]]:
-        execFilter = execFilter or ExecutionFilter()
+        if execFilter is None:
+            execFilter = ExecutionFilter()
+            execFilter.clientId = self.client.clientId
         reqId = self.client.getReqId()
         future = self.wrapper.startReq(reqId)
         self.client.reqExecutions(reqId, execFilter)
