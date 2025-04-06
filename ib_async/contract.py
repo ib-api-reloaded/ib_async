@@ -137,6 +137,11 @@ class Contract:
 
         return cls(**kwargs)
 
+    @staticmethod
+    def recreate(c) -> "Contract":
+        """Comply an existing generic Contract into its most specific type."""
+        return Contract.create(**util.dataclassAsDict(c))
+
     def isHashable(self) -> bool:
         """
         See if this contract can be hashed by conId.

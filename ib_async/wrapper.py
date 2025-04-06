@@ -481,7 +481,7 @@ class Wrapper:
         realizedPNL: float,
         account: str,
     ):
-        contract = Contract.create(**dataclassAsDict(contract))
+        contract = Contract.recreate(contract)
         portfItem = PortfolioItem(
             contract,
             posSize,
@@ -505,7 +505,7 @@ class Wrapper:
     def position(
         self, account: str, contract: Contract, posSize: float, avgCost: float
     ):
-        contract = Contract.create(**dataclassAsDict(contract))
+        contract = Contract.recreate(contract)
         position = Position(account, contract, posSize, avgCost)
         positions = self.positions[account]
 
@@ -604,7 +604,7 @@ class Wrapper:
                 order = Order(
                     **{k: v for k, v in dataclassAsDict(order).items() if v != "?"}
                 )
-                contract = Contract.create(**dataclassAsDict(contract))
+                contract = Contract.recreate(contract)
                 orderStatus = OrderStatus(orderId=orderId, status=orderState.status)
                 trade = Trade(contract, order, orderStatus, [], [])
                 self.trades[key] = trade
@@ -628,7 +628,7 @@ class Wrapper:
         self._endReq("openOrders")
 
     def completedOrder(self, contract: Contract, order: Order, orderState: OrderState):
-        contract = Contract.create(**dataclassAsDict(contract))
+        contract = Contract.recreate(contract)
         orderStatus = OrderStatus(orderId=order.orderId, status=orderState.status)
         trade = Trade(contract, order, orderStatus, [], [])
         self._results["completedOrders"].append(trade)
@@ -720,10 +720,11 @@ class Wrapper:
             key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
             trade = self.trades.get(key)
 
+        # TODO: debug why spread contracts aren't fully detailed here. They have no legs in execDetails, but they do in orderStatus?
         if trade and contract == trade.contract:
             contract = trade.contract
         else:
-            contract = Contract.create(**dataclassAsDict(contract))
+            contract = Contract.recreate(contract)
 
         execId = execution.execId
         isLive = reqId not in self._futures
