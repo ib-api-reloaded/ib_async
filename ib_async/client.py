@@ -482,8 +482,10 @@ class Client:
             # ONLY volatility orders can have 'volatility' set when sending API data.
             order.volatility = None
 
+        # The IBKR API protocol is just a series of in-order arguments denoted by position.
+        # The upstream API parses all fields based on the first value (the message type).
         fields = [
-            3,
+            3,  # PLACE_ORDER message type
             orderId,
             contract,
             contract.secIdType,
@@ -558,9 +560,9 @@ class Client:
             order.allOrNone,
             order.minQty,
             order.percentOffset,
-            order.eTradeOnly,
-            order.firmQuoteOnly,
-            order.nbboPriceCap,
+            order.eTradeOnly,  # always False
+            order.firmQuoteOnly,  # always False
+            order.nbboPriceCap,  # always UNSET
             order.auctionStrategy,
             order.startingPrice,
             order.stockRefPrice,

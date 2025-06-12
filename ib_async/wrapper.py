@@ -700,7 +700,7 @@ class Wrapper:
                         trade.cancelledEvent.emit(trade)
         else:
             self._logger.error(
-                "orderStatus: No order found for " "orderId %s and clientId %s",
+                "orderStatus: No order found for orderId %s and clientId %s",
                 orderId,
                 clientId,
             )
@@ -944,9 +944,9 @@ class Wrapper:
             # self._logger.error(f"[{tickType=}] SET {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
             # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: AFTER {ticker=}")
         else:
-            assert (
-                tickType in PRICE_TICK_MAP
-            ), f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+            assert tickType in PRICE_TICK_MAP, (
+                f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+            )
 
             setattr(ticker, PRICE_TICK_MAP[tickType], price)
 
@@ -1001,9 +1001,9 @@ class Wrapper:
                 ticker.prevLastSize = ticker.lastSize
                 ticker.lastSize = size
         else:
-            assert (
-                tickType in SIZE_TICK_MAP
-            ), f"Received tick {tickType=} {size=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+            assert tickType in SIZE_TICK_MAP, (
+                f"Received tick {tickType=} {size=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+            )
 
             setattr(ticker, SIZE_TICK_MAP[tickType], size)
 
@@ -1182,14 +1182,13 @@ class Wrapper:
                 )
             else:
                 self._logger.error(
-                    f"tickString with tickType {tickType}: "
-                    f"unhandled value: {value!r}"
+                    f"tickString with tickType {tickType}: unhandled value: {value!r}"
                 )
 
             self.pendingTickers.add(ticker)
         except ValueError:
             self._logger.error(
-                f"tickString with tickType {tickType}: " f"malformed value: {value!r}"
+                f"tickString with tickType {tickType}: malformed value: {value!r}"
             )
 
     def tickGeneric(self, reqId: int, tickType: int, value: float):
@@ -1206,9 +1205,9 @@ class Wrapper:
             )
             return
 
-        assert (
-            tickType in GENERIC_TICK_MAP
-        ), f"Received tick {tickType=} {value=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+        assert tickType in GENERIC_TICK_MAP, (
+            f"Received tick {tickType=} {value=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+        )
 
         setattr(ticker, GENERIC_TICK_MAP[tickType], value)
 
@@ -1336,9 +1335,9 @@ class Wrapper:
             # reply from reqMktData
             # https://interactivebrokers.github.io/tws-api/tick_types.html
 
-            assert (
-                tickType in GREEKS_TICK_MAP
-            ), f"Received tick {tickType=} {tickAttrib=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+            assert tickType in GREEKS_TICK_MAP, (
+                f"Received tick {tickType=} {tickAttrib=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
+            )
 
             setattr(ticker, GREEKS_TICK_MAP[tickType], comp)
             self.pendingTickers.add(ticker)
@@ -1542,7 +1541,7 @@ class Wrapper:
             # invalid price for a new order must cancel it
             isWarning = False
 
-        msg = f'{"Warning" if isWarning else "Error"} {errorCode}, reqId {reqId}: {errorString}'
+        msg = f"{'Warning' if isWarning else 'Error'} {errorCode}, reqId {reqId}: {errorString}"
 
         contract = self._reqId2Contract.get(reqId)
         if contract:

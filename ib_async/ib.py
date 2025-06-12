@@ -1442,7 +1442,7 @@ class IB:
             self.client.cancelMktData(reqId)
             return True
 
-        self._logger.error("cancelMktData: " f"No reqId found for contract {contract}")
+        self._logger.error(f"cancelMktData: No reqId found for contract {contract}")
 
         return False
 
@@ -2160,7 +2160,7 @@ class IB:
                     possibles = [details.contract for details in detailsList]
 
                 self._logger.warning(
-                    f"Ambiguous contract: {contract}, " f"possibles are {possibles}"
+                    f"Ambiguous contract: {contract}, possibles are {possibles}"
                 )
 
                 if returnAll:

@@ -296,6 +296,9 @@ class OrderStatus:
     WorkingStates: ClassVar[frozenset[str]] = frozenset(
         [
             "Submitted",
+            # ValidationError can happen on submit or modify.
+            # If ValidationError happens on submit, the states go PreSubmitted -> ValidationError -> Submitted (if it can be ignored automatically), so order is still live.
+            # If ValidationError happens on modify, the update is just ValidationError with no new Submitted, so the previous order state remains active.
             "ValidationError",
             "ApiUpdate",
         ]
