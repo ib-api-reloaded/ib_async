@@ -1,6 +1,149 @@
 ``ib_async`` Changelog
 ======================
 
+2.0
+---
+
+Version 2.0.0 (2025-06-13)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This major release includes significant new features, performance improvements, and critical bug fixes. The most notable addition is the custom defaults system, allowing users to customize how ib_async handles empty values and timestamps throughout the library.
+
+**Added**
+
+* **Custom Default Values**: Major new feature allowing customization of default values used throughout the library via ``IBDefaults`` object passed to ``IB()`` constructor
+
+  * Customize ``emptyPrice``, ``emptySize``, ``unset`` values, and ``timezone`` settings
+  * Replace IBKR's default values (``emptyPrice=-1``, ``emptySize=0``, ``unset=nan``) with your preferred defaults (e.g., ``None``)
+  * Set custom timezone for timestamp display (e.g., ``pytz.timezone("US/Eastern")`` instead of UTC)
+
+* **Enhanced Ticker Data**: New ticker fields for improved market data analysis
+
+  * ``timestamp``: Float format timestamp for easier mathematical operations alongside existing ``time`` field
+  * ``shortable``: Shortability score (0-3) for instruments
+  * ``volumeRate3Min``, ``volumeRate5Min``, ``volumeRate10Min``: IBKR-provided volume acceleration metrics
+  * ``lastTimestamp``: Timestamp of the last trade event
+
+* **OrderStatus Enhancements**: Extended order management capabilities
+
+  * New API status states added to ``OrderStatus`` enum
+  * ``totalQuantity()`` method to report total order quantity
+  * Additional helper methods for reading order states
+
+* **OrderState Conversion Helpers**: New utility methods for ``OrderState`` objects
+
+  * ``numeric()``: Convert string values to numbers with optional digit rounding
+  * ``formatted()``: Convert values to comma-separated formatted strings
+  * Both methods handle ``UNSET_DOUBLE`` values automatically
+
+* **OptionComputation Mathematical Operations**: Options can now be added, subtracted, and multiplied
+
+  * Enables direct calculation of Greeks for spreads (e.g., vertical spreads: ``longGreeks - shortGreeks``)
+
+* **Contract-from-params Abstraction**: Centralized logic for converting generic ``Contract`` objects to specific subclass types (e.g., ``Contract(secType="OPT")`` → ``Option()``)
+
+* **Enhanced Contract Support**:
+
+  * Event Contracts ("EC" security type) recognition for binary event betting
+  * Bag contracts can now be hashed using leg details, symbol, and exchange
+
+* **Improved Market Data Subscription Management**:
+
+  * ``cancelMktData()`` now returns success/failure status instead of just logging
+  * Contract lookups now use ``hash(contract)`` instead of ``id(contract)``, allowing reuse of equivalent contract objects
+
+**Changed**
+
+* **Breaking**: ``qualifyContractsAsync()`` behavior significantly improved
+
+  * Now returns N results for N input contracts (previously returned fewer results if some failed)
+  * Failed qualifications return ``None`` in corresponding position
+  * New ``returnAll`` parameter: when ``True``, returns all possible matches as a list instead of failing for ambiguous contracts
+  * Enables reliable ``zip(requestContracts, resultContracts)`` usage
+
+* **Ticker Previous Value Logic**: Simplified and more accurate tracking
+
+  * Previous price/size now always reflects the truly previous values, regardless of whether they match current values
+  * Removed conditional updating that caused inaccurate "previous" data representation
+  * Better performance by eliminating unnecessary comparisons
+
+* **Type System Modernization**: Extensive type annotation improvements
+
+  * ``Dict`` → ``dict``, ``List`` → ``list``, ``FrozenSet`` → ``frozenset`` throughout codebase
+  * Enhanced ``Order`` class with proper type annotations and ``Decimal`` support for price/quantity fields
+  * Converted ``NamedTuple`` instances to frozen dataclasses for better extensibility
+
+* **Event Loop Handling**: Updated for modern Python compatibility (recent asyncio API changes)
+
+**Fixed**
+
+* **Critical Order Management Bug**: Fixed order cache deletion issues that caused "phantom orders"
+
+  * Orders are no longer incorrectly deleted from client state when modification validation fails
+  * Warning messages are now logged to order history instead of causing state corruption
+  * Prevents situation where orders appear cancelled locally but remain active at broker
+
+* **Order Modification Bug Prevention**: Added API-level validation to prevent common modification errors
+
+  * Automatic handling of IBKR API field overwrites that conflict with user data
+  * Prevents submission of unintended order updates from cached order objects
+
+* **TWS API Contract Matching Bug Workaround**: Fixed cross-instrument contract suggestions
+
+  * When requesting FOP contracts, IBKR was incorrectly also returning Event Contracts
+  * Now filters results to only return contracts matching the requested security type
+
+* **Bulk Data Tick Types**: Fixed default value handling in bulk tick processing
+* **Last Trade Timestamp Validation**: Improved handling of invalid '0' timestamps from ticker startup
+* **Volatility Order Type**: Corrected "VOL" → "VOLAT" order type specification
+* **Missing Import**: Added missing import that was causing import errors
+* **False Order Cache Deletion**: Additional fix for orders being incorrectly removed during modification validation
+
+**Performance**
+
+* **Tick Processing Optimization**: Significant performance improvements for market data handling
+
+  * Replaced multi-case if/else branches with lookup maps for tick type processing
+  * More efficient handling of generic ticks and Greek ticks
+  * Added explicit error handling for unknown tick types to aid future development
+
+* **Ticker Update Performance**: Eliminated unnecessary comparison operations during ticker updates
+
+  * Always replace fields instead of conditionally checking for changes
+  * Faster processing of instruments with frequent same-price trades
+
+**Developer Experience**
+
+* **Enhanced Error Handling**: Better error messages and logging throughout
+
+  * Unknown tick types now generate explicit error messages for easier debugging
+  * More verbose validation error reporting
+
+* **Code Style**: Comprehensive formatting and linting improvements
+
+  * Applied ``ruff format`` and ``ufmt`` formatting across entire codebase
+  * Fixed various style warnings and modernized code patterns
+  * Variable naming improvements (fixed illegal variable names like 'l')
+
+**Internal**
+
+* **Disconnection Logic**: Improved connection state management
+
+  * Full state reset on disconnect/reconnect cycles
+  * Returns connection status string with session details
+
+* **Utility Functions**: Modernized ``util.py`` with updated Python patterns and async compatibility
+
+**Migration Notes for v2.0.0:**
+
+1. **qualifyContractsAsync() users**: The return value now always contains the same number of elements as input contracts. Check for ``None`` values to detect failed qualifications.
+
+2. **Custom defaults users**: Consider using ``IBDefaults()`` to customize empty values if you've been manually handling ``-1`` prices or ``0`` sizes.
+
+3. **Ticker previous value users**: The logic for ``previousPrice``/``previousSize`` is now more accurate but may show different values if you were relying on the old conditional update behavior.
+
+4. **Order management users**: Order validation errors are now logged to order history instead of causing order deletions. Check order event logs for validation details.
+
 1.0
 ---
 

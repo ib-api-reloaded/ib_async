@@ -4,8 +4,8 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Code recipes &mdash; ib_async 1.0.3 documentation</title>
-      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+  <title>Code recipes &mdash; ib_async 2.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
   
@@ -16,7 +16,7 @@
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=baaebd52"></script>
+        <script src="_static/documentation_options.js?v=51b770b3"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -38,7 +38,7 @@
             ib_async
           </a>
               <div class="version">
-                1.0
+                2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -108,8 +108,8 @@
 <p>Suppose we want to get the 1 min bar data of Tesla since the very beginning
 up until now. The best way is to start with now and keep requesting further
 and further back in time until there is no more data returned.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">datetime</span>
-<span class="kn">from</span> <span class="nn">ib_async</span> <span class="kn">import</span> <span class="o">*</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
 
 <span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
 <span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
@@ -156,7 +156,7 @@ and further back in time until there is no more data returned.</p>
 </section>
 <section id="scanner-data-streaming">
 <h2>Scanner data (streaming)<a class="headerlink" href="#scanner-data-streaming" title="Link to this heading"></a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">onScanData</span><span class="p">(</span><span class="n">scanData</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">onScanData</span><span class="p">(</span><span class="n">scanData</span><span class="p">):</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">scanData</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="nb">print</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">scanData</span><span class="p">))</span>
 
@@ -237,7 +237,7 @@ and further back in time until there is no more data returned.</p>
 <h2>WSH Event Calendar<a class="headerlink" href="#wsh-event-calendar" title="Link to this heading"></a></h2>
 <p>A  <a class="reference external" href="https://www.wallstreethorizon.com/interactive-brokers">Wall Street Horizon subscription</a>
 is needed to get corporate event data.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ib_async</span> <span class="kn">import</span> <span class="o">*</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
 
 <span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
 <span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
@@ -334,11 +334,11 @@ counterparts.</p>
 <h2>Integration with PyGame<a class="headerlink" href="#integration-with-pygame" title="Link to this heading"></a></h2>
 <p>By calling <code class="docutils literal notranslate"><span class="pre">ib.sleep</span></code> from within the PyGame run loop, ib_async can periodically
 run for short whiles and keep up to date:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">ib_async</span> <span class="k">as</span> <span class="nn">ibi</span>
-<span class="kn">import</span> <span class="nn">pygame</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ibi</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pygame</span>
 
 
-<span class="k">def</span> <span class="nf">onTicker</span><span class="p">(</span><span class="n">ticker</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">onTicker</span><span class="p">(</span><span class="n">ticker</span><span class="p">):</span>
     <span class="n">screen</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="n">bg_color</span><span class="p">)</span>
     <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;bid: </span><span class="si">{</span><span class="n">ticker</span><span class="o">.</span><span class="n">bid</span><span class="si">}</span><span class="s1">   ask: </span><span class="si">{</span><span class="n">ticker</span><span class="o">.</span><span class="n">ask</span><span class="si">}</span><span class="s1">&#39;</span>
     <span class="n">quote</span> <span class="o">=</span> <span class="n">font</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="n">fg_color</span><span class="p">)</span>

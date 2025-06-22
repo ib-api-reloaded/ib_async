@@ -4,8 +4,8 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async Changelog &mdash; ib_async 1.0.3 documentation</title>
-      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+  <title>ib_async Changelog &mdash; ib_async 2.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
   
@@ -16,7 +16,7 @@
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=baaebd52"></script>
+        <script src="_static/documentation_options.js?v=51b770b3"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -38,7 +38,7 @@
             ib_async
           </a>
               <div class="version">
-                1.0
+                2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -55,7 +55,11 @@
 <li class="toctree-l1"><a class="reference internal" href="recipes.html">Code recipes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#id1">1.0</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id1">2.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#version-2-0-0-2025-06-13">Version 2.0.0 (2025-06-13)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">1.0</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-3-2024-07-06">Version 1.0.3 (2024-07-06)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-2-2024-06-29">Version 1.0.2 (2024-06-29)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-1-0-1-2024-03-20">Version 1.0.1 (2024-03-20)</a></li>
@@ -63,7 +67,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#original-ib-insync-changelog-2017-2023">Original <code class="docutils literal notranslate"><span class="pre">ib_insync</span></code> Changelog (2017-2023)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id2">0.9</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id3">0.9</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-86">Version 0.9.86</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-85">Version 0.9.85</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-84">Version 0.9.84</a></li>
@@ -153,7 +157,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#version-0-9-0">Version 0.9.0</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#id3">0.8</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id4">0.8</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-17">Version 0.8.17</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-16">Version 0.8.16</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-15">Version 0.8.15</a></li>
@@ -174,14 +178,14 @@
 <li class="toctree-l3"><a class="reference internal" href="#version-0-8-0">Version 0.8.0</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#id4">0.7</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id5">0.7</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-3">Version 0.7.3</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-2">Version 0.7.2</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-1">Version 0.7.1</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-7-0">Version 0.7.0</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#id5">0.6</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id6">0.6</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-6-1">Version 0.6.1</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-0-6-0">Version 0.6.0</a></li>
 </ul>
@@ -218,7 +222,166 @@
   <section id="ib-async-changelog">
 <h1><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog<a class="headerlink" href="#ib-async-changelog" title="Link to this heading"></a></h1>
 <section id="id1">
-<h2>1.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<h2>2.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<section id="version-2-0-0-2025-06-13">
+<h3>Version 2.0.0 (2025-06-13)<a class="headerlink" href="#version-2-0-0-2025-06-13" title="Link to this heading"></a></h3>
+<p>This major release includes significant new features, performance improvements, and critical bug fixes. The most notable addition is the custom defaults system, allowing users to customize how ib_async handles empty values and timestamps throughout the library.</p>
+<p><strong>Added</strong></p>
+<ul class="simple">
+<li><p><strong>Custom Default Values</strong>: Major new feature allowing customization of default values used throughout the library via <code class="docutils literal notranslate"><span class="pre">IBDefaults</span></code> object passed to <code class="docutils literal notranslate"><span class="pre">IB()</span></code> constructor</p>
+<ul>
+<li><p>Customize <code class="docutils literal notranslate"><span class="pre">emptyPrice</span></code>, <code class="docutils literal notranslate"><span class="pre">emptySize</span></code>, <code class="docutils literal notranslate"><span class="pre">unset</span></code> values, and <code class="docutils literal notranslate"><span class="pre">timezone</span></code> settings</p></li>
+<li><p>Replace IBKR’s default values (<code class="docutils literal notranslate"><span class="pre">emptyPrice=-1</span></code>, <code class="docutils literal notranslate"><span class="pre">emptySize=0</span></code>, <code class="docutils literal notranslate"><span class="pre">unset=nan</span></code>) with your preferred defaults (e.g., <code class="docutils literal notranslate"><span class="pre">None</span></code>)</p></li>
+<li><p>Set custom timezone for timestamp display (e.g., <code class="docutils literal notranslate"><span class="pre">pytz.timezone(&quot;US/Eastern&quot;)</span></code> instead of UTC)</p></li>
+</ul>
+</li>
+<li><p><strong>Enhanced Ticker Data</strong>: New ticker fields for improved market data analysis</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">timestamp</span></code>: Float format timestamp for easier mathematical operations alongside existing <code class="docutils literal notranslate"><span class="pre">time</span></code> field</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">shortable</span></code>: Shortability score (0-3) for instruments</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">volumeRate3Min</span></code>, <code class="docutils literal notranslate"><span class="pre">volumeRate5Min</span></code>, <code class="docutils literal notranslate"><span class="pre">volumeRate10Min</span></code>: IBKR-provided volume acceleration metrics</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lastTimestamp</span></code>: Timestamp of the last trade event</p></li>
+</ul>
+</li>
+<li><p><strong>OrderStatus Enhancements</strong>: Extended order management capabilities</p>
+<ul>
+<li><p>New API status states added to <code class="docutils literal notranslate"><span class="pre">OrderStatus</span></code> enum</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">totalQuantity()</span></code> method to report total order quantity</p></li>
+<li><p>Additional helper methods for reading order states</p></li>
+</ul>
+</li>
+<li><p><strong>OrderState Conversion Helpers</strong>: New utility methods for <code class="docutils literal notranslate"><span class="pre">OrderState</span></code> objects</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">numeric()</span></code>: Convert string values to numbers with optional digit rounding</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">formatted()</span></code>: Convert values to comma-separated formatted strings</p></li>
+<li><p>Both methods handle <code class="docutils literal notranslate"><span class="pre">UNSET_DOUBLE</span></code> values automatically</p></li>
+</ul>
+</li>
+<li><p><strong>OptionComputation Mathematical Operations</strong>: Options can now be added, subtracted, and multiplied</p>
+<ul>
+<li><p>Enables direct calculation of Greeks for spreads (e.g., vertical spreads: <code class="docutils literal notranslate"><span class="pre">longGreeks</span> <span class="pre">-</span> <span class="pre">shortGreeks</span></code>)</p></li>
+</ul>
+</li>
+<li><p><strong>Contract-from-params Abstraction</strong>: Centralized logic for converting generic <code class="docutils literal notranslate"><span class="pre">Contract</span></code> objects to specific subclass types (e.g., <code class="docutils literal notranslate"><span class="pre">Contract(secType=&quot;OPT&quot;)</span></code> → <code class="docutils literal notranslate"><span class="pre">Option()</span></code>)</p></li>
+<li><p><strong>Enhanced Contract Support</strong>:</p>
+<ul>
+<li><p>Event Contracts (“EC” security type) recognition for binary event betting</p></li>
+<li><p>Bag contracts can now be hashed using leg details, symbol, and exchange</p></li>
+</ul>
+</li>
+<li><p><strong>Improved Market Data Subscription Management</strong>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">cancelMktData()</span></code> now returns success/failure status instead of just logging</p></li>
+<li><p>Contract lookups now use <code class="docutils literal notranslate"><span class="pre">hash(contract)</span></code> instead of <code class="docutils literal notranslate"><span class="pre">id(contract)</span></code>, allowing reuse of equivalent contract objects</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Changed</strong></p>
+<ul class="simple">
+<li><p><strong>Breaking</strong>: <code class="docutils literal notranslate"><span class="pre">qualifyContractsAsync()</span></code> behavior significantly improved</p>
+<ul>
+<li><p>Now returns N results for N input contracts (previously returned fewer results if some failed)</p></li>
+<li><p>Failed qualifications return <code class="docutils literal notranslate"><span class="pre">None</span></code> in corresponding position</p></li>
+<li><p>New <code class="docutils literal notranslate"><span class="pre">returnAll</span></code> parameter: when <code class="docutils literal notranslate"><span class="pre">True</span></code>, returns all possible matches as a list instead of failing for ambiguous contracts</p></li>
+<li><p>Enables reliable <code class="docutils literal notranslate"><span class="pre">zip(requestContracts,</span> <span class="pre">resultContracts)</span></code> usage</p></li>
+</ul>
+</li>
+<li><p><strong>Ticker Previous Value Logic</strong>: Simplified and more accurate tracking</p>
+<ul>
+<li><p>Previous price/size now always reflects the truly previous values, regardless of whether they match current values</p></li>
+<li><p>Removed conditional updating that caused inaccurate “previous” data representation</p></li>
+<li><p>Better performance by eliminating unnecessary comparisons</p></li>
+</ul>
+</li>
+<li><p><strong>Type System Modernization</strong>: Extensive type annotation improvements</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">Dict</span></code> → <code class="docutils literal notranslate"><span class="pre">dict</span></code>, <code class="docutils literal notranslate"><span class="pre">List</span></code> → <code class="docutils literal notranslate"><span class="pre">list</span></code>, <code class="docutils literal notranslate"><span class="pre">FrozenSet</span></code> → <code class="docutils literal notranslate"><span class="pre">frozenset</span></code> throughout codebase</p></li>
+<li><p>Enhanced <code class="docutils literal notranslate"><span class="pre">Order</span></code> class with proper type annotations and <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> support for price/quantity fields</p></li>
+<li><p>Converted <code class="docutils literal notranslate"><span class="pre">NamedTuple</span></code> instances to frozen dataclasses for better extensibility</p></li>
+</ul>
+</li>
+<li><p><strong>Event Loop Handling</strong>: Updated for modern Python compatibility (recent asyncio API changes)</p></li>
+</ul>
+<p><strong>Fixed</strong></p>
+<ul class="simple">
+<li><p><strong>Critical Order Management Bug</strong>: Fixed order cache deletion issues that caused “phantom orders”</p>
+<ul>
+<li><p>Orders are no longer incorrectly deleted from client state when modification validation fails</p></li>
+<li><p>Warning messages are now logged to order history instead of causing state corruption</p></li>
+<li><p>Prevents situation where orders appear cancelled locally but remain active at broker</p></li>
+</ul>
+</li>
+<li><p><strong>Order Modification Bug Prevention</strong>: Added API-level validation to prevent common modification errors</p>
+<ul>
+<li><p>Automatic handling of IBKR API field overwrites that conflict with user data</p></li>
+<li><p>Prevents submission of unintended order updates from cached order objects</p></li>
+</ul>
+</li>
+<li><p><strong>TWS API Contract Matching Bug Workaround</strong>: Fixed cross-instrument contract suggestions</p>
+<ul>
+<li><p>When requesting FOP contracts, IBKR was incorrectly also returning Event Contracts</p></li>
+<li><p>Now filters results to only return contracts matching the requested security type</p></li>
+</ul>
+</li>
+<li><p><strong>Bulk Data Tick Types</strong>: Fixed default value handling in bulk tick processing</p></li>
+<li><p><strong>Last Trade Timestamp Validation</strong>: Improved handling of invalid ‘0’ timestamps from ticker startup</p></li>
+<li><p><strong>Volatility Order Type</strong>: Corrected “VOL” → “VOLAT” order type specification</p></li>
+<li><p><strong>Missing Import</strong>: Added missing import that was causing import errors</p></li>
+<li><p><strong>False Order Cache Deletion</strong>: Additional fix for orders being incorrectly removed during modification validation</p></li>
+</ul>
+<p><strong>Performance</strong></p>
+<ul class="simple">
+<li><p><strong>Tick Processing Optimization</strong>: Significant performance improvements for market data handling</p>
+<ul>
+<li><p>Replaced multi-case if/else branches with lookup maps for tick type processing</p></li>
+<li><p>More efficient handling of generic ticks and Greek ticks</p></li>
+<li><p>Added explicit error handling for unknown tick types to aid future development</p></li>
+</ul>
+</li>
+<li><p><strong>Ticker Update Performance</strong>: Eliminated unnecessary comparison operations during ticker updates</p>
+<ul>
+<li><p>Always replace fields instead of conditionally checking for changes</p></li>
+<li><p>Faster processing of instruments with frequent same-price trades</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Developer Experience</strong></p>
+<ul class="simple">
+<li><p><strong>Enhanced Error Handling</strong>: Better error messages and logging throughout</p>
+<ul>
+<li><p>Unknown tick types now generate explicit error messages for easier debugging</p></li>
+<li><p>More verbose validation error reporting</p></li>
+</ul>
+</li>
+<li><p><strong>Code Style</strong>: Comprehensive formatting and linting improvements</p>
+<ul>
+<li><p>Applied <code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">format</span></code> and <code class="docutils literal notranslate"><span class="pre">ufmt</span></code> formatting across entire codebase</p></li>
+<li><p>Fixed various style warnings and modernized code patterns</p></li>
+<li><p>Variable naming improvements (fixed illegal variable names like ‘l’)</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Internal</strong></p>
+<ul class="simple">
+<li><p><strong>Disconnection Logic</strong>: Improved connection state management</p>
+<ul>
+<li><p>Full state reset on disconnect/reconnect cycles</p></li>
+<li><p>Returns connection status string with session details</p></li>
+</ul>
+</li>
+<li><p><strong>Utility Functions</strong>: Modernized <code class="docutils literal notranslate"><span class="pre">util.py</span></code> with updated Python patterns and async compatibility</p></li>
+</ul>
+<p><strong>Migration Notes for v2.0.0:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>qualifyContractsAsync() users</strong>: The return value now always contains the same number of elements as input contracts. Check for <code class="docutils literal notranslate"><span class="pre">None</span></code> values to detect failed qualifications.</p></li>
+<li><p><strong>Custom defaults users</strong>: Consider using <code class="docutils literal notranslate"><span class="pre">IBDefaults()</span></code> to customize empty values if you’ve been manually handling <code class="docutils literal notranslate"><span class="pre">-1</span></code> prices or <code class="docutils literal notranslate"><span class="pre">0</span></code> sizes.</p></li>
+<li><p><strong>Ticker previous value users</strong>: The logic for <code class="docutils literal notranslate"><span class="pre">previousPrice</span></code>/<code class="docutils literal notranslate"><span class="pre">previousSize</span></code> is now more accurate but may show different values if you were relying on the old conditional update behavior.</p></li>
+<li><p><strong>Order management users</strong>: Order validation errors are now logged to order history instead of causing order deletions. Check order event logs for validation details.</p></li>
+</ol>
+</section>
+</section>
+<section id="id2">
+<h2>1.0<a class="headerlink" href="#id2" title="Link to this heading"></a></h2>
 <section id="version-1-0-3-2024-07-06">
 <h3>Version 1.0.3 (2024-07-06)<a class="headerlink" href="#version-1-0-3-2024-07-06" title="Link to this heading"></a></h3>
 <p>General improvements and minor correctness fixes.</p>
@@ -278,8 +441,8 @@
 <h2>Original <code class="docutils literal notranslate"><span class="pre">ib_insync</span></code> Changelog (2017-2023)<a class="headerlink" href="#original-ib-insync-changelog-2017-2023" title="Link to this heading"></a></h2>
 <p>Note: due to the project moving to a github organization, all auto-generated links below to mentioned issues and PRs don’t work anymore. You can use the issue numbers in the <a class="reference external" href="https://github.com/erdewit/ib_insync/issues">original ib_insync repo</a> for historical reference.</p>
 </section>
-<section id="id2">
-<h2>0.9<a class="headerlink" href="#id2" title="Link to this heading"></a></h2>
+<section id="id3">
+<h2>0.9<a class="headerlink" href="#id3" title="Link to this heading"></a></h2>
 <section id="version-0-9-86">
 <h3>Version 0.9.86<a class="headerlink" href="#version-0-9-86" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -990,8 +1153,8 @@ and <code class="docutils literal notranslate"><span class="pre">cancelOrderEven
 </ul>
 </section>
 </section>
-<section id="id3">
-<h2>0.8<a class="headerlink" href="#id3" title="Link to this heading"></a></h2>
+<section id="id4">
+<h2>0.8<a class="headerlink" href="#id4" title="Link to this heading"></a></h2>
 <section id="version-0-8-17">
 <h3>Version 0.8.17<a class="headerlink" href="#version-0-8-17" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -1128,8 +1291,8 @@ the request parameters.</p></li>
 </ul>
 </section>
 </section>
-<section id="id4">
-<h2>0.7<a class="headerlink" href="#id4" title="Link to this heading"></a></h2>
+<section id="id5">
+<h2>0.7<a class="headerlink" href="#id5" title="Link to this heading"></a></h2>
 <section id="version-0-7-3">
 <h3>Version 0.7.3<a class="headerlink" href="#version-0-7-3" title="Link to this heading"></a></h3>
 <ul class="simple">
@@ -1158,8 +1321,8 @@ the request parameters.</p></li>
 </ul>
 </section>
 </section>
-<section id="id5">
-<h2>0.6<a class="headerlink" href="#id5" title="Link to this heading"></a></h2>
+<section id="id6">
+<h2>0.6<a class="headerlink" href="#id6" title="Link to this heading"></a></h2>
 <section id="version-0-6-1">
 <h3>Version 0.6.1<a class="headerlink" href="#version-0-6-1" title="Link to this heading"></a></h3>
 <ul class="simple">

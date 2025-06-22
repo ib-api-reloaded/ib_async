@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.ticker &mdash; ib_async 1.0.3 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+  <title>ib_async.ticker &mdash; ib_async 2.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
   
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=baaebd52"></script>
+        <script src="../../_static/documentation_options.js?v=51b770b3"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                1.0
+                2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -82,17 +82,18 @@
   <h1>Source code for ib_async.ticker</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Access to realtime market information.&quot;&quot;&quot;</span>
 
-<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
-<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
 
-<span class="kn">from</span> <span class="nn">eventkit</span> <span class="kn">import</span> <span class="n">Event</span><span class="p">,</span> <span class="n">Op</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">eventkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span><span class="p">,</span> <span class="n">Op</span>
 
-<span class="kn">from</span> <span class="nn">ib_async.contract</span> <span class="kn">import</span> <span class="n">Contract</span>
-<span class="kn">from</span> <span class="nn">ib_async.objects</span> <span class="kn">import</span> <span class="p">(</span>
-    <span class="n">DOMLevel</span><span class="p">,</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.contract</span><span class="w"> </span><span class="kn">import</span> <span class="n">Contract</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.objects</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Dividends</span><span class="p">,</span>
+    <span class="n">DOMLevel</span><span class="p">,</span>
     <span class="n">FundamentalRatios</span><span class="p">,</span>
+    <span class="n">IBDefaults</span><span class="p">,</span>
     <span class="n">MktDepthData</span><span class="p">,</span>
     <span class="n">OptionComputation</span><span class="p">,</span>
     <span class="n">TickByTickAllLast</span><span class="p">,</span>
@@ -100,7 +101,7 @@
     <span class="n">TickByTickMidPoint</span><span class="p">,</span>
     <span class="n">TickData</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span> <span class="nn">ib_async.util</span> <span class="kn">import</span> <span class="n">dataclassRepr</span><span class="p">,</span> <span class="n">isNan</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclassRepr</span><span class="p">,</span> <span class="n">isNan</span>
 
 <span class="n">nan</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>
 
@@ -108,7 +109,7 @@
 <div class="viewcode-block" id="Ticker">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Ticker">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">Ticker</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Ticker</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Current market data such as bid, ask, last price, etc. for a contract.</span>
 
@@ -132,8 +133,9 @@
 
     <span class="n">events</span><span class="p">:</span> <span class="n">ClassVar</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;updateEvent&quot;</span><span class="p">,)</span>
 
-    <span class="n">contract</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Contract</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">time</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">time</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">marketDataType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">minTick</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">bid</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
@@ -145,6 +147,7 @@
     <span class="n">last</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">lastSize</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">lastExchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">lastTimestamp</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">prevBid</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">prevBidSize</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">prevAsk</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
@@ -176,6 +179,10 @@
     <span class="n">tradeCount</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">tradeRate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">volumeRate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
+    <span class="n">volumeRate3Min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
+    <span class="n">volumeRate5Min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
+    <span class="n">volumeRate10Min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
+    <span class="n">shortable</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">shortableShares</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">indexFuturePremium</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">futuresOpenInterest</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
@@ -188,15 +195,15 @@
     <span class="n">impliedVolatility</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">dividends</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dividends</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">fundamentalRatios</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FundamentalRatios</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">ticks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TickData</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
-    <span class="n">tickByTicks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span>
+    <span class="n">ticks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TickData</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">tickByTicks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span>
         <span class="n">Union</span><span class="p">[</span><span class="n">TickByTickAllLast</span><span class="p">,</span> <span class="n">TickByTickBidAsk</span><span class="p">,</span> <span class="n">TickByTickMidPoint</span><span class="p">]</span>
     <span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
-    <span class="n">domBids</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">DOMLevel</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">domBids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">DOMLevel</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">domBidsDict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">DOMLevel</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
-    <span class="n">domAsks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">DOMLevel</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">domAsks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">DOMLevel</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">domAsksDict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">DOMLevel</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
-    <span class="n">domTicks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">MktDepthData</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">domTicks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">MktDepthData</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">bidGreeks</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OptionComputation</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">askGreeks</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OptionComputation</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">lastGreeks</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OptionComputation</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
@@ -208,45 +215,118 @@
     <span class="n">bboExchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">snapshotPermissions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
 
-    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">updateEvent</span> <span class="o">=</span> <span class="n">TickerUpdateEvent</span><span class="p">(</span><span class="s2">&quot;updateEvent&quot;</span><span class="p">)</span>
+    <span class="n">defaults</span><span class="p">:</span> <span class="n">IBDefaults</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">IBDefaults</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">created</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 
-    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># when copying a dataclass, the __post_init__ runs again, so we</span>
+        <span class="c1"># want to make sure if this was _already_ created, we don&#39;t overwrite</span>
+        <span class="c1"># everything with _another_ post_init clear.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">created</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">updateEvent</span> <span class="o">=</span> <span class="n">TickerUpdateEvent</span><span class="p">(</span><span class="s2">&quot;updateEvent&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">minTick</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bidSize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">askSize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lastSize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prevBid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prevBidSize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prevAsk</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prevAskSize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prevLast</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prevLastSize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">volume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">open</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">high</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">low</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">close</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vwap</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">low13week</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">high13week</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">low26week</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">high26week</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">low52week</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">high52week</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bidYield</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">askYield</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lastYield</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">markPrice</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">halted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rtHistVolatility</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rtVolume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rtTradeVolume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">avVolume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tradeCount</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tradeRate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">volumeRate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">volumeRate3Min</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">volumeRate5Min</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">volumeRate10Min</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shortable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shortableShares</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">indexFuturePremium</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">futuresOpenInterest</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">putOpenInterest</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">callOpenInterest</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">putVolume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">callVolume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">avOptionVolume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">histVolatility</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">impliedVolatility</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">auctionVolume</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">auctionPrice</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">auctionImbalance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">regulatoryImbalance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">created</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span>
 
-    <span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
 
     <span class="fm">__repr__</span> <span class="o">=</span> <span class="n">dataclassRepr</span>
     <span class="fm">__str__</span> <span class="o">=</span> <span class="n">dataclassRepr</span>
 
+<div class="viewcode-block" id="Ticker.isUnset">
+<a class="viewcode-back" href="../../api.html#ib_async.ticker.Ticker.isUnset">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">isUnset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="c1"># if default value is nan and value is nan, it is unset.</span>
+        <span class="c1"># else, if value matches default value, it is unset.</span>
+        <span class="n">dev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">dev</span> <span class="o">!=</span> <span class="n">dev</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">!=</span> <span class="n">value</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">value</span> <span class="o">==</span> <span class="n">dev</span><span class="p">)</span></div>
+
+
 <div class="viewcode-block" id="Ticker.hasBidAsk">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Ticker.hasBidAsk">[docs]</a>
-    <span class="k">def</span> <span class="nf">hasBidAsk</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">hasBidAsk</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;See if this ticker has a valid bid and ask.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">bid</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span>
-            <span class="ow">and</span> <span class="ow">not</span> <span class="n">isNan</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bid</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">isUnset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bid</span><span class="p">)</span>
             <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">bidSize</span> <span class="o">&gt;</span> <span class="mi">0</span>
             <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">ask</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span>
-            <span class="ow">and</span> <span class="ow">not</span> <span class="n">isNan</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ask</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">isUnset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ask</span><span class="p">)</span>
             <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">askSize</span> <span class="o">&gt;</span> <span class="mi">0</span>
         <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Ticker.midpoint">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Ticker.midpoint">[docs]</a>
-    <span class="k">def</span> <span class="nf">midpoint</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">midpoint</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Return average of bid and ask, or NaN if no valid bid and ask</span>
+<span class="sd">        Return average of bid and ask, or defaults.unset if no valid bid and ask</span>
 <span class="sd">        are available.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bid</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">ask</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hasBidAsk</span><span class="p">()</span> <span class="k">else</span> <span class="n">nan</span></div>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bid</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">ask</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hasBidAsk</span><span class="p">()</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaults</span><span class="o">.</span><span class="n">unset</span></div>
 
 
 <div class="viewcode-block" id="Ticker.marketPrice">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Ticker.marketPrice">[docs]</a>
-    <span class="k">def</span> <span class="nf">marketPrice</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">marketPrice</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Return the first available one of</span>
 
@@ -260,6 +340,7 @@
                 <span class="n">price</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">midpoint</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">price</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last</span>
+
         <span class="k">return</span> <span class="n">price</span></div>
 </div>
 
@@ -267,40 +348,40 @@
 
 <div class="viewcode-block" id="TickerUpdateEvent">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickerUpdateEvent">[docs]</a>
-<span class="k">class</span> <span class="nc">TickerUpdateEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TickerUpdateEvent</span><span class="p">(</span><span class="n">Event</span><span class="p">):</span>
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
 
 <div class="viewcode-block" id="TickerUpdateEvent.trades">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickerUpdateEvent.trades">[docs]</a>
-    <span class="k">def</span> <span class="nf">trades</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">trades</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit trade ticks.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Tickfilter</span><span class="p">((</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">48</span><span class="p">,</span> <span class="mi">68</span><span class="p">,</span> <span class="mi">71</span><span class="p">),</span> <span class="bp">self</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="TickerUpdateEvent.bids">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickerUpdateEvent.bids">[docs]</a>
-    <span class="k">def</span> <span class="nf">bids</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bids</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit bid ticks.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Tickfilter</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">66</span><span class="p">,</span> <span class="mi">69</span><span class="p">),</span> <span class="bp">self</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="TickerUpdateEvent.asks">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickerUpdateEvent.asks">[docs]</a>
-    <span class="k">def</span> <span class="nf">asks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">asks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit ask ticks.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Tickfilter</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">67</span><span class="p">,</span> <span class="mi">70</span><span class="p">),</span> <span class="bp">self</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="TickerUpdateEvent.bidasks">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickerUpdateEvent.bidasks">[docs]</a>
-    <span class="k">def</span> <span class="nf">bidasks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bidasks</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit bid and ask ticks.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Tickfilter</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">66</span><span class="p">,</span> <span class="mi">69</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">67</span><span class="p">,</span> <span class="mi">70</span><span class="p">),</span> <span class="bp">self</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="TickerUpdateEvent.midpoints">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickerUpdateEvent.midpoints">[docs]</a>
-    <span class="k">def</span> <span class="nf">midpoints</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">midpoints</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Tickfilter&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit midpoint ticks.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">Midpoints</span><span class="p">((),</span> <span class="bp">self</span><span class="p">)</span></div>
 </div>
@@ -309,18 +390,18 @@
 
 <div class="viewcode-block" id="Tickfilter">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Tickfilter">[docs]</a>
-<span class="k">class</span> <span class="nc">Tickfilter</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Tickfilter</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Tick filtering event operators that ``emit(time, price, size)``.&quot;&quot;&quot;</span>
 
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;_tickTypes&quot;</span><span class="p">,)</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tickTypes</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tickTypes</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">Op</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_tickTypes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tickTypes</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Tickfilter.on_source">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Tickfilter.on_source">[docs]</a>
-    <span class="k">def</span> <span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">ticker</span><span class="o">.</span><span class="n">ticks</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">tickType</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tickTypes</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">price</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">size</span><span class="p">)</span></div>
@@ -328,7 +409,7 @@
 
 <div class="viewcode-block" id="Tickfilter.timebars">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Tickfilter.timebars">[docs]</a>
-    <span class="k">def</span> <span class="nf">timebars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timer</span><span class="p">:</span> <span class="n">Event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TimeBars&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">timebars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timer</span><span class="p">:</span> <span class="n">Event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TimeBars&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Aggregate ticks into time bars, where the timing of new bars</span>
 <span class="sd">        is derived from a timer event.</span>
@@ -345,7 +426,7 @@
 
 <div class="viewcode-block" id="Tickfilter.tickbars">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Tickfilter.tickbars">[docs]</a>
-    <span class="k">def</span> <span class="nf">tickbars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TickBars&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">tickbars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TickBars&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Aggregate ticks into bars that have the same number of ticks.</span>
 <span class="sd">        Emits a completed :class:`Bar`.</span>
@@ -361,7 +442,7 @@
 
 <div class="viewcode-block" id="Tickfilter.volumebars">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Tickfilter.volumebars">[docs]</a>
-    <span class="k">def</span> <span class="nf">volumebars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volume</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;VolumeBars&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">volumebars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volume</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;VolumeBars&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Aggregate ticks into bars that have the same volume.</span>
 <span class="sd">        Emits a completed :class:`Bar`.</span>
@@ -379,12 +460,12 @@
 
 <div class="viewcode-block" id="Midpoints">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Midpoints">[docs]</a>
-<span class="k">class</span> <span class="nc">Midpoints</span><span class="p">(</span><span class="n">Tickfilter</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Midpoints</span><span class="p">(</span><span class="n">Tickfilter</span><span class="p">):</span>
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">()</span>
 
 <div class="viewcode-block" id="Midpoints.on_source">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Midpoints.on_source">[docs]</a>
-    <span class="k">def</span> <span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">ticker</span><span class="o">.</span><span class="n">ticks</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">ticker</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">ticker</span><span class="o">.</span><span class="n">midpoint</span><span class="p">(),</span> <span class="mi">0</span><span class="p">)</span></div>
 </div>
@@ -394,7 +475,7 @@
 <div class="viewcode-block" id="Bar">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.Bar">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">Bar</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Bar</span><span class="p">:</span>
     <span class="n">time</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span>
     <span class="nb">open</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
     <span class="n">high</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">nan</span>
@@ -407,19 +488,19 @@
 
 <div class="viewcode-block" id="BarList">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.BarList">[docs]</a>
-<span class="k">class</span> <span class="nc">BarList</span><span class="p">(</span><span class="n">List</span><span class="p">[</span><span class="n">Bar</span><span class="p">]):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">BarList</span><span class="p">(</span><span class="nb">list</span><span class="p">[</span><span class="n">Bar</span><span class="p">]):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">updateEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;updateEvent&quot;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span></div>
 
 
 
 <div class="viewcode-block" id="TimeBars">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TimeBars">[docs]</a>
-<span class="k">class</span> <span class="nc">TimeBars</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TimeBars</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span>
         <span class="s2">&quot;_timer&quot;</span><span class="p">,</span>
         <span class="s2">&quot;bars&quot;</span><span class="p">,</span>
@@ -428,7 +509,7 @@
 
     <span class="n">bars</span><span class="p">:</span> <span class="n">BarList</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timer</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timer</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">Op</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span> <span class="o">=</span> <span class="n">timer</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_on_timer</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_on_timer_done</span><span class="p">)</span>
@@ -436,12 +517,14 @@
 
 <div class="viewcode-block" id="TimeBars.on_source">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TimeBars.on_source">[docs]</a>
-    <span class="k">def</span> <span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="n">bar</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
         <span class="k">if</span> <span class="n">isNan</span><span class="p">(</span><span class="n">bar</span><span class="o">.</span><span class="n">open</span><span class="p">):</span>
             <span class="n">bar</span><span class="o">.</span><span class="n">open</span> <span class="o">=</span> <span class="n">bar</span><span class="o">.</span><span class="n">high</span> <span class="o">=</span> <span class="n">bar</span><span class="o">.</span><span class="n">low</span> <span class="o">=</span> <span class="n">price</span>
+
         <span class="n">bar</span><span class="o">.</span><span class="n">high</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">bar</span><span class="o">.</span><span class="n">high</span><span class="p">,</span> <span class="n">price</span><span class="p">)</span>
         <span class="n">bar</span><span class="o">.</span><span class="n">low</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">bar</span><span class="o">.</span><span class="n">low</span><span class="p">,</span> <span class="n">price</span><span class="p">)</span>
         <span class="n">bar</span><span class="o">.</span><span class="n">close</span> <span class="o">=</span> <span class="n">price</span>
@@ -450,16 +533,18 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="o">.</span><span class="n">updateEvent</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_on_timer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_on_timer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">:</span>
             <span class="n">bar</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">isNan</span><span class="p">(</span><span class="n">bar</span><span class="o">.</span><span class="n">close</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isUnset</span><span class="p">(</span><span class="n">bar</span><span class="o">.</span><span class="n">close</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="n">bar</span><span class="o">.</span><span class="n">open</span> <span class="o">=</span> <span class="n">bar</span><span class="o">.</span><span class="n">high</span> <span class="o">=</span> <span class="n">bar</span><span class="o">.</span><span class="n">low</span> <span class="o">=</span> <span class="n">bar</span><span class="o">.</span><span class="n">close</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">close</span>
+
             <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="o">.</span><span class="n">updateEvent</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">bar</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Bar</span><span class="p">(</span><span class="n">time</span><span class="p">))</span>
 
-    <span class="k">def</span> <span class="nf">_on_timer_done</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timer</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_on_timer_done</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timer</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">set_done</span><span class="p">()</span></div>
 
@@ -467,20 +552,20 @@
 
 <div class="viewcode-block" id="TickBars">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickBars">[docs]</a>
-<span class="k">class</span> <span class="nc">TickBars</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TickBars</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;_count&quot;</span><span class="p">,</span> <span class="s2">&quot;bars&quot;</span><span class="p">)</span>
     <span class="vm">__doc__</span> <span class="o">=</span> <span class="n">Tickfilter</span><span class="o">.</span><span class="n">tickbars</span><span class="o">.</span><span class="vm">__doc__</span>
 
     <span class="n">bars</span><span class="p">:</span> <span class="n">BarList</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">Op</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_count</span> <span class="o">=</span> <span class="n">count</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">bars</span> <span class="o">=</span> <span class="n">BarList</span><span class="p">()</span>
 
 <div class="viewcode-block" id="TickBars.on_source">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.TickBars.on_source">[docs]</a>
-    <span class="k">def</span> <span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">count</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_count</span><span class="p">:</span>
             <span class="n">bar</span> <span class="o">=</span> <span class="n">Bar</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bar</span><span class="p">)</span>
@@ -500,20 +585,20 @@
 
 <div class="viewcode-block" id="VolumeBars">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.VolumeBars">[docs]</a>
-<span class="k">class</span> <span class="nc">VolumeBars</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">VolumeBars</span><span class="p">(</span><span class="n">Op</span><span class="p">):</span>
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;_volume&quot;</span><span class="p">,</span> <span class="s2">&quot;bars&quot;</span><span class="p">)</span>
     <span class="vm">__doc__</span> <span class="o">=</span> <span class="n">Tickfilter</span><span class="o">.</span><span class="n">volumebars</span><span class="o">.</span><span class="vm">__doc__</span>
 
     <span class="n">bars</span><span class="p">:</span> <span class="n">BarList</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volume</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volume</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">Op</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_volume</span> <span class="o">=</span> <span class="n">volume</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">bars</span> <span class="o">=</span> <span class="n">BarList</span><span class="p">()</span>
 
 <div class="viewcode-block" id="VolumeBars.on_source">
 <a class="viewcode-back" href="../../api.html#ib_async.ticker.VolumeBars.on_source">[docs]</a>
-    <span class="k">def</span> <span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">volume</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_volume</span><span class="p">:</span>
             <span class="n">bar</span> <span class="o">=</span> <span class="n">Bar</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">bars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bar</span><span class="p">)</span>

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.ibcontroller &mdash; ib_async 1.0.3 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+  <title>ib_async.ibcontroller &mdash; ib_async 2.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
   
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=baaebd52"></script>
+        <script src="../../_static/documentation_options.js?v=51b770b3"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                1.0
+                2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -82,24 +82,24 @@
   <h1>Source code for ib_async.ibcontroller</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Programmatic control over the TWS/gateway client software.&quot;&quot;&quot;</span>
 
-<span class="kn">import</span> <span class="nn">asyncio</span>
-<span class="kn">import</span> <span class="nn">logging</span>
-<span class="kn">import</span> <span class="nn">sys</span>
-<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">suppress</span>
-<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">ClassVar</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">suppress</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassVar</span>
 
-<span class="kn">from</span> <span class="nn">eventkit</span> <span class="kn">import</span> <span class="n">Event</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">eventkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
 
-<span class="kn">import</span> <span class="nn">ib_async.util</span> <span class="k">as</span> <span class="nn">util</span>
-<span class="kn">from</span> <span class="nn">ib_async.contract</span> <span class="kn">import</span> <span class="n">Contract</span><span class="p">,</span> <span class="n">Forex</span>
-<span class="kn">from</span> <span class="nn">ib_async.ib</span> <span class="kn">import</span> <span class="n">IB</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">ib_async.util</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">util</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.contract</span><span class="w"> </span><span class="kn">import</span> <span class="n">Contract</span><span class="p">,</span> <span class="n">Forex</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.ib</span><span class="w"> </span><span class="kn">import</span> <span class="n">IB</span>
 
 
 <div class="viewcode-block" id="IBC">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.IBC">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">IBC</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">IBC</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Programmatic control over starting and stopping TWS/Gateway</span>
 <span class="sd">    using IBC (https://github.com/IbcAlpha/IBC).</span>
@@ -181,7 +181,7 @@
     <span class="n">fixpassword</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">on2fatimeout</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_isWindows</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;win32&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">ibcPath</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ibcPath</span> <span class="o">=</span> <span class="s2">&quot;/opt/ibc&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_isWindows</span> <span class="k">else</span> <span class="s2">&quot;C:</span><span class="se">\\</span><span class="s2">IBC&quot;</span>
@@ -189,30 +189,30 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_monitor</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;ib_async.IBC&quot;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
         <span class="k">return</span> <span class="bp">self</span>
 
-    <span class="k">def</span> <span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">_exc</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">_exc</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
 
 <div class="viewcode-block" id="IBC.start">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.IBC.start">[docs]</a>
-    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Launch TWS/IBG.&quot;&quot;&quot;</span>
         <span class="n">util</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">startAsync</span><span class="p">())</span></div>
 
 
 <div class="viewcode-block" id="IBC.terminate">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.IBC.terminate">[docs]</a>
-    <span class="k">def</span> <span class="nf">terminate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">terminate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Terminate TWS/IBG.&quot;&quot;&quot;</span>
         <span class="n">util</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">terminateAsync</span><span class="p">())</span></div>
 
 
 <div class="viewcode-block" id="IBC.startAsync">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.IBC.startAsync">[docs]</a>
-    <span class="k">async</span> <span class="k">def</span> <span class="nf">startAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">startAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_proc</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting&quot;</span><span class="p">)</span>
@@ -236,9 +236,11 @@
 
         <span class="c1"># create shell command</span>
         <span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ibcPath</span><span class="si">}</span><span class="se">\\</span><span class="s2">scripts</span><span class="se">\\</span><span class="s2">StartIBC.bat&quot;</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_isWindows</span>
-            <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ibcPath</span><span class="si">}</span><span class="s2">/scripts/ibcstart.sh&quot;</span>
+            <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ibcPath</span><span class="si">}</span><span class="se">\\</span><span class="s2">scripts</span><span class="se">\\</span><span class="s2">StartIBC.bat&quot;</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_isWindows</span>
+                <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ibcPath</span><span class="si">}</span><span class="s2">/scripts/ibcstart.sh&quot;</span>
+            <span class="p">)</span>
         <span class="p">]</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">util</span><span class="o">.</span><span class="n">dataclassAsDict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">arg</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="bp">self</span><span class="o">.</span><span class="n">_isWindows</span><span class="p">]</span>
@@ -259,7 +261,7 @@
 
 <div class="viewcode-block" id="IBC.terminateAsync">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.IBC.terminateAsync">[docs]</a>
-    <span class="k">async</span> <span class="k">def</span> <span class="nf">terminateAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">terminateAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_proc</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Terminating&quot;</span><span class="p">)</span>
@@ -267,7 +269,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_monitor</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_monitor</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_isWindows</span><span class="p">:</span>
-            <span class="kn">import</span> <span class="nn">subprocess</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
 
             <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">([</span><span class="s2">&quot;taskkill&quot;</span><span class="p">,</span> <span class="s2">&quot;/F&quot;</span><span class="p">,</span> <span class="s2">&quot;/T&quot;</span><span class="p">,</span> <span class="s2">&quot;/PID&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_proc</span><span class="o">.</span><span class="n">pid</span><span class="p">)])</span>
         <span class="k">else</span><span class="p">:</span>
@@ -279,7 +281,7 @@
 
 <div class="viewcode-block" id="IBC.monitorAsync">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.IBC.monitorAsync">[docs]</a>
-    <span class="k">async</span> <span class="k">def</span> <span class="nf">monitorAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">monitorAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">while</span> <span class="bp">self</span><span class="o">.</span><span class="n">_proc</span><span class="p">:</span>
             <span class="n">line</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_proc</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">line</span><span class="p">:</span>
@@ -292,7 +294,7 @@
 <div class="viewcode-block" id="Watchdog">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.Watchdog">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">Watchdog</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Watchdog</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Start, connect and watch over the TWS or gateway app and try to keep it</span>
 <span class="sd">    up and running. It is intended to be used in an event-driven</span>
@@ -373,7 +375,7 @@
     <span class="n">probeContract</span><span class="p">:</span> <span class="n">Contract</span> <span class="o">=</span> <span class="n">Forex</span><span class="p">(</span><span class="s2">&quot;EURUSD&quot;</span><span class="p">)</span>
     <span class="n">probeTimeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">4</span>
 
-    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">startingEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;startingEvent&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">startedEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;startedEvent&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">stoppingEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;stoppingEvent&quot;</span><span class="p">)</span>
@@ -391,7 +393,7 @@
 
 <div class="viewcode-block" id="Watchdog.start">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.Watchdog.start">[docs]</a>
-    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">startingEvent</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_runner</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">ensure_future</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">runAsync</span><span class="p">())</span>
@@ -400,7 +402,7 @@
 
 <div class="viewcode-block" id="Watchdog.stop">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.Watchdog.stop">[docs]</a>
-    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Stopping&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">stoppingEvent</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
@@ -409,16 +411,16 @@
 
 <div class="viewcode-block" id="Watchdog.runAsync">
 <a class="viewcode-back" href="../../api.html#ib_async.ibcontroller.Watchdog.runAsync">[docs]</a>
-    <span class="k">async</span> <span class="k">def</span> <span class="nf">runAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">def</span> <span class="nf">onTimeout</span><span class="p">(</span><span class="n">idlePeriod</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">runAsync</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">onTimeout</span><span class="p">(</span><span class="n">idlePeriod</span><span class="p">):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">waiter</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
                 <span class="n">waiter</span><span class="o">.</span><span class="n">set_result</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
 
-        <span class="k">def</span> <span class="nf">onError</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="n">errorCode</span><span class="p">,</span> <span class="n">errorString</span><span class="p">,</span> <span class="n">contract</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">onError</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="n">errorCode</span><span class="p">,</span> <span class="n">errorString</span><span class="p">,</span> <span class="n">contract</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">errorCode</span> <span class="ow">in</span> <span class="p">{</span><span class="mi">100</span><span class="p">,</span> <span class="mi">1100</span><span class="p">}</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">waiter</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
                 <span class="n">waiter</span><span class="o">.</span><span class="n">set_exception</span><span class="p">(</span><span class="ne">Warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error </span><span class="si">{</span><span class="n">errorCode</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
 
-        <span class="k">def</span> <span class="nf">onDisconnected</span><span class="p">():</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">onDisconnected</span><span class="p">():</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">waiter</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
                 <span class="n">waiter</span><span class="o">.</span><span class="n">set_exception</span><span class="p">(</span><span class="ne">Warning</span><span class="p">(</span><span class="s2">&quot;Disconnected&quot;</span><span class="p">))</span>
 

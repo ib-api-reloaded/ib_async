@@ -4,8 +4,8 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contents &mdash; ib_async 1.0.3 documentation</title>
-      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+  <title>Contents &mdash; ib_async 2.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
   
@@ -16,7 +16,7 @@
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=baaebd52"></script>
+        <script src="_static/documentation_options.js?v=51b770b3"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -37,7 +37,7 @@
             ib_async
           </a>
               <div class="version">
-                1.0
+                2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -94,8 +94,13 @@
 <li class="toctree-l2"><a class="reference internal" href="readme.html#check-types">Check Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="readme.html#build-package">Build Package</a></li>
 <li class="toctree-l2"><a class="reference internal" href="readme.html#upload-package-if-maintaining">Upload Package (if maintaining)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="readme.html#example">Example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="readme.html#setup-interactive-brokers">Setup Interactive Brokers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="readme.html#connection-patterns">Connection Patterns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="readme.html#quick-start">Quick Start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="readme.html#more-complete-examples">More Complete Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="readme.html#library-structure">Library Structure</a></li>
 <li class="toctree-l2"><a class="reference internal" href="readme.html#documentation">Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="readme.html#development">Development</a></li>
 <li class="toctree-l2"><a class="reference internal" href="readme.html#community-resources">Community Resources</a></li>
 <li class="toctree-l2"><a class="reference internal" href="readme.html#disclaimer">Disclaimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="readme.html#history">History</a></li>
@@ -149,12 +154,13 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">1.0</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">2.0</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id2">1.0</a></li>
 <li class="toctree-l2"><a class="reference internal" href="changelog.html#original-ib-insync-changelog-2017-2023">Original <code class="docutils literal notranslate"><span class="pre">ib_insync</span></code> Changelog (2017-2023)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id2">0.9</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id3">0.8</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id4">0.7</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#id5">0.6</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id3">0.9</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id4">0.8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id5">0.7</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id6">0.6</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="links.html">Links</a></li>
@@ -165,31 +171,34 @@
 <h2>ib_async<a class="headerlink" href="#ib-async" title="Link to this heading"></a></h2>
 <section id="update">
 <h3>Update<a class="headerlink" href="#update" title="Link to this heading"></a></h3>
-<p>Under new management. See <a class="reference external" href="https://github.com/mattsta/ib_insync/discussions">original discussions</a> for recent history. Create new discussions or PRs or issues under <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async">the new primary repo</a> for ongoing updates.</p>
-<p>New contributions welcome. We are open to adding more maintainers with commit access if your updates and understanding of IBKR/TWS and Python are all high quality.</p>
-<p>This is a small project with a userbase of widely varying experience and knowledge, so if you open issues which are more about IBKR problems and less about client problems, we may not be able to assist you unless your problem is a direct client issue and not one of many IBKR API edge cases. Feel free to open <a class="reference external" href="https://github.com/ib-api-reloaded/ib_async/discussions">Discussion topics</a> about anything if you are unsure about a problem being IBKR, our client, or your own code usage.</p>
 </section>
 <section id="introduction">
 <h3>Introduction<a class="headerlink" href="#introduction" title="Link to this heading"></a></h3>
-<p>The goal of the <code class="docutils literal notranslate"><span class="pre">ib_async</span></code> library is to make working with the
-<a class="reference external" href="https://ibkrcampus.com/ibkr-api-page/twsapi-doc/">Trader Workstation API</a>
-from Interactive Brokers as easy as possible.</p>
-<p>The main features are:</p>
+<p><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> is a Python library that provides a clean, modern interface to Interactive Brokers’ Trader Workstation (TWS) and IB Gateway. It handles the complexities of the <a class="reference external" href="https://ibkrcampus.com/ibkr-api-page/twsapi-doc/">IBKR API</a> so you can focus on building trading applications, research tools, and market data analysis.</p>
+<section id="what-you-can-build">
+<h4>What You Can Build<a class="headerlink" href="#what-you-can-build" title="Link to this heading"></a></h4>
 <ul class="simple">
-<li><p>An easy to use linear style of programming;</p></li>
-<li><p>An <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/api.html#module-ib_async.ib">IB component</a>
-that automatically keeps in sync with the TWS or IB Gateway application;</p></li>
-<li><p>A fully asynchonous framework based on
-<a class="reference external" href="https://docs.python.org/3/library/asyncio.html">asyncio</a>
-and
-<a class="reference external" href="https://github.com/erdewit/eventkit">eventkit</a>
-for advanced users;</p></li>
-<li><p>Interactive operation with live data in Jupyter notebooks.</p></li>
+<li><p><strong>Market Data Applications</strong>: Stream live quotes, historical data, and market depth</p></li>
+<li><p><strong>Trading Systems</strong>: Place, modify, and monitor orders programmatically</p></li>
+<li><p><strong>Portfolio Tools</strong>: Track positions, account balances, and P&amp;L in real-time</p></li>
+<li><p><strong>Research Platforms</strong>: Analyze contract details, option chains, and fundamental data</p></li>
+<li><p><strong>Risk Management</strong>: Monitor exposures and implement automated controls</p></li>
+</ul>
+</section>
+<section id="key-features">
+<h4>Key Features<a class="headerlink" href="#key-features" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Simple and Intuitive</strong>: Write straightforward Python code without dealing with callback complexity</p></li>
+<li><p><strong>Automatic Synchronization</strong>: The <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/api.html#module-ib_async.ib">IB component</a> stays in sync with TWS/Gateway automatically</p></li>
+<li><p><strong>Async-Ready</strong>: Built on <a class="reference external" href="https://docs.python.org/3/library/asyncio.html">asyncio</a> and <a class="reference external" href="https://github.com/erdewit/eventkit">eventkit</a> for high-performance applications</p></li>
+<li><p><strong>Jupyter-Friendly</strong>: Interactive development with live data in notebooks</p></li>
+<li><p><strong>Production-Ready</strong>: Robust error handling, reconnection logic, and comprehensive logging</p></li>
 </ul>
 <p>Be sure to take a look at the
 <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/notebooks.html">notebooks</a>,
 the <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/recipes.html">recipes</a>
 and the <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/api.html">API docs</a>.</p>
+</section>
 </section>
 <section id="installation">
 <h3>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h3>
@@ -212,7 +221,7 @@ and the <a class="reference external" href="https://ib-api-reloaded.github.io/ib
 <li><p>Make sure the <a class="reference external" href="https://ibkrcampus.com/ibkr-api-page/twsapi-doc/#tws-download">API port is enabled</a> and ‘Download open orders on connection’ is checked.</p></li>
 <li><p>You may also want to increase the Java memory usage under <code class="docutils literal notranslate"><span class="pre">Configure-&gt;Settings-&gt;Memory</span> <span class="pre">Allocation</span></code> to 4096 MB minimum to prevent gateway crashes when loading bulk data.</p></li>
 </ul>
-<p>The ibapi package from IB is not needed. <code class="docutils literal notranslate"><span class="pre">ib_async</span></code> implements the full IBKR API protocol internally.</p>
+<p>The ibapi package from IB is not needed. <code class="docutils literal notranslate"><span class="pre">ib_async</span></code> implements the full IBKR API binary protocol internally.</p>
 </section>
 <section id="build-manually">
 <h3>Build Manually<a class="headerlink" href="#build-manually" title="Link to this heading"></a></h3>
@@ -260,42 +269,464 @@ and the <a class="reference external" href="https://ib-api-reloaded.github.io/ib
 </pre></div>
 </div>
 </section>
-<section id="example">
-<h3>Example<a class="headerlink" href="#example" title="Link to this heading"></a></h3>
-<p>This is a complete script to download historical data:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ib_async</span> <span class="kn">import</span> <span class="o">*</span>
+<section id="setup-interactive-brokers">
+<h3>Setup Interactive Brokers<a class="headerlink" href="#setup-interactive-brokers" title="Link to this heading"></a></h3>
+<section id="download-ib-gateway-or-tws">
+<h4>1. Download IB Gateway or TWS<a class="headerlink" href="#download-ib-gateway-or-tws" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><a class="reference external" href="https://www.interactivebrokers.com/en/trading/ibgateway-stable.php">IB Gateway (Stable)</a> — Updated every few months, more stable</p></li>
+<li><p><a class="reference external" href="https://www.interactivebrokers.com/en/trading/ibgateway-latest.php">IB Gateway (Latest)</a> — Updated weekly, newest features</p></li>
+<li><p><a class="reference external" href="https://www.interactivebrokers.com/en/trading/tws.php">Trader Workstation (TWS)</a> — Full trading platform</p></li>
+</ul>
+</section>
+<section id="configure-api-access">
+<h4>2. Configure API Access<a class="headerlink" href="#configure-api-access" title="Link to this heading"></a></h4>
+<ol class="arabic simple">
+<li><p><strong>Enable API</strong>: Go to <code class="docutils literal notranslate"><span class="pre">Configure</span> <span class="pre">→</span> <span class="pre">API</span> <span class="pre">→</span> <span class="pre">Settings</span></code> and check “Enable ActiveX and Socket Clients”</p></li>
+<li><p><strong>Set Port</strong>: Default ports are 7497 (TWS) and 4001 (Gateway). You can change these if needed.</p></li>
+<li><p><strong>Allow Connections</strong>: Add <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code> to “Trusted IPs” if connecting locally</p></li>
+<li><p><strong>Download Orders</strong>: Check “Download open orders on connection” to see existing orders</p></li>
+</ol>
+</section>
+<section id="performance-settings">
+<h4>3. Performance Settings<a class="headerlink" href="#performance-settings" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Memory</strong>: Go to <code class="docutils literal notranslate"><span class="pre">Configure</span> <span class="pre">→</span> <span class="pre">Settings</span> <span class="pre">→</span> <span class="pre">Memory</span> <span class="pre">Allocation</span></code> and set to 4096 MB minimum to prevent crashes with bulk data</p></li>
+<li><p><strong>Timeouts</strong>: Increase API timeout settings if you experience disconnections during large data requests</p></li>
+</ul>
+</section>
+<section id="common-connection-issues">
+<h4>4. Common Connection Issues<a class="headerlink" href="#common-connection-issues" title="Link to this heading"></a></h4>
+<p><strong>Connection Refused</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Make sure TWS/Gateway is running and API is enabled</span>
+<span class="c1"># Check that ports match (7497 for TWS, 4001 for Gateway)</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># TWS</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">4001</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># Gateway</span>
+</pre></div>
+</div>
+<p><strong>Client ID Conflicts</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Each connection needs a unique client ID</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># Use different numbers for multiple connections</span>
+</pre></div>
+</div>
+<p><strong>Market Data Issues</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># For free delayed data (no subscription required)</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">reqMarketDataType</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># Delayed</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">reqMarketDataType</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>  <span class="c1"># Delayed frozen</span>
+
+<span class="c1"># For real-time data (requires subscription)</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">reqMarketDataType</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># Real-time</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="connection-patterns">
+<h3>Connection Patterns<a class="headerlink" href="#connection-patterns" title="Link to this heading"></a></h3>
+<section id="basic-script-usage">
+<h4>Basic Script Usage<a class="headerlink" href="#basic-script-usage" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># Your code here</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="jupyter-notebook-usage">
+<h4>Jupyter Notebook Usage<a class="headerlink" href="#jupyter-notebook-usage" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="n">util</span><span class="o">.</span><span class="n">startLoop</span><span class="p">()</span>  <span class="c1"># Required for notebooks</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># Your code here - no need to call ib.run()</span>
+</pre></div>
+</div>
+</section>
+<section id="async-application">
+<h4>Async Application<a class="headerlink" href="#async-application" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+    <span class="k">await</span> <span class="n">ib</span><span class="o">.</span><span class="n">connectAsync</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="c1"># Your async code here</span>
+    <span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+
+<span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="quick-start">
+<h3>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h3>
+<section id="basic-connection">
+<h4>Basic Connection<a class="headerlink" href="#basic-connection" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="c1"># Connect to TWS or IB Gateway</span>
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Connected&quot;</span><span class="p">)</span>
+
+<span class="c1"># Disconnect when done</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="get-account-information">
+<h4>Get Account Information<a class="headerlink" href="#get-account-information" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Get account summary</span>
+<span class="n">account</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">managedAccounts</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">summary</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">accountSummary</span><span class="p">(</span><span class="n">account</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">summary</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">tag</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="historical-data">
+<h4>Historical Data<a class="headerlink" href="#historical-data" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
 <span class="c1"># util.startLoop()  # uncomment this line when in a notebook</span>
 
 <span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
 <span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
-<span class="n">ib</span><span class="o">.</span><span class="n">reqMarketDataType</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>  <span class="c1"># Use free, delayed, frozen data</span>
+<span class="c1"># Request historical data</span>
 <span class="n">contract</span> <span class="o">=</span> <span class="n">Forex</span><span class="p">(</span><span class="s1">&#39;EURUSD&#39;</span><span class="p">)</span>
 <span class="n">bars</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">reqHistoricalData</span><span class="p">(</span>
     <span class="n">contract</span><span class="p">,</span> <span class="n">endDateTime</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">durationStr</span><span class="o">=</span><span class="s1">&#39;30 D&#39;</span><span class="p">,</span>
     <span class="n">barSizeSetting</span><span class="o">=</span><span class="s1">&#39;1 hour&#39;</span><span class="p">,</span> <span class="n">whatToShow</span><span class="o">=</span><span class="s1">&#39;MIDPOINT&#39;</span><span class="p">,</span> <span class="n">useRTH</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
-<span class="c1"># convert to pandas dataframe (pandas needs to be installed):</span>
+<span class="c1"># Convert to pandas dataframe (pandas needs to be installed):</span>
 <span class="n">df</span> <span class="o">=</span> <span class="n">util</span><span class="o">.</span><span class="n">df</span><span class="p">(</span><span class="n">bars</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Output:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>                   <span class="n">date</span>      <span class="nb">open</span>      <span class="n">high</span>       <span class="n">low</span>     <span class="n">close</span>  <span class="n">volume</span>
-<span class="mi">0</span>   <span class="mi">2019</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">19</span> <span class="mi">23</span><span class="p">:</span><span class="mi">15</span><span class="p">:</span><span class="mi">00</span>  <span class="mf">1.107875</span>  <span class="mf">1.108050</span>  <span class="mf">1.107725</span>  <span class="mf">1.107825</span>      <span class="o">-</span><span class="mi">1</span>
-<span class="mi">1</span>   <span class="mi">2019</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">20</span> <span class="mi">00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>  <span class="mf">1.107825</span>  <span class="mf">1.107925</span>  <span class="mf">1.107675</span>  <span class="mf">1.107825</span>      <span class="o">-</span><span class="mi">1</span>
-<span class="mi">2</span>   <span class="mi">2019</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">20</span> <span class="mi">01</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>  <span class="mf">1.107825</span>  <span class="mf">1.107975</span>  <span class="mf">1.107675</span>  <span class="mf">1.107875</span>      <span class="o">-</span><span class="mi">1</span>
-<span class="mi">3</span>   <span class="mi">2019</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">20</span> <span class="mi">02</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>  <span class="mf">1.107875</span>  <span class="mf">1.107975</span>  <span class="mf">1.107025</span>  <span class="mf">1.107225</span>      <span class="o">-</span><span class="mi">1</span>
-<span class="mi">4</span>   <span class="mi">2019</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">20</span> <span class="mi">03</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>  <span class="mf">1.107225</span>  <span class="mf">1.107725</span>  <span class="mf">1.107025</span>  <span class="mf">1.107525</span>      <span class="o">-</span><span class="mi">1</span>
-<span class="o">..</span>                  <span class="o">...</span>       <span class="o">...</span>       <span class="o">...</span>       <span class="o">...</span>       <span class="o">...</span>     <span class="o">...</span>
-<span class="mi">705</span> <span class="mi">2020</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">02</span> <span class="mi">14</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>  <span class="mf">1.119325</span>  <span class="mf">1.119675</span>  <span class="mf">1.119075</span>  <span class="mf">1.119225</span>      <span class="o">-</span><span class="mi">1</span>
+</section>
+<section id="live-market-data">
+<h4>Live Market Data<a class="headerlink" href="#live-market-data" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Subscribe to live market data</span>
+<span class="n">contract</span> <span class="o">=</span> <span class="n">Stock</span><span class="p">(</span><span class="s1">&#39;AAPL&#39;</span><span class="p">,</span> <span class="s1">&#39;SMART&#39;</span><span class="p">,</span> <span class="s1">&#39;USD&#39;</span><span class="p">)</span>
+<span class="n">ticker</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">reqMktData</span><span class="p">(</span><span class="n">contract</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Print live quotes for 30 seconds</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">30</span><span class="p">):</span>
+    <span class="n">ib</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># Wait 1 second</span>
+    <span class="k">if</span> <span class="n">ticker</span><span class="o">.</span><span class="n">last</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;AAPL: $</span><span class="si">{</span><span class="n">ticker</span><span class="o">.</span><span class="n">last</span><span class="si">}</span><span class="s2"> (bid: $</span><span class="si">{</span><span class="n">ticker</span><span class="o">.</span><span class="n">bid</span><span class="si">}</span><span class="s2">, ask: $</span><span class="si">{</span><span class="n">ticker</span><span class="o">.</span><span class="n">ask</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
 </pre></div>
 </div>
+</section>
+<section id="place-a-simple-order">
+<h4>Place a Simple Order<a class="headerlink" href="#place-a-simple-order" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Create a contract and order</span>
+<span class="n">contract</span> <span class="o">=</span> <span class="n">Stock</span><span class="p">(</span><span class="s1">&#39;AAPL&#39;</span><span class="p">,</span> <span class="s1">&#39;SMART&#39;</span><span class="p">,</span> <span class="s1">&#39;USD&#39;</span><span class="p">)</span>
+<span class="n">order</span> <span class="o">=</span> <span class="n">MarketOrder</span><span class="p">(</span><span class="s1">&#39;BUY&#39;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+
+<span class="c1"># Place the order</span>
+<span class="n">trade</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">placeOrder</span><span class="p">(</span><span class="n">contract</span><span class="p">,</span> <span class="n">order</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Order placed: </span><span class="si">{</span><span class="n">trade</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Monitor order status</span>
+<span class="k">while</span> <span class="ow">not</span> <span class="n">trade</span><span class="o">.</span><span class="n">isDone</span><span class="p">():</span>
+    <span class="n">ib</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Order status: </span><span class="si">{</span><span class="n">trade</span><span class="o">.</span><span class="n">orderStatus</span><span class="o">.</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="more-complete-examples">
+<h3>More Complete Examples<a class="headerlink" href="#more-complete-examples" title="Link to this heading"></a></h3>
+<section id="portfolio-monitoring">
+<h4>Portfolio Monitoring<a class="headerlink" href="#portfolio-monitoring" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Get current positions</span>
+<span class="n">positions</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">positions</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Current Positions:&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">pos</span> <span class="ow">in</span> <span class="n">positions</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pos</span><span class="o">.</span><span class="n">contract</span><span class="o">.</span><span class="n">symbol</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">pos</span><span class="o">.</span><span class="n">position</span><span class="si">}</span><span class="s2"> @ </span><span class="si">{</span><span class="n">pos</span><span class="o">.</span><span class="n">avgCost</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Get open orders</span>
+<span class="n">orders</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">openTrades</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Open Orders: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">orders</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">trade</span> <span class="ow">in</span> <span class="n">orders</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">trade</span><span class="o">.</span><span class="n">contract</span><span class="o">.</span><span class="n">symbol</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">trade</span><span class="o">.</span><span class="n">order</span><span class="o">.</span><span class="n">action</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">trade</span><span class="o">.</span><span class="n">order</span><span class="o">.</span><span class="n">totalQuantity</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="real-time-p-l-tracking">
+<h4>Real-time P&amp;L Tracking<a class="headerlink" href="#real-time-p-l-tracking" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">onPnL</span><span class="p">(</span><span class="n">pnl</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;P&amp;L Update: Unrealized: $</span><span class="si">{</span><span class="n">pnl</span><span class="o">.</span><span class="n">unrealizedPnL</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">, Realized: $</span><span class="si">{</span><span class="n">pnl</span><span class="o">.</span><span class="n">realizedPnL</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Subscribe to P&amp;L updates</span>
+<span class="n">account</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">managedAccounts</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">pnl</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">reqPnL</span><span class="p">(</span><span class="n">account</span><span class="p">)</span>
+<span class="n">pnl</span><span class="o">.</span><span class="n">updateEvent</span> <span class="o">+=</span> <span class="n">onPnL</span>
+
+<span class="c1"># Keep running to receive updates</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">ib</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>  <span class="c1"># Run until interrupted</span>
+<span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+    <span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="advanced-order-management">
+<h4>Advanced Order Management<a class="headerlink" href="#advanced-order-management" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Create a bracket order (entry + stop loss + take profit)</span>
+<span class="n">contract</span> <span class="o">=</span> <span class="n">Stock</span><span class="p">(</span><span class="s1">&#39;TSLA&#39;</span><span class="p">,</span> <span class="s1">&#39;SMART&#39;</span><span class="p">,</span> <span class="s1">&#39;USD&#39;</span><span class="p">)</span>
+
+<span class="c1"># Parent order</span>
+<span class="n">parent</span> <span class="o">=</span> <span class="n">LimitOrder</span><span class="p">(</span><span class="s1">&#39;BUY&#39;</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mf">250.00</span><span class="p">)</span>
+<span class="n">parent</span><span class="o">.</span><span class="n">orderId</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
+<span class="n">parent</span><span class="o">.</span><span class="n">transmit</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="c1"># Stop loss</span>
+<span class="n">stopLoss</span> <span class="o">=</span> <span class="n">StopOrder</span><span class="p">(</span><span class="s1">&#39;SELL&#39;</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mf">240.00</span><span class="p">)</span>
+<span class="n">stopLoss</span><span class="o">.</span><span class="n">orderId</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
+<span class="n">stopLoss</span><span class="o">.</span><span class="n">parentId</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">orderId</span>
+<span class="n">stopLoss</span><span class="o">.</span><span class="n">transmit</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="c1"># Take profit</span>
+<span class="n">takeProfit</span> <span class="o">=</span> <span class="n">LimitOrder</span><span class="p">(</span><span class="s1">&#39;SELL&#39;</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mf">260.00</span><span class="p">)</span>
+<span class="n">takeProfit</span><span class="o">.</span><span class="n">orderId</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
+<span class="n">takeProfit</span><span class="o">.</span><span class="n">parentId</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">orderId</span>
+<span class="n">takeProfit</span><span class="o">.</span><span class="n">transmit</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="c1"># Place bracket order</span>
+<span class="n">trades</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">trades</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ib</span><span class="o">.</span><span class="n">placeOrder</span><span class="p">(</span><span class="n">contract</span><span class="p">,</span> <span class="n">parent</span><span class="p">))</span>
+<span class="n">trades</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ib</span><span class="o">.</span><span class="n">placeOrder</span><span class="p">(</span><span class="n">contract</span><span class="p">,</span> <span class="n">stopLoss</span><span class="p">))</span>
+<span class="n">trades</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ib</span><span class="o">.</span><span class="n">placeOrder</span><span class="p">(</span><span class="n">contract</span><span class="p">,</span> <span class="n">takeProfit</span><span class="p">))</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bracket order placed: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">trades</span><span class="p">)</span><span class="si">}</span><span class="s2"> orders&quot;</span><span class="p">)</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="historical-data-analysis">
+<h4>Historical Data Analysis<a class="headerlink" href="#historical-data-analysis" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
+<span class="n">ib</span> <span class="o">=</span> <span class="n">IB</span><span class="p">()</span>
+<span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Get multiple timeframes</span>
+<span class="n">contract</span> <span class="o">=</span> <span class="n">Stock</span><span class="p">(</span><span class="s1">&#39;SPY&#39;</span><span class="p">,</span> <span class="s1">&#39;SMART&#39;</span><span class="p">,</span> <span class="s1">&#39;USD&#39;</span><span class="p">)</span>
+
+<span class="c1"># Daily bars for 1 year</span>
+<span class="n">daily_bars</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">reqHistoricalData</span><span class="p">(</span>
+    <span class="n">contract</span><span class="p">,</span> <span class="n">endDateTime</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">durationStr</span><span class="o">=</span><span class="s1">&#39;1 Y&#39;</span><span class="p">,</span>
+    <span class="n">barSizeSetting</span><span class="o">=</span><span class="s1">&#39;1 day&#39;</span><span class="p">,</span> <span class="n">whatToShow</span><span class="o">=</span><span class="s1">&#39;TRADES&#39;</span><span class="p">,</span> <span class="n">useRTH</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># 5-minute bars for last 5 days</span>
+<span class="n">intraday_bars</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">reqHistoricalData</span><span class="p">(</span>
+    <span class="n">contract</span><span class="p">,</span> <span class="n">endDateTime</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">durationStr</span><span class="o">=</span><span class="s1">&#39;5 D&#39;</span><span class="p">,</span>
+    <span class="n">barSizeSetting</span><span class="o">=</span><span class="s1">&#39;5 mins&#39;</span><span class="p">,</span> <span class="n">whatToShow</span><span class="o">=</span><span class="s1">&#39;TRADES&#39;</span><span class="p">,</span> <span class="n">useRTH</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Convert to DataFrames</span>
+<span class="n">daily_df</span> <span class="o">=</span> <span class="n">util</span><span class="o">.</span><span class="n">df</span><span class="p">(</span><span class="n">daily_bars</span><span class="p">)</span>
+<span class="n">intraday_df</span> <span class="o">=</span> <span class="n">util</span><span class="o">.</span><span class="n">df</span><span class="p">(</span><span class="n">intraday_bars</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Daily bars: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">daily_df</span><span class="p">)</span><span class="si">}</span><span class="s2"> rows&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Intraday bars: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">intraday_df</span><span class="p">)</span><span class="si">}</span><span class="s2"> rows&quot;</span><span class="p">)</span>
+
+<span class="c1"># Calculate simple moving average</span>
+<span class="n">daily_df</span><span class="p">[</span><span class="s1">&#39;SMA_20&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">daily_df</span><span class="p">[</span><span class="s1">&#39;close&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">daily_df</span><span class="p">[[</span><span class="s1">&#39;date&#39;</span><span class="p">,</span> <span class="s1">&#39;close&#39;</span><span class="p">,</span> <span class="s1">&#39;SMA_20&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">tail</span><span class="p">())</span>
+
+<span class="n">ib</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="library-structure">
+<h3>Library Structure<a class="headerlink" href="#library-structure" title="Link to this heading"></a></h3>
+<section id="core-components">
+<h4>Core Components<a class="headerlink" href="#core-components" title="Link to this heading"></a></h4>
+<p><strong><code class="docutils literal notranslate"><span class="pre">ib_async.ib.IB</span></code></strong> - Main interface class</p>
+<ul class="simple">
+<li><p>Connection management (<code class="docutils literal notranslate"><span class="pre">connect()</span></code>, <code class="docutils literal notranslate"><span class="pre">disconnect()</span></code>, <code class="docutils literal notranslate"><span class="pre">connectAsync()</span></code>)</p></li>
+<li><p>Market data requests (<code class="docutils literal notranslate"><span class="pre">reqMktData()</span></code>, <code class="docutils literal notranslate"><span class="pre">reqHistoricalData()</span></code>)</p></li>
+<li><p>Order management (<code class="docutils literal notranslate"><span class="pre">placeOrder()</span></code>, <code class="docutils literal notranslate"><span class="pre">cancelOrder()</span></code>)</p></li>
+<li><p>Account data (<code class="docutils literal notranslate"><span class="pre">positions()</span></code>, <code class="docutils literal notranslate"><span class="pre">accountSummary()</span></code>, <code class="docutils literal notranslate"><span class="pre">reqPnL()</span></code>)</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">ib_async.contract</span></code></strong> - Financial instruments</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Stock</span></code>, <code class="docutils literal notranslate"><span class="pre">Option</span></code>, <code class="docutils literal notranslate"><span class="pre">Future</span></code>, <code class="docutils literal notranslate"><span class="pre">Forex</span></code>, <code class="docutils literal notranslate"><span class="pre">Index</span></code>, <code class="docutils literal notranslate"><span class="pre">Bond</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Contract</span></code> - Base class for all instruments</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ComboLeg</span></code>, <code class="docutils literal notranslate"><span class="pre">DeltaNeutralContract</span></code> - Complex instruments</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">ib_async.order</span></code></strong> - Order types and management</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MarketOrder</span></code>, <code class="docutils literal notranslate"><span class="pre">LimitOrder</span></code>, <code class="docutils literal notranslate"><span class="pre">StopOrder</span></code>, <code class="docutils literal notranslate"><span class="pre">StopLimitOrder</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Order</span></code> - Base order class with all parameters</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">OrderStatus</span></code>, <code class="docutils literal notranslate"><span class="pre">OrderState</span></code> - Order execution tracking</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Trade</span></code> - Complete order lifecycle tracking</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">ib_async.ticker</span></code></strong> - Real-time market data</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Ticker</span></code> - Live quotes, trades, and market data</p></li>
+<li><p>Automatic field updates (bid, ask, last, volume, etc.)</p></li>
+<li><p>Event-driven updates via <code class="docutils literal notranslate"><span class="pre">updateEvent</span></code></p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">ib_async.objects</span></code></strong> - Data structures</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">BarData</span></code> - Historical price bars</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Position</span></code> - Portfolio positions</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PortfolioItem</span></code> - Portfolio details with P&amp;L</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AccountValue</span></code> - Account metrics</p></li>
+</ul>
+</section>
+<section id="key-patterns">
+<h4>Key Patterns<a class="headerlink" href="#key-patterns" title="Link to this heading"></a></h4>
+<p><strong>Synchronous vs Asynchronous</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Synchronous (blocks until complete)</span>
+<span class="n">bars</span> <span class="o">=</span> <span class="n">ib</span><span class="o">.</span><span class="n">reqHistoricalData</span><span class="p">(</span><span class="n">contract</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+
+<span class="c1"># Asynchronous (yields to event loop)</span>
+<span class="n">bars</span> <span class="o">=</span> <span class="k">await</span> <span class="n">ib</span><span class="o">.</span><span class="n">reqHistoricalDataAsync</span><span class="p">(</span><span class="n">contract</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Event Handling</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Subscribe to events</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">onOrderUpdate</span><span class="p">(</span><span class="n">trade</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Order update: </span><span class="si">{</span><span class="n">trade</span><span class="o">.</span><span class="n">orderStatus</span><span class="o">.</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">ib</span><span class="o">.</span><span class="n">orderStatusEvent</span> <span class="o">+=</span> <span class="n">onOrderUpdate</span>
+
+<span class="c1"># Or with async</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">onTicker</span><span class="p">(</span><span class="n">ticker</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Price update: </span><span class="si">{</span><span class="n">ticker</span><span class="o">.</span><span class="n">last</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">ticker</span><span class="o">.</span><span class="n">updateEvent</span> <span class="o">+=</span> <span class="n">onTicker</span>
+</pre></div>
+</div>
+<p><strong>Error Handling</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">try</span><span class="p">:</span>
+    <span class="n">ib</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="mi">7497</span><span class="p">,</span> <span class="n">clientId</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">ConnectionRefusedError</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;TWS/Gateway not running or API not enabled&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Connection error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="documentation">
 <h3>Documentation<a class="headerlink" href="#documentation" title="Link to this heading"></a></h3>
 <p>The complete <a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/api.html">API documentation</a>.</p>
 <p><a class="reference external" href="https://ib-api-reloaded.github.io/ib_async/changelog.html">Changelog</a>.</p>
+</section>
+<section id="development">
+<h3>Development<a class="headerlink" href="#development" title="Link to this heading"></a></h3>
+<section id="running-tests">
+<h4>Running Tests<a class="headerlink" href="#running-tests" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>install<span class="w"> </span>--with<span class="o">=</span>dev
+poetry<span class="w"> </span>run<span class="w"> </span>pytest
+</pre></div>
+</div>
+</section>
+<section id="type-checking">
+<h4>Type Checking<a class="headerlink" href="#type-checking" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>run<span class="w"> </span>mypy<span class="w"> </span>ib_async
+</pre></div>
+</div>
+</section>
+<section id="code-formatting">
+<h4>Code Formatting<a class="headerlink" href="#code-formatting" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>run<span class="w"> </span>ruff<span class="w"> </span>format
+poetry<span class="w"> </span>run<span class="w"> </span>ruff<span class="w"> </span>check<span class="w"> </span>--fix
+</pre></div>
+</div>
+</section>
+<section id="local-development">
+<h4>Local Development<a class="headerlink" href="#local-development" title="Link to this heading"></a></h4>
+<ol class="arabic simple">
+<li><p>Clone the repository:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/ib-api-reloaded/ib_async.git
+<span class="nb">cd</span><span class="w"> </span>ib_async
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Install dependencies:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>install<span class="w"> </span>--with<span class="o">=</span>dev,docs
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p>Make your changes and run tests:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>run<span class="w"> </span>pytest
+poetry<span class="w"> </span>run<span class="w"> </span>mypy<span class="w"> </span>ib_async
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li><p>Submit a pull request with:</p>
+<ul class="simple">
+<li><p>Clear description of changes</p></li>
+<li><p>Tests for new functionality</p></li>
+<li><p>Updated documentation if needed</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="contributing-guidelines">
+<h4>Contributing Guidelines<a class="headerlink" href="#contributing-guidelines" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Follow existing code style (enforced by ruff)</p></li>
+<li><p>Add tests for new features</p></li>
+<li><p>Update documentation for user-facing changes</p></li>
+<li><p>Keep commits focused and well-described</p></li>
+<li><p>Be responsive to code review feedback</p></li>
+</ul>
+</section>
 </section>
 <section id="community-resources">
 <h3>Community Resources<a class="headerlink" href="#community-resources" title="Link to this heading"></a></h3>

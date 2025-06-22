@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.contract &mdash; ib_async 1.0.3 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+  <title>ib_async.contract &mdash; ib_async 2.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
   
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=baaebd52"></script>
+        <script src="../../_static/documentation_options.js?v=51b770b3"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                1.0
+                2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -82,17 +82,17 @@
   <h1>Source code for ib_async.contract</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Financial instrument types used by Interactive Brokers.&quot;&quot;&quot;</span>
 
-<span class="kn">import</span> <span class="nn">datetime</span> <span class="k">as</span> <span class="nn">dt</span>
-<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">NamedTuple</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">NamedTuple</span><span class="p">,</span> <span class="n">Optional</span>
 
-<span class="kn">import</span> <span class="nn">ib_async.util</span> <span class="k">as</span> <span class="nn">util</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">ib_async.util</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">util</span>
 
 
 <div class="viewcode-block" id="Contract">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Contract">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">Contract</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Contract</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    ``Contract(**kwargs)`` can create any contract using keyword</span>
 <span class="sd">    arguments. To simplify working with contracts, there are also more</span>
@@ -190,7 +190,7 @@
 <div class="viewcode-block" id="Contract.create">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Contract.create">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Contract&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Contract&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Create and a return a specialized contract based on the given secType,</span>
 <span class="sd">        or a general Contract if secType is not given.</span>
@@ -215,6 +215,7 @@
             <span class="s2">&quot;CRYPTO&quot;</span><span class="p">:</span> <span class="n">Crypto</span><span class="p">,</span>
             <span class="s2">&quot;NEWS&quot;</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
             <span class="s2">&quot;EVENT&quot;</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
+            <span class="s2">&quot;EC&quot;</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>  <span class="c1"># Event Contracts (binary yes/no results)</span>
         <span class="p">}</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">secType</span><span class="p">,</span> <span class="n">Contract</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Contract</span><span class="p">:</span>
@@ -223,28 +224,48 @@
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
 
+<div class="viewcode-block" id="Contract.recreate">
+<a class="viewcode-back" href="../../api.html#ib_async.contract.Contract.recreate">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">recreate</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Contract&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Comply an existing generic Contract into its most specific type.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Contract</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="o">**</span><span class="n">util</span><span class="o">.</span><span class="n">dataclassAsDict</span><span class="p">(</span><span class="n">c</span><span class="p">))</span></div>
+
+
 <div class="viewcode-block" id="Contract.isHashable">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Contract.isHashable">[docs]</a>
-    <span class="k">def</span> <span class="nf">isHashable</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">isHashable</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        See if this contract can be hashed by conId.</span>
 
-<span class="sd">        Note: Bag contracts always get conId=28812380, so they&#39;re not hashable.</span>
+<span class="sd">        Note: Bag contracts always get conId=28812380, so they&#39;re not hashable by conId,</span>
+<span class="sd">              but we generate a synthetic hash for them based on leg details instead.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conId</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">conId</span> <span class="o">!=</span> <span class="mi">28812380</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">secType</span> <span class="o">!=</span> <span class="s2">&quot;BAG&quot;</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conId</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Contract</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">conId</span>
             <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">conId</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">conId</span>
             <span class="ow">or</span> <span class="n">util</span><span class="o">.</span><span class="n">dataclassAsDict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">==</span> <span class="n">util</span><span class="o">.</span><span class="n">dataclassAsDict</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
         <span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">secType</span> <span class="o">==</span> <span class="s2">&quot;BAG&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span>
+                <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="p">[</span>
+                        <span class="n">util</span><span class="o">.</span><span class="n">dataclassAsTuple</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+                        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">comboLegs</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">conId</span><span class="p">)</span>
+                    <span class="p">]</span>
+                    <span class="o">+</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">symbol</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">exchange</span><span class="p">]</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">isHashable</span><span class="p">():</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Contract </span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> can&#39;t be hashed because no &#39;conId&#39; value exists. Resolve contract to populate &#39;conId&#39;.&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Contract </span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> can&#39;t be hashed because no &#39;conId&#39; value exists. Qualify contract to populate &#39;conId&#39;.&quot;</span>
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">secType</span> <span class="o">==</span> <span class="s2">&quot;CONTFUT&quot;</span><span class="p">:</span>
@@ -255,12 +276,15 @@
 
         <span class="k">return</span> <span class="n">h</span>
 
-    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">attrs</span> <span class="o">=</span> <span class="n">util</span><span class="o">.</span><span class="n">dataclassNonDefaults</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Contract</span><span class="p">:</span>
             <span class="n">attrs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;secType&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
         <span class="n">clsName</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__qualname__</span>
         <span class="n">kwargs</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">v</span><span class="si">!r}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">attrs</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">clsName</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">kwargs</span><span class="si">}</span><span class="s2">)&quot;</span>
 
     <span class="fm">__str__</span> <span class="o">=</span> <span class="fm">__repr__</span></div>
@@ -269,8 +293,8 @@
 
 <div class="viewcode-block" id="Stock">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Stock">[docs]</a>
-<span class="k">class</span> <span class="nc">Stock</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Stock</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">exchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">currency</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -294,8 +318,8 @@
 
 <div class="viewcode-block" id="Option">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Option">[docs]</a>
-<span class="k">class</span> <span class="nc">Option</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Option</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">lastTradeDateOrContractMonth</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
@@ -340,8 +364,8 @@
 
 <div class="viewcode-block" id="Future">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Future">[docs]</a>
-<span class="k">class</span> <span class="nc">Future</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Future</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">lastTradeDateOrContractMonth</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
@@ -382,8 +406,8 @@
 
 <div class="viewcode-block" id="ContFuture">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.ContFuture">[docs]</a>
-<span class="k">class</span> <span class="nc">ContFuture</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ContFuture</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">exchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
@@ -417,8 +441,8 @@
 
 <div class="viewcode-block" id="Forex">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Forex">[docs]</a>
-<span class="k">class</span> <span class="nc">Forex</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Forex</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">pair</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">exchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;IDEALPRO&quot;</span><span class="p">,</span>
@@ -444,7 +468,7 @@
             <span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;CASH&quot;</span><span class="p">,</span> <span class="n">symbol</span><span class="o">=</span><span class="n">symbol</span><span class="p">,</span> <span class="n">exchange</span><span class="o">=</span><span class="n">exchange</span><span class="p">,</span> <span class="n">currency</span><span class="o">=</span><span class="n">currency</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
         <span class="p">)</span>
 
-    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">attrs</span> <span class="o">=</span> <span class="n">util</span><span class="o">.</span><span class="n">dataclassNonDefaults</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
         <span class="n">attrs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;secType&quot;</span><span class="p">)</span>
         <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;Forex(&quot;</span>
@@ -460,7 +484,7 @@
 
 <div class="viewcode-block" id="Forex.pair">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Forex.pair">[docs]</a>
-    <span class="k">def</span> <span class="nf">pair</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">pair</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Short name of pair.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">symbol</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">currency</span></div>
 </div>
@@ -469,8 +493,8 @@
 
 <div class="viewcode-block" id="Index">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Index">[docs]</a>
-<span class="k">class</span> <span class="nc">Index</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Index</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">exchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">currency</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -489,8 +513,8 @@
 
 <div class="viewcode-block" id="CFD">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.CFD">[docs]</a>
-<span class="k">class</span> <span class="nc">CFD</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CFD</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">exchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">currency</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -509,8 +533,8 @@
 
 <div class="viewcode-block" id="Commodity">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Commodity">[docs]</a>
-<span class="k">class</span> <span class="nc">Commodity</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Commodity</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">exchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">currency</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -529,8 +553,8 @@
 
 <div class="viewcode-block" id="Bond">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Bond">[docs]</a>
-<span class="k">class</span> <span class="nc">Bond</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Bond</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Bond.&quot;&quot;&quot;</span>
         <span class="n">Contract</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;BOND&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
@@ -538,8 +562,8 @@
 
 <div class="viewcode-block" id="FuturesOption">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.FuturesOption">[docs]</a>
-<span class="k">class</span> <span class="nc">FuturesOption</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">FuturesOption</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">lastTradeDateOrContractMonth</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
@@ -584,8 +608,8 @@
 
 <div class="viewcode-block" id="MutualFund">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.MutualFund">[docs]</a>
-<span class="k">class</span> <span class="nc">MutualFund</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MutualFund</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Mutual fund.&quot;&quot;&quot;</span>
         <span class="n">Contract</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;FUND&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
@@ -593,8 +617,8 @@
 
 <div class="viewcode-block" id="Warrant">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Warrant">[docs]</a>
-<span class="k">class</span> <span class="nc">Warrant</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Warrant</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Warrant option.&quot;&quot;&quot;</span>
         <span class="n">Contract</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;WAR&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
@@ -602,8 +626,8 @@
 
 <div class="viewcode-block" id="Bag">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Bag">[docs]</a>
-<span class="k">class</span> <span class="nc">Bag</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Bag</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Bag contract.&quot;&quot;&quot;</span>
         <span class="n">Contract</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;BAG&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
@@ -611,8 +635,8 @@
 
 <div class="viewcode-block" id="Crypto">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.Crypto">[docs]</a>
-<span class="k">class</span> <span class="nc">Crypto</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Crypto</span><span class="p">(</span><span class="n">Contract</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">exchange</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">currency</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -636,7 +660,7 @@
 
 <div class="viewcode-block" id="TagValue">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.TagValue">[docs]</a>
-<span class="k">class</span> <span class="nc">TagValue</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TagValue</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
     <span class="n">tag</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">value</span><span class="p">:</span> <span class="nb">str</span></div>
 
@@ -645,7 +669,7 @@
 <div class="viewcode-block" id="ComboLeg">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.ComboLeg">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">ComboLeg</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ComboLeg</span><span class="p">:</span>
     <span class="n">conId</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">ratio</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">action</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -660,7 +684,7 @@
 <div class="viewcode-block" id="DeltaNeutralContract">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.DeltaNeutralContract">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">DeltaNeutralContract</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DeltaNeutralContract</span><span class="p">:</span>
     <span class="n">conId</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">delta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="n">price</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span></div>
@@ -669,7 +693,7 @@
 
 <div class="viewcode-block" id="TradingSession">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.TradingSession">[docs]</a>
-<span class="k">class</span> <span class="nc">TradingSession</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TradingSession</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
     <span class="n">start</span><span class="p">:</span> <span class="n">dt</span><span class="o">.</span><span class="n">datetime</span>
     <span class="n">end</span><span class="p">:</span> <span class="n">dt</span><span class="o">.</span><span class="n">datetime</span></div>
 
@@ -678,7 +702,7 @@
 <div class="viewcode-block" id="ContractDetails">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.ContractDetails">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">ContractDetails</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ContractDetails</span><span class="p">:</span>
     <span class="n">contract</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Contract</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">marketName</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">minTick</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -727,17 +751,17 @@
 
 <div class="viewcode-block" id="ContractDetails.tradingSessions">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.ContractDetails.tradingSessions">[docs]</a>
-    <span class="k">def</span> <span class="nf">tradingSessions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">TradingSession</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">tradingSessions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">TradingSession</span><span class="p">]:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parseSessions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tradingHours</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="ContractDetails.liquidSessions">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.ContractDetails.liquidSessions">[docs]</a>
-    <span class="k">def</span> <span class="nf">liquidSessions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">TradingSession</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">liquidSessions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">TradingSession</span><span class="p">]:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parseSessions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">liquidHours</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span> <span class="nf">_parseSessions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">TradingSession</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parseSessions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">TradingSession</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse the IBKR session date range text format into native Python objects.</span>
 
 <span class="sd">        Note: The IBKR date range format looks like:</span>
@@ -774,7 +798,7 @@
 <div class="viewcode-block" id="ContractDescription">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.ContractDescription">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">ContractDescription</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ContractDescription</span><span class="p">:</span>
     <span class="n">contract</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Contract</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">derivativeSecTypes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
 
@@ -783,7 +807,7 @@
 <div class="viewcode-block" id="ScanData">
 <a class="viewcode-back" href="../../api.html#ib_async.contract.ScanData">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">ScanData</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ScanData</span><span class="p">:</span>
     <span class="n">rank</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">contractDetails</span><span class="p">:</span> <span class="n">ContractDetails</span>
     <span class="n">distance</span><span class="p">:</span> <span class="nb">str</span>

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.order &mdash; ib_async 1.0.3 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
+  <title>ib_async.order &mdash; ib_async 2.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
   
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=baaebd52"></script>
+        <script src="../../_static/documentation_options.js?v=51b770b3"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                1.0
+                2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -82,20 +82,25 @@
   <h1>Source code for ib_async.order</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Order types used by Interactive Brokers.&quot;&quot;&quot;</span>
 
-<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">FrozenSet</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">NamedTuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
-<span class="kn">from</span> <span class="nn">eventkit</span> <span class="kn">import</span> <span class="n">Event</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
 
-<span class="kn">from</span> <span class="nn">.contract</span> <span class="kn">import</span> <span class="n">Contract</span><span class="p">,</span> <span class="n">TagValue</span>
-<span class="kn">from</span> <span class="nn">.objects</span> <span class="kn">import</span> <span class="n">Fill</span><span class="p">,</span> <span class="n">SoftDollarTier</span><span class="p">,</span> <span class="n">TradeLogEntry</span>
-<span class="kn">from</span> <span class="nn">.util</span> <span class="kn">import</span> <span class="n">UNSET_DOUBLE</span><span class="p">,</span> <span class="n">UNSET_INTEGER</span><span class="p">,</span> <span class="n">dataclassNonDefaults</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">decimal</span><span class="w"> </span><span class="kn">import</span> <span class="n">Decimal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">NamedTuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">eventkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.contract</span><span class="w"> </span><span class="kn">import</span> <span class="n">Contract</span><span class="p">,</span> <span class="n">TagValue</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.objects</span><span class="w"> </span><span class="kn">import</span> <span class="n">Fill</span><span class="p">,</span> <span class="n">SoftDollarTier</span><span class="p">,</span> <span class="n">TradeLogEntry</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclassNonDefaults</span><span class="p">,</span> <span class="n">UNSET_DOUBLE</span><span class="p">,</span> <span class="n">UNSET_INTEGER</span>
 
 
 <div class="viewcode-block" id="Order">
 <a class="viewcode-back" href="../../api.html#ib_async.order.Order">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">Order</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Order</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Order for trading contracts.</span>
 
@@ -108,8 +113,8 @@
     <span class="n">action</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="n">orderType</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">lmtPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">auxPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">lmtPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">auxPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">tif</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">activeStartTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">activeStopTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -129,10 +134,10 @@
     <span class="n">rule80A</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">allOrNone</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">minQty</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
-    <span class="n">percentOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">percentOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">overridePercentageConstraints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="n">trailStopPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">trailingPercent</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">trailStopPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">trailingPercent</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">faGroup</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">faProfile</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>  <span class="c1"># obsolete</span>
     <span class="n">faMethod</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -145,20 +150,20 @@
     <span class="n">discretionaryAmt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="n">eTradeOnly</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">firmQuoteOnly</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="n">nbboPriceCap</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">nbboPriceCap</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">optOutSmartRouting</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">auctionStrategy</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">startingPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">stockRefPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">delta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">stockRangeLower</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">stockRangeUpper</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">startingPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">stockRefPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">delta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">stockRangeLower</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">stockRangeUpper</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">randomizePrice</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">randomizeSize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="n">volatility</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">volatility</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">volatilityType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
     <span class="n">deltaNeutralOrderType</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">deltaNeutralAuxPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">deltaNeutralAuxPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">deltaNeutralConId</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">deltaNeutralSettlingFirm</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">deltaNeutralClearingAccount</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -169,14 +174,14 @@
     <span class="n">deltaNeutralDesignatedLocation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">continuousUpdate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">referencePriceType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
-    <span class="n">basisPoints</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">basisPoints</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">basisPointsType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
     <span class="n">scaleInitLevelSize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
     <span class="n">scaleSubsLevelSize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
-    <span class="n">scalePriceIncrement</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">scalePriceAdjustValue</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">scalePriceIncrement</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">scalePriceAdjustValue</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">scalePriceAdjustInterval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
-    <span class="n">scaleProfitOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">scaleProfitOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">scaleAutoReset</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">scaleInitPosition</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
     <span class="n">scaleInitFillQty</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
@@ -189,33 +194,33 @@
     <span class="n">clearingAccount</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">clearingIntent</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">algoStrategy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">algoParams</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
-    <span class="n">smartComboRoutingParams</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">algoParams</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">smartComboRoutingParams</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">algoId</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">whatIf</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">notHeld</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">solicited</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">modelCode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">orderComboLegs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;OrderComboLeg&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
-    <span class="n">orderMiscOptions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">orderComboLegs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">OrderComboLeg</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">orderMiscOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">referenceContractId</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">peggedChangeAmount</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="n">isPeggedChangeAmountDecrease</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">referenceChangeAmount</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="n">referenceExchangeId</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">adjustedOrderType</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">triggerPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">adjustedStopPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">adjustedStopLimitPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">adjustedTrailingAmount</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">triggerPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">adjustedStopPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">adjustedStopLimitPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">adjustedTrailingAmount</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">adjustableTrailingUnit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">lmtPriceOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;OrderCondition&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">lmtPriceOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">conditions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">OrderCondition</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">conditionsCancelOrder</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">conditionsIgnoreRth</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">extOperator</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">softDollarTier</span><span class="p">:</span> <span class="n">SoftDollarTier</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">SoftDollarTier</span><span class="p">)</span>
-    <span class="n">cashQty</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">cashQty</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">mifid2DecisionMaker</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">mifid2DecisionAlgo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">mifid2ExecutionTrader</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -224,7 +229,7 @@
     <span class="n">isOmsContainer</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">discretionaryUpToLimitPrice</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">autoCancelDate</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">filledQuantity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">filledQuantity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
     <span class="n">refFuturesConId</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">autoCancelParent</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">shareholder</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -238,34 +243,36 @@
     <span class="n">manualOrderTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">minTradeQty</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
     <span class="n">minCompeteSize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">UNSET_INTEGER</span>
-    <span class="n">competeAgainstBestOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">midOffsetAtWhole</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
-    <span class="n">midOffsetAtHalf</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">competeAgainstBestOffset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">midOffsetAtWhole</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
+    <span class="n">midOffsetAtHalf</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span>
 
-    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">attrs</span> <span class="o">=</span> <span class="n">dataclassNonDefaults</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Order</span><span class="p">:</span>
             <span class="n">attrs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;orderType&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">softDollarTier</span><span class="p">:</span>
             <span class="n">attrs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;softDollarTier&quot;</span><span class="p">)</span>
+
         <span class="n">clsName</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__qualname__</span>
         <span class="n">kwargs</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">v</span><span class="si">!r}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">attrs</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">clsName</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">kwargs</span><span class="si">}</span><span class="s2">)&quot;</span>
 
     <span class="fm">__str__</span> <span class="o">=</span> <span class="fm">__repr__</span>
 
-    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span> <span class="ow">is</span> <span class="n">other</span>
 
-    <span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="LimitOrder">
 <a class="viewcode-back" href="../../api.html#ib_async.order.LimitOrder">[docs]</a>
-<span class="k">class</span> <span class="nc">LimitOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">lmtPrice</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LimitOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">lmtPrice</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="n">Order</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">orderType</span><span class="o">=</span><span class="s2">&quot;LMT&quot;</span><span class="p">,</span>
@@ -279,8 +286,8 @@
 
 <div class="viewcode-block" id="MarketOrder">
 <a class="viewcode-back" href="../../api.html#ib_async.order.MarketOrder">[docs]</a>
-<span class="k">class</span> <span class="nc">MarketOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MarketOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="n">Order</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">orderType</span><span class="o">=</span><span class="s2">&quot;MKT&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="n">action</span><span class="p">,</span> <span class="n">totalQuantity</span><span class="o">=</span><span class="n">totalQuantity</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
         <span class="p">)</span></div>
@@ -289,8 +296,8 @@
 
 <div class="viewcode-block" id="StopOrder">
 <a class="viewcode-back" href="../../api.html#ib_async.order.StopOrder">[docs]</a>
-<span class="k">class</span> <span class="nc">StopOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">stopPrice</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">StopOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">stopPrice</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="n">Order</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">orderType</span><span class="o">=</span><span class="s2">&quot;STP&quot;</span><span class="p">,</span>
@@ -304,8 +311,8 @@
 
 <div class="viewcode-block" id="StopLimitOrder">
 <a class="viewcode-back" href="../../api.html#ib_async.order.StopLimitOrder">[docs]</a>
-<span class="k">class</span> <span class="nc">StopLimitOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">StopLimitOrder</span><span class="p">(</span><span class="n">Order</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">totalQuantity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
@@ -328,7 +335,7 @@
 <div class="viewcode-block" id="OrderStatus">
 <a class="viewcode-back" href="../../api.html#ib_async.order.OrderStatus">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">OrderStatus</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrderStatus</span><span class="p">:</span>
     <span class="n">orderId</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">status</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">filled</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -341,21 +348,59 @@
     <span class="n">whyHeld</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">mktCapPrice</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
 
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">total</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Helper property to return the total size of this requested order.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filled</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">remaining</span>
+
     <span class="n">PendingSubmit</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;PendingSubmit&quot;</span>
     <span class="n">PendingCancel</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;PendingCancel&quot;</span>
     <span class="n">PreSubmitted</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;PreSubmitted&quot;</span>
     <span class="n">Submitted</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Submitted&quot;</span>
     <span class="n">ApiPending</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;ApiPending&quot;</span>
     <span class="n">ApiCancelled</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;ApiCancelled&quot;</span>
+    <span class="n">ApiUpdate</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;ApiUpdate&quot;</span>
     <span class="n">Cancelled</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Cancelled&quot;</span>
     <span class="n">Filled</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Filled&quot;</span>
     <span class="n">Inactive</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Inactive&quot;</span>
+    <span class="n">ValidationError</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;ValidationError&quot;</span>
 
-    <span class="n">DoneStates</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">FrozenSet</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
-        <span class="p">[</span><span class="s2">&quot;Filled&quot;</span><span class="p">,</span> <span class="s2">&quot;Cancelled&quot;</span><span class="p">,</span> <span class="s2">&quot;ApiCancelled&quot;</span><span class="p">]</span>
+    <span class="c1"># order has either been completed, cancelled, or destroyed by IBKR&#39;s risk management</span>
+    <span class="n">DoneStates</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+        <span class="p">[</span><span class="s2">&quot;Filled&quot;</span><span class="p">,</span> <span class="s2">&quot;Cancelled&quot;</span><span class="p">,</span> <span class="s2">&quot;ApiCancelled&quot;</span><span class="p">,</span> <span class="s2">&quot;Inactive&quot;</span><span class="p">]</span>
     <span class="p">)</span>
-    <span class="n">ActiveStates</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">FrozenSet</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
-        <span class="p">[</span><span class="s2">&quot;PendingSubmit&quot;</span><span class="p">,</span> <span class="s2">&quot;ApiPending&quot;</span><span class="p">,</span> <span class="s2">&quot;PreSubmitted&quot;</span><span class="p">,</span> <span class="s2">&quot;Submitted&quot;</span><span class="p">]</span>
+
+    <span class="c1"># order is capable of executing at sometime in the future</span>
+    <span class="n">ActiveStates</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="s2">&quot;PendingSubmit&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;ApiPending&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;PreSubmitted&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Submitted&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;ValidationError&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;ApiUpdate&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="c1"># order hasn&#39;t triggered &quot;live&quot; yet (but it could become live and execute before we receive a notice)</span>
+    <span class="n">WaitingStates</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="s2">&quot;PendingSubmit&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;ApiPending&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;PreSubmitted&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="c1"># order is live and &quot;working&quot; at the broker against public exchanges</span>
+    <span class="n">WorkingStates</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="s2">&quot;Submitted&quot;</span><span class="p">,</span>
+            <span class="c1"># ValidationError can happen on submit or modify.</span>
+            <span class="c1"># If ValidationError happens on submit, the states go PreSubmitted -&gt; ValidationError -&gt; Submitted (if it can be ignored automatically), so order is still live.</span>
+            <span class="c1"># If ValidationError happens on modify, the update is just ValidationError with no new Submitted, so the previous order state remains active.</span>
+            <span class="s2">&quot;ValidationError&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;ApiUpdate&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
     <span class="p">)</span></div>
 
 
@@ -363,7 +408,7 @@
 <div class="viewcode-block" id="OrderState">
 <a class="viewcode-back" href="../../api.html#ib_async.order.OrderState">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">OrderState</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrderState</span><span class="p">:</span>
     <span class="n">status</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">initMarginBefore</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">maintMarginBefore</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -380,22 +425,102 @@
     <span class="n">commissionCurrency</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">warningText</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">completedTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">completedStatus</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+    <span class="n">completedStatus</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="OrderState.transform">
+<a class="viewcode-back" href="../../api.html#ib_async.order.OrderState.transform">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transformer</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert the numeric values of this OrderState into a new OrderState transformed by &#39;using&#39;&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">initMarginBefore</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">initMarginBefore</span><span class="p">),</span>
+            <span class="n">maintMarginBefore</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">maintMarginBefore</span><span class="p">),</span>
+            <span class="n">equityWithLoanBefore</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">equityWithLoanBefore</span><span class="p">),</span>
+            <span class="n">initMarginChange</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">initMarginChange</span><span class="p">),</span>
+            <span class="n">maintMarginChange</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">maintMarginChange</span><span class="p">),</span>
+            <span class="n">equityWithLoanChange</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">equityWithLoanChange</span><span class="p">),</span>
+            <span class="n">initMarginAfter</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">initMarginAfter</span><span class="p">),</span>
+            <span class="n">maintMarginAfter</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">maintMarginAfter</span><span class="p">),</span>
+            <span class="n">equityWithLoanAfter</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">equityWithLoanAfter</span><span class="p">),</span>
+            <span class="n">commission</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">commission</span><span class="p">),</span>
+            <span class="n">minCommission</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minCommission</span><span class="p">),</span>
+            <span class="n">maxCommission</span><span class="o">=</span><span class="n">transformer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">maxCommission</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="OrderState.numeric">
+<a class="viewcode-back" href="../../api.html#ib_async.order.OrderState.numeric">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">numeric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">digits</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OrderStateNumeric</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a new OrderState with the current values values to floats instead of strings as returned from IBKR directly.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">floatOrNone</span><span class="p">(</span><span class="n">what</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Attempt to convert input to a float, but if we fail (value is just empty string) return None&quot;&quot;&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c1"># convert</span>
+                <span class="n">floated</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">what</span><span class="p">)</span>
+
+                <span class="c1"># if the conversion is IBKR speak for &quot;this value is not set&quot; then give us None</span>
+                <span class="k">if</span> <span class="n">floated</span> <span class="o">==</span> <span class="n">UNSET_DOUBLE</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">None</span>
+
+                <span class="c1"># else, round to the requested precision</span>
+                <span class="k">return</span> <span class="nb">round</span><span class="p">(</span><span class="n">floated</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">_</span><span class="p">:</span>
+                <span class="c1"># initial conversion failed so just return None in its place</span>
+                <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">floatOrNone</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">digits</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="OrderState.formatted">
+<a class="viewcode-back" href="../../api.html#ib_async.order.OrderState.formatted">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">formatted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">digits</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a new OrderState with the current values as formatted strings.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">numeric</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span>
+            <span class="c1"># 300000.21 -&gt; 300,000.21</span>
+            <span class="c1"># 0.0 -&gt; 0.00</span>
+            <span class="c1"># 431.342000000001 -&gt; 431.34</span>
+            <span class="c1"># Note: we need &#39;is not None&#39; here because &#39;x=0&#39; is a valid numeric input too</span>
+            <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">x</span><span class="si">:</span><span class="s2">,.</span><span class="si">{</span><span class="n">digits</span><span class="si">}</span><span class="s2">f</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OrderStateNumeric">
+<a class="viewcode-back" href="../../api.html#ib_async.order.OrderStateNumeric">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrderStateNumeric</span><span class="p">(</span><span class="n">OrderState</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Just a type helper for mypy to check against if you convert OrderState to .numeric().</span>
+
+<span class="sd">    Usage:</span>
+
+<span class="sd">    state_numeric: OrderStateNumeric = state.numeric(digits=2)&quot;&quot;&quot;</span>
+
+    <span class="n">initMarginBefore</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">maintMarginBefore</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">equityWithLoanBefore</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">initMarginChange</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">maintMarginChange</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">equityWithLoanChange</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">initMarginAfter</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">maintMarginAfter</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+    <span class="n">equityWithLoanAfter</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
 
 
 
 <div class="viewcode-block" id="OrderComboLeg">
 <a class="viewcode-back" href="../../api.html#ib_async.order.OrderComboLeg">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">OrderComboLeg</span><span class="p">:</span>
-    <span class="n">price</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span></div>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrderComboLeg</span><span class="p">:</span>
+    <span class="n">price</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Decimal</span> <span class="o">=</span> <span class="n">UNSET_DOUBLE</span></div>
 
 
 
 <div class="viewcode-block" id="Trade">
 <a class="viewcode-back" href="../../api.html#ib_async.order.Trade">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">Trade</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Trade</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Trade keeps track of an order, its status and all its fills.</span>
 
@@ -412,11 +537,12 @@
 
     <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">Contract</span><span class="p">)</span>
     <span class="n">order</span><span class="p">:</span> <span class="n">Order</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">Order</span><span class="p">)</span>
-    <span class="n">orderStatus</span><span class="p">:</span> <span class="s2">&quot;OrderStatus&quot;</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">OrderStatus</span><span class="p">)</span>
-    <span class="n">fills</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Fill</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
-    <span class="n">log</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TradeLogEntry</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">orderStatus</span><span class="p">:</span> <span class="n">OrderStatus</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">OrderStatus</span><span class="p">)</span>
+    <span class="n">fills</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Fill</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">log</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TradeLogEntry</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">advancedError</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
 
+    <span class="c1"># TODO: replace these with an enum?</span>
     <span class="n">events</span><span class="p">:</span> <span class="n">ClassVar</span> <span class="o">=</span> <span class="p">(</span>
         <span class="s2">&quot;statusEvent&quot;</span><span class="p">,</span>
         <span class="s2">&quot;modifyEvent&quot;</span><span class="p">,</span>
@@ -427,7 +553,7 @@
         <span class="s2">&quot;cancelledEvent&quot;</span><span class="p">,</span>
     <span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">statusEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;statusEvent&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">modifyEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;modifyEvent&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fillEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;fillEvent&quot;</span><span class="p">)</span>
@@ -436,43 +562,58 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">cancelEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;cancelEvent&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">cancelledEvent</span> <span class="o">=</span> <span class="n">Event</span><span class="p">(</span><span class="s2">&quot;cancelledEvent&quot;</span><span class="p">)</span>
 
+<div class="viewcode-block" id="Trade.isWaiting">
+<a class="viewcode-back" href="../../api.html#ib_async.order.Trade.isWaiting">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">isWaiting</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True if sent to IBKR but not &quot;Submitted&quot; for live execution yet.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">orderStatus</span><span class="o">.</span><span class="n">status</span> <span class="ow">in</span> <span class="n">OrderStatus</span><span class="o">.</span><span class="n">WaitingStates</span></div>
+
+
+<div class="viewcode-block" id="Trade.isWorking">
+<a class="viewcode-back" href="../../api.html#ib_async.order.Trade.isWorking">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">isWorking</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True if sent to IBKR but not &quot;Submitted&quot; for live execution yet.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">orderStatus</span><span class="o">.</span><span class="n">status</span> <span class="ow">in</span> <span class="n">OrderStatus</span><span class="o">.</span><span class="n">WorkingStates</span></div>
+
+
 <div class="viewcode-block" id="Trade.isActive">
 <a class="viewcode-back" href="../../api.html#ib_async.order.Trade.isActive">[docs]</a>
-    <span class="k">def</span> <span class="nf">isActive</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">isActive</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;True if eligible for execution, false otherwise.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">orderStatus</span><span class="o">.</span><span class="n">status</span> <span class="ow">in</span> <span class="n">OrderStatus</span><span class="o">.</span><span class="n">ActiveStates</span></div>
 
 
 <div class="viewcode-block" id="Trade.isDone">
 <a class="viewcode-back" href="../../api.html#ib_async.order.Trade.isDone">[docs]</a>
-    <span class="k">def</span> <span class="nf">isDone</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">isDone</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;True if completely filled or cancelled, false otherwise.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">orderStatus</span><span class="o">.</span><span class="n">status</span> <span class="ow">in</span> <span class="n">OrderStatus</span><span class="o">.</span><span class="n">DoneStates</span></div>
 
 
 <div class="viewcode-block" id="Trade.filled">
 <a class="viewcode-back" href="../../api.html#ib_async.order.Trade.filled">[docs]</a>
-    <span class="k">def</span> <span class="nf">filled</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">filled</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Number of shares filled.&quot;&quot;&quot;</span>
         <span class="n">fills</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fills</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">contract</span><span class="o">.</span><span class="n">secType</span> <span class="o">==</span> <span class="s2">&quot;BAG&quot;</span><span class="p">:</span>
             <span class="c1"># don&#39;t count fills for the leg contracts</span>
             <span class="n">fills</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">fills</span> <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">contract</span><span class="o">.</span><span class="n">secType</span> <span class="o">==</span> <span class="s2">&quot;BAG&quot;</span><span class="p">]</span>
-        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">execution</span><span class="o">.</span><span class="n">shares</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">fills</span><span class="p">)</span></div>
+
+        <span class="k">return</span> <span class="nb">sum</span><span class="p">([</span><span class="n">f</span><span class="o">.</span><span class="n">execution</span><span class="o">.</span><span class="n">shares</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">fills</span><span class="p">])</span></div>
 
 
 <div class="viewcode-block" id="Trade.remaining">
 <a class="viewcode-back" href="../../api.html#ib_async.order.Trade.remaining">[docs]</a>
-    <span class="k">def</span> <span class="nf">remaining</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">remaining</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Number of shares remaining to be filled.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">order</span><span class="o">.</span><span class="n">totalQuantity</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">filled</span><span class="p">()</span></div>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">order</span><span class="o">.</span><span class="n">totalQuantity</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">filled</span><span class="p">()</span></div>
 </div>
 
 
 
 <div class="viewcode-block" id="BracketOrder">
 <a class="viewcode-back" href="../../api.html#ib_async.order.BracketOrder">[docs]</a>
-<span class="k">class</span> <span class="nc">BracketOrder</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">BracketOrder</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
     <span class="n">parent</span><span class="p">:</span> <span class="n">Order</span>
     <span class="n">takeProfit</span><span class="p">:</span> <span class="n">Order</span>
     <span class="n">stopLoss</span><span class="p">:</span> <span class="n">Order</span></div>
@@ -482,11 +623,11 @@
 <div class="viewcode-block" id="OrderCondition">
 <a class="viewcode-back" href="../../api.html#ib_async.order.OrderCondition">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">OrderCondition</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrderCondition</span><span class="p">:</span>
 <div class="viewcode-block" id="OrderCondition.createClass">
 <a class="viewcode-back" href="../../api.html#ib_async.order.OrderCondition.createClass">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">createClass</span><span class="p">(</span><span class="n">condType</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">createClass</span><span class="p">(</span><span class="n">condType</span><span class="p">):</span>
         <span class="n">d</span> <span class="o">=</span> <span class="p">{</span>
             <span class="mi">1</span><span class="p">:</span> <span class="n">PriceCondition</span><span class="p">,</span>
             <span class="mi">3</span><span class="p">:</span> <span class="n">TimeCondition</span><span class="p">,</span>
@@ -500,14 +641,14 @@
 
 <div class="viewcode-block" id="OrderCondition.And">
 <a class="viewcode-back" href="../../api.html#ib_async.order.OrderCondition.And">[docs]</a>
-    <span class="k">def</span> <span class="nf">And</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">And</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">conjunction</span> <span class="o">=</span> <span class="s2">&quot;a&quot;</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 
 <div class="viewcode-block" id="OrderCondition.Or">
 <a class="viewcode-back" href="../../api.html#ib_async.order.OrderCondition.Or">[docs]</a>
-    <span class="k">def</span> <span class="nf">Or</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">Or</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">conjunction</span> <span class="o">=</span> <span class="s2">&quot;o&quot;</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 </div>
@@ -517,7 +658,7 @@
 <div class="viewcode-block" id="PriceCondition">
 <a class="viewcode-back" href="../../api.html#ib_async.order.PriceCondition">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">PriceCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PriceCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
     <span class="n">condType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">conjunction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;a&quot;</span>
     <span class="n">isMore</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
@@ -531,7 +672,7 @@
 <div class="viewcode-block" id="TimeCondition">
 <a class="viewcode-back" href="../../api.html#ib_async.order.TimeCondition">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">TimeCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TimeCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
     <span class="n">condType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
     <span class="n">conjunction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;a&quot;</span>
     <span class="n">isMore</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
@@ -542,7 +683,7 @@
 <div class="viewcode-block" id="MarginCondition">
 <a class="viewcode-back" href="../../api.html#ib_async.order.MarginCondition">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">MarginCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MarginCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
     <span class="n">condType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span>
     <span class="n">conjunction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;a&quot;</span>
     <span class="n">isMore</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
@@ -553,7 +694,7 @@
 <div class="viewcode-block" id="ExecutionCondition">
 <a class="viewcode-back" href="../../api.html#ib_async.order.ExecutionCondition">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">ExecutionCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ExecutionCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
     <span class="n">condType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span>
     <span class="n">conjunction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;a&quot;</span>
     <span class="n">secType</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -565,7 +706,7 @@
 <div class="viewcode-block" id="VolumeCondition">
 <a class="viewcode-back" href="../../api.html#ib_async.order.VolumeCondition">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">VolumeCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">VolumeCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
     <span class="n">condType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span>
     <span class="n">conjunction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;a&quot;</span>
     <span class="n">isMore</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
@@ -578,7 +719,7 @@
 <div class="viewcode-block" id="PercentChangeCondition">
 <a class="viewcode-back" href="../../api.html#ib_async.order.PercentChangeCondition">[docs]</a>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">PercentChangeCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PercentChangeCondition</span><span class="p">(</span><span class="n">OrderCondition</span><span class="p">):</span>
     <span class="n">condType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">7</span>
     <span class="n">conjunction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;a&quot;</span>
     <span class="n">isMore</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
