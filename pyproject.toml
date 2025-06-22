@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ib_async"
-version = "2.0.0"
+version = "2.0.1"
 description = "Python sync/async framework for Interactive Brokers API"
 authors = ["Ewald de Wit"]
 maintainers = ["Matt Stancliff <matt@matt.sh>"]
@@ -23,10 +23,8 @@ keywords = ["ibapi", "tws", "asyncio", "jupyter", "interactive", "brokers", "asy
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-# The pypi `eventkit` package is still locked to Ewald's account, so for now it's
-# easier to just add a direct github tag dependency for our new version.
-eventkit = { git = "https://github.com/ib-api-reloaded/eventkit", tag = "v2.0.0" }
-# eventkit = { path = "../eventkit", develop = true }
+aeventkit = "^2.1.0"
+# aeventkit = { path = "../eventkit", develop = true }
 nest_asyncio = "*"
 
 [tool.poetry.urls]

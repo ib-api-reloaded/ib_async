@@ -4,6 +4,15 @@
 2.0
 ---
 
+Version 2.0.1 (2025-06-22)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Minor dependency change to fix pypi package building.
+
+**Dependency Fix**
+
+The ``eventkit`` dependency is now ``aeventkit`` because ``eventkit`` is locked behind a closed account and pypi doesn't allow dependencies with direct github URL tags.
+
 Version 2.0.0 (2025-06-13)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
