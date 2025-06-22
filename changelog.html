@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async Changelog &mdash; ib_async 2.0.0 documentation</title>
+  <title>ib_async Changelog &mdash; ib_async 2.0.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
@@ -16,7 +16,7 @@
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=51b770b3"></script>
+        <script src="_static/documentation_options.js?v=f5cff4aa"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -56,6 +56,7 @@
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#id1">2.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#version-2-0-1-2025-06-22">Version 2.0.1 (2025-06-22)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-2-0-0-2025-06-13">Version 2.0.0 (2025-06-13)</a></li>
 </ul>
 </li>
@@ -223,6 +224,12 @@
 <h1><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog<a class="headerlink" href="#ib-async-changelog" title="Link to this heading"></a></h1>
 <section id="id1">
 <h2>2.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<section id="version-2-0-1-2025-06-22">
+<h3>Version 2.0.1 (2025-06-22)<a class="headerlink" href="#version-2-0-1-2025-06-22" title="Link to this heading"></a></h3>
+<p>Minor dependency change to fix pypi package building.</p>
+<p><strong>Dependency Fix</strong></p>
+<p>The <code class="docutils literal notranslate"><span class="pre">eventkit</span></code> dependency is now <code class="docutils literal notranslate"><span class="pre">aeventkit</span></code> because <code class="docutils literal notranslate"><span class="pre">eventkit</span></code> is locked behind a closed account and pypi doesn’t allow dependencies with direct github URL tags.</p>
+</section>
 <section id="version-2-0-0-2025-06-13">
 <h3>Version 2.0.0 (2025-06-13)<a class="headerlink" href="#version-2-0-0-2025-06-13" title="Link to this heading"></a></h3>
 <p>This major release includes significant new features, performance improvements, and critical bug fixes. The most notable addition is the custom defaults system, allowing users to customize how ib_async handles empty values and timestamps throughout the library.</p>
