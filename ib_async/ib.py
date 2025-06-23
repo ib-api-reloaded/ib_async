@@ -1124,7 +1124,7 @@ class IB:
         barSize: int,
         whatToShow: str,
         useRTH: bool,
-        realTimeBarsOptions: list[TagValue] = [],
+        realTimeBarsOptions: list[TagValue] | None = None,
     ) -> RealTimeBarList:
         """
         Request realtime 5 second bars.
@@ -1174,7 +1174,7 @@ class IB:
         useRTH: bool,
         formatDate: int = 1,
         keepUpToDate: bool = False,
-        chartOptions: list[TagValue] = [],
+        chartOptions: list[TagValue] | None = None,
         timeout: float = 60,
     ) -> BarDataList:
         """
@@ -1281,7 +1281,7 @@ class IB:
         whatToShow: str,
         useRth: bool,
         ignoreSize: bool = False,
-        miscOptions: list[TagValue] = [],
+        miscOptions: list[TagValue] | None = None,
     ) -> List:
         """
         Request historical ticks. The time resolution of the ticks
@@ -1361,7 +1361,7 @@ class IB:
         genericTickList: str = "",
         snapshot: bool = False,
         regulatorySnapshot: bool = False,
-        mktDataOptions: list[TagValue] = [],
+        mktDataOptions: list[TagValue] | None = None,
     ) -> Ticker:
         """
         Subscribe to tick data or request a snapshot.
@@ -1591,7 +1591,7 @@ class IB:
         self,
         contract: Contract,
         reportType: str,
-        fundamentalDataOptions: list[TagValue] = [],
+        fundamentalDataOptions: list[TagValue] | None = None,
     ) -> str:
         """
         Get fundamental data of a contract in XML format.
@@ -1619,8 +1619,8 @@ class IB:
     def reqScannerData(
         self,
         subscription: ScannerSubscription,
-        scannerSubscriptionOptions: list[TagValue] = [],
-        scannerSubscriptionFilterOptions: list[TagValue] = [],
+        scannerSubscriptionOptions: list[TagValue] | None = None,
+        scannerSubscriptionFilterOptions: list[TagValue] | None = None,
     ) -> ScanDataList:
         """
         Do a blocking market scan by starting a subscription and canceling it
@@ -1646,8 +1646,8 @@ class IB:
     def reqScannerSubscription(
         self,
         subscription: ScannerSubscription,
-        scannerSubscriptionOptions: list[TagValue] = [],
-        scannerSubscriptionFilterOptions: list[TagValue] = [],
+        scannerSubscriptionOptions: list[TagValue] | None = None,
+        scannerSubscriptionFilterOptions: list[TagValue] | None = None,
     ) -> ScanDataList:
         """
         Subscribe to market scan data.
@@ -1664,9 +1664,7 @@ class IB:
         dataList.reqId = reqId
         dataList.subscription = subscription
         dataList.scannerSubscriptionOptions = scannerSubscriptionOptions or []
-        dataList.scannerSubscriptionFilterOptions = (
-            scannerSubscriptionFilterOptions or []
-        )
+        dataList.scannerSubscriptionFilterOptions = scannerSubscriptionFilterOptions or []
         self.wrapper.startSubscription(reqId, dataList)
         self.client.reqScannerSubscription(
             reqId,
@@ -1702,7 +1700,7 @@ class IB:
         contract: Contract,
         optionPrice: float,
         underPrice: float,
-        implVolOptions: list[TagValue] = [],
+        implVolOptions: list[TagValue] | None = None,
     ) -> OptionComputation:
         """
         Calculate the volatility given the option price.
@@ -1728,7 +1726,7 @@ class IB:
         contract: Contract,
         volatility: float,
         underPrice: float,
-        optPrcOptions: list[TagValue] = [],
+        optPrcOptions: list[TagValue] | None = None,
     ) -> OptionComputation:
         """
         Calculate the option price given the volatility.
@@ -1741,7 +1739,7 @@ class IB:
             contract: Option contract.
             volatility: Option volatility to use in calculation.
             underPrice: Price of the underlier to use in calculation
-            implVolOptions: Unknown
+            optPrcOptions: TODO
         """
         return self._run(
             self.calculateOptionPriceAsync(
@@ -1815,7 +1813,7 @@ class IB:
         return self._run(self.reqNewsProvidersAsync())
 
     def reqNewsArticle(
-        self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] = []
+        self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] | None = None,
     ) -> NewsArticle:
         """
         Get the body of a news article.
@@ -1840,7 +1838,7 @@ class IB:
         startDateTime: Union[str, datetime.date],
         endDateTime: Union[str, datetime.date],
         totalResults: int,
-        historicalNewsOptions: list[TagValue] = [],
+        historicalNewsOptions: list[TagValue] | None = None,
     ) -> HistoricalNews:
         """
         Get historical news headline.
@@ -2332,7 +2330,7 @@ class IB:
         useRTH: bool,
         formatDate: int = 1,
         keepUpToDate: bool = False,
-        chartOptions: list[TagValue] = [],
+        chartOptions: list[TagValue] | None = None,
         timeout: float = 60,
     ) -> BarDataList:
         reqId = self.client.getReqId()
@@ -2407,7 +2405,7 @@ class IB:
         whatToShow: str,
         useRth: bool,
         ignoreSize: bool = False,
-        miscOptions: list[TagValue] = [],
+        miscOptions: list[TagValue] | None = None,
     ) -> Awaitable[List]:
         reqId = self.client.getReqId()
         future = self.wrapper.startReq(reqId, contract)
@@ -2463,7 +2461,7 @@ class IB:
         self,
         contract: Contract,
         reportType: str,
-        fundamentalDataOptions: list[TagValue] = [],
+        fundamentalDataOptions: list[TagValue] | None = None,
     ) -> Awaitable[str]:
         reqId = self.client.getReqId()
 
@@ -2476,8 +2474,8 @@ class IB:
     async def reqScannerDataAsync(
         self,
         subscription: ScannerSubscription,
-        scannerSubscriptionOptions: list[TagValue] = [],
-        scannerSubscriptionFilterOptions: list[TagValue] = [],
+        scannerSubscriptionOptions: list[TagValue] | None = None,
+        scannerSubscriptionFilterOptions: list[TagValue] | None = None,
     ) -> ScanDataList:
         dataList = self.reqScannerSubscription(
             subscription,
@@ -2501,7 +2499,7 @@ class IB:
         contract: Contract,
         optionPrice: float,
         underPrice: float,
-        implVolOptions: list[TagValue] = [],
+        implVolOptions: list[TagValue] | None = None,
     ) -> Optional[OptionComputation]:
         reqId = self.client.getReqId()
         future = self.wrapper.startReq(reqId, contract)
@@ -2522,7 +2520,7 @@ class IB:
         contract: Contract,
         volatility: float,
         underPrice: float,
-        optPrcOptions: list[TagValue] = [],
+        optPrcOptions: list[TagValue] | None = None,
     ) -> Optional[OptionComputation]:
         reqId = self.client.getReqId()
         future = self.wrapper.startReq(reqId, contract)
@@ -2559,7 +2557,7 @@ class IB:
         return future
 
     def reqNewsArticleAsync(
-        self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] = []
+        self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] | None = None
     ) -> Awaitable[NewsArticle]:
         reqId = self.client.getReqId()
 
@@ -2574,7 +2572,7 @@ class IB:
         startDateTime: Union[str, datetime.date],
         endDateTime: Union[str, datetime.date],
         totalResults: int,
-        historicalNewsOptions: list[TagValue] = [],
+        historicalNewsOptions: list[TagValue] | None = None,
     ) -> Optional[HistoricalNews]:
         reqId = self.client.getReqId()
 
