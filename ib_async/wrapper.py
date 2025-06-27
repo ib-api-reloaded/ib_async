@@ -631,6 +631,7 @@ class Wrapper:
         contract = Contract.recreate(contract)
         orderStatus = OrderStatus(orderId=order.orderId, status=orderState.status)
         trade = Trade(contract, order, orderStatus, [], [])
+        self._results.setdefault("completedOrders", [])
         self._results["completedOrders"].append(trade)
 
         if order.permId not in self.permId2Trade:
