@@ -495,12 +495,10 @@ def patchAsyncio():
     nest_asyncio.apply()
 
 
-@functools.cache
 def getLoop():
     """Get asyncio event loop or create one if it doesn't exist."""
     try:
-        # https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.get_running_loop
-        loop = asyncio.get_running_loop()
+        loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
