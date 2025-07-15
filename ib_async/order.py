@@ -203,6 +203,13 @@ class MarketOrder(Order):
         )
 
 
+class SnapMidOrder(Order):
+    def __init__(self, action: str, totalQuantity: float, **kwargs):
+        Order.__init__(
+            self, orderType="SNAP MID", action=action, totalQuantity=totalQuantity, **kwargs
+        )
+
+
 class StopOrder(Order):
     def __init__(self, action: str, totalQuantity: float, stopPrice: float, **kwargs):
         Order.__init__(
