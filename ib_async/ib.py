@@ -2626,7 +2626,15 @@ class IB:
         future = self.wrapper.startReq(reqId)
         self.client.reqUserInfo(reqId)
         return future
-
+        
+    def reqPositionsMulti(self,account,modelCode) -> List[Position]:
+        return self._run(self.reqPositionsMultiAsync(account,modelCode))    
+        
+    def reqPositionsMultiAsync(self,account,modelCode) -> Awaitable[List[Position]]:
+        reqId = self.client.getReqId()
+        future = self.wrapper.startReq(reqId, container=[])
+        self.client.reqPositionsMulti(reqId, account, modelCode)
+        return future
 
 if __name__ == "__main__":
     loop = util.getLoop()
