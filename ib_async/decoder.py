@@ -335,9 +335,6 @@ class Decoder:
         if len(times) > 1:
             cd.lastTradeTime = times[1]
 
-        if len(times) > 2:
-            cd.timeZoneId = times[2]
-
         cd.longName = cd.longName.encode().decode("unicode-escape")
         self.parse(cd)
         self.parse(c)
