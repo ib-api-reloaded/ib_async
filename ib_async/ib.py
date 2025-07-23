@@ -2053,6 +2053,8 @@ class IB:
             # prepare initializing requests
             # name -> request
             reqs: dict[str, Awaitable[Any]] = {}
+            reqs["positions"] = self.reqPositionsAsync()
+
             if not readonly:
                 if fetchFields & StartupFetch.ORDERS_OPEN:
                     reqs["open orders"] = self.reqOpenOrdersAsync()
@@ -2062,20 +2064,18 @@ class IB:
                     reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
 
             if account:
-                reqs["positions"] = self.reqPositionsAsync()
-
                 if fetchFields & StartupFetch.ACCOUNT_UPDATES:
                     reqs["account updates"] = self.reqAccountUpdatesAsync(account)
 
-            if len(accounts) <= self.MaxSyncedSubAccounts:
-                for acc in accounts:
-                    reqs[f"positions for {acc}"] = self.reqPositionsMultiAsync(acc)
+            # if len(accounts) <= self.MaxSyncedSubAccounts:
+            #     # for acc in accounts:
+            #     # reqs[f"positions for {acc}"] = self.reqPositionsMultiAsync(acc)
 
-                if fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES:
-                    for acc in accounts:
-                        reqs[f"account updates for {acc}"] = (
-                            self.reqAccountUpdatesMultiAsync(acc)
-                        )
+            #     if fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES:
+            #         for acc in accounts:
+            #             reqs[f"account updates for {acc}"] = (
+            #                 self.reqAccountUpdatesMultiAsync(acc)
+            #             )
 
             # run initializing requests concurrently and log if any times out
             tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
@@ -2086,6 +2086,20 @@ class IB:
                     msg = f"{name} request timed out"
                     errors.append(msg)
                     self._logger.error(msg)
+
+            # For FA accounts, serially subscribe to each account and wait for
+            # the 'accountDownloadEnd' signal to ensure all data is loaded.
+            if len(accounts) <= self.MaxSyncedSubAccounts:
+                for acc in accounts:
+                    try:
+                        await asyncio.wait_for(
+                            self.reqAccountUpdatesAsync(acc), timeout
+                        )
+                    except asyncio.TimeoutError:
+                        msg = f"reqAccountUpdatesAsync for {acc} timed out"
+                        errors.append(msg)
+                        self._logger.error(msg)
+                self._logger.info("Finished fetching all portfolio data.")
 
             # the request for executions must come after all orders are in
             if fetchFields & StartupFetch.EXECUTIONS:
