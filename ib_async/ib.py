@@ -2053,7 +2053,6 @@ class IB:
             # prepare initializing requests
             # name -> request
             reqs: dict[str, Awaitable[Any]] = {}
-            reqs["positions"] = self.reqPositionsAsync()
             if not readonly:
                 if fetchFields & StartupFetch.ORDERS_OPEN:
                     reqs["open orders"] = self.reqOpenOrdersAsync()
@@ -2063,10 +2062,15 @@ class IB:
                     reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
 
             if account:
+                reqs["positions"] = self.reqPositionsAsync()
+
                 if fetchFields & StartupFetch.ACCOUNT_UPDATES:
                     reqs["account updates"] = self.reqAccountUpdatesAsync(account)
 
             if len(accounts) <= self.MaxSyncedSubAccounts:
+                for acc in accounts:
+                    reqs[f"positions for {acc}"] = self.reqPositionsMultiAsync(acc)
+
                 if fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES:
                     for acc in accounts:
                         reqs[f"account updates for {acc}"] = (
@@ -2287,6 +2291,14 @@ class IB:
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
         future = self.wrapper.startReq("positions")
         self.client.reqPositions()
+        return future
+
+    def reqPositionsMultiAsync(
+        self, account: str = "", modelCode: str = ""
+    ) -> Awaitable[None]:
+        reqId = self.client.getReqId()
+        future = self.wrapper.startReq(reqId)
+        self.client.reqPositionsMulti(reqId, account, modelCode)
         return future
 
     def reqContractDetailsAsync(
