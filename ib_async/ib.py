@@ -2067,16 +2067,6 @@ class IB:
                 if fetchFields & StartupFetch.ACCOUNT_UPDATES:
                     reqs["account updates"] = self.reqAccountUpdatesAsync(account)
 
-            # if len(accounts) <= self.MaxSyncedSubAccounts:
-            #     # for acc in accounts:
-            #     # reqs[f"positions for {acc}"] = self.reqPositionsMultiAsync(acc)
-
-            #     if fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES:
-            #         for acc in accounts:
-            #             reqs[f"account updates for {acc}"] = (
-            #                 self.reqAccountUpdatesMultiAsync(acc)
-            #             )
-
             # run initializing requests concurrently and log if any times out
             tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
             errors = []
@@ -2087,8 +2077,11 @@ class IB:
                     errors.append(msg)
                     self._logger.error(msg)
 
-            # For FA accounts, serially subscribe to each account and wait for
-            # the 'accountDownloadEnd' signal to ensure all data is loaded.
+            # To get portfolios for multiple accounts we have to subscribe to each
+            # account serially to ensure all data is loaded. We have to do it serially
+            # because IB API sends back a generic accountDownloadEnd signal when it
+            # finishes sending the data for the first account, so we cannot subscribe
+            # to multiple accounts at once.
             if len(accounts) <= self.MaxSyncedSubAccounts:
                 for acc in accounts:
                     try:
