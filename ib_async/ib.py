@@ -48,7 +48,6 @@ from ib_async.order import (
     LimitOrder,
     Order,
     OrderState,
-    OrderStateNumeric,
     OrderStatus,
     StopOrder,
     Trade,
@@ -1784,6 +1783,7 @@ class IB:
         exerciseQuantity: int,
         account: str,
         override: int,
+        manualOrderTime: str,
     ):
         """
         Exercise an options contract.
@@ -1800,10 +1800,17 @@ class IB:
             override:
                 * 0 = no override
                 * 1 = override the system's natural action
+            manualOrderTime: Manual Order Time
         """
         reqId = self.client.getReqId()
         self.client.exerciseOptions(
-            reqId, contract, exerciseAction, exerciseQuantity, account, override
+            reqId,
+            contract,
+            exerciseAction,
+            exerciseQuantity,
+            account,
+            override,
+            manualOrderTime,
         )
 
     def reqNewsProviders(self) -> list[NewsProvider]:
