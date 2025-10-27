@@ -10,12 +10,72 @@ from collections import deque
 from typing import Any, Callable, Deque, List, Optional
 
 from eventkit import Event
+from google.protobuf.message import Message
 
 from .connection import Connection
 from .contract import Contract
 from .decoder import Decoder
+from .message import MessageId
 from .objects import ConnectionStats, WshEventData
-from .util import dataclassAsTuple, getLoop, run, UNSET_DOUBLE, UNSET_INTEGER
+from .protobuf.AccountSummaryRequest_pb2 import (
+    AccountSummaryRequest as AccountSummaryRequestProto,
+)
+from .protobuf.AllOpenOrdersRequest_pb2 import (
+    AllOpenOrdersRequest as AllOpenOrdersRequestProto,
+)
+from .protobuf.AutoOpenOrdersRequest_pb2 import (
+    AutoOpenOrdersRequest as AutoOpenOrdersRequestProto,
+)
+from .protobuf.CancelAccountSummary_pb2 import (
+    CancelAccountSummary as CancelAccountSummaryProto,
+)
+from .protobuf.CancelOrderRequest_pb2 import (
+    CancelOrderRequest as CancelOrderRequestProto,
+)
+from .protobuf.CancelPositions_pb2 import CancelPositions as CancelPositionsProto
+from .protobuf.CancelHeadTimestamp_pb2 import (
+    CancelHeadTimestamp as CancelHeadTimestampProto,
+)
+from .protobuf.CompletedOrdersRequest_pb2 import (
+    CompletedOrdersRequest as CompletedOrdersRequestProto,
+)
+from .protobuf.CancelHistoricalData_pb2 import (
+    CancelHistoricalData as CancelHistoricalDataProto,
+)
+from .protobuf.ContractDataRequest_pb2 import (
+    ContractDataRequest as ContractDataRequestProto,
+)
+from .protobuf.CurrentTimeInMillisRequest_pb2 import (
+    CurrentTimeInMillisRequest as CurrentTimeInMillisRequestProto,
+)
+from .protobuf.CurrentTimeRequest_pb2 import (
+    CurrentTimeRequest as CurrentTimeRequestProto,
+)
+from .protobuf.IdsRequest_pb2 import IdsRequest as IdsRequestProto
+from .protobuf.ManagedAccountsRequest_pb2 import (
+    ManagedAccountsRequest as ManagedAccountsRequestProto,
+)
+from .protobuf.OpenOrdersRequest_pb2 import OpenOrdersRequest as OpenOrdersRequestProto
+
+from .protobuf.PositionsRequest_pb2 import PositionsRequest as PositionsRequestProto
+from .protobuf.StartApiRequest_pb2 import StartApiRequest as StartApiRequestProto
+from .protobuf_converters.account_converters import (
+    createAccountDataRequestProto,
+    createAccountMultiRequestProto,
+    createCancelAccMultiRequestProto,
+)
+from .protobuf_converters.contract_converters import (
+    createContractProto,
+    createMarketRuleRequestProto,
+    createMatchingSymbolsRequestProto,
+    createSecDefOptParamsRequestProto,
+)
+from .protobuf_converters.historical_data_converters import (
+    createHeadTimestampRequestProto,
+    createHistoricalDataRequestProto,
+)
+from .protobuf_converters.trade_converter import createExecutionRequestProto
+from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
 
 
 class Client:
@@ -84,8 +144,8 @@ class Client:
     MaxRequests = 45
     RequestsInterval = 1
 
-    MinClientVersion = 157
-    MaxClientVersion = 178
+    MinClientVersion = 100
+    MaxClientVersion = 216  # Updated to support Protobuf
 
     DISCONNECTED, CONNECTING, CONNECTED = range(3)
 
@@ -113,6 +173,7 @@ class Client:
         self.clientId = -1
         self.optCapab = ""
         self.connectOptions = b""
+        self._hasReqId = False  # Initialize _hasReqId in __init__
         self.reset()
 
     def reset(self):
@@ -132,6 +193,10 @@ class Client:
 
     def serverVersion(self) -> int:
         return self._serverVersion
+
+    def useProtoBuf(self) -> bool:
+        result = self.serverVersion() >= 201  # min protobuf server version
+        return result
 
     def run(self):
         loop = getLoop()
@@ -207,7 +272,7 @@ class Client:
     async def connectAsync(self, host, port, clientId, timeout=2.0):
         try:
             self._logger.info(
-                f"Connecting to {host}:{port} with clientId {clientId}..."
+                "Connecting to %s:%s with clientId %s...", host, port, clientId
             )
             self.host = host
             self.port = int(port)
@@ -243,117 +308,9 @@ class Client:
         self.conn.disconnect()
         self.reset()
 
-    def send(self, *fields, makeEmpty=True):
-        """Serialize and send the given fields using the IB socket protocol.
-
-        if 'makeEmpty' is True (default), then the IBKR values representing "no value"
-        become the empty string."""
-        if not self.isConnected():
-            raise ConnectionError("Not connected")
-
-        # fmt: off
-        FORMAT_HANDLERS: dict[Any, Callable[[Any], str]] = {
-            # Contracts are formatted in IBKR null delimiter format
-            Contract: lambda c: "\0".join([
-                str(f)
-                for f in (
-                    c.conId,
-                    c.symbol,
-                    c.secType,
-                    c.lastTradeDateOrContractMonth,
-                    c.strike,
-                    c.right,
-                    c.multiplier,
-                    c.exchange,
-                    c.primaryExchange,
-                    c.currency,
-                    c.localSymbol,
-                    c.tradingClass,
-                )
-            ]),
-
-            # Float conversion has 3 stages:
-            #  - Convert 'IBKR unset' double to empty (if requested)
-            #  - Convert infinity to 'Infinite' string (if appropriate)
-            #  - else, convert float to string normally
-            float: lambda f: ""
-            if (makeEmpty and f == UNSET_DOUBLE)
-            else ("Infinite" if (f == math.inf) else str(f)),
-
-            # Int conversion has 2 stages:
-            #  - Convert 'IBKR unset' to empty (if requested)
-            #  - else, convert int to string normally
-            int: lambda f: "" if makeEmpty and f == UNSET_INTEGER else str(f),
-
-            # None is always just an empty string.
-            # (due to a quirk of Python, 'type(None)' is how you properly generate the NoneType value)
-            type(None): lambda _: "",
-
-            # Strings are always strings
-            str: lambda s: s,
-
-            # Bools become strings "1" or "0"
-            bool: lambda b: "1" if b else "0",
-
-            # Lists of tags become semicolon-appended KV pairs
-            list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
-        }
-        # fmt: on
-
-        # start of new message
-        msg = io.StringIO()
-
-        for field in fields:
-            # Fetch type converter for this field (falls back to 'str(field)' as a default for unmatched types)
-            # (extra `isinstance()` wrapper needed here because Contract subclasses are their own type, but we want
-            #  to only match against the Contract parent class for formatting operations)
-            convert = FORMAT_HANDLERS.get(
-                Contract if isinstance(field, Contract) else type(field), str
-            )
-
-            # Convert field to IBKR protocol string part
-            s = convert(field)
-
-            # Append converted IBKR protocol string to message buffer
-            msg.write(s)
-            msg.write("\0")
-
-        generated = msg.getvalue()
-        self.sendMsg(generated)
-
-    def sendMsg(self, msg: str):
-        loop = getLoop()
-        t = loop.time()
-        times = self._timeQ
-        msgs = self._msgQ
-        while times and t - times[0] > self.RequestsInterval:
-            times.popleft()
-
-        if msg:
-            msgs.append(msg)
-
-        while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
-            msg = msgs.popleft()
-            self.conn.sendMsg(self._prefix(msg.encode()))
-            times.append(t)
-            if self._logger.isEnabledFor(logging.DEBUG):
-                self._logger.debug(">>> %s", msg[:-1].replace("\0", ","))
-
-        if msgs:
-            if not self._isThrottling:
-                self._isThrottling = True
-                self.throttleStart.emit()
-                self._logger.debug("Started to throttle requests")
-            loop.call_at(times[0] + self.RequestsInterval, self.sendMsg, None)
-        else:
-            if self._isThrottling:
-                self._isThrottling = False
-                self.throttleEnd.emit()
-                self._logger.debug("Stopped to throttle requests")
-
     def _prefix(self, msg):
         # prefix a message with its length
-        return struct.pack(">I", len(msg)) + msg
+        return struct.pack(f">I{len(msg)}s", len(msg), msg)
 
     def _onSocketHasData(self, data):
         debug = self._logger.isEnabledFor(logging.DEBUG)
@@ -364,54 +321,54 @@ class Client:
         self._numBytesRecv += len(data)
 
         while True:
-            if len(self._data) <= 4:
+            if len(self._data) < 4:
+                # Not enough data for the length prefix
                 break
 
-            # 4 byte prefix tells the message length
+            # 4-byte prefix tells the message length
             msgEnd = 4 + struct.unpack(">I", self._data[:4])[0]
             if len(self._data) < msgEnd:
-                # insufficient data for now
+                # Incomplete message in buffer
                 break
 
-            msg = self._data[4:msgEnd].decode(errors="backslashreplace")
+            payload = self._data[4:msgEnd]
             self._data = self._data[msgEnd:]
-            fields = msg.split("\0")
-            fields.pop()  # pop off last empty element
             self._numMsgRecv += 1
 
-            if debug:
-                self._logger.debug("<<< %s", ",".join(fields))
+            if not self._serverVersion:
+                # First message is always the legacy server version string
+                fields = payload.decode(errors="backslashreplace").split("\0")
+                fields.pop()
 
-            if not self._serverVersion and len(fields) == 2:
-                # this concludes the handshake
+                if debug:
+                    self._logger.debug("<<< %s", ",".join(fields))
+
                 version, _connTime = fields
                 self._serverVersion = int(version)
-                if self._serverVersion < self.MinClientVersion:
-                    self._onSocketDisconnected("TWS/gateway version must be >= 972")
+                self._logger.info(
+                    "Established connection, server version %s", self._serverVersion
+                )
+
+                if self._serverVersion < 201:  # MIN_SERVER_VER_PROTOBUF
+                    self._onSocketDisconnected(
+                        f"Server version {self._serverVersion} does not support Protobuf. Disconnecting."
+                    )
                     return
+
                 self.decoder.serverVersion = self._serverVersion
                 self.connState = Client.CONNECTED
                 self.startApi()
-                self.wrapper.connectAck()
-                self._logger.info(f"Logged on to server version {self._serverVersion}")
+                self._logger.info("Logged on to server version %s", self._serverVersion)
             else:
                 if not self._apiReady:
-                    # snoop for nextValidId and managedAccounts response,
-                    # when both are in then the client is ready
-                    msgId = int(fields[0])
-                    if msgId == 9:
-                        _, _, validId = fields
-                        self.updateReqId(int(validId))
-                        self._hasReqId = True
-                    elif msgId == 15:
-                        _, _, accts = fields
-                        self._accounts = [a for a in accts.split(",") if a]
                     if self._hasReqId and self._accounts:
                         self._apiReady = True
                         self.apiStart.emit()
-
-                # decode and handle the message
-                self.decoder.interpret(fields)
+                if debug:
+                    self._logger.debug("<<< %r", payload)
+                # After handshake, all incoming messages are treated as Protobuf
+                # The entire payload (ID + data) is passed to the decoder
+                self.decoder.processProtoBuf(payload)
 
         if self._tcpDataProcessed:
             self._tcpDataProcessed()
@@ -719,29 +676,40 @@ class Client:
         self.send(*fields)
 
     def reqOpenOrders(self):
-        self.send(5, 1)
-
-    def reqAccountUpdates(self, subscribe, acctCode):
-        self.send(6, 2, subscribe, acctCode)
-
-    def reqExecutions(self, reqId, execFilter):
-        self.send(
-            7,
-            3,
-            reqId,
-            execFilter.clientId,
-            execFilter.acctCode,
-            execFilter.time,
-            execFilter.symbol,
-            execFilter.secType,
-            execFilter.exchange,
-            execFilter.side,
+        openOrdersRequestProto = OpenOrdersRequestProto()
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_OPEN_ORDERS),
+            openOrdersRequestProto,
         )
 
-    def reqIds(self, numIds):
-        self.send(8, 1, numIds)
+    def reqAccountUpdates(self, subscribe, acctCode):
+        proto = createAccountDataRequestProto(subscribe, acctCode)
+        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_ACCT_DATA), proto)
+
+    def reqExecutions(self, reqId, execFilter):
+        executionRequestProto = createExecutionRequestProto(reqId, execFilter)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_EXECUTIONS), executionRequestProto
+        )
+
+    def reqIds(self, numIds: int):
+        """Request a new request ID."""
+        self._logger.debug("Calling reqIds (Protobuf)")
+        proto = IdsRequestProto()
+        proto.numIds = numIds
+        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_IDS), proto)
 
     def reqContractDetails(self, reqId, contract):
+        contractDetailsRequestProto = ContractDataRequestProto()
+        contractDetailsRequestProto.reqId = reqId
+        contractProto = createContractProto(contract, None)
+        contractDetailsRequestProto.contract.CopyFrom(contractProto)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_CONTRACT_DATA),
+            contractDetailsRequestProto,
+        )
+
+    def reqContractDetailsLegacy(self, reqId, contract):
         fields = [
             9,
             8,
@@ -756,6 +724,128 @@ class Client:
             fields += [contract.issuerId]
 
         self.send(*fields)
+
+    def sendProto(self, msgId: int, proto: Message):
+        # TODO implement throtling
+        body = proto.SerializeToString()
+        header = msgId.to_bytes(4, "big")
+        msg = header + body
+        self.conn.sendMsg(self._prefix(msg))
+        if self._logger.isEnabledFor(logging.DEBUG):
+            self._logger.debug(
+                "Sending Protobuf message: msgId=%s, proto=%r, body=%r",
+                msgId,
+                proto,
+                body,
+            )
+
+    def send(self, *fields, makeEmpty=True):
+        """Serialize and send the given fields using the IB socket protocol.
+
+        if 'makeEmpty' is True (default), then the IBKR values representing "no value"
+        become the empty string."""
+        if not self.isConnected():
+            raise ConnectionError("Not connected")
+
+        # fmt: off
+        FORMAT_HANDLERS: dict[Any, Callable[[Any], str]] = {
+            # Contracts are formatted in IBKR null delimiter format
+            Contract: lambda c: "\0".join([
+                str(f)
+                for f in (
+                    c.conId,
+                    c.symbol,
+                    c.secType,
+                    c.lastTradeDateOrContractMonth,
+                    c.strike,
+                    c.right,
+                    c.multiplier,
+                    c.exchange,
+                    c.primaryExchange,
+                    c.currency,
+                    c.localSymbol,
+                    c.tradingClass,
+                )
+            ]),
+
+            # Float conversion has 3 stages:
+            #  - Convert 'IBKR unset' double to empty (if requested)
+            #  - Convert infinity to 'Infinite' string (if appropriate)
+            #  - else, convert float to string normally
+            float: lambda f: ""
+            if (makeEmpty and f == UNSET_DOUBLE)
+            else ("Infinite" if (f == math.inf) else str(f)),
+
+            # Int conversion has 2 stages:
+            #  - Convert 'IBKR unset' to empty (if requested)
+            #  - else, convert int to string normally
+            int: lambda f: "" if makeEmpty and f == UNSET_INTEGER else str(f),
+
+            # None is always just an empty string.
+            # (due to a quirk of Python, 'type(None)' is how you properly generate the NoneType value)
+            type(None): lambda _: "",
+
+            # Strings are always strings
+            str: lambda s: s,
+
+            # Bools become strings "1" or "0"
+            bool: lambda b: "1" if b else "0",
+
+            # Lists of tags become semicolon-appended KV pairs
+            list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
+        }
+        # fmt: on
+
+        # start of new message
+        msg = io.StringIO()
+
+        for field in fields:
+            # Fetch type converter for this field (falls back to 'str(field)' as a default for unmatched types)
+            # (extra `isinstance()` wrapper needed here because Contract subclasses are their own type, but we want
+            #  to only match against the Contract parent class for formatting operations)
+            convert = FORMAT_HANDLERS.get(
+                Contract if isinstance(field, Contract) else type(field), str
+            )
+
+            # Convert field to IBKR protocol string part
+            s = convert(field)
+
+            # Append converted IBKR protocol string to message buffer
+            msg.write(s)
+            msg.write("\0")
+
+        generated = msg.getvalue()
+        self.sendMsg(generated)
+
+    def sendMsg(self, msg: str):
+        loop = getLoop()
+        t = loop.time()
+        times = self._timeQ
+        msgs = self._msgQ
+        while times and t - times[0] > self.RequestsInterval:
+            times.popleft()
+
+        if msg:
+            msgs.append(msg)
+
+        while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
+            msg = msgs.popleft()
+            self.conn.sendMsg(self._prefix(msg.encode()))
+            times.append(t)
+            if self._logger.isEnabledFor(logging.DEBUG):
+                self._logger.debug(">>> %s", msg[:-1].replace("\0", ","))
+
+        if msgs:
+            if not self._isThrottling:
+                self._isThrottling = True
+                self.throttleStart.emit()
+                self._logger.debug("Started to throttle requests")
+            loop.call_at(times[0] + self.RequestsInterval, self.sendMsg, None)
+        else:
+            if self._isThrottling:
+                self._isThrottling = False
+                self.throttleEnd.emit()
+                self._logger.debug("Stopped to throttle requests")
 
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):
         self.send(
@@ -791,14 +881,25 @@ class Client:
     def setServerLogLevel(self, logLevel):
         self.send(14, 1, logLevel)
 
-    def reqAutoOpenOrders(self, bAutoBind):
-        self.send(15, 1, bAutoBind)
+    def reqAutoOpenOrders(self, bAutoBind: bool):
+        autoOpenOrdersRequestProto = AutoOpenOrdersRequestProto()
+        autoOpenOrdersRequestProto.autoBind = bAutoBind
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_AUTO_OPEN_ORDERS),
+            autoOpenOrdersRequestProto,
+        )
 
     def reqAllOpenOrders(self):
-        self.send(16, 1)
+        allOpenOrdersRequestProto = AllOpenOrdersRequestProto()
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_ALL_OPEN_ORDERS),
+            allOpenOrdersRequestProto,
+        )
 
     def reqManagedAccts(self):
-        self.send(17, 1)
+        self._logger.debug("Calling reqManagedAccts (Protobuf)")
+        proto = ManagedAccountsRequestProto()
+        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_MANAGED_ACCTS), proto)
 
     def requestFA(self, faData):
         self.send(18, 1, faData)
@@ -819,27 +920,28 @@ class Client:
         keepUpToDate,
         chartOptions,
     ):
-        fields = [
-            20,
+        historicalDataRequestProto = createHistoricalDataRequestProto(
             reqId,
             contract,
-            contract.includeExpired,
             endDateTime,
-            barSizeSetting,
             durationStr,
-            useRTH,
+            barSizeSetting,
             whatToShow,
+            useRTH,
             formatDate,
-        ]
+            keepUpToDate,
+            chartOptions,
+        )
 
-        if contract.secType == "BAG":
-            legs = contract.comboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [leg.conId, leg.ratio, leg.action, leg.exchange]
-
-        fields += [keepUpToDate, chartOptions]
-        self.send(*fields)
+        # if contract.secType == "BAG":
+        #     legs = contract.comboLegs or []
+        #     fields += [len(legs)]
+        #     for leg in legs:
+        #         fields += [leg.conId, leg.ratio, leg.action, leg.exchange]
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_HISTORICAL_DATA),
+            historicalDataRequestProto,
+        )
 
     def exerciseOptions(
         self, reqId, contract, exerciseAction, exerciseQuantity, account, override
@@ -908,10 +1010,25 @@ class Client:
         self.send(24, 1)
 
     def cancelHistoricalData(self, reqId):
-        self.send(25, 1, reqId)
+        cancelRequest = CancelHistoricalDataProto()
+        cancelRequest.reqId = reqId
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.CANCEL_HISTORICAL_DATA),
+            cancelRequest)
 
     def reqCurrentTime(self):
-        self.send(49, 1)
+        currentTimeRequestProto = CurrentTimeRequestProto()
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_CURRENT_TIME),
+            currentTimeRequestProto,
+        )
+
+    def reqCurrentTimeMili(self):
+        currentTimeMiliRequestProto = CurrentTimeInMillisRequestProto()
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_CURRENT_TIME_IN_MILLIS),
+            currentTimeMiliRequestProto,
+        )
 
     def reqRealTimeBars(
         self, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
@@ -985,16 +1102,26 @@ class Client:
         self.send(59, 1, marketDataType)
 
     def reqPositions(self):
-        self.send(61, 1)
-
-    def reqAccountSummary(self, reqId, groupName, tags):
-        self.send(62, 1, reqId, groupName, tags)
-
-    def cancelAccountSummary(self, reqId):
-        self.send(63, 1, reqId)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_POSITIONS), PositionsRequestProto()
+        )
 
     def cancelPositions(self):
-        self.send(64, 1)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.CANCEL_POSITIONS),
+            CancelPositionsProto(),
+        )
+
+    def reqAccountSummary(self, reqId, groupName, tags):
+        proto = AccountSummaryRequestProto(reqId=reqId, group=groupName, tags=tags)
+        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_ACCOUNT_SUMMARY), proto)
+
+    def cancelAccountSummary(self, reqId):
+        cancelAccountSummaryProto = CancelAccountSummaryProto(reqId=reqId)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.CANCEL_ACCOUNT_SUMMARY),
+            cancelAccountSummaryProto,
+        )
 
     def verifyRequest(self, apiName, apiVersion):
         self.send(65, 1, apiName, apiVersion)
@@ -1015,7 +1142,14 @@ class Client:
         self.send(70, 1, reqId)
 
     def startApi(self):
-        self.send(71, 2, self.clientId, self.optCapab)
+        startApiRequestProto = StartApiRequestProto()
+        if self.clientId >= 0:  # Assuming 0 or negative clientId is invalid
+            startApiRequestProto.clientId = self.clientId
+        if self.optCapab:  # Only set if not an empty string
+            startApiRequestProto.optionalCapabilities = self.optCapab
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.START_API), startApiRequestProto
+        )
 
     def verifyAndAuthRequest(self, apiName, apiVersion, opaqueIsvKey):
         self.send(72, 1, apiName, apiVersion, opaqueIsvKey)
@@ -1029,11 +1163,22 @@ class Client:
     def cancelPositionsMulti(self, reqId):
         self.send(75, 1, reqId)
 
-    def reqAccountUpdatesMulti(self, reqId, account, modelCode, ledgerAndNLV):
-        self.send(76, 1, reqId, account, modelCode, ledgerAndNLV)
+    def reqAccountUpdatesMulti(
+        self, reqId: int, account: str, modelCode: str, ledgerAndNLV: bool
+    ):
+        reqAccUpdatesMultiProto = createAccountMultiRequestProto(
+            reqId, account, modelCode, ledgerAndNLV
+        )
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_ACCOUNT_UPDATES_MULTI),
+            reqAccUpdatesMultiProto,
+        )
 
     def cancelAccountUpdatesMulti(self, reqId):
-        self.send(77, 1, reqId)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.CANCEL_ACCOUNT_UPDATES_MULTI),
+            createCancelAccMultiRequestProto(reqId),
+        )
 
     def reqSecDefOptParams(
         self,
@@ -1043,13 +1188,16 @@ class Client:
         underlyingSecType,
         underlyingConId,
     ):
-        self.send(
-            78,
+        secDefOptParamsRequestProto = createSecDefOptParamsRequestProto(
             reqId,
             underlyingSymbol,
             futFopExchange,
             underlyingSecType,
             underlyingConId,
+        )
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_SEC_DEF_OPT_PARAMS),
+            secDefOptParamsRequestProto,
         )
 
     def reqSoftDollarTiers(self, reqId):
@@ -1059,7 +1207,11 @@ class Client:
         self.send(80)
 
     def reqMatchingSymbols(self, reqId, pattern):
-        self.send(81, reqId, pattern)
+        matchingSymbolsRequestProto = createMatchingSymbolsRequestProto(reqId, pattern)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_MATCHING_SYMBOLS),
+            matchingSymbolsRequestProto,
+        )
 
     def reqMktDepthExchanges(self):
         self.send(82)
@@ -1095,8 +1247,20 @@ class Client:
         )
 
     def reqHeadTimeStamp(self, reqId, contract, whatToShow, useRTH, formatDate):
-        self.send(
-            87, reqId, contract, contract.includeExpired, useRTH, whatToShow, formatDate
+        headTimestampRequestProto = createHeadTimestampRequestProto(
+            reqId, contract, whatToShow, useRTH != 0, formatDate
+        )
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_HEAD_TIMESTAMP),
+            headTimestampRequestProto,
+        )
+
+    def cancelHeadTimeStamp(self, reqId):
+        cancelHeadTimestampRequestProto = CancelHeadTimestampProto()
+        cancelHeadTimestampRequestProto.reqId = reqId
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.CANCEL_HEAD_TIMESTAMP),
+            cancelHeadTimestampRequestProto,
         )
 
     def reqHistogramData(self, tickerId, contract, useRTH, timePeriod):
@@ -1105,11 +1269,11 @@ class Client:
     def cancelHistogramData(self, tickerId):
         self.send(89, tickerId)
 
-    def cancelHeadTimeStamp(self, reqId):
-        self.send(90, reqId)
-
-    def reqMarketRule(self, marketRuleId):
-        self.send(91, marketRuleId)
+    def reqMarketRule(self, marketRuleId: int):
+        marketRuleRequestProto = createMarketRuleRequestProto(marketRuleId)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_MARKET_RULE), marketRuleRequestProto
+        )
 
     def reqPnL(self, reqId, account, modelCode):
         self.send(92, reqId, account, modelCode)
@@ -1155,8 +1319,13 @@ class Client:
     def cancelTickByTickData(self, reqId):
         self.send(98, reqId)
 
-    def reqCompletedOrders(self, apiOnly):
-        self.send(99, apiOnly)
+    def reqCompletedOrders(self, apiOnly: bool):
+        completedOrdersRequestProto = CompletedOrdersRequestProto()
+        completedOrdersRequestProto.apiOnly = apiOnly
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_COMPLETED_ORDERS),
+            completedOrdersRequestProto,
+        )
 
     def reqWshMetaData(self, reqId):
         self.send(100, reqId)

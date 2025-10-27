@@ -2,9 +2,28 @@
 
 import datetime as dt
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, NamedTuple, Optional
 
 import ib_async.util as util
+
+
+class FundAssetType(Enum):
+    NoneItem = ("None", "None")
+    Others = (("000", "Others"),)
+    MoneyMarket = ("001", "Money Market")
+    FixedIncome = ("002", "Fixed Income")
+    MultiAsset = ("003", "Multi-asset")
+    Equity = ("004", "Equity")
+    Sector = ("005", "Sector")
+    Guaranteed = ("006", "Guaranteed")
+    Alternative = ("007", "Alternative")
+
+
+class FundDistributionPolicyIndicator(Enum):
+    NoneItem = ("None", "None")
+    AccumulationFund = ("N", "Accumulation Fund")
+    IncomeFund = ("Y", "Income Fund")
 
 
 @dataclass
@@ -82,10 +101,11 @@ class Contract:
             price for Delta-Neutral combo orders.
     """
 
-    secType: str = ""
     conId: int = 0
     symbol: str = ""
+    secType: str = ""
     lastTradeDateOrContractMonth: str = ""
+    lastTradeDate = ""
     strike: float = 0.0
     right: str = ""
     multiplier: str = ""
@@ -100,7 +120,7 @@ class Contract:
     description: str = ""
     issuerId: str = ""
     comboLegsDescrip: str = ""
-    comboLegs: List["ComboLeg"] = field(default_factory=list)
+    comboLegs: list["ComboLeg"] = field(default_factory=list)
     deltaNeutralContract: Optional["DeltaNeutralContract"] = None
 
     @staticmethod
@@ -250,7 +270,7 @@ class Option(Contract):
         """
         Contract.__init__(
             self,
-            "OPT",
+            secType="OPT",
             symbol=symbol,
             lastTradeDateOrContractMonth=lastTradeDateOrContractMonth,
             strike=strike,
@@ -290,7 +310,7 @@ class Future(Contract):
         """
         Contract.__init__(
             self,
-            "FUT",
+            secType="FUT",
             symbol=symbol,
             lastTradeDateOrContractMonth=lastTradeDateOrContractMonth,
             exchange=exchange,
@@ -323,7 +343,7 @@ class ContFuture(Contract):
         """
         Contract.__init__(
             self,
-            "CONTFUT",
+            secType="CONTFUT",
             symbol=symbol,
             exchange=exchange,
             localSymbol=localSymbol,
@@ -357,7 +377,7 @@ class Forex(Contract):
             currency = currency or pair[3:]
 
         Contract.__init__(
-            self, "CASH", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self, secType="CASH", symbol=symbol, exchange=exchange, currency=currency, **kwargs
         )
 
     def __repr__(self):
@@ -392,7 +412,7 @@ class Index(Contract):
             currency: Underlying currency.
         """
         Contract.__init__(
-            self, "IND", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self, secType="IND", symbol=symbol, exchange=exchange, currency=currency, **kwargs
         )
 
 
@@ -409,7 +429,7 @@ class CFD(Contract):
             currency: Underlying currency.
         """
         Contract.__init__(
-            self, "CFD", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self, secType="CFD", symbol=symbol, exchange=exchange, currency=currency, **kwargs
         )
 
 
@@ -426,14 +446,14 @@ class Commodity(Contract):
             currency: Underlying currency.
         """
         Contract.__init__(
-            self, "CMDTY", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self, secType="CMDTY", symbol=symbol, exchange=exchange, currency=currency, **kwargs
         )
 
 
 class Bond(Contract):
     def __init__(self, **kwargs):
         """Bond."""
-        Contract.__init__(self, "BOND", **kwargs)
+        Contract.__init__(self, secType="BOND", **kwargs)
 
 
 class FuturesOption(Contract):
@@ -467,7 +487,7 @@ class FuturesOption(Contract):
         """
         Contract.__init__(
             self,
-            "FOP",
+            secType="FOP",
             symbol=symbol,
             lastTradeDateOrContractMonth=lastTradeDateOrContractMonth,
             strike=strike,
@@ -482,19 +502,19 @@ class FuturesOption(Contract):
 class MutualFund(Contract):
     def __init__(self, **kwargs):
         """Mutual fund."""
-        Contract.__init__(self, "FUND", **kwargs)
+        Contract.__init__(self, secType="FUND", **kwargs)
 
 
 class Warrant(Contract):
     def __init__(self, **kwargs):
         """Warrant option."""
-        Contract.__init__(self, "WAR", **kwargs)
+        Contract.__init__(self, secType="WAR", **kwargs)
 
 
 class Bag(Contract):
     def __init__(self, **kwargs):
         """Bag contract."""
-        Contract.__init__(self, "BAG", **kwargs)
+        Contract.__init__(self, secType="BAG", **kwargs)
 
 
 class Crypto(Contract):
@@ -595,6 +615,28 @@ class ContractDetails:
     nextOptionType: str = ""
     nextOptionPartial: bool = False
     notes: str = ""
+    # FUND values
+    fundName = ""
+    fundFamily = ""
+    fundType = ""
+    fundFrontLoad = ""
+    fundBackLoad = ""
+    fundBackLoadTimeInterval = ""
+    fundManagementFee = ""
+    fundClosed = False
+    fundClosedForNewInvestors = False
+    fundClosedForNewMoney = False
+    fundNotifyAmount = ""
+    fundMinimumInitialPurchase = ""
+    fundSubsequentMinimumPurchase = ""
+    fundBlueSkyStates = ""
+    fundBlueSkyTerritories = ""
+    fundDistributionPolicyIndicator = FundDistributionPolicyIndicator.NoneItem
+    fundAssetType = FundAssetType.NoneItem
+    ineligibilityReasonList = None
+    eventContract1 = ""
+    eventContractDescription1 = ""
+    eventContractDescription2 = ""
 
     def tradingSessions(self) -> List[TradingSession]:
         return self._parseSessions(self.tradingHours)

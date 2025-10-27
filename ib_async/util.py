@@ -9,6 +9,7 @@ import signal
 import sys
 import time
 from dataclasses import fields, is_dataclass
+from decimal import Decimal
 from typing import (
     Any,
     AsyncIterator,
@@ -38,6 +39,7 @@ Event to emit global exceptions.
 EPOCH: Final = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
 UNSET_INTEGER: Final = 2**31 - 1
 UNSET_DOUBLE: Final = sys.float_info.max
+UNSET_DECIMAL = Decimal(2**127 - 1)
 
 Time_t: TypeAlias = dt.time | dt.datetime
 
@@ -598,3 +600,30 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
         t = dt.datetime.strptime(ss, "%Y%m%d%H:%M:%S")
 
     return t
+
+
+def decimalMaxString(val: Decimal):
+    val = Decimal(val)
+    return f"{val:f}" if val != UNSET_DECIMAL else ""
+
+
+def floatMaxString(val: float):
+    if val is None:
+        return ""
+    return (
+        f"{val:.8f}".rstrip("0").rstrip(".").rstrip(",") if val != UNSET_DOUBLE else ""
+    )
+
+
+def getEnumTypeFromString(cls, stringIn):
+    for item in cls:
+        if item.value[0] == stringIn:
+            return item
+    return listOfValues(cls)[0]
+
+
+def listOfValues(cls):
+    return list(map(lambda c: c, cls))
+
+def isValidIntValue(val: int) -> bool:
+    return val != UNSET_INTEGER

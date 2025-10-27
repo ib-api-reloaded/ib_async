@@ -15,3 +15,6 @@ ib_async.egg-info
 poetry.lock
 *.csv
 *.json
+proto/*
+**/__pycache__/
+#pythonclient/*

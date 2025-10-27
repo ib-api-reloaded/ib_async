@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, cast, Final, Optional, TYPE_CHECKING, TypeAlias, Union
 
+import eventkit as ev
+
 from ib_async.contract import (
     Contract,
     ContractDescription,
@@ -182,7 +184,7 @@ class Wrapper:
     portfolio: dict[str, dict[int, PortfolioItem]] = field(init=False)
     """ account -> conId -> PortfolioItem """
 
-    positions: dict[str, dict[int, Position]] = field(init=False)
+    positions: defaultdict[str, dict[int, Position]] = field(init=False)
     """ account -> conId -> Position """
 
     trades: dict[OrderKeyType, Trade] = field(init=False)
@@ -190,6 +192,8 @@ class Wrapper:
 
     permId2Trade: dict[int, Trade] = field(init=False)
     """ permId -> Trade """
+    _isReady: bool = field(init=False, default=False)
+    """ wrapper initial status state """
 
     fills: dict[str, Fill] = field(init=False)
     """ execId -> Fill """
@@ -259,6 +263,7 @@ class Wrapper:
         self.defaultTimezone = self.defaults.timezone
         self.defaultEmptyPrice = self.defaults.emptyPrice
         self.defaultEmptySize = self.defaults.emptySize
+        self.response_bus = ev.Event("Response bus")
 
         self.reset()
 
@@ -269,6 +274,7 @@ class Wrapper:
         self.positions = defaultdict(dict)
         self.trades = {}
         self.permId2Trade = {}
+        self._isReady = False
         self.fills = {}
         self.newsTicks = []
         self.msgId2NewsBulletin = {}
@@ -420,112 +426,72 @@ class Wrapper:
 
     # wrapper methods
 
-    def connectAck(self):
-        pass
-
     def nextValidId(self, reqId: int):
-        pass
+        self.ib.client.updateReqId(reqId)
+        self.ib.client._hasReqId = True
 
     def managedAccounts(self, accountsList: str):
-        self.accounts = [a for a in accountsList.split(",") if a]
+        self.accounts = (
+            accountsList.split(",") if isinstance(accountsList, str) else accountsList
+        )
+        self.ib.client._accounts = self.accounts
 
     def updateAccountTime(self, timestamp: str):
-        pass
+        self.accountTime = timestamp
 
-    def updateAccountValue(self, tag: str, val: str, currency: str, account: str):
-        key = (account, tag, currency, "")
-        acctVal = AccountValue(account, tag, val, currency, "")
-        self.accountValues[key] = acctVal
-        self.ib.accountValueEvent.emit(acctVal)
+    def updateAccountValue(self, value: AccountValue):
+        key = (value.account, value.tag, value.currency, "")
+        self.accountValues[key] = value
+        if self._isReady:
+            self.ib.accountValueEvent.emit(value)
 
     def accountDownloadEnd(self, _account: str):
         # sent after updateAccountValue and updatePortfolio both finished
-        self._endReq("accountValues")
+        self.response_bus.emit("accountValues", None)
 
-    def accountUpdateMulti(
-        self,
-        reqId: int,
-        account: str,
-        modelCode: str,
-        tag: str,
-        val: str,
-        currency: str,
-    ):
-        key = (account, tag, currency, modelCode)
-        acctVal = AccountValue(account, tag, val, currency, modelCode)
-        self.accountValues[key] = acctVal
-        self.ib.accountValueEvent.emit(acctVal)
+    def accountUpdateMulti(self, reqId: int, value: AccountValue):
+        key = (value.account, value.tag, value.currency, value.modelCode)
+        self.accountValues[key] = value
+        if self._isReady:
+            self.ib.accountValueEvent.emit(value)
+        self.response_bus.emit(reqId, value)
 
     def accountUpdateMultiEnd(self, reqId: int):
-        self._endReq(reqId)
+        self.response_bus.emit(reqId, None)
 
-    def accountSummary(
-        self, _reqId: int, account: str, tag: str, value: str, currency: str
-    ):
-        key = (account, tag, currency)
-        acctVal = AccountValue(account, tag, value, currency, "")
-        self.acctSummary[key] = acctVal
-        self.ib.accountSummaryEvent.emit(acctVal)
+    def accountSummary(self, reqId: int, accountValue: AccountValue):
+        key = (accountValue.account, accountValue.tag, accountValue.currency)
+        self.acctSummary[key] = accountValue
+        if self._isReady:
+            self.ib.accountValueEvent.emit(accountValue)
+        self.response_bus.emit(reqId, accountValue)
 
     def accountSummaryEnd(self, reqId: int):
-        self._endReq(reqId)
+        self.response_bus.emit(reqId, None)
 
-    def updatePortfolio(
-        self,
-        contract: Contract,
-        posSize: float,
-        marketPrice: float,
-        marketValue: float,
-        averageCost: float,
-        unrealizedPNL: float,
-        realizedPNL: float,
-        account: str,
-    ):
-        contract = Contract.recreate(contract)
-        portfItem = PortfolioItem(
-            contract,
-            posSize,
-            marketPrice,
-            marketValue,
-            averageCost,
-            unrealizedPNL,
-            realizedPNL,
-            account,
-        )
-        portfolioItems = self.portfolio[account]
-
-        if posSize == 0:
-            portfolioItems.pop(contract.conId, None)
+    def updatePortfolio(self, portfolioItem: PortfolioItem):
+        account_portfolio = self.portfolio[portfolioItem.account]
+        if portfolioItem.position == 0:
+            account_portfolio.pop(portfolioItem.contract.conId, None)
         else:
-            portfolioItems[contract.conId] = portfItem
+            account_portfolio[portfolioItem.contract.conId] = portfolioItem
 
-        self._logger.info(f"updatePortfolio: {portfItem}")
-        self.ib.updatePortfolioEvent.emit(portfItem)
+        if self._isReady:
+            self.ib.updatePortfolioEvent.emit(portfolioItem)
 
-    def position(
-        self, account: str, contract: Contract, posSize: float, avgCost: float
-    ):
-        contract = Contract.recreate(contract)
-        position = Position(account, contract, posSize, avgCost)
-        positions = self.positions[account]
-
-        # if this updates position to 0 quantity, remove the position
-        if posSize == 0:
-            positions.pop(contract.conId, None)
+    def position(self, position: Position):
+        account_positions = self.positions[position.account]
+        if position.position == 0:
+            account_positions.pop(position.contract.conId, None)
         else:
-            # else, add or replace the position in-place
-            positions[contract.conId] = position
+            account_positions[position.contract.conId] = position
 
-        self._logger.info(f"position: {position}")
-        results = self._results.get("positions")
-
-        if results is not None:
-            results.append(position)
-
-        self.ib.positionEvent.emit(position)
+        if self._isReady:
+            self.ib.positionEvent.emit(position)
+        self.response_bus.emit("position", position)
 
     def positionEnd(self):
-        self._endReq("positions")
+        self.response_bus.emit("position", None)
 
     def positionMulti(
         self,
@@ -573,184 +539,93 @@ class Wrapper:
         pnlSingle.value = value
         self.ib.pnlSingleEvent.emit(pnlSingle)
 
-    def openOrder(
-        self, orderId: int, contract: Contract, order: Order, orderState: OrderState
-    ):
-        """
-        This wrapper is called to:
-
-        * feed in open orders at startup;
-        * feed in open orders or order updates from other clients and TWS
-          if clientId=master id;
-        * feed in manual orders and order updates from TWS if clientId=0;
-        * handle openOrders and allOpenOrders responses.
-        """
-        if order.whatIf:
-            # response to whatIfOrder
-            if float(orderState.initMarginChange) != UNSET_DOUBLE:
-                self._endReq(order.orderId, orderState)
+    def openOrder(self, trade: Trade):
+        if trade.order.whatIf:
+            self.openOrderEnd()
+            return
         else:
-            key = self.orderKey(order.clientId, order.orderId, order.permId)
-            trade = self.trades.get(key)
-            if trade:
-                trade.order.permId = order.permId
-                trade.order.totalQuantity = order.totalQuantity
-                trade.order.lmtPrice = order.lmtPrice
-                trade.order.auxPrice = order.auxPrice
-                trade.order.orderType = order.orderType
-                trade.order.orderRef = order.orderRef
-            else:
-                # ignore '?' values in the order
-                order = Order(
-                    **{k: v for k, v in dataclassAsDict(order).items() if v != "?"}
-                )
-                contract = Contract.recreate(contract)
-                orderStatus = OrderStatus(orderId=orderId, status=orderState.status)
-                trade = Trade(contract, order, orderStatus, [], [])
+            key = self.orderKey(
+                trade.order.clientId, trade.order.orderId, trade.order.permId
+            )
+            existing_trade = self.trades.get(key)
+            if existing_trade:
+                # trade is already known, update it
+                existing_trade.order.permId = trade.order.permId
+                existing_trade.order.totalQuantity = trade.order.totalQuantity
+                existing_trade.order.lmtPrice = trade.order.lmtPrice
+                existing_trade.order.auxPrice = trade.order.auxPrice
+                existing_trade.order.orderType = trade.order.orderType
+                existing_trade.order.orderRef = trade.order.orderRef
+            else:  # new trade
                 self.trades[key] = trade
                 self._logger.info(f"openOrder: {trade}")
 
-            self.permId2Trade.setdefault(order.permId, trade)
-            results = self._results.get("openOrders")
-
-            if results is None:
-                self.ib.openOrderEvent.emit(trade)
-            else:
-                # response to reqOpenOrders or reqAllOpenOrders
-                results.append(trade)
-
-        # make sure that the client issues order ids larger than any
-        # order id encountered (even from other clients) to avoid
-        # "Duplicate order id" error
-        self.ib.client.updateReqId(orderId + 1)
+        self.permId2Trade.setdefault(trade.order.permId, trade)
+        if self._isReady:
+            self.ib.newOrderEvent.emit(trade)
+        self.ib.client.updateReqId(trade.order.orderId + 1)
+        self.response_bus.emit("openOrders", trade)
 
     def openOrderEnd(self):
-        self._endReq("openOrders")
+        self.response_bus.emit("openOrders", None)
 
-    def completedOrder(self, contract: Contract, order: Order, orderState: OrderState):
+    def completedOrder(
+        self, contract: Contract, order: Order, orderStatus: OrderStatus
+    ):
         contract = Contract.recreate(contract)
-        orderStatus = OrderStatus(orderId=order.orderId, status=orderState.status)
         trade = Trade(contract, order, orderStatus, [], [])
-        self._results["completedOrders"].append(trade)
 
         if order.permId not in self.permId2Trade:
             self.trades[order.permId] = trade
             self.permId2Trade[order.permId] = trade
+        self._logger.debug(f"completedOrders: {trade}")
+        self.response_bus.emit("completedOrders", trade)
 
     def completedOrdersEnd(self):
-        self._endReq("completedOrders")
+        self.response_bus.emit("completedOrders", None)
 
-    def orderStatus(
-        self,
-        orderId: int,
-        status: str,
-        filled: float,
-        remaining: float,
-        avgFillPrice: float,
-        permId: int,
-        parentId: int,
-        lastFillPrice: float,
-        clientId: int,
-        whyHeld: str,
-        mktCapPrice: float = 0.0,
-    ):
-        key = self.orderKey(clientId, orderId, permId)
-        trade = self.trades.get(key)
-        if trade:
-            msg: Optional[str]
-            oldStatus = trade.orderStatus.status
-            new = dict(
-                status=status,
-                filled=filled,
-                remaining=remaining,
-                avgFillPrice=avgFillPrice,
-                permId=permId,
-                parentId=parentId,
-                lastFillPrice=lastFillPrice,
-                clientId=clientId,
-                whyHeld=whyHeld,
-                mktCapPrice=mktCapPrice,
-            )
-            curr = dataclassAsDict(trade.orderStatus)
-            isChanged = curr != {**curr, **new}
-
-            if isChanged:
-                dataclassUpdate(trade.orderStatus, **new)
-                msg = ""
-            elif (
-                status == "Submitted"
-                and trade.log
-                and trade.log[-1].message == "Modify"
-            ):
-                # order modifications are acknowledged
-                msg = "Modified"
-            else:
-                msg = None
-
-            if msg is not None:
-                logEntry = TradeLogEntry(self.lastTime, status, msg)
-                trade.log.append(logEntry)
-                self._logger.info(f"orderStatus: {trade}")
-                self.ib.orderStatusEvent.emit(trade)
-                trade.statusEvent.emit(trade)
-                if status != oldStatus:
-                    if status == OrderStatus.Filled:
-                        trade.filledEvent.emit(trade)
-                    elif status == OrderStatus.Cancelled:
-                        trade.cancelledEvent.emit(trade)
-        else:
-            self._logger.error(
-                "orderStatus: No order found for orderId %s and clientId %s",
-                orderId,
-                clientId,
-            )
-
-    def execDetails(self, reqId: int, contract: Contract, execution: Execution):
-        """
-        This wrapper handles both live fills and responses to
-        reqExecutions.
-        """
-        self._logger.info(f"execDetails {execution}")
-        if execution.orderId == UNSET_INTEGER:
-            # bug in TWS: executions of manual orders have unset value
-            execution.orderId = 0
-
-        trade = self.permId2Trade.get(execution.permId)
+    def orderStatus(self, orderStatus: OrderStatus):
+        permId = orderStatus.permId
+        trade = self.permId2Trade.get(permId)
         if not trade:
-            key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
-            trade = self.trades.get(key)
+            # trade is not found, create a placeholder
+            trade = Trade(Contract(), Order(permId=permId), orderStatus, [], [])
+            self.permId2Trade[permId] = trade
 
-        # TODO: debug why spread contracts aren't fully detailed here. They have no legs in execDetails, but they do in orderStatus?
-        if trade and contract == trade.contract:
-            contract = trade.contract
-        else:
-            contract = Contract.recreate(contract)
+        trade.orderStatus = orderStatus
+        logEntry = TradeLogEntry(self.lastTime, orderStatus.status)
+        trade.log.append(logEntry)
+        self._logger.info(f"orderStatus: {trade}")
 
-        execId = execution.execId
-        isLive = reqId not in self._futures
-        time = self.lastTime if isLive else execution.time
-        fill = Fill(contract, execution, CommissionReport(), time)
-        if execId not in self.fills:
-            # first time we see this execution so add it
-            self.fills[execId] = fill
-            if trade:
-                trade.fills.append(fill)
-                logEntry = TradeLogEntry(
-                    time,
-                    trade.orderStatus.status,
-                    f"Fill {execution.shares}@{execution.price}",
-                )
-                trade.log.append(logEntry)
-                if isLive:
-                    self._logger.info(f"execDetails: {fill}")
-                    self.ib.execDetailsEvent.emit(trade, fill)
-                    trade.fillEvent(trade, fill)
+        if self._isReady:
+            trade.statusEvent.emit(trade)
+            self.ib.orderStatusEvent.emit(trade)
 
-        if not isLive:
-            self._results[reqId].append(fill)
+            if orderStatus.status == OrderStatus.Cancelled:
+                trade.cancelledEvent.emit(trade)
+            elif orderStatus.status == OrderStatus.Filled:
+                trade.filledEvent.emit(trade)
+
+    def execDetails(self, reqId: int, fill: Fill):
+        permId = fill.execution.permId
+        trade = self.permId2Trade.get(permId)
+        if not trade:
+            # trade is not found, create a placeholder
+            trade = Trade(fill.contract, Order(permId=permId), OrderStatus(), [], [])
+            self.permId2Trade[permId] = trade
+
+        self.fills[fill.execution.execId] = fill
+        trade.fills.append(fill)
+        if self._isReady:
+            self.ib.execDetailsEvent.emit(trade, fill)
+            trade.fillEvent.emit(trade, fill)
+            if fill.commissionReport:
+                self.ib.commissionReportEvent.emit(trade, fill, fill.commissionReport)
+                trade.commissionReportEvent.emit(trade, fill, fill.commissionReport)
+        self.response_bus.emit(reqId, fill)
 
     def execDetailsEnd(self, reqId: int):
-        self._endReq(reqId)
+        self.response_bus.emit(reqId, None)
 
     def commissionReport(self, commissionReport: CommissionReport):
         if commissionReport.yield_ == UNSET_DOUBLE:
@@ -758,41 +633,45 @@ class Wrapper:
 
         if commissionReport.realizedPNL == UNSET_DOUBLE:
             commissionReport.realizedPNL = 0.0
+        fill: Fill | None = self.fills.get(commissionReport.execId)
 
-        fill = self.fills.get(commissionReport.execId)
-        if fill:
-            report = dataclassUpdate(fill.commissionReport, commissionReport)
-            self._logger.info(f"commissionReport: {report}")
-            trade = self.permId2Trade.get(fill.execution.permId)
-            if trade:
-                self.ib.commissionReportEvent.emit(trade, fill, report)
-                trade.commissionReportEvent.emit(trade, fill, report)
-            else:
-                # this is not a live execution and the order was filled
-                # before this connection started
-                pass
-        else:
+        if not fill:
             # commission report is not for this client
+            return
+
+        trade = self.permId2Trade.get(fill.execution.permId)
+        if not trade:
+            return
+
+        report = dataclassUpdate(fill.commissionReport, commissionReport)
+
+        self._logger.info(f"commissionReport: {report}")
+        if self._isReady and trade:
+            self.ib.commissionReportEvent.emit(trade, fill, commissionReport)
+            trade.commissionReportEvent.emit(trade, fill, commissionReport)
+        else:
+            # this is not a live execution and the order was filled
+            # before this connection started
             pass
 
     def orderBound(self, reqId: int, apiClientId: int, apiOrderId: int):
         pass
 
     def contractDetails(self, reqId: int, contractDetails: ContractDetails):
-        self._results[reqId].append(contractDetails)
+        self.response_bus.emit(reqId, contractDetails)
 
     bondContractDetails = contractDetails
 
     def contractDetailsEnd(self, reqId: int):
-        self._endReq(reqId)
+        self.response_bus.emit(reqId, None)
 
     def symbolSamples(
         self, reqId: int, contractDescriptions: list[ContractDescription]
     ):
-        self._endReq(reqId, contractDescriptions)
+        self.response_bus.emit(reqId, contractDescriptions)
 
     def marketRule(self, marketRuleId: int, priceIncrements: list[PriceIncrement]):
-        self._endReq(f"marketRule-{marketRuleId}", priceIncrements)
+        self.response_bus.emit(f"marketRule-{marketRuleId}", priceIncrements)
 
     def marketDataType(self, reqId: int, marketDataId: int):
         ticker = self.reqId2Ticker.get(reqId)
@@ -819,14 +698,12 @@ class Wrapper:
             self.ib.barUpdateEvent.emit(bars, True)
             bars.updateEvent.emit(bars, True)
 
-    def historicalData(self, reqId: int, bar: BarData):
-        results = self._results.get(reqId)
-        if results is not None:
-            bar.date = parseIBDatetime(bar.date)  # type: ignore
-            results.append(bar)
+    def historicalData(self, reqId: int, bars: list[BarData]):
+        if bars is not None:
+            self.response_bus.emit(reqId, bars)
 
     def historicalDataEnd(self, reqId, _start: str, _end: str):
-        self._endReq(reqId)
+        self.response_bus.emit(reqId, None)
 
     def historicalDataUpdate(self, reqId: int, bar: BarData):
         bars = self.reqId2Subscriber.get(reqId)
@@ -852,9 +729,9 @@ class Wrapper:
     def headTimestamp(self, reqId: int, headTimestamp: str):
         try:
             dt = parseIBDatetime(headTimestamp)
-            self._endReq(reqId, dt)
+            self.response_bus.emit(reqId, dt)
         except ValueError as exc:
-            self._endReq(reqId, exc, False)
+            self.response_bus.emit(reqId, exc)
 
     def historicalTicks(self, reqId: int, ticks: list[HistoricalTick], done: bool):
         result = self._results.get(reqId)
@@ -1453,7 +1330,11 @@ class Wrapper:
 
     def currentTime(self, time: int):
         dt = datetime.fromtimestamp(time, self.defaultTimezone)
-        self._endReq("currentTime", dt)
+        self.response_bus.emit("currentTime", dt)
+
+    def currentTimeMili(self, time: int):
+        dt = datetime.fromtimestamp(time / 1000, self.defaultTimezone)
+        self.response_bus.emit("currentTimeMili", dt)
 
     def tickEFP(
         self,
@@ -1498,14 +1379,23 @@ class Wrapper:
         pass
 
     def error(
-        self, reqId: int, errorCode: int, errorString: str, advancedOrderRejectJson: str
+        self,
+        reqId: int,
+        errorCode: int,
+        errorString: str,
+        advancedOrderRejectJson: str = "",
     ):
+        self._logger.debug("IBKR API reqID: %s error: %s", reqId, errorString)
         # https://interactivebrokers.github.io/tws-api/message_codes.html
         # https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#api-error-codes
-        isRequest = reqId in self._futures
+        isRequest = 0 < reqId <= self.ib.client._reqIdSeq or (
+            isinstance(reqId, str) and reqId.startswith("marketRule")
+        )
+
         trade = None
 
-        # reqId is a local orderId, but is delivered as -1 if this is a non-order-related error
+        # reqId is a local orderId, but is delivered as -1 if this is a
+        # non-order-related error
         if reqId != -1:
             trade = self.trades.get((self.clientId, reqId))
 
@@ -1523,7 +1413,8 @@ class Wrapper:
         # Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
         # TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
 
-        # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
+        # Previously this was included as a Warning condition, but 202 is literally
+        # "Order Canceled" error status, so now it is an order-delete error:
         # 202 - Order cancelled - Reason:
 
         warningCodes = frozenset({105, 110, 165, 321, 329, 399, 404, 434, 492, 10167})
@@ -1559,16 +1450,28 @@ class Wrapper:
                 trade.statusEvent.emit(trade)
             else:
                 # else, this is a non-trade-related warning message
+                if isRequest:
+                    # It's a new eventkit-based request. Emit the error on the
+                    # response_bus. The pipeline is responsible for raising it.
+                    if self.ib.RaiseRequestErrors:
+                        error = RequestError(reqId, errorCode, errorString)
+                        self.response_bus.emit(reqId, error)
+                    else:
+                        # a None will be interpreted as an empty result
+                        self._logger.error("is request %s, %s", reqId,msg)
+                        self.response_bus.emit(reqId, None)
                 self._logger.info(msg)
         else:
             self._logger.error(msg)
             if isRequest:
-                # the request failed
+                # It's a new eventkit-based request. Emit the error on the
+                # response_bus. The pipeline is responsible for raising it.
                 if self.ib.RaiseRequestErrors:
                     error = RequestError(reqId, errorCode, errorString)
-                    self._endReq(reqId, error, success=False)
+                    self.response_bus.emit(reqId, error)
                 else:
-                    self._endReq(reqId)
+                    # a None will be interpreted as an empty result
+                    self.response_bus.emit(reqId, None)
             elif trade:
                 # something is wrong with the order, cancel it
                 if advancedOrderRejectJson:
@@ -1577,7 +1480,8 @@ class Wrapper:
                 # Errors can mean two things:
                 #  - new order is REJECTED
                 #  - existing order is server-canceled (DAY orders, margin problems)
-                #  - modification to *existing* order just has an update error, but the order is STILL LIVE
+                #  - modification to *existing* order just has an update error, but the
+                # order is STILL LIVE
                 if not trade.isDone():
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)

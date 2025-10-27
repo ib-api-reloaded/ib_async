@@ -1,18 +1,37 @@
 """High-level interface to Interactive Brokers."""
 
-import asyncio
+from asyncio import TimeoutError
 import copy
 import datetime
+import asyncio
 import logging
 import time
 from enum import auto, Flag
-from typing import Any, Awaitable, Iterator, List, Optional, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    cast,
+    Iterator,
+    List,
+    Optional,
+    TypeVar,
+    Union,
+    AsyncIterator,
+)
+
+_T = TypeVar("_T")
 
 from eventkit import Event
 
 import ib_async.util as util
+from ib_async.wrapper import Wrapper, RequestError
 from ib_async.client import Client
 from ib_async.contract import Contract, ContractDescription, ContractDetails
+from ib_async.protobuf.ContractDataRequest_pb2 import (
+    ContractDataRequest as ContractDataRequestProto,
+)
+
 from ib_async.objects import (
     AccountValue,
     BarDataList,
@@ -423,6 +442,25 @@ class IB:
     timeRange = staticmethod(util.timeRange)
     timeRangeAsync = staticmethod(util.timeRangeAsync)
     waitUntil = staticmethod(util.waitUntil)
+
+    @staticmethod
+    def _raise_if_error(data: Any) -> Any:
+        """
+        Raise error in reactive stream.
+        """
+        if isinstance(data, Exception):
+            raise data
+        return data
+
+    @staticmethod
+    async def _raise_if_error_async(ait: AsyncIterator[_T]) -> AsyncIterator[_T]:
+        """
+        Raise error in asyn iterator.
+        """
+        async for item in ait:
+            if isinstance(item, RequestError):
+                raise item
+            yield item
 
     def _run(self, *awaitables: Awaitable):
         return util.run(*awaitables, timeout=self.RequestTimeout)
@@ -870,6 +908,14 @@ class IB:
         """
         return self._run(self.reqCurrentTimeAsync())
 
+    def reqCurrentTimeMili(self) -> datetime.datetime:
+        """
+        Request TWS current time in milliseconds.
+
+        This method is blocking.
+        """
+        return self._run(self.reqCurrentTimeMiliAsync())
+
     def reqAccountUpdates(self, account: str = ""):
         """
         This is called at startup - no need to call again.
@@ -1103,7 +1149,7 @@ class IB:
         """
         return self._run(self.reqMatchingSymbolsAsync(pattern))
 
-    def reqMarketRule(self, marketRuleId: int) -> PriceIncrement:
+    def reqMarketRule(self, marketRuleId: int) -> list[PriceIncrement]:
         """
         Request price increments rule.
 
@@ -2035,12 +2081,19 @@ class IB:
         raiseSyncErrors: bool = False,
         fetchFields: StartupFetch = StartupFetchALL,
     ):
+        self.wrapper._isReady = False
         clientId = int(clientId)
         self.wrapper.clientId = clientId
         timeout = timeout or None
         try:
             # establish API connection
             await self.client.connectAsync(host, port, clientId, timeout)
+
+            if not self.client.useProtoBuf():
+                raise ConnectionError(
+                    "Protobuf not supported by server. "
+                    "Please upgrade TWS/Gateway to a version that supports protobuf."
+                )
 
             # autobind manual orders
             if clientId == 0:
@@ -2100,6 +2153,7 @@ class IB:
                 raise ConnectionError("Socket connection broken while connecting")
 
             self._logger.info("Synchronization complete")
+            self.wrapper._isReady = True
             self.connectedEvent.emit()
         except BaseException:
             self.disconnect()
@@ -2212,22 +2266,50 @@ class IB:
         return future
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
-        future = self.wrapper.startReq("currentTime")
         self.client.reqCurrentTime()
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda key, _: key == "currentTime")
+            .pluck(1)
+            .take(1)
+        )
 
-    def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
-        future = self.wrapper.startReq("accountValues")
-        self.client.reqAccountUpdates(True, account)
-        return future
+    def reqCurrentTimeMiliAsync(self) -> Awaitable[datetime.datetime]:
+        self.client.reqCurrentTimeMili()
+        return (
+            self.wrapper.response_bus.filter(lambda key, _: key == "currentTimeMili")
+            .pluck(1)
+            .take(1)
+        )
+
+    def reqAccountUpdatesAsync(self, account: str = "") -> Awaitable[None]:
+        """
+        Request account and portfolio values of the account
+        and keep updated. Returns when both account values and portfolio
+        are filled.
+
+        This is a coroutine.
+
+        Args:
+            account: If specified, filter for this account name.
+        """
+        acctCode = account or self.wrapper.accounts[0]
+        self.client.reqAccountUpdates(True, acctCode)
+        return self.wrapper.response_bus.filter(
+            lambda key, _: key == "accountValues"
+        ).take(1)
 
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
-    ) -> Awaitable[None]:
+    ) -> Awaitable[list[AccountValue]]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
         self.client.reqAccountUpdatesMulti(reqId, account, modelCode, False)
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+            .list()
+        )
 
     async def accountSummaryAsync(self, account: str = "") -> list[AccountValue]:
         if not self.wrapper.acctSummary:
@@ -2241,86 +2323,158 @@ class IB:
 
         return list(self.wrapper.acctSummary.values())
 
-    def reqAccountSummaryAsync(self) -> Awaitable[None]:
+    def reqAccountSummaryAsync(self, group: str = "All", tags: str = ""):
+        """
+        Request account values for all accounts and keep them updated.
+        Returns when account summary is filled.
+
+        This is a coroutine.
+        """
+        if not tags:
+            tags = (
+                "AccountType,NetLiquidation,TotalCashValue,SettledCash,"
+                "AccruedCash,BuyingPower,EquityWithLoanValue,"
+                "PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,"
+                "ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,"
+                "ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,"
+                "FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,"
+                "LookAheadInitMarginReq,LookAheadMaintMarginReq,"
+                "LookAheadAvailableFunds,LookAheadExcessLiquidity,"
+                "HighestSeverity,DayTradesRemaining,Leverage"
+            )
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
-        tags = (
-            "AccountType,NetLiquidation,TotalCashValue,SettledCash,"
-            "AccruedCash,BuyingPower,EquityWithLoanValue,"
-            "PreviousDayEquityWithLoanValue,GrossPositionValue,RegTEquity,"
-            "RegTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,"
-            "ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,"
-            "FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,"
-            "LookAheadInitMarginReq,LookAheadMaintMarginReq,"
-            "LookAheadAvailableFunds,LookAheadExcessLiquidity,"
-            "HighestSeverity,DayTradesRemaining,DayTradesRemainingT+1,"
-            "DayTradesRemainingT+2,DayTradesRemainingT+3,"
-            "DayTradesRemainingT+4,Leverage,$LEDGER:ALL"
+        self.client.reqAccountSummary(reqId, group, tags)
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
         )
-        self.client.reqAccountSummary(reqId, "All", tags)
-        return future
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
-        future = self.wrapper.startReq("openOrders")
         self.client.reqOpenOrders()
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda key, _: key == "openOrders")
+            .takewhile(lambda key, data: data is not None)
+            .pluck(1)
+            .list()
+        )
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
-        future = self.wrapper.startReq("openOrders")
         self.client.reqAllOpenOrders()
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda key, _: key == "openOrders")
+            .takewhile(lambda key, data: data is not None)
+            .pluck(1)
+            .list()
+        )
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
-        future = self.wrapper.startReq("completedOrders")
         self.client.reqCompletedOrders(apiOnly)
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda key, _: key == "completedOrders")
+            .takewhile(lambda key, data: data is not None)
+            .pluck(1)
+            .list()
+        )
 
     def reqExecutionsAsync(
         self, execFilter: Optional[ExecutionFilter] = None
     ) -> Awaitable[list[Fill]]:
-        execFilter = execFilter or ExecutionFilter()
+        """Request a list of fills."""
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
-        self.client.reqExecutions(reqId, execFilter)
-        return future
+        self.client.reqExecutions(reqId, execFilter or ExecutionFilter())
+        fills = (
+            self.wrapper.response_bus.filter(
+                lambda rId, e: rId == reqId and e is not None
+            )
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+            .list()
+        )
+        return fills
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
-        future = self.wrapper.startReq("positions")
+        """Request a list of positions."""
         self.client.reqPositions()
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda name, _: name == "position")
+            .takewhile(lambda name, data: data is not None)
+            .pluck(1)
+        )
 
     def reqContractDetailsAsync(
         self, contract: Contract
-    ) -> Awaitable[list[ContractDetails]]:
+    ) -> "Awaitable[list[ContractDetails]]":
+        """
+        Asynchronous version of :meth:`.reqContractDetails`.
+
+        Returns:
+            An awaitable that yields the matching contract details.
+        """
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
         self.client.reqContractDetails(reqId, contract)
-        return future
+        # This is a streaming response; contract details are sent one by one,
+        # followed by a final "end" event. The .list() operator gathers all
+        # individual results into a single list.
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+            .list()
+        )
 
-    async def reqMatchingSymbolsAsync(
+    def reqMatchingSymbolsAsync(
         self, pattern: str
-    ) -> Optional[list[ContractDescription]]:
-        reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
-        self.client.reqMatchingSymbols(reqId, pattern)
-        try:
-            await asyncio.wait_for(future, 4)
-            return future.result()
-        except asyncio.TimeoutError:
-            self._logger.error("reqMatchingSymbolsAsync: Timeout")
-            return None
+    ) -> Awaitable[list[ContractDescription]]:
+        """
+        Request contract descriptions of contracts that match a pattern.
 
-    async def reqMarketRuleAsync(
-        self, marketRuleId: int
-    ) -> Optional[list[PriceIncrement]]:
-        future = self.wrapper.startReq(f"marketRule-{marketRuleId}")
-        try:
-            self.client.reqMarketRule(marketRuleId)
-            await asyncio.wait_for(future, 1)
-            return future.result()
-        except asyncio.TimeoutError:
-            self._logger.error("reqMarketRuleAsync: Timeout")
-            return None
+        This method is blocking.
+
+        https://interactivebrokers.github.io/tws-api/matching_symbols.html
+
+        Args:
+            pattern: The first few letters of the ticker symbol, or for
+                longer strings a character sequence matching a word in
+                the security name.
+        """
+        reqId = self.client.getReqId()
+        self.client.reqMatchingSymbols(reqId, pattern)
+        # This is a single-shot response; the API sends the entire list
+        # of results in one event. .take(1).pluck(1) is used to grab the
+        # payload (which is the list) from that single event.
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
+
+    def reqMarketRuleAsync(self, marketRuleId: int) -> Awaitable[list[PriceIncrement]]:
+        """
+        Request price increments rule.
+
+        https://interactivebrokers.github.io/tws-api/minimum_increment.html
+
+        Args:
+            marketRuleId: ID of market rule.
+                The market rule IDs for a contract can be obtained
+                via :meth:`.reqContractDetails` from
+                :class:`.ContractDetails`.marketRuleIds,
+                which contains a comma separated string of market rule IDs.
+        """
+        self.client.reqMarketRule(marketRuleId)
+        return (
+            self.wrapper.response_bus.filter(
+                lambda rId, _: rId == f"marketRule-{marketRuleId}"
+            )
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
     async def reqHistoricalDataAsync(
         self,
@@ -2336,20 +2490,8 @@ class IB:
         timeout: float = 60,
     ) -> BarDataList:
         reqId = self.client.getReqId()
-        bars = BarDataList()
-        bars.reqId = reqId
-        bars.contract = contract
-        bars.endDateTime = endDateTime
-        bars.durationStr = durationStr
-        bars.barSizeSetting = barSizeSetting
-        bars.whatToShow = whatToShow
-        bars.useRTH = useRTH
-        bars.formatDate = formatDate
-        bars.keepUpToDate = keepUpToDate
-        bars.chartOptions = chartOptions or []
-        future = self.wrapper.startReq(reqId, contract, container=bars)
-        if keepUpToDate:
-            self.wrapper.startSubscription(reqId, bars, contract)
+        # if keepUpToDate:
+        #     self.wrapper.startSubscription(reqId, bars, contract)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalData(
             reqId,
@@ -2363,14 +2505,31 @@ class IB:
             keepUpToDate,
             chartOptions,
         )
-        task = asyncio.wait_for(future, timeout) if timeout else future
+        awaitable = (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
+        task = asyncio.wait_for(awaitable, timeout) if timeout else awaitable
         try:
-            await task
+            result = await task
         except asyncio.TimeoutError:
             self.client.cancelHistoricalData(reqId)
             self._logger.warning(f"reqHistoricalData: Timeout for {contract}")
-            bars.clear()
 
+        bars = BarDataList()
+        bars.reqId = reqId
+        bars.contract = contract
+        bars.endDateTime = endDateTime
+        bars.durationStr = durationStr
+        bars.barSizeSetting = barSizeSetting
+        bars.whatToShow = whatToShow
+        bars.useRTH = useRTH
+        bars.formatDate = formatDate
+        bars.keepUpToDate = keepUpToDate
+        bars.chartOptions = chartOptions or []
+        bars.extend(result)
         return bars
 
     def reqHistoricalScheduleAsync(
@@ -2427,16 +2586,21 @@ class IB:
         return future
 
     async def reqHeadTimeStampAsync(
-        self, contract: Contract, whatToShow: str, useRTH: bool, formatDate: int
+        self, contract: Contract, whatToShow: str, useRTH: bool, formatDate: int = 1
     ) -> datetime.datetime:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId, contract)
         self.client.reqHeadTimeStamp(reqId, contract, whatToShow, useRTH, formatDate)
-        await future
 
+        result = (
+            await self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
         self.client.cancelHeadTimeStamp(reqId)
-        return future.result()
+
+        return result
 
     def reqSmartComponentsAsync(self, bboExchange):
         reqId = self.client.getReqId()
@@ -2546,12 +2710,43 @@ class IB:
         underlyingConId: int,
     ) -> Awaitable[list[OptionChain]]:
         reqId = self.client.getReqId()
-
-        future = self.wrapper.startReq(reqId)
         self.client.reqSecDefOptParams(
             reqId, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
         )
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .list()
+        )
+
+    def reqSecDefOptParams(
+        self,
+        underlyingSymbol: str,
+        futFopExchange: str,
+        underlyingSecType: str,
+        underlyingConId: int,
+    ) -> list[OptionChain]:
+        """
+        Get the option chain.
+
+        This method is blocking.
+
+        https://interactivebrokers.github.io/tws-api/options.html
+
+        Args:
+            underlyingSymbol: Symbol of underlier contract.
+            futFopExchange: Exchange (only for ``FuturesOption``, otherwise
+                leave blank).
+            underlyingSecType: The type of the underlying security, like
+                'STK' or 'FUT'.
+            underlyingConId: conId of the underlying contract.
+        """
+        return self._run(
+            self.reqSecDefOptParamsAsync(
+                underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
+            )
+        )
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
         future = self.wrapper.startReq("newsProviders")

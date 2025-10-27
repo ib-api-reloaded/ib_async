@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date as date_, datetime, timezone, tzinfo
+from enum import Enum
 from typing import Any, List, NamedTuple, Optional, Union
 
 from eventkit import Event
@@ -13,6 +14,16 @@ from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER
 
 nan = float("nan")
 
+class OptionExerciseType(Enum):
+    NoneItem = (-1, "None")
+    Exercise = (1, "Exercise")
+    Lapse = (2, "Lapse")
+    DoNothing = (3, "DoNothing")
+    Assigned = (100, "Assigned ")
+    AutoexerciseClearing = (101, "AutoexerciseClearing")
+    Expired = (102, "Expired")
+    Netting = (103, "Netting")
+    AutoexerciseTrading = (200, "AutoexerciseTrading")
 
 @dataclass
 class ScannerSubscription:
@@ -70,6 +81,8 @@ class Execution:
     modelCode: str = ""
     lastLiquidity: int = 0
     pendingPriceRevision: bool = False
+    submitter:str = ""
+    optExerciseOrLapseType:OptionExerciseType = OptionExerciseType.NoneItem
 
 
 @dataclass
@@ -91,6 +104,8 @@ class ExecutionFilter:
     secType: str = ""
     exchange: str = ""
     side: str = ""
+    lastNDays:int = UNSET_INTEGER
+    specificDates:list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -560,3 +575,9 @@ class IBDefaults:
 
     # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
     timezone: tzinfo = timezone.utc
+
+
+@dataclass
+class IneligibilityReason:
+    id_: str = field(default_factory=str)
+    description: str = field(default_factory=str)

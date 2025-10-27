@@ -18,6 +18,7 @@ class Connection(asyncio.Protocol):
           Is emitted on socket disconnect, with an error message in case
           of error, or an empty string in case of a normal disconnect.
     """
+    transport:asyncio.Transport|None
 
     def __init__(self):
         self.hasData = Event("hasData")

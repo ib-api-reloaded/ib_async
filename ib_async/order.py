@@ -12,7 +12,7 @@ from eventkit import Event
 
 from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry
-from .util import dataclassNonDefaults, UNSET_DOUBLE, UNSET_INTEGER
+from .util import UNSET_DECIMAL, dataclassNonDefaults, UNSET_DOUBLE, UNSET_INTEGER
 
 
 @dataclass
@@ -162,6 +162,13 @@ class Order:
     competeAgainstBestOffset: float | Decimal = UNSET_DOUBLE
     midOffsetAtWhole: float | Decimal = UNSET_DOUBLE
     midOffsetAtHalf: float | Decimal = UNSET_DOUBLE
+    customerAccount:str = ""
+    professionalCustomer:bool = False
+    bondAccruedInterest:str = ""
+    includeOvernight:bool = False
+    manualOrderIndicator:int = UNSET_INTEGER
+    submitter:str = ""
+
 
     def __repr__(self):
         attrs = dataclassNonDefaults(self)
@@ -472,6 +479,7 @@ class Trade:
         return float(self.order.totalQuantity) - self.filled()
 
 
+
 class BracketOrder(NamedTuple):
     parent: Order
     takeProfit: Order
@@ -555,3 +563,13 @@ class PercentChangeCondition(OrderCondition):
     changePercent: float = 0.0
     conId: int = 0
     exch: str = ""
+
+@dataclass
+class OrderAllocation:
+    account = ""
+    position:Decimal = UNSET_DECIMAL
+    positionDesired:Decimal = UNSET_DECIMAL
+    positionAfter:Decimal = UNSET_DECIMAL
+    desiredAllocQty:Decimal = UNSET_DECIMAL
+    allowedAllocQty:Decimal = UNSET_DECIMAL
+    isMonetary = False
