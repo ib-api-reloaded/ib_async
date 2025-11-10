@@ -188,7 +188,7 @@ def createTickOptionComputation(msg: TickOptionComputationProto) -> TickComputat
         )
     tickAttrib = msg.tickAttrib if msg.HasField("tickAttrib") else UNSET_INTEGER
     impliedVol = msg.impliedVol if msg.HasField("impliedVol") else None
-    if impliedVol < 0:  # -1 is the "not computed" indicator
+    if impliedVol and impliedVol < 0:  # -1 is the "not computed" indicator
         impliedVol = None
     delta = msg.delta if msg.HasField("delta") else None
     if delta == -2:  # -2 is the "not computed" indicator

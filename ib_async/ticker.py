@@ -452,7 +452,7 @@ class Ticker:
                 # only populate if timestamp isn't '0' (we don't want to report "last trade: 20,000 days ago")
                 if timestamp:
                     self.lastTimestamp = datetime.fromtimestamp(
-                        timestamp, self.defaultTimezone
+                        timestamp, self.defaults.timezone
                     )
             elif tick_string.tickType == TickType.FUNDAMENTAL_RATIOS:
                 # https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html

@@ -72,6 +72,8 @@ from .protobuf.HistoricalTicksBidAsk_pb2 import (
 from .protobuf.HistoricalTicksLast_pb2 import (
     HistoricalTicksLast as HistoricalTicksLastProto,
 )
+from .protobuf.HistoricalSchedule_pb2 import HistoricalSchedule as HistoricalScheduleProto
+from .protobuf.HistoricalSession_pb2 import HistoricalSession as HistoricalSessionProto
 from .protobuf.ManagedAccounts_pb2 import ManagedAccounts as ManagedAccountsProto
 from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
 from .protobuf.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
@@ -112,10 +114,11 @@ from .protobuf_converters.contract_converters import (
 )
 from .protobuf_converters.historical_data_converters import (
     createBarDataList,
-    decodeHistogramDataEntry,
-    decodeHistoricalTick,
-    decodeHistoricalTickBidAsk,
-    decodeHistoricalTickLast,
+    createHistogramDataEntry,
+    createHistoricalSchedule,
+    createHistoricalTick,
+    createHistoricalTickBidAsk,
+    createHistoricalTickLast,
 )
 from .protobuf_converters.market_data_converters import (
     createTickOptionComputation,
@@ -133,7 +136,7 @@ from .protobuf_converters.trade_converter import (
     createOrderStatus,
     createTradeFromOpenOrder,
 )
-from .util import NO_VALID_ID, UNSET_DOUBLE, UNSET_INTEGER, ZoneInfo, parseIBDatetime
+from .util import NO_VALID_ID
 from .wrapper import Wrapper
 
 
@@ -237,6 +240,10 @@ class Decoder:
             "historicalTicksLastProto",
         ),
         MessageId.IN.HISTOGRAM_DATA: (HistogramDataProto, "histogramDataProto"),
+        MessageId.IN.HISTORICAL_SCHEDULE: (
+            HistoricalScheduleProto,
+            "historicalScheduleProto",
+        ),
         MessageId.IN.TICK_REQ_PARAMS: (TickReqParamsProto, "tickReqParamsProto"),
         MessageId.IN.TICK_PRICE: (TickPriceProto, "tickPriceProto"),
         MessageId.IN.TICK_SIZE: (TickSizeProto, "tickSizeProto"),
@@ -413,7 +420,7 @@ class Decoder:
         historicalTicks = []
         if msg.historicalTicks:
             for historicalTickProto in msg.historicalTicks:
-                historicalTick = decodeHistoricalTick(
+                historicalTick = createHistoricalTick(
                     historicalTickProto, self.wrapper.defaults.timezone
                 )
                 historicalTicks.append(historicalTick)
@@ -425,7 +432,7 @@ class Decoder:
         historicalTicksBidAsk: list[HistoricalTickBidAsk] = []
         if msg.historicalTicksBidAsk:
             for historicalTickProto in msg.historicalTicksBidAsk:
-                historicalTickBidAsk = decodeHistoricalTickBidAsk(
+                historicalTickBidAsk = createHistoricalTickBidAsk(
                     historicalTickProto, self.wrapper.defaults.timezone
                 )
                 historicalTicksBidAsk.append(historicalTickBidAsk)
@@ -437,7 +444,7 @@ class Decoder:
         historicalTicksLast: list[HistoricalTickLast] = []
         if msg.historicalTicksLast:
             for historicalTickProto in msg.historicalTicksLast:
-                historicalTickLast = decodeHistoricalTickLast(
+                historicalTickLast = createHistoricalTickLast(
                     historicalTickProto, self.wrapper.defaults.timezone
                 )
                 historicalTicksLast.append(historicalTickLast)
@@ -447,9 +454,14 @@ class Decoder:
         histogram: list[HistogramData] = []
         if msg.histogramDataEntries:
             for histogramDataEntryProto in msg.histogramDataEntries:
-                histogramEntry = decodeHistogramDataEntry(histogramDataEntryProto)
+                histogramEntry = createHistogramDataEntry(histogramDataEntryProto)
                 histogram.append(histogramEntry)
         self.wrapper.histogramData(msg.reqId, histogram)
+
+    def historicalScheduleProto(self, msg: HistoricalScheduleProto):
+        historicalSchedule = createHistoricalSchedule(msg)
+        self.wrapper.historicalSchedule(msg.reqId, historicalSchedule)
+        
 
     def marketDataTypeProto(self, msg: MarketDataTypeProto):
         self.wrapper.marketDataType(msg.reqId, msg.marketDataType)
@@ -564,24 +576,6 @@ class Decoder:
         self.parse(c)
         self.wrapper.bondContractDetails(int(reqId), cd)
 
-    def historicalData(self, fields):
-        _, reqId, startDateStr, endDateStr, numBars, *fields = fields
-        get = iter(fields).__next__
-
-        for _ in range(int(numBars)):
-            bar = BarData(
-                date=get(),
-                open=float(get()),
-                high=float(get()),
-                low=float(get()),
-                close=float(get()),
-                volume=float(get()),
-                average=float(get()),
-                barCount=int(get()),
-            )
-            self.wrapper.historicalData(int(reqId), bar)
-
-        self.wrapper.historicalDataEnd(int(reqId), startDateStr, endDateStr)
 
     def historicalDataUpdate(self, fields):
         _, reqId, *fields = fields
@@ -634,56 +628,12 @@ class Decoder:
 
         self.wrapper.scannerDataEnd(int(reqId))
 
-    def tickOptionComputation(self, fields):
-        _, reqId, tickTypeInt, tickAttrib, *fields = fields
-        impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice = fields
-
-        self.wrapper.tickOptionComputation(
-            int(reqId),
-            int(tickTypeInt),
-            int(tickAttrib),
-            float(impliedVol),
-            float(delta),
-            float(optPrice),
-            float(pvDividend),
-            float(gamma),
-            float(vega),
-            float(theta),
-            float(undPrice),
-        )
-
     def deltaNeutralValidation(self, fields):
         _, _, reqId, conId, delta, price = fields
 
         self.wrapper.deltaNeutralValidation(
             int(reqId),
             DeltaNeutralContract(int(conId), float(delta or 0), float(price or 0)),
-        )
-
-    def securityDefinitionOptionParameter(self, fields):
-        (
-            _,
-            reqId,
-            exchange,
-            underlyingConId,
-            tradingClass,
-            multiplier,
-            n,
-            *fields,
-        ) = fields
-        n = int(n)
-
-        expirations = fields[:n]
-        strikes = [float(field) for field in fields[n + 1 :]]
-
-        self.wrapper.securityDefinitionOptionParameter(
-            int(reqId),
-            exchange,
-            underlyingConId,
-            tradingClass,
-            multiplier,
-            expirations,
-            strikes,
         )
 
     def softDollarTiers(self, fields):

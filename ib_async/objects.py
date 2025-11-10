@@ -796,8 +796,3 @@ class IBDefaults:
     # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
     timezone: tzinfo = timezone.utc
 
-
-@dataclass
-class IneligibilityReason:
-    id_: str = field(default_factory=str)
-    description: str = field(default_factory=str)

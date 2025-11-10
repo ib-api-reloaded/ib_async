@@ -1,30 +1,38 @@
 """Historical data protobuf converters"""
 
 from datetime import datetime, tzinfo
-from ..objects import (
-    BarData,
-    HistoricalTick,
-    HistoricalTickLast,
-    HistoricalTickBidAsk,
-    TickAttribBidAsk,
-    TickAttribLast,
-    HistogramData,
-)
-from ..util import isValidIntValue, parseIBDatetime
 
 from ..contract import Contract, TagValue
+from ..objects import (
+    BarData,
+    HistogramData,
+    HistoricalSchedule,
+    HistoricalSession,
+    HistoricalTick,
+    HistoricalTickBidAsk,
+    HistoricalTickLast,
+    TickAttribBidAsk,
+    TickAttribLast,
+)
 from ..protobuf.HeadTimestampRequest_pb2 import (
     HeadTimestampRequest as HeadTimestampRequestProto,
 )
-from ..protobuf.HistoricalDataRequest_pb2 import (
-    HistoricalDataRequest as HistoricalDataRequestProto,
+from ..protobuf.HistogramDataEntry_pb2 import (
+    HistogramDataEntry as HistogramDataEntryProto,
+)
+from ..protobuf.HistogramDataRequest_pb2 import (
+    HistogramDataRequest as HistogramDataRequestProto,
 )
 from ..protobuf.HistoricalDataBar_pb2 import (
     HistoricalDataBar as HistoricalDataBarProto,
 )
-from ..protobuf.HistoricalTicksRequest_pb2 import (
-    HistoricalTicksRequest as HistoricalTicksRequestProto,
+from ..protobuf.HistoricalDataRequest_pb2 import (
+    HistoricalDataRequest as HistoricalDataRequestProto,
 )
+from ..protobuf.HistoricalSchedule_pb2 import (
+    HistoricalSchedule as HistoricalScheduleProto,
+)
+from ..protobuf.HistoricalSession_pb2 import HistoricalSession as HistoricalSessionProto
 from ..protobuf.HistoricalTick_pb2 import HistoricalTick as HistoricalTickProto
 from ..protobuf.HistoricalTickBidAsk_pb2 import (
     HistoricalTickBidAsk as HistoricalTickBidAskProto,
@@ -32,15 +40,12 @@ from ..protobuf.HistoricalTickBidAsk_pb2 import (
 from ..protobuf.HistoricalTickLast_pb2 import (
     HistoricalTickLast as HistoricalTickLastProto,
 )
-from ..protobuf.HistogramDataRequest_pb2 import (
-    HistogramDataRequest as HistogramDataRequestProto,
-)
-from ..protobuf.HistogramDataEntry_pb2 import (
-    HistogramDataEntry as HistogramDataEntryProto,
+from ..protobuf.HistoricalTicksRequest_pb2 import (
+    HistoricalTicksRequest as HistoricalTicksRequestProto,
 )
 from ..protobuf.TickAttribBidAsk_pb2 import TickAttribBidAsk as TickAttribBidAskProto
 from ..protobuf.TickAttribLast_pb2 import TickAttribLast as TickAttribLastProto
-
+from ..util import NO_VALID_ID, isValidIntValue, parseIBDatetime
 from .contract_converters import createContractProto
 
 
@@ -163,7 +168,7 @@ def createHistoricalTicksRequestProto(
     return historicalTicksRequestProto
 
 
-def decodeHistoricalTick(
+def createHistoricalTick(
     historicalTickProto: HistoricalTickProto, tz: tzinfo
 ) -> HistoricalTick:
     time = datetime.fromtimestamp(historicalTickProto.time, tz)
@@ -173,7 +178,7 @@ def decodeHistoricalTick(
     return historicalTick
 
 
-def decodeHistoricalTickBidAsk(
+def createHistoricalTickBidAsk(
     historicalTickBidAskProto: HistoricalTickBidAskProto, tz: tzinfo
 ) -> HistoricalTickBidAsk:
     time = datetime.fromtimestamp(historicalTickBidAskProto.time, tz)
@@ -195,7 +200,7 @@ def decodeHistoricalTickBidAsk(
     return historicalTickBidAsk
 
 
-def decodeHistoricalTickLast(
+def createHistoricalTickLast(
     historicalTickLastProto: HistoricalTickLastProto, tz: tzinfo
 ) -> HistoricalTickLast:
     time = datetime.fromtimestamp(historicalTickLastProto.time, tz)
@@ -233,7 +238,7 @@ def createHistogramDataRequestProto(
     return histogramDataRequestProto
 
 
-def decodeHistogramDataEntry(
+def createHistogramDataEntry(
     histogramDataEntryProto: HistogramDataEntryProto,
 ) -> HistogramData:
     histogramData = HistogramData()
@@ -242,3 +247,49 @@ def decodeHistogramDataEntry(
     if histogramDataEntryProto.HasField("size"):
         histogramData.count = int(histogramDataEntryProto.size)
     return histogramData
+
+
+def createHistoricalSchedule(
+    historicalScheduleProto: HistoricalScheduleProto,
+) -> HistoricalSchedule:
+    startDateTime = (
+        historicalScheduleProto.startDateTime
+        if historicalScheduleProto.HasField("startDateTime")
+        else ""
+    )
+    endDateTime = (
+        historicalScheduleProto.endDateTime
+        if historicalScheduleProto.HasField("endDateTime")
+        else ""
+    )
+    timeZone = (
+        historicalScheduleProto.timeZone
+        if historicalScheduleProto.HasField("timeZone")
+        else ""
+    )
+
+    sessions = []
+    if historicalScheduleProto.historicalSessions:
+        for historicalSessionProto in historicalScheduleProto.historicalSessions:
+            historicalSession = HistoricalSession()
+            historicalSession.startDateTime = (
+                historicalSessionProto.startDateTime
+                if historicalSessionProto.HasField("startDateTime")
+                else ""
+            )
+            historicalSession.endDateTime = (
+                historicalSessionProto.endDateTime
+                if historicalSessionProto.HasField("endDateTime")
+                else ""
+            )
+            historicalSession.refDate = (
+                historicalSessionProto.refDate
+                if historicalSessionProto.HasField("refDate")
+                else ""
+            )
+            sessions.append(historicalSession)
+
+    historicalSchedule = HistoricalSchedule(
+        startDateTime, endDateTime, timeZone, sessions
+    )
+    return historicalSchedule

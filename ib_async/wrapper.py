@@ -6,7 +6,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Final, TypeAlias, Union, cast
+from typing import TYPE_CHECKING, Any, TypeAlias, Union, cast
 
 import eventkit as ev
 
@@ -23,12 +23,9 @@ from ib_async.objects import (
     BarDataList,
     CommissionReport,
     DepthMktDataDescription,
-    Dividends,
     DOMLevel,
-    Execution,
     FamilyCode,
     Fill,
-    FundamentalRatios,
     HistogramData,
     HistoricalNews,
     HistoricalSchedule,
@@ -43,7 +40,6 @@ from ib_async.objects import (
     NewsProvider,
     NewsTick,
     OptionChain,
-    OptionComputation,
     PnL,
     PnLSingle,
     PortfolioItem,
@@ -58,7 +54,6 @@ from ib_async.objects import (
     TickByTickBidAsk,
     TickByTickMidPoint,
     TickComputationData,
-    TickDataType,
     TickGenericData,
     TickParams,
     TickPriceData,
@@ -67,12 +62,10 @@ from ib_async.objects import (
     TickType,
     TradeLogEntry,
 )
-from ib_async.order import Order, OrderState, OrderStatus, Trade
+from ib_async.order import Order, OrderStatus, Trade
 from ib_async.ticker import Ticker
 from ib_async.util import (
     UNSET_DOUBLE,
-    UNSET_INTEGER,
-    dataclassAsDict,
     dataclassUpdate,
     getLoop,
     globalErrorEvent,
@@ -1049,13 +1042,9 @@ class Wrapper:
     def historicalSchedule(
         self,
         reqId: int,
-        startDateTime: str,
-        endDateTime: str,
-        timeZone: str,
-        sessions: list[HistoricalSession],
+        schedule:HistoricalSchedule,
     ):
-        schedule = HistoricalSchedule(startDateTime, endDateTime, timeZone, sessions)
-        self._endReq(reqId, schedule)
+        self.response_bus.emit(reqId, schedule)
 
     def wshMetaData(self, reqId: int, dataJson: str):
         self.ib.wshMetaEvent.emit(dataJson)

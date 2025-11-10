@@ -1,9 +1,9 @@
+from dataclasses import dataclass
+
 class MessageId:
     """
     Encapsulates TWS API message ID constants and protocol-related logic.
     """
-
-    from dataclasses import dataclass
 
     PROTOBUF_MSG_ID = 200
     """Protobuf message ID offset"""

@@ -25,6 +25,10 @@ class FundDistributionPolicyIndicator(Enum):
     AccumulationFund = ("N", "Accumulation Fund")
     IncomeFund = ("Y", "Income Fund")
 
+@dataclass
+class IneligibilityReason:
+    id_: str = field(default_factory=str)
+    description: str = field(default_factory=str)
 
 @dataclass
 class Contract:
@@ -653,7 +657,7 @@ class ContractDetails:
     fundBlueSkyTerritories = ""
     fundDistributionPolicyIndicator = FundDistributionPolicyIndicator.NoneItem
     fundAssetType = FundAssetType.NoneItem
-    ineligibilityReasonList = None
+    ineligibilityReasonList: list[IneligibilityReason] = field(default_factory=list)
     eventContract1 = ""
     eventContractDescription1 = ""
     eventContractDescription2 = ""

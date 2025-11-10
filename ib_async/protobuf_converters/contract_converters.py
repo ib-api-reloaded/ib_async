@@ -7,9 +7,9 @@ from ..contract import (
     ContractDetails,
     DeltaNeutralContract,
     FundAssetType,
-    FundDistributionPolicyIndicator,
+    FundDistributionPolicyIndicator, IneligibilityReason
 )
-from ..objects import IneligibilityReason, OptionChain
+from ..objects import OptionChain
 from ..order import Order
 from ..protobuf.ComboLeg_pb2 import ComboLeg as ComboLegProto
 from ..protobuf.Contract_pb2 import Contract as ContractProto
@@ -199,7 +199,7 @@ def createDeltaNeutralContract(
     return deltaNeutralContract
 
 
-def decodeIneligibilityReasonList(
+def createIneligibilityReasonList(
     contractDetailsProto: ContractDetailsProto,
 ) -> list[IneligibilityReason]:
     ineligibilityReasonList = []
@@ -228,7 +228,8 @@ def setLastTradeDate(
             if isBond:
                 contract.maturity = split[0]
             else:
-                contract.contract.lastTradeDateOrContractMonth = split[0]
+                if contract.contract:
+                    contract.contract.lastTradeDateOrContractMonth = split[0]
 
         if len(split) > 1:
             contract.lastTradeTime = split[1]
@@ -337,7 +338,7 @@ def createContractDetails(
             FundAssetType, details.fundAssetType
         )
 
-    ineligibilityReasonList = decodeIneligibilityReasonList(details)
+    ineligibilityReasonList = createIneligibilityReasonList(details)
     if ineligibilityReasonList is not None and ineligibilityReasonList:
         contractDetails.ineligibilityReasonList = ineligibilityReasonList
 
@@ -493,8 +494,8 @@ def createComboLegProtoList(
         for i, comboLeg in enumerate(comboLegs):
             perLegPrice = UNSET_DOUBLE
             if orderComboLegs and i < len(orderComboLegs):
-                perLegPrice = orderComboLegs[i].price
-            comboLegProto = createComboLegProto(comboLeg, perLegPrice)
+                perLegPrice:float = orderComboLegs[i].price
+                comboLegProto = createComboLegProto(comboLeg, perLegPrice)
             if comboLegProto is not None:
                 comboLegProtoList.append(comboLegProto)
     return comboLegProtoList

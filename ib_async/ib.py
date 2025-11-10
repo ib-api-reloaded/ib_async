@@ -2538,7 +2538,6 @@ class IB:
         useRTH: bool = True,
     ) -> Awaitable[HistoricalSchedule]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalData(
             reqId,
@@ -2552,8 +2551,13 @@ class IB:
             False,
             None,
         )
-
-        return future
+        awaitable = (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
+        return awaitable
 
     def reqHistoricalTicksAsync(
         self,
