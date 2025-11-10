@@ -287,12 +287,12 @@ class Ticker:
     __str__ = dataclassRepr
 
     def _on_ticker_data(self, tick_data: TickDataType, last_time: datetime):
-        _logger.debug(
-            "Ticker %s. Received tick data: %s, %s",
-            self.contract.symbol,
-            tick_data,
-            last_time,
-        )
+        # _logger.debug(
+        #     "Ticker %s. Received tick data: %s, %s",
+        #     self.contract.symbol,
+        #     tick_data,
+        #     last_time,
+        # )
         if isinstance(tick_data, TickPriceData):
             self._on_price_size_tick(tick_data, last_time)
         elif isinstance(tick_data, TickSizeData):
