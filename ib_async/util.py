@@ -39,7 +39,8 @@ Event to emit global exceptions.
 EPOCH: Final = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
 UNSET_INTEGER: Final = 2**31 - 1
 UNSET_DOUBLE: Final = sys.float_info.max
-UNSET_DECIMAL = Decimal(2**127 - 1)
+UNSET_DECIMAL: Final = Decimal(2**127 - 1)
+NO_VALID_ID: Final = -1
 
 Time_t: TypeAlias = dt.time | dt.datetime
 
@@ -119,6 +120,7 @@ def dataclassNonDefaults(obj) -> dict[str, Any]:
         if value is not None
         and value != field.default
         and value == value
+        and field.repr
         and not (
             (isinstance(value, list) and value == [])
             or (isinstance(value, dict) and value == {})
@@ -624,6 +626,7 @@ def getEnumTypeFromString(cls, stringIn):
 
 def listOfValues(cls):
     return list(map(lambda c: c, cls))
+
 
 def isValidIntValue(val: int) -> bool:
     return val != UNSET_INTEGER

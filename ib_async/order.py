@@ -162,13 +162,12 @@ class Order:
     competeAgainstBestOffset: float | Decimal = UNSET_DOUBLE
     midOffsetAtWhole: float | Decimal = UNSET_DOUBLE
     midOffsetAtHalf: float | Decimal = UNSET_DOUBLE
-    customerAccount:str = ""
-    professionalCustomer:bool = False
-    bondAccruedInterest:str = ""
-    includeOvernight:bool = False
-    manualOrderIndicator:int = UNSET_INTEGER
-    submitter:str = ""
-
+    customerAccount: str = ""
+    professionalCustomer: bool = False
+    bondAccruedInterest: str = ""
+    includeOvernight: bool = False
+    manualOrderIndicator: int = UNSET_INTEGER
+    submitter: str = ""
 
     def __repr__(self):
         attrs = dataclassNonDefaults(self)
@@ -479,7 +478,6 @@ class Trade:
         return float(self.order.totalQuantity) - self.filled()
 
 
-
 class BracketOrder(NamedTuple):
     parent: Order
     takeProfit: Order
@@ -564,12 +562,13 @@ class PercentChangeCondition(OrderCondition):
     conId: int = 0
     exch: str = ""
 
+
 @dataclass
 class OrderAllocation:
     account = ""
-    position:Decimal = UNSET_DECIMAL
-    positionDesired:Decimal = UNSET_DECIMAL
-    positionAfter:Decimal = UNSET_DECIMAL
-    desiredAllocQty:Decimal = UNSET_DECIMAL
-    allowedAllocQty:Decimal = UNSET_DECIMAL
+    position: Decimal = UNSET_DECIMAL
+    positionDesired: Decimal = UNSET_DECIMAL
+    positionAfter: Decimal = UNSET_DECIMAL
+    desiredAllocQty: Decimal = UNSET_DECIMAL
+    allowedAllocQty: Decimal = UNSET_DECIMAL
     isMonetary = False

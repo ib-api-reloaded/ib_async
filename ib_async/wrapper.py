@@ -3,12 +3,10 @@
 import asyncio
 import logging
 import time
-
 from collections import defaultdict
-from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, cast, Final, Optional, TYPE_CHECKING, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, Final, TypeAlias, Union, cast
 
 import eventkit as ev
 
@@ -59,19 +57,26 @@ from ib_async.objects import (
     TickByTickAllLast,
     TickByTickBidAsk,
     TickByTickMidPoint,
-    TickData,
+    TickComputationData,
+    TickDataType,
+    TickGenericData,
+    TickParams,
+    TickPriceData,
+    TickSizeData,
+    TickStringData,
+    TickType,
     TradeLogEntry,
 )
 from ib_async.order import Order, OrderState, OrderStatus, Trade
 from ib_async.ticker import Ticker
 from ib_async.util import (
+    UNSET_DOUBLE,
+    UNSET_INTEGER,
     dataclassAsDict,
     dataclassUpdate,
     getLoop,
     globalErrorEvent,
     parseIBDatetime,
-    UNSET_DOUBLE,
-    UNSET_INTEGER,
 )
 
 if TYPE_CHECKING:
@@ -79,74 +84,6 @@ if TYPE_CHECKING:
 
 
 OrderKeyType: TypeAlias = int | tuple[int, int]
-TickDict: TypeAlias = dict[int, str]
-
-PRICE_TICK_MAP: Final[TickDict] = {
-    6: "high",
-    72: "high",
-    7: "low",
-    73: "low",
-    9: "close",
-    75: "close",
-    14: "open",
-    76: "open",
-    15: "low13week",
-    16: "high13week",
-    17: "low26week",
-    18: "high26week",
-    19: "low52week",
-    20: "high52week",
-    35: "auctionPrice",
-    37: "markPrice",
-    50: "bidYield",
-    103: "bidYield",
-    51: "askYield",
-    104: "askYield",
-    52: "lastYield",
-}
-
-
-SIZE_TICK_MAP: Final[TickDict] = {
-    8: "volume",
-    74: "volume",
-    63: "volumeRate3Min",
-    64: "volumeRate5Min",
-    65: "volumeRate10Min",
-    21: "avVolume",
-    27: "callOpenInterest",
-    28: "putOpenInterest",
-    29: "callVolume",
-    30: "putVolume",
-    34: "auctionVolume",
-    36: "auctionImbalance",
-    61: "regulatoryImbalance",
-    86: "futuresOpenInterest",
-    87: "avOptionVolume",
-    89: "shortableShares",
-}
-
-GENERIC_TICK_MAP: Final[TickDict] = {
-    23: "histVolatility",
-    24: "impliedVolatility",
-    31: "indexFuturePremium",
-    46: "shortable",
-    49: "halted",
-    54: "tradeCount",
-    55: "tradeRate",
-    56: "volumeRate",
-    58: "rtHistVolatility",
-}
-
-GREEKS_TICK_MAP: Final[TickDict] = {
-    10: "bidGreeks",
-    80: "bidGreeks",
-    11: "askGreeks",
-    81: "askGreeks",
-    12: "lastGreeks",
-    82: "lastGreeks",
-    13: "modelGreeks",
-    83: "modelGreeks",
-}
 
 
 class RequestError(Exception):
@@ -264,6 +201,8 @@ class Wrapper:
         self.defaultEmptyPrice = self.defaults.emptyPrice
         self.defaultEmptySize = self.defaults.emptySize
         self.response_bus = ev.Event("Response bus")
+        self.ticker_bus = ev.Event("Ticker bus")
+        self.bar_bus = ev.Event("Bar bus")
 
         self.reset()
 
@@ -297,6 +236,9 @@ class Wrapper:
         self._timeout = 0
         self._futures = {}
         self._results = {}
+        self.response_bus.clear()
+        self.ticker_bus.clear()
+        self.bar_bus.clear()
         self.setTimeout(0)
 
     def setEventsDone(self):
@@ -361,19 +303,26 @@ class Wrapper:
         Start a tick request that has the reqId associated with the contract.
         Return the ticker.
         """
-        ticker = self.tickers.get(hash(contract))
+        ticker = self.reqId2Ticker.get(reqId)
         if not ticker:
             ticker = Ticker(contract=contract, defaults=self.defaults)
-            self.tickers[hash(contract)] = ticker
+            self.reqId2Ticker[reqId] = ticker
+            self.ticker_bus.filter(lambda r, d, t: r == reqId).takewhile(
+                lambda r, data, t: data is not None
+            ).pluck(1, 2).connect(ticker._on_ticker_data)
 
-        self.reqId2Ticker[reqId] = ticker
-        self._reqId2Contract[reqId] = contract
-        self.ticker2ReqId[tickType][ticker] = reqId
         return ticker
 
     def endTicker(self, ticker: Ticker, tickType: Union[int, str]):
-        reqId = self.ticker2ReqId[tickType].pop(ticker, 0)
-        self._reqId2Contract.pop(reqId, None)
+        reqId = None
+        for r, t in self.reqId2Ticker.items():
+            if hash(t.contract) == hash(ticker.contract):
+                reqId = r
+                break
+
+        if reqId:
+            self.reqId2Ticker.pop(reqId, 0)
+            self.ticker_bus.emit(reqId, None, None)
         return reqId
 
     def startSubscription(self, reqId, subscriber, contract=None):
@@ -734,161 +683,59 @@ class Wrapper:
             self.response_bus.emit(reqId, exc)
 
     def historicalTicks(self, reqId: int, ticks: list[HistoricalTick], done: bool):
-        result = self._results.get(reqId)
-        if result is not None:
-            result += ticks
-
+        self.response_bus.emit(reqId, ticks)
         if done:
-            self._endReq(reqId)
+            self.response_bus.emit(reqId, None)
 
     def historicalTicksBidAsk(
         self, reqId: int, ticks: list[HistoricalTickBidAsk], done: bool
     ):
-        result = self._results.get(reqId)
-        if result is not None:
-            result += ticks
-
+        self.response_bus.emit(reqId, ticks)
         if done:
-            self._endReq(reqId)
+            self.response_bus.emit(reqId, None)
 
     def historicalTicksLast(
         self, reqId: int, ticks: list[HistoricalTickLast], done: bool
     ):
-        result = self._results.get(reqId)
-        if result is not None:
-            result += ticks
-
+        self.response_bus.emit(reqId, ticks)
         if done:
-            self._endReq(reqId)
+            self.response_bus.emit(reqId, None)
 
     # additional wrapper method provided by Client
-    def priceSizeTick(self, reqId: int, tickType: int, price: float, size: float):
+    def priceSizeTick(self, reqId: int, tick_price: TickPriceData):
         ticker = self.reqId2Ticker.get(reqId)
         if not ticker:
             self._logger.error(f"priceSizeTick: Unknown reqId: {reqId}")
             return
-
-        # self._logger.error(f"WHAT R U DOING: {tickType=} {price=} {size=}")
-
-        # Allow overwriting IBKR's default "empty price" of -1 when there is no qty/size on a side.
-        # https://interactivebrokers.github.io/tws-api/tick_types.html
-        if tickType in {1, 66}:
-            # Note: Keep these size==0 overrides INSIDE each tickType where it is needed because
-            #       other tickTypes like open/high/low/close are values with size=0 but those
-            #       are still valid prices to receive.
-            # Bid/Ask updates always have a Price+Size delivered at the same time, while the
-            # other properties are mainly price-only delivery methods.
-            if size == 0:
-                price = self.defaultEmptyPrice
-                size = self.defaultEmptySize
-
-            ticker.prevBid = ticker.bid
-            ticker.prevBidSize = ticker.bidSize
-            ticker.bid = price
-            ticker.bidSize = size
-        elif tickType in {2, 67}:
-            if size == 0:
-                price = self.defaultEmptyPrice
-                size = self.defaultEmptySize
-
-            ticker.prevAsk = ticker.ask
-            ticker.prevAskSize = ticker.askSize
-            ticker.ask = price
-            ticker.askSize = size
-        elif tickType in {4, 68}:
-            # for 'last' values, price can be valid with size=0 for updates like 'last SPX price' since SPX doesn't trade
-            # Workaround: for TICK-NYSE, it is valid to have price=-1, size=0 because it can float between -10,000 and 10,000
-            #             and it also never reports a size. As a workaround, check if ticker.close exists as a proxy for "not TICK-NYSE"
-            #             because TICK-NYSE never has open/close values populated.
-            if price == -1 and size == 0 and ticker.close > 0:
-                price = self.defaultEmptyPrice
-                size = self.defaultEmptySize
-
-            # BUG? IBKR is sometimes sending a GOOD VALUE followed by a PREVIOUS value all under tickType=4?
-            # e.g. I get the SPX close delivered first with size=0, then I get another data point with size=1 priced one point lower,
-            # but since the older price is delivered second, it replaces the "last" value with a wrong value? Not sure if it's
-            # an IBKR data problem or a logic problem somewhere here?
-            # More research: IBKR also shows the bad value in their own app, so there is a data bug in their own server logic somewhere.
-
-            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: BEFORE {ticker=}")
-            # self._logger.error(f"[{tickType=}] SETTING {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
-
-            ticker.prevLast = ticker.last
-            ticker.prevLastSize = ticker.lastSize
-            ticker.last = price
-            ticker.lastSize = size
-
-            # self._logger.error(f"[{tickType=}] SET {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
-            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: AFTER {ticker=}")
-        else:
-            assert tickType in PRICE_TICK_MAP, (
-                f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-            )
-
-            setattr(ticker, PRICE_TICK_MAP[tickType], price)
-
-        if price or size:
-            tick = TickData(self.lastTime, tickType, price, size)
-            ticker.ticks.append(tick)
-
+        self.ticker_bus.emit(reqId, tick_price, self.lastTime)
         self.pendingTickers.add(ticker)
 
-    def tickSize(self, reqId: int, tickType: int, size: float):
+    def tickSize(self, reqId: int, tick_size: TickSizeData):
         ticker = self.reqId2Ticker.get(reqId)
         if not ticker:
             self._logger.error(f"tickSize: Unknown reqId: {reqId}")
             return
-
-        price = self.defaultEmptyPrice
-
-        # self._logger.error(
-        #     f"tickSize with tickType {tickType}: " f"processing value: {size!r}"
-        # )
-
-        # https://interactivebrokers.github.io/tws-api/tick_types.html
-        if tickType in {0, 69}:
-            if size == ticker.bidSize:
-                return
-
-            ticker.prevBidSize = ticker.bidSize
-            if size == 0:
-                ticker.bid = self.defaultEmptyPrice
-                ticker.bidSize = self.defaultEmptySize
-            else:
-                price = ticker.bid
-                ticker.bidSize = size
-        elif tickType in {3, 70}:
-            if size == ticker.askSize:
-                return
-
-            ticker.prevAskSize = ticker.askSize
-            if size == 0:
-                ticker.ask = self.defaultEmptyPrice
-                ticker.askSize = self.defaultEmptySize
-            else:
-                price = ticker.ask
-                ticker.askSize = size
-        elif tickType in {5, 71}:
-            price = ticker.last
-
-            if ticker.isUnset(price):
-                return
-
-            if size != ticker.lastSize:
-                ticker.prevLastSize = ticker.lastSize
-                ticker.lastSize = size
-        else:
-            assert tickType in SIZE_TICK_MAP, (
-                f"Received tick {tickType=} {size=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-            )
-
-            setattr(ticker, SIZE_TICK_MAP[tickType], size)
-
-        if price or size:
-            tick = TickData(self.lastTime, tickType, price, size)
-            ticker.ticks.append(tick)
-
+        self.ticker_bus.emit(reqId, tick_size, self.lastTime)
         self.pendingTickers.add(ticker)
+
+    def tickString(self, reqId: int, tick_string: TickStringData):
+        if not (ticker := self.reqId2Ticker.get(reqId)):
+            return
+        self.ticker_bus.emit(reqId, tick_string, self.lastTime)
+        self.pendingTickers.add(ticker)
+
+    def tickGeneric(self, reqId: int, tick_generic: TickGenericData):
+        if not (ticker := self.reqId2Ticker.get(reqId)):
+            return
+        self.ticker_bus.emit(reqId, tick_generic, self.lastTime)
+        self.pendingTickers.add(ticker)
+
+    def tickReqParams(self, reqId: int, tickParams: TickParams):
+        if not (ticker := self.reqId2Ticker.get(reqId)):
+            return
+        ticker.minTick = tickParams.minTick
+        ticker.bboExchange = tickParams.bboExchange
+        ticker.snapshotPermissions = tickParams.snapshotPermissions
 
     def tickSnapshotEnd(self, reqId: int):
         self._endReq(reqId)
@@ -979,130 +826,6 @@ class Wrapper:
         ticker.tickByTicks.append(tick)
         self.pendingTickers.add(ticker)
 
-    def tickString(self, reqId: int, tickType: int, value: str):
-        if not (ticker := self.reqId2Ticker.get(reqId)):
-            return
-
-        try:
-            if tickType == 32:
-                ticker.bidExchange = value
-            elif tickType == 33:
-                ticker.askExchange = value
-            elif tickType == 84:
-                ticker.lastExchange = value
-            elif tickType == 45:
-                timestamp = int(value)
-
-                # only populate if timestamp isn't '0' (we don't want to report "last trade: 20,000 days ago")
-                if timestamp:
-                    ticker.lastTimestamp = datetime.fromtimestamp(
-                        timestamp, self.defaultTimezone
-                    )
-            elif tickType == 47:
-                # https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html
-                d = dict(
-                    t.split("=")
-                    for t in value.split(";")
-                    if t  # type: ignore
-                )  # type: ignore
-                for k, v in d.items():
-                    with suppress(ValueError):
-                        if v == "-99999.99":
-                            v = "nan"
-                        d[k] = float(v)  # type: ignore
-                        d[k] = int(v)  # type: ignore
-                ticker.fundamentalRatios = FundamentalRatios(**d)
-            elif tickType in {48, 77}:
-                # RT Volume or RT Trade Volume string format:
-                # price;size;ms since epoch;total volume;VWAP;single trade
-                # example:
-                # 701.28;1;1348075471534;67854;701.46918464;true
-                priceStr, sizeStr, rtTime, volume, vwap, _ = value.split(";")
-                if volume:
-                    if tickType == 48:
-                        ticker.rtVolume = float(volume)
-                    elif tickType == 77:
-                        ticker.rtTradeVolume = float(volume)
-
-                if vwap:
-                    ticker.vwap = float(vwap)
-
-                if rtTime:
-                    ticker.rtTime = datetime.fromtimestamp(
-                        int(rtTime) / 1000, self.defaultTimezone
-                    )
-
-                if priceStr == "":
-                    return
-
-                price = float(priceStr)
-                size = float(sizeStr)
-
-                ticker.prevLast = ticker.last
-                ticker.prevLastSize = ticker.lastSize
-
-                ticker.last = price
-                ticker.lastSize = size
-
-                tick = TickData(self.lastTime, tickType, price, size)
-                ticker.ticks.append(tick)
-            elif tickType == 59:
-                # Dividend tick:
-                # https://interactivebrokers.github.io/tws-api/tick_types.html#ib_dividends
-                # example value: '0.83,0.92,20130219,0.23'
-                past12, next12, nextDate, nextAmount = value.split(",")
-                ticker.dividends = Dividends(
-                    float(past12) if past12 else None,
-                    float(next12) if next12 else None,
-                    parseIBDatetime(nextDate) if nextDate else None,
-                    float(nextAmount) if nextAmount else None,
-                )
-            else:
-                self._logger.error(
-                    f"tickString with tickType {tickType}: unhandled value: {value!r}"
-                )
-
-            self.pendingTickers.add(ticker)
-        except ValueError:
-            self._logger.error(
-                f"tickString with tickType {tickType}: malformed value: {value!r}"
-            )
-
-    def tickGeneric(self, reqId: int, tickType: int, value: float):
-        ticker = self.reqId2Ticker.get(reqId)
-        if not ticker:
-            return
-
-        try:
-            value = float(value)
-            value = value if value > 0 else self.defaultEmptySize
-        except ValueError:
-            self._logger.error(
-                f"[tickType {tickType}] genericTick: malformed value: {value!r}"
-            )
-            return
-
-        assert tickType in GENERIC_TICK_MAP, (
-            f"Received tick {tickType=} {value=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-        )
-
-        setattr(ticker, GENERIC_TICK_MAP[tickType], value)
-
-        tick = TickData(self.lastTime, tickType, value, 0)
-        ticker.ticks.append(tick)
-        self.pendingTickers.add(ticker)
-
-    def tickReqParams(
-        self, reqId: int, minTick: float, bboExchange: str, snapshotPermissions: int
-    ):
-        ticker = self.reqId2Ticker.get(reqId)
-        if not ticker:
-            return
-
-        ticker.minTick = minTick
-        ticker.bboExchange = bboExchange
-        ticker.snapshotPermissions = snapshotPermissions
-
     def smartComponents(self, reqId, components):
         self._endReq(reqId, components)
 
@@ -1183,44 +906,18 @@ class Wrapper:
         self.pendingTickers.add(ticker)
 
     def tickOptionComputation(
-        self,
-        reqId: int,
-        tickType: int,
-        tickAttrib: int,
-        impliedVol: float,
-        delta: float,
-        optPrice: float,
-        pvDividend: float,
-        gamma: float,
-        vega: float,
-        theta: float,
-        undPrice: float,
+        self, reqId: int, tick_computation: TickComputationData
     ):
-        comp = OptionComputation(
-            tickAttrib,
-            impliedVol if impliedVol != -1 else None,
-            delta if delta != -2 else None,
-            optPrice if optPrice != -1 else None,
-            pvDividend if pvDividend != -1 else None,
-            gamma if gamma != -2 else None,
-            vega if vega != -2 else vega,
-            theta if theta != -2 else theta,
-            undPrice if undPrice != -1 else None,
-        )
         ticker = self.reqId2Ticker.get(reqId)
         if ticker:
             # reply from reqMktData
             # https://interactivebrokers.github.io/tws-api/tick_types.html
 
-            assert tickType in GREEKS_TICK_MAP, (
-                f"Received tick {tickType=} {tickAttrib=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-            )
-
-            setattr(ticker, GREEKS_TICK_MAP[tickType], comp)
+            self.ticker_bus.emit(reqId, tick_computation, self.lastTime)
             self.pendingTickers.add(ticker)
-        elif reqId in self._futures:
+        elif reqId and tick_computation.tickType == TickType.NOT_SET:
             # reply from calculateImpliedVolatility or calculateOptionPrice
-            self._endReq(reqId, comp)
+            self.response_bus.emit(reqId, tick_computation.computation)
         else:
             self._logger.error(f"tickOptionComputation: Unknown reqId: {reqId}")
 
@@ -1265,8 +962,7 @@ class Wrapper:
             dataList.updateEvent.emit(dataList)
 
     def histogramData(self, reqId: int, items: list[HistogramData]):
-        result = [HistogramData(item.price, item.count) for item in items]
-        self._endReq(reqId, result)
+        self.response_bus.emit(reqId, items)
 
     def securityDefinitionOptionParameter(
         self,
@@ -1458,7 +1154,7 @@ class Wrapper:
                         self.response_bus.emit(reqId, error)
                     else:
                         # a None will be interpreted as an empty result
-                        self._logger.error("is request %s, %s", reqId,msg)
+                        self._logger.error("is request %s, %s", reqId, msg)
                         self.response_bus.emit(reqId, None)
                 self._logger.info(msg)
         else:

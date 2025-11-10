@@ -1,4 +1,6 @@
-# ib_async/protobuf_converters/account_converters.py
+"""
+Account data protobuf converters.
+"""
 
 from ..objects import AccountValue, PortfolioItem, Position
 from ..protobuf.AccountDataRequest_pb2 import (
@@ -45,7 +47,10 @@ def createAccountDataRequestProto(
     accountDataRequestProto.acctCode = acctCode
     return accountDataRequestProto
 
-def createAccountMultiRequestProto(reqId: int, account: str, modelCode: str, ledgerAndNLV: bool) -> AccountUpdatesMultiRequestProto:
+
+def createAccountMultiRequestProto(
+    reqId: int, account: str, modelCode: str, ledgerAndNLV: bool
+) -> AccountUpdatesMultiRequestProto:
     """
     Creates an AccountUpdatesMultiRequest protobuf message.
     """
@@ -59,13 +64,16 @@ def createAccountMultiRequestProto(reqId: int, account: str, modelCode: str, led
         accountUpdatesMultiRequestProto.ledgerAndNLV = ledgerAndNLV
     return accountUpdatesMultiRequestProto
 
+
 def createCancelAccMultiRequestProto(reqId: int) -> CancelAccountUpdatesMultiProto:
     cancelAccountUpdatesMultiProto = CancelAccountUpdatesMultiProto()
     cancelAccountUpdatesMultiProto.reqId = reqId
     return cancelAccountUpdatesMultiProto
 
 
-def createAccountValueFromUpdateMulti(accountValueProto: AccountUpdateMultiProto) -> AccountValue:
+def createAccountValueFromUpdateMulti(
+    accountValueProto: AccountUpdateMultiProto,
+) -> AccountValue:
     """
     Converts an AccountUpdateMulti protobuf message to an ib_async AccountValue object.
     """

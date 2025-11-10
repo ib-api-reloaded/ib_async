@@ -1,6 +1,15 @@
 """Historical data protobuf converters"""
 
-from ib_async.objects import BarData
+from datetime import datetime, tzinfo
+from ..objects import (
+    BarData,
+    HistoricalTick,
+    HistoricalTickLast,
+    HistoricalTickBidAsk,
+    TickAttribBidAsk,
+    TickAttribLast,
+    HistogramData,
+)
 from ..util import isValidIntValue, parseIBDatetime
 
 from ..contract import Contract, TagValue
@@ -13,6 +22,25 @@ from ..protobuf.HistoricalDataRequest_pb2 import (
 from ..protobuf.HistoricalDataBar_pb2 import (
     HistoricalDataBar as HistoricalDataBarProto,
 )
+from ..protobuf.HistoricalTicksRequest_pb2 import (
+    HistoricalTicksRequest as HistoricalTicksRequestProto,
+)
+from ..protobuf.HistoricalTick_pb2 import HistoricalTick as HistoricalTickProto
+from ..protobuf.HistoricalTickBidAsk_pb2 import (
+    HistoricalTickBidAsk as HistoricalTickBidAskProto,
+)
+from ..protobuf.HistoricalTickLast_pb2 import (
+    HistoricalTickLast as HistoricalTickLastProto,
+)
+from ..protobuf.HistogramDataRequest_pb2 import (
+    HistogramDataRequest as HistogramDataRequestProto,
+)
+from ..protobuf.HistogramDataEntry_pb2 import (
+    HistogramDataEntry as HistogramDataEntryProto,
+)
+from ..protobuf.TickAttribBidAsk_pb2 import TickAttribBidAsk as TickAttribBidAskProto
+from ..protobuf.TickAttribLast_pb2 import TickAttribLast as TickAttribLastProto
+
 from .contract_converters import createContractProto
 
 
@@ -100,3 +128,117 @@ def createBarDataList(
             bar.barCount = barProto.barCount
         bars.append(bar)
     return bars
+
+
+def createHistoricalTicksRequestProto(
+    reqId: int,
+    contract: Contract,
+    startDateTime: str,
+    endDateTime: str,
+    numberOfTicks: int,
+    whatToShow: str,
+    useRTH: bool,
+    ignoreSize: bool,
+    miscOptionsList: list[TagValue],
+) -> HistoricalTicksRequestProto:
+    historicalTicksRequestProto = HistoricalTicksRequestProto()
+    if isValidIntValue(reqId):
+        historicalTicksRequestProto.reqId = reqId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        historicalTicksRequestProto.contract.CopyFrom(contractProto)
+    if startDateTime:
+        historicalTicksRequestProto.startDateTime = startDateTime
+    if endDateTime:
+        historicalTicksRequestProto.endDateTime = endDateTime
+    if isValidIntValue(numberOfTicks):
+        historicalTicksRequestProto.numberOfTicks = numberOfTicks
+    if whatToShow:
+        historicalTicksRequestProto.whatToShow = whatToShow
+    if useRTH:
+        historicalTicksRequestProto.useRTH = useRTH
+    if ignoreSize:
+        historicalTicksRequestProto.ignoreSize = ignoreSize
+    fillTagValueList(miscOptionsList, historicalTicksRequestProto.miscOptions)
+    return historicalTicksRequestProto
+
+
+def decodeHistoricalTick(
+    historicalTickProto: HistoricalTickProto, tz: tzinfo
+) -> HistoricalTick:
+    time = datetime.fromtimestamp(historicalTickProto.time, tz)
+    price = historicalTickProto.price
+    size = float(historicalTickProto.size)
+    historicalTick = HistoricalTick(time, price, size)
+    return historicalTick
+
+
+def decodeHistoricalTickBidAsk(
+    historicalTickBidAskProto: HistoricalTickBidAskProto, tz: tzinfo
+) -> HistoricalTickBidAsk:
+    time = datetime.fromtimestamp(historicalTickBidAskProto.time, tz)
+
+    tickAttribBidAskProto = historicalTickBidAskProto.tickAttribBidAsk
+    bidPastLow = tickAttribBidAskProto.bidPastLow
+    askPastHigh = tickAttribBidAskProto.askPastHigh
+    tickAttribBidAsk = TickAttribBidAsk(bidPastLow, askPastHigh)
+
+    priceBid = historicalTickBidAskProto.priceBid
+    priceAsk = historicalTickBidAskProto.priceAsk
+    sizeBid = float(historicalTickBidAskProto.sizeBid)
+    sizeAsk = float(historicalTickBidAskProto.sizeAsk)
+
+    historicalTickBidAsk = HistoricalTickBidAsk(
+        time, tickAttribBidAsk, priceBid, priceAsk, sizeBid, sizeAsk
+    )
+
+    return historicalTickBidAsk
+
+
+def decodeHistoricalTickLast(
+    historicalTickLastProto: HistoricalTickLastProto, tz: tzinfo
+) -> HistoricalTickLast:
+    time = datetime.fromtimestamp(historicalTickLastProto.time, tz)
+
+    tickAttribLastProto = historicalTickLastProto.tickAttribLast
+    pastLimit = tickAttribLastProto.pastLimit
+    unreported = tickAttribLastProto.unreported
+    tickAttribLast = TickAttribLast(pastLimit, unreported)
+
+    price = historicalTickLastProto.price
+    size = float(historicalTickLastProto.size)
+    exchange = historicalTickLastProto.exchange
+    specialConditions = historicalTickLastProto.specialConditions
+
+    historicalTickLast = HistoricalTickLast(
+        time, tickAttribLast, price, size, exchange, specialConditions
+    )
+
+    return historicalTickLast
+
+
+def createHistogramDataRequestProto(
+    reqId: int, contract: Contract, useRTH: bool, timePeriod: str
+) -> HistogramDataRequestProto:
+    histogramDataRequestProto = HistogramDataRequestProto()
+    if isValidIntValue(reqId):
+        histogramDataRequestProto.reqId = reqId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        histogramDataRequestProto.contract.CopyFrom(contractProto)
+    if useRTH:
+        histogramDataRequestProto.useRTH = useRTH
+    if timePeriod:
+        histogramDataRequestProto.timePeriod = timePeriod
+    return histogramDataRequestProto
+
+
+def decodeHistogramDataEntry(
+    histogramDataEntryProto: HistogramDataEntryProto,
+) -> HistogramData:
+    histogramData = HistogramData()
+    if histogramDataEntryProto.HasField("price"):
+        histogramData.price = histogramDataEntryProto.price
+    if histogramDataEntryProto.HasField("size"):
+        histogramData.count = int(histogramDataEntryProto.size)
+    return histogramData

@@ -1,37 +1,30 @@
 """High-level interface to Interactive Brokers."""
 
-from asyncio import TimeoutError
+import asyncio
 import copy
 import datetime
-import asyncio
 import logging
 import time
-from enum import auto, Flag
+from asyncio import TimeoutError
+from enum import Flag, auto
 from typing import (
     Any,
+    AsyncIterator,
     Awaitable,
     Callable,
-    cast,
     Iterator,
     List,
     Optional,
     TypeVar,
     Union,
-    AsyncIterator,
+    cast,
 )
-
-_T = TypeVar("_T")
 
 from eventkit import Event
 
 import ib_async.util as util
-from ib_async.wrapper import Wrapper, RequestError
 from ib_async.client import Client
 from ib_async.contract import Contract, ContractDescription, ContractDetails
-from ib_async.protobuf.ContractDataRequest_pb2 import (
-    ContractDataRequest as ContractDataRequestProto,
-)
-
 from ib_async.objects import (
     AccountValue,
     BarDataList,
@@ -73,7 +66,9 @@ from ib_async.order import (
     Trade,
 )
 from ib_async.ticker import Ticker
-from ib_async.wrapper import Wrapper
+from ib_async.wrapper import RequestError, Wrapper
+
+_T = TypeVar("_T")
 
 
 class StartupFetch(Flag):
@@ -414,7 +409,7 @@ class IB:
             f"in {stats.numMsgSent} messages, "
             f"{util.formatSI(stats.numBytesRecv)}B received "
             f"in {stats.numMsgRecv} messages, "
-            f"session time {util.formatSI(stats.duration)}s."
+            f"session time {datetime.timedelta(seconds=stats.duration)}."
         )
 
         self._logger.info(status)
@@ -661,7 +656,7 @@ class IB:
         """List of all executions from this session."""
         return list(fill.execution for fill in self.wrapper.fills.values())
 
-    def ticker(self, contract: Contract) -> Optional[Ticker]:
+    def ticker(self, contract: Contract) -> Ticker | None:
         """
         Get ticker of the given contract. It must have been requested before
         with reqMktData with the same contract object. The ticker may not be
@@ -670,11 +665,14 @@ class IB:
         Args:
             contract: Contract to get ticker for.
         """
-        return self.wrapper.tickers.get(hash(contract))
+        for ticker in self.wrapper.reqId2Ticker.values():
+            if hash(ticker.contract) == hash(contract):
+                return ticker
+        return None
 
     def tickers(self) -> list[Ticker]:
         """Get a list of all tickers."""
-        return list(self.wrapper.tickers.values())
+        return list(self.wrapper.reqId2Ticker.values())
 
     def pendingTickers(self) -> list[Ticker]:
         """Get a list of all tickers that have pending ticks or domTicks."""
@@ -2379,16 +2377,16 @@ class IB:
         )
 
     def reqExecutionsAsync(
-        self, execFilter: Optional[ExecutionFilter] = None
+        self, execFilter: ExecutionFilter | None = None
     ) -> Awaitable[list[Fill]]:
         """Request a list of fills."""
         reqId = self.client.getReqId()
         self.client.reqExecutions(reqId, execFilter or ExecutionFilter())
         fills = (
             self.wrapper.response_bus.filter(
-                lambda rId, e: rId == reqId and e is not None
+                lambda rId, e: rId == reqId
             )
-            .takewhile(lambda rId, data: data is not None)
+            .takewhile(lambda r, data: data is not None)
             .pluck(1)
             .map(self._raise_if_error)
             .list()
@@ -2569,7 +2567,6 @@ class IB:
         miscOptions: list[TagValue] = [],
     ) -> Awaitable[List]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalTicks(
@@ -2583,7 +2580,12 @@ class IB:
             ignoreSize,
             miscOptions,
         )
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
     async def reqHeadTimeStampAsync(
         self, contract: Contract, whatToShow: str, useRTH: bool, formatDate: int = 1
@@ -2618,10 +2620,13 @@ class IB:
         self, contract: Contract, useRTH: bool, period: str
     ) -> Awaitable[list[HistogramData]]:
         reqId = self.client.getReqId()
-
-        future = self.wrapper.startReq(reqId, contract)
         self.client.reqHistogramData(reqId, contract, useRTH, period)
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
     def reqFundamentalDataAsync(
         self,
@@ -2718,34 +2723,6 @@ class IB:
             .takewhile(lambda rId, data: data is not None)
             .pluck(1)
             .list()
-        )
-
-    def reqSecDefOptParams(
-        self,
-        underlyingSymbol: str,
-        futFopExchange: str,
-        underlyingSecType: str,
-        underlyingConId: int,
-    ) -> list[OptionChain]:
-        """
-        Get the option chain.
-
-        This method is blocking.
-
-        https://interactivebrokers.github.io/tws-api/options.html
-
-        Args:
-            underlyingSymbol: Symbol of underlier contract.
-            futFopExchange: Exchange (only for ``FuturesOption``, otherwise
-                leave blank).
-            underlyingSecType: The type of the underlying security, like
-                'STK' or 'FUT'.
-            underlyingConId: conId of the underlying contract.
-        """
-        return self._run(
-            self.reqSecDefOptParamsAsync(
-                underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
-            )
         )
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:

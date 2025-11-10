@@ -1,7 +1,5 @@
 """Contract converters"""
 
-from decimal import Decimal
-
 from ..contract import (
     ComboLeg,
     Contract,
@@ -12,10 +10,7 @@ from ..contract import (
     FundDistributionPolicyIndicator,
 )
 from ..objects import IneligibilityReason, OptionChain
-from ..order import Order, OrderComboLeg
-from ..protobuf.AccountDataRequest_pb2 import (
-    AccountDataRequest as AccountDataRequestProto,
-)
+from ..order import Order
 from ..protobuf.ComboLeg_pb2 import ComboLeg as ComboLegProto
 from ..protobuf.Contract_pb2 import Contract as ContractProto
 from ..protobuf.ContractData_pb2 import ContractData as ContractDataProto
@@ -25,9 +20,6 @@ from ..protobuf.ContractDescription_pb2 import (
 from ..protobuf.ContractDetails_pb2 import ContractDetails as ContractDetailsProto
 from ..protobuf.DeltaNeutralContract_pb2 import (
     DeltaNeutralContract as DeltaNeutralContractProto,
-)
-from ..protobuf.IneligibilityReason_pb2 import (
-    IneligibilityReason as IneligibilityReasonProto,
 )
 from ..protobuf.MarketRuleRequest_pb2 import MarketRuleRequest as MarketRuleRequestProto
 from ..protobuf.MatchingSymbolsRequest_pb2 import (
@@ -178,7 +170,7 @@ def createComboLegs(contractProto: ContractProto) -> list[ComboLeg]:
             if comboLegProto.HasField("openClose"):
                 comboLeg.openClose = comboLegProto.openClose
             if comboLegProto.HasField("shortSalesSlot"):
-                comboLeg.shortSalesSlot = comboLegProto.shortSalesSlot
+                comboLeg.shortSaleSlot = comboLegProto.shortSalesSlot
             if comboLegProto.HasField("designatedLocation"):
                 comboLeg.designatedLocation = comboLegProto.designatedLocation
             if comboLegProto.HasField("exemptCode"):
@@ -188,8 +180,10 @@ def createComboLegs(contractProto: ContractProto) -> list[ComboLeg]:
     return comboLegs
 
 
-def createDeltaNeutralContract(contractProto: ContractProto) -> DeltaNeutralContract:
-    deltaNeutralContract = DeltaNeutralContract()
+def createDeltaNeutralContract(
+    contractProto: ContractProto,
+) -> DeltaNeutralContract | None:
+    deltaNeutralContract = None
     if contractProto.HasField("deltaNeutralContract"):
         deltaNeutralContractProto = DeltaNeutralContractProto()
         deltaNeutralContractProto.CopyFrom(contractProto.deltaNeutralContract)

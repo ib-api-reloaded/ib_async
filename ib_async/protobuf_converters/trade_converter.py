@@ -71,6 +71,7 @@ def createOrderComboLegs(contractProto: ContractProto) -> list[OrderComboLeg]:
 
     return orderComboLegs
 
+
 def createOrder(
     orderId: int, contractProto: ContractProto, orderProto: OrderProto
 ) -> Order:
@@ -500,7 +501,7 @@ def createTagValueList(protoMap: dict[str, str]) -> list[TagValue]:
     tagValueList = []
     if protoMap is not None and protoMap:
         for tag, value in protoMap.items():
-            tagValue = TagValue(tag,value)
+            tagValue = TagValue(tag, value)
             tagValueList.append(tagValue)
     return tagValueList
 
@@ -715,7 +716,7 @@ def createExecution(executionProto: ExecutionProto) -> Execution:
     if executionProto.HasField("optExerciseOrLapseType"):
         execution.optExerciseOrLapseType = getEnumTypeFromString(
             OptionExerciseType, executionProto.optExerciseOrLapseType
-        )        
+        )
     return execution
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date as date_, datetime, timezone, tzinfo
 from enum import Enum
-from typing import Any, List, NamedTuple, Optional, Union
+from typing import Any, List, NamedTuple, Optional, TypeAlias, Union
 
 from eventkit import Event
 
@@ -13,6 +13,7 @@ from .contract import Contract, ScanData, TagValue
 from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER
 
 nan = float("nan")
+
 
 class OptionExerciseType(Enum):
     NoneItem = (-1, "None")
@@ -24,6 +25,7 @@ class OptionExerciseType(Enum):
     Expired = (102, "Expired")
     Netting = (103, "Netting")
     AutoexerciseTrading = (200, "AutoexerciseTrading")
+
 
 @dataclass
 class ScannerSubscription:
@@ -81,8 +83,10 @@ class Execution:
     modelCode: str = ""
     lastLiquidity: int = 0
     pendingPriceRevision: bool = False
-    submitter:str = ""
-    optExerciseOrLapseType:OptionExerciseType = OptionExerciseType.NoneItem
+    submitter: str = ""
+    optExerciseOrLapseType: OptionExerciseType = field(
+        default=OptionExerciseType.NoneItem
+    )
 
 
 @dataclass
@@ -104,8 +108,8 @@ class ExecutionFilter:
     secType: str = ""
     exchange: str = ""
     side: str = ""
-    lastNDays:int = UNSET_INTEGER
-    specificDates:list[int] = field(default_factory=list)
+    lastNDays: int = UNSET_INTEGER
+    specificDates: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -133,26 +137,246 @@ class RealTimeBar:
     count: int = 0
 
 
-@dataclass
+class TickType(Enum):
+    BID_SIZE = 0
+    BID = 1
+    ASK = 2
+    ASK_SIZE = 3
+    LAST = 4
+    LAST_SIZE = 5
+    HIGH = 6
+    LOW = 7
+    VOLUME = 8
+    CLOSE = 9
+    BID_OPTION_COMPUTATION = 10
+    ASK_OPTION_COMPUTATION = 11
+    LAST_OPTION_COMPUTATION = 12
+    MODEL_OPTION = 13
+    OPEN = 14
+    LOW_13_WEEK = 15
+    HIGH_13_WEEK = 16
+    LOW_26_WEEK = 17
+    HIGH_26_WEEK = 18
+    LOW_52_WEEK = 19
+    HIGH_52_WEEK = 20
+    AVG_VOLUME = 21
+    OPEN_INTEREST = 22
+    OPTION_HISTORICAL_VOL = 23
+    OPTION_IMPLIED_VOL = 24
+    OPTION_BID_EXCH = 25
+    OPTION_ASK_EXCH = 26
+    OPTION_CALL_OPEN_INTEREST = 27
+    OPTION_PUT_OPEN_INTEREST = 28
+    OPTION_CALL_VOLUME = 29
+    OPTION_PUT_VOLUME = 30
+    INDEX_FUTURE_PREMIUM = 31
+    BID_EXCH = 32
+    ASK_EXCH = 33
+    AUCTION_VOLUME = 34
+    AUCTION_PRICE = 35
+    AUCTION_IMBALANCE = 36
+    MARK_PRICE = 37
+    BID_EFP_COMPUTATION = 38
+    ASK_EFP_COMPUTATION = 39
+    LAST_EFP_COMPUTATION = 40
+    OPEN_EFP_COMPUTATION = 41
+    HIGH_EFP_COMPUTATION = 42
+    LOW_EFP_COMPUTATION = 43
+    CLOSE_EFP_COMPUTATION = 44
+    LAST_TIMESTAMP = 45
+    SHORTABLE = 46
+    FUNDAMENTAL_RATIOS = 47
+    RT_VOLUME = 48
+    HALTED = 49
+    BID_YIELD = 50
+    ASK_YIELD = 51
+    LAST_YIELD = 52
+    CUST_OPTION_COMPUTATION = 53
+    TRADE_COUNT = 54
+    TRADE_RATE = 55
+    VOLUME_RATE = 56
+    LAST_RTH_TRADE = 57
+    RT_HISTORICAL_VOL = 58
+    IB_DIVIDENDS = 59
+    BOND_FACTOR_MULTIPLIER = 60
+    REGULATORY_IMBALANCE = 61
+    NEWS_TICK = 62
+    SHORT_TERM_VOLUME_3_MIN = 63
+    SHORT_TERM_VOLUME_5_MIN = 64
+    SHORT_TERM_VOLUME_10_MIN = 65
+    DELAYED_BID = 66
+    DELAYED_ASK = 67
+    DELAYED_LAST = 68
+    DELAYED_BID_SIZE = 69
+    DELAYED_ASK_SIZE = 70
+    DELAYED_LAST_SIZE = 71
+    DELAYED_HIGH = 72
+    DELAYED_LOW = 73
+    DELAYED_VOLUME = 74
+    DELAYED_CLOSE = 75
+    DELAYED_OPEN = 76
+    RT_TRD_VOLUME = 77
+    CREDITMAN_MARK_PRICE = 78
+    CREDITMAN_SLOW_MARK_PRICE = 79
+    DELAYED_BID_OPTION = 80
+    DELAYED_ASK_OPTION = 81
+    DELAYED_LAST_OPTION = 82
+    DELAYED_MODEL_OPTION = 83
+    LAST_EXCH = 84
+    LAST_REG_TIME = 85
+    FUTURES_OPEN_INTEREST = 86
+    AVG_OPT_VOLUME = 87
+    DELAYED_LAST_TIMESTAMP = 88
+    SHORTABLE_SHARES = 89
+    DELAYED_HALTED = 90
+    REUTERS_2_MUTUAL_FUNDS = 91
+    ETF_NAV_CLOSE = 92
+    ETF_NAV_PRIOR_CLOSE = 93
+    ETF_NAV_BID = 94
+    ETF_NAV_ASK = 95
+    ETF_NAV_LAST = 96
+    ETF_FROZEN_NAV_LAST = 97
+    ETF_NAV_HIGH = 98
+    ETF_NAV_LOW = 99
+    SOCIAL_MARKET_ANALYTICS = 100
+    ESTIMATED_IPO_MIDPOINT = 101
+    FINAL_IPO_LAST = 102
+    DELAYED_YIELD_BID = 103
+    DELAYED_YIELD_ASK = 104
+    NOT_SET = 105
+
+
+@dataclass(slots=True, frozen=True)
+class TickParams:
+    reqId: int
+    minTick: float
+    bboExchange: str
+    snapshotPermissions: int
+
+
+@dataclass(slots=True, frozen=True)
+class TickData:
+    """For Ticker.ticks[TickData]"""
+
+    time: datetime
+    tickType: TickType
+    price: float
+    size: float
+
+
+@dataclass(slots=True)
 class TickAttrib:
     canAutoExecute: bool = False
     pastLimit: bool = False
     preOpen: bool = False
 
 
-@dataclass
+@dataclass(slots=True)
 class TickAttribBidAsk:
     bidPastLow: bool = False
     askPastHigh: bool = False
 
 
-@dataclass
+@dataclass(slots=True)
 class TickAttribLast:
     pastLimit: bool = False
     unreported: bool = False
 
 
-@dataclass
+@dataclass(frozen=True)
+class TickPriceData:
+    """Data from a TickPriceProto message."""
+
+    reqId: int
+    tickType: TickType
+    price: float
+    size: float
+    attribs: TickAttrib
+
+
+@dataclass(frozen=True)
+class TickSizeData:
+    """Data from a TickSizeProto message."""
+
+    reqId: int
+    tickType: TickType
+    size: float
+
+
+@dataclass(frozen=True)
+class TickStringData:
+    """Data from a TickStringProto message."""
+
+    reqId: int
+    tickType: TickType
+    value: str
+
+
+@dataclass(frozen=True)
+class TickGenericData:
+    """Data from a generic tick message."""
+
+    reqId: int
+    tickType: TickType
+    value: float
+
+@dataclass(frozen=True)
+class TickComputationData:
+    """Data from a TickComputationProto message."""
+
+    reqId: int
+    tickType: TickType
+    computation: OptionComputation
+
+@dataclass(frozen=True)
+class TickByTickAllLastData:
+    """Data from a TickByTickAllLastProto message."""
+
+    reqId: int
+    tickType: int
+    time: int
+    price: float
+    size: int
+    tickAttribLast: TickAttribLast
+    exchange: str
+    specialConditions: str
+
+
+@dataclass(frozen=True)
+class TickByTickBidAskData:
+    """Data from a TickByTickBidAskProto message."""
+
+    reqId: int
+    time: int
+    bidPrice: float
+    askPrice: float
+    bidSize: int
+    askSize: int
+    tickAttribBidAsk: TickAttribBidAsk
+
+
+@dataclass(frozen=True)
+class TickByTickMidPointData:
+    """Data from a TickByTickMidPointProto message."""
+
+    reqId: int
+    time: int
+    midPoint: float
+
+
+TickDataType: TypeAlias = (
+    TickPriceData
+    | TickSizeData
+    | TickStringData
+    | TickGenericData
+    | TickByTickAllLastData
+    | TickByTickBidAskData
+    | TickByTickMidPointData
+    | TickComputationData
+)
+
+
+@dataclass(slots=True)
 class HistogramData:
     price: float = 0.0
     count: int = 0
@@ -237,20 +461,15 @@ class AccountValue(NamedTuple):
     modelCode: str
 
 
-class TickData(NamedTuple):
-    time: datetime
-    tickType: int
-    price: float
-    size: float
-
-
-class HistoricalTick(NamedTuple):
+@dataclass(slots=True)
+class HistoricalTick:
     time: datetime
     price: float
     size: float
 
 
-class HistoricalTickBidAsk(NamedTuple):
+@dataclass(slots=True)
+class HistoricalTickBidAsk:
     time: datetime
     tickAttribBidAsk: TickAttribBidAsk
     priceBid: float
@@ -259,7 +478,8 @@ class HistoricalTickBidAsk(NamedTuple):
     sizeAsk: float
 
 
-class HistoricalTickLast(NamedTuple):
+@dataclass(slots=True)
+class HistoricalTickLast:
     time: datetime
     tickAttribLast: TickAttribLast
     price: float

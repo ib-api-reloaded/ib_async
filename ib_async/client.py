@@ -72,9 +72,16 @@ from .protobuf_converters.contract_converters import (
 )
 from .protobuf_converters.historical_data_converters import (
     createHeadTimestampRequestProto,
+    createHistogramDataRequestProto,
     createHistoricalDataRequestProto,
+    createHistoricalTicksRequestProto,
 )
 from .protobuf_converters.trade_converter import createExecutionRequestProto
+from .protobuf_converters.market_data_converters import (
+    cancelMarketDataProto,
+    createMarketDataRequestProto,
+    createMarketDataTypeRequestProto,
+)
 from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
 
 
@@ -407,25 +414,23 @@ class Client:
         regulatorySnapshot,
         mktDataOptions,
     ):
-        fields = [1, 11, reqId, contract]
-
-        if contract.secType == "BAG":
-            legs = contract.comboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [leg.conId, leg.ratio, leg.action, leg.exchange]
-
-        dnc = contract.deltaNeutralContract
-        if dnc:
-            fields += [True, dnc.conId, dnc.delta, dnc.price]
-        else:
-            fields += [False]
-
-        fields += [genericTickList, snapshot, regulatorySnapshot, mktDataOptions]
-        self.send(*fields)
+        mktDataRequestProto = createMarketDataRequestProto(
+            reqId,
+            contract,
+            genericTickList,
+            snapshot,
+            regulatorySnapshot,
+            mktDataOptions,
+        )
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_MKT_DATA), mktDataRequestProto
+        )
 
     def cancelMktData(self, reqId):
-        self.send(2, 2, reqId)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.CANCEL_MKT_DATA),
+            cancelMarketDataProto(reqId),
+        )
 
     def placeOrder(self, orderId, contract, order):
         version = self.serverVersion()
@@ -1013,8 +1018,8 @@ class Client:
         cancelRequest = CancelHistoricalDataProto()
         cancelRequest.reqId = reqId
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.CANCEL_HISTORICAL_DATA),
-            cancelRequest)
+            MessageId.to_protobuf(MessageId.OUT.CANCEL_HISTORICAL_DATA), cancelRequest
+        )
 
     def reqCurrentTime(self):
         currentTimeRequestProto = CurrentTimeRequestProto()
@@ -1099,7 +1104,10 @@ class Client:
         self.send(58, 1)
 
     def reqMarketDataType(self, marketDataType):
-        self.send(59, 1, marketDataType)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_MARKET_DATA_TYPE),
+            createMarketDataTypeRequestProto(marketDataType=marketDataType),
+        )
 
     def reqPositions(self):
         self.sendProto(
@@ -1264,7 +1272,10 @@ class Client:
         )
 
     def reqHistogramData(self, tickerId, contract, useRTH, timePeriod):
-        self.send(88, tickerId, contract, contract.includeExpired, useRTH, timePeriod)
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_HISTOGRAM_DATA),
+            createHistogramDataRequestProto(tickerId, contract, useRTH, timePeriod),
+        )
 
     def cancelHistogramData(self, tickerId):
         self.send(89, tickerId)
@@ -1299,11 +1310,9 @@ class Client:
         ignoreSize,
         miscOptions,
     ):
-        self.send(
-            96,
+        historicalTicksRequestProto = createHistoricalTicksRequestProto(
             reqId,
             contract,
-            contract.includeExpired,
             startDateTime,
             endDateTime,
             numberOfTicks,
@@ -1311,6 +1320,10 @@ class Client:
             useRth,
             ignoreSize,
             miscOptions,
+        )
+        self.sendProto(
+            MessageId.to_protobuf(MessageId.OUT.REQ_HISTORICAL_TICKS),
+            historicalTicksRequestProto,
         )
 
     def reqTickByTickData(self, reqId, contract, tickType, numberOfTicks, ignoreSize):

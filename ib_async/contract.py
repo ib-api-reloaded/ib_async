@@ -377,7 +377,12 @@ class Forex(Contract):
             currency = currency or pair[3:]
 
         Contract.__init__(
-            self, secType="CASH", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self,
+            secType="CASH",
+            symbol=symbol,
+            exchange=exchange,
+            currency=currency,
+            **kwargs,
         )
 
     def __repr__(self):
@@ -412,7 +417,12 @@ class Index(Contract):
             currency: Underlying currency.
         """
         Contract.__init__(
-            self, secType="IND", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self,
+            secType="IND",
+            symbol=symbol,
+            exchange=exchange,
+            currency=currency,
+            **kwargs,
         )
 
 
@@ -429,7 +439,12 @@ class CFD(Contract):
             currency: Underlying currency.
         """
         Contract.__init__(
-            self, secType="CFD", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self,
+            secType="CFD",
+            symbol=symbol,
+            exchange=exchange,
+            currency=currency,
+            **kwargs,
         )
 
 
@@ -446,7 +461,12 @@ class Commodity(Contract):
             currency: Underlying currency.
         """
         Contract.__init__(
-            self, secType="CMDTY", symbol=symbol, exchange=exchange, currency=currency, **kwargs
+            self,
+            secType="CMDTY",
+            symbol=symbol,
+            exchange=exchange,
+            currency=currency,
+            **kwargs,
         )
 
 

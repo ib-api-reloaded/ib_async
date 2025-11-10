@@ -2,14 +2,13 @@ class MessageId:
     """
     Encapsulates TWS API message ID constants and protocol-related logic.
     """
-    
+
     from dataclasses import dataclass
-    
 
     PROTOBUF_MSG_ID = 200
     """Protobuf message ID offset"""
 
-    @dataclass(frozen=True,slots=True)
+    @dataclass(frozen=True, slots=True)
     class IN:
         """Incoming Message IDs (TWS -> Client)"""
 
@@ -98,7 +97,7 @@ class MessageId:
         HISTORICAL_DATA_END = 108
         CURRENT_TIME_IN_MILLIS = 109
 
-    @dataclass(frozen=True,slots=True)
+    @dataclass(frozen=True, slots=True)
     class OUT:
         """Outgoing Message IDs (Client -> TWS)"""
 

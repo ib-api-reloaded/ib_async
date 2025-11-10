@@ -27,6 +27,7 @@ from .objects import (
     TagValue,
     TickAttribBidAsk,
     TickAttribLast,
+    TickType,
 )
 from .order import OrderStatus
 from .protobuf.AccountDataEnd_pb2 import AccountDataEnd as AccountDataEndProto
@@ -61,10 +62,19 @@ from .protobuf.ExecutionDetailsEnd_pb2 import (
     ExecutionDetailsEnd as ExecutionDetailsEndProto,
 )
 from .protobuf.HeadTimestamp_pb2 import HeadTimestamp as HeadTimestampProto
+from .protobuf.HistogramData_pb2 import HistogramData as HistogramDataProto
 from .protobuf.HistoricalData_pb2 import HistoricalData as HistoricalDataProto
 from .protobuf.HistoricalDataEnd_pb2 import HistoricalDataEnd as HistoricalDataEndProto
+from .protobuf.HistoricalTicks_pb2 import HistoricalTicks as HistoricalTicksProto
+from .protobuf.HistoricalTicksBidAsk_pb2 import (
+    HistoricalTicksBidAsk as HistoricalTicksBidAskProto,
+)
+from .protobuf.HistoricalTicksLast_pb2 import (
+    HistoricalTicksLast as HistoricalTicksLastProto,
+)
 from .protobuf.ManagedAccounts_pb2 import ManagedAccounts as ManagedAccountsProto
 from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
+from .protobuf.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
 from .protobuf.NextValidId_pb2 import NextValidId as NextValidIdProto
 from .protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
 from .protobuf.OpenOrdersEnd_pb2 import OpenOrdersEnd as OpenOrderEndProto
@@ -79,6 +89,15 @@ from .protobuf.SecDefOptParameterEnd_pb2 import (
     SecDefOptParameterEnd as SecDefOptParameterEndProto,
 )
 from .protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
+from .protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
+from .protobuf.TickOptionComputation_pb2 import (
+    TickOptionComputation as TickOptionComputationProto,
+)
+from .protobuf.TickPrice_pb2 import TickPrice as TickPriceProto
+from .protobuf.TickSize_pb2 import TickSize as TickSizeProto
+from .protobuf.TickSnapshotEnd_pb2 import TickSnapshotEnd as TickSnapshotEndProto
+from .protobuf.TickString_pb2 import TickString as TickStringProto
+from .protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
 from .protobuf_converters.account_converters import (
     createAccountSummary,
     createAccountValue,
@@ -91,18 +110,30 @@ from .protobuf_converters.contract_converters import (
     createContractDetails,
     createOptionChain,
 )
+from .protobuf_converters.historical_data_converters import (
+    createBarDataList,
+    decodeHistogramDataEntry,
+    decodeHistoricalTick,
+    decodeHistoricalTickBidAsk,
+    decodeHistoricalTickLast,
+)
+from .protobuf_converters.market_data_converters import (
+    createTickOptionComputation,
+    createTickParams,
+    createTickPriceData,
+    createTickSizeData,
+    createTickGenericData,
+    createTickStringData,
+)
 from .protobuf_converters.trade_converter import (
     createCommissionReport,
     createContract,
-    createExecution,
     createFill,
     createOrder,
-    createOrderState,
     createOrderStatus,
     createTradeFromOpenOrder,
 )
-from .protobuf_converters.historical_data_converters import createBarDataList
-from .util import UNSET_DOUBLE, ZoneInfo, parseIBDatetime
+from .util import NO_VALID_ID, UNSET_DOUBLE, UNSET_INTEGER, ZoneInfo, parseIBDatetime
 from .wrapper import Wrapper
 
 
@@ -180,6 +211,7 @@ class Decoder:
             AccountUpdateTimeProto,
             "updateAccountTimeProto",
         ),
+        MessageId.IN.MARKET_DATA_TYPE: (MarketDataTypeProto, "marketDataTypeProto"),
         MessageId.IN.COMMISSION_AND_FEES_REPORT: (
             CommissionReportProto,
             "commissionReportProto",
@@ -189,9 +221,32 @@ class Decoder:
             CurrentTimeInMillisProto,
             "currentTimeMiliProto",
         ),
-        MessageId.IN.HEAD_TIMESTAMP: (HeadTimestampProto,"headTimestampProto"),
+        MessageId.IN.HEAD_TIMESTAMP: (HeadTimestampProto, "headTimestampProto"),
         MessageId.IN.HISTORICAL_DATA: (HistoricalDataProto, "historicalDataProto"),
-        MessageId.IN.HISTORICAL_DATA_END: (HistoricalDataEndProto, "historicalDataProtoEnd"),
+        MessageId.IN.HISTORICAL_DATA_END: (
+            HistoricalDataEndProto,
+            "historicalDataProtoEnd",
+        ),
+        MessageId.IN.HISTORICAL_TICKS: (HistoricalTicksProto, "historicalTicksProto"),
+        MessageId.IN.HISTORICAL_TICKS_BID_ASK: (
+            HistoricalTicksBidAskProto,
+            "historicalTicksBidAskProto",
+        ),
+        MessageId.IN.HISTORICAL_TICKS_LAST: (
+            HistoricalTicksLastProto,
+            "historicalTicksLastProto",
+        ),
+        MessageId.IN.HISTOGRAM_DATA: (HistogramDataProto, "histogramDataProto"),
+        MessageId.IN.TICK_REQ_PARAMS: (TickReqParamsProto, "tickReqParamsProto"),
+        MessageId.IN.TICK_PRICE: (TickPriceProto, "tickPriceProto"),
+        MessageId.IN.TICK_SIZE: (TickSizeProto, "tickSizeProto"),
+        MessageId.IN.TICK_GENERIC: (TickGenericProto, "tickGenericProto"),
+        MessageId.IN.TICK_STRING: (TickStringProto, "tickStringProto"),
+        MessageId.IN.TICK_OPTION_COMPUTATION: (
+            TickOptionComputationProto,
+            "tickOptionComputationProto",
+        ),
+        MessageId.IN.TICK_SNAPSHOT_END: (TickSnapshotEndProto, "tickSnapshotEndProto"),
     }
 
     def __init__(self, wrapper: Wrapper, serverVersion: int):
@@ -341,27 +396,93 @@ class Decoder:
 
     def currentTimeMiliProto(self, msg: CurrentTimeInMillisProto):
         self.wrapper.currentTimeMili(msg.currentTimeInMillis)
-        
+
     def headTimestampProto(self, msg: HeadTimestampProto):
         self.wrapper.headTimestamp(msg.reqId, msg.headTimestamp)
-
 
     def historicalDataProto(self, msg: HistoricalDataProto):
         bar_data = createBarDataList(msg.historicalDataBars)
         self.wrapper.historicalData(msg.reqId, bar_data)
-        
+
     def historicalDataProtoEnd(self, msg: HistoricalDataEndProto):
         self.wrapper.historicalDataEnd(msg.reqId, msg.startDateStr, msg.endDateStr)
 
+    def historicalTicksProto(self, msg: HistoricalTicksProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        isDone = msg.isDone if msg.HasField("isDone") else False
+        historicalTicks = []
+        if msg.historicalTicks:
+            for historicalTickProto in msg.historicalTicks:
+                historicalTick = decodeHistoricalTick(
+                    historicalTickProto, self.wrapper.defaults.timezone
+                )
+                historicalTicks.append(historicalTick)
+        self.wrapper.historicalTicks(reqId, historicalTicks, isDone)
+
+    def historicalTicksBidAskProto(self, msg: HistoricalTicksBidAskProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        isDone = msg.isDone if msg.HasField("isDone") else False
+        historicalTicksBidAsk: list[HistoricalTickBidAsk] = []
+        if msg.historicalTicksBidAsk:
+            for historicalTickProto in msg.historicalTicksBidAsk:
+                historicalTickBidAsk = decodeHistoricalTickBidAsk(
+                    historicalTickProto, self.wrapper.defaults.timezone
+                )
+                historicalTicksBidAsk.append(historicalTickBidAsk)
+        self.wrapper.historicalTicksBidAsk(reqId, historicalTicksBidAsk, isDone)
+
+    def historicalTicksLastProto(self, msg: HistoricalTicksLastProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        isDone = msg.isDone if msg.HasField("isDone") else False
+        historicalTicksLast: list[HistoricalTickLast] = []
+        if msg.historicalTicksLast:
+            for historicalTickProto in msg.historicalTicksLast:
+                historicalTickLast = decodeHistoricalTickLast(
+                    historicalTickProto, self.wrapper.defaults.timezone
+                )
+                historicalTicksLast.append(historicalTickLast)
+        self.wrapper.historicalTicksLast(reqId, historicalTicksLast, isDone)
+
+    def histogramDataProto(self, msg: HistogramDataProto):
+        histogram: list[HistogramData] = []
+        if msg.histogramDataEntries:
+            for histogramDataEntryProto in msg.histogramDataEntries:
+                histogramEntry = decodeHistogramDataEntry(histogramDataEntryProto)
+                histogram.append(histogramEntry)
+        self.wrapper.histogramData(msg.reqId, histogram)
+
+    def marketDataTypeProto(self, msg: MarketDataTypeProto):
+        self.wrapper.marketDataType(msg.reqId, msg.marketDataType)
+
+    def tickReqParamsProto(self, msg: TickReqParamsProto):
+        tickParams = createTickParams(msg)
+        self.wrapper.tickReqParams(tickParams.reqId, tickParams)
+
+    def tickPriceProto(self, msg: TickPriceProto):
+        tickPrice, tickSize = createTickPriceData(msg)
+        self.wrapper.priceSizeTick(tickPrice.reqId, tickPrice)
+        if tickSize.tickType != TickType.NOT_SET:
+            self.wrapper.tickSize(tickSize.reqId, tickSize)
+
+    def tickSizeProto(self, msg: TickSizeProto):
+        tickSize = createTickSizeData(msg)
+        self.wrapper.tickSize(tickSize.reqId, tickSize)
+
+    def tickGenericProto(self, msg: TickGenericProto):
+        tickGeneric = createTickGenericData(msg)
+        self.wrapper.tickGeneric(tickGeneric.reqId, tickGeneric)
+
+    def tickStringProto(self, msg: TickStringProto):
+        tickString = createTickStringData(msg)
+        self.wrapper.tickString(tickString.reqId, tickString)
+
+    def tickOptionComputationProto(self, msg: TickOptionComputationProto):
+        tick_computation = createTickOptionComputation(msg)
+        self.wrapper.tickOptionComputation(
+            tick_computation.reqId, tick_computation
+        )
+
     ##################### legacy methods ##########################################
-
-    def priceSizeTick(self, fields):
-        _, _, reqId, tickType, price, size, _ = fields
-
-        if price:
-            self.wrapper.priceSizeTick(
-                int(reqId), int(tickType), float(price), float(size or 0)
-            )
 
     def bondContractDetails(self, fields):
         cd = ContractDetails()
