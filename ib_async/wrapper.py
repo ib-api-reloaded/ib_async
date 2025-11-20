@@ -133,6 +133,7 @@ GENERIC_TICK_MAP: Final[TickDict] = {
     55: "tradeRate",
     56: "volumeRate",
     58: "rtHistVolatility",
+    90: "ShortableStatus",
 }
 
 GREEKS_TICK_MAP: Final[TickDict] = {
@@ -1113,7 +1114,7 @@ class Wrapper:
                 ticker.askExchange = value
             elif tickType == 84:
                 ticker.lastExchange = value
-            elif tickType == 45:
+            elif tickType in {45, 88}:
                 timestamp = int(value)
 
                 # only populate if timestamp isn't '0' (we don't want to report "last trade: 20,000 days ago")
