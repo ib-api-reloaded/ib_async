@@ -133,6 +133,7 @@ GENERIC_TICK_MAP: Final[TickDict] = {
     55: "tradeRate",
     56: "volumeRate",
     58: "rtHistVolatility",
+    90: "ShortableStatus",
 }
 
 GREEKS_TICK_MAP: Final[TickDict] = {
