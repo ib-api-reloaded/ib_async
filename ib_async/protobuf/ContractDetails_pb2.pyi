@@ -1,0 +1,141 @@
+import IneligibilityReason_pb2 as _IneligibilityReason_pb2
+from google.protobuf.internal import containers as _containers
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+
+DESCRIPTOR: _descriptor.FileDescriptor
+
+class ContractDetails(_message.Message):
+    __slots__ = ("marketName", "minTick", "orderTypes", "validExchanges", "priceMagnifier", "underConId", "longName", "contractMonth", "industry", "category", "subcategory", "timeZoneId", "tradingHours", "liquidHours", "evRule", "evMultiplier", "secIdList", "aggGroup", "underSymbol", "underSecType", "marketRuleIds", "realExpirationDate", "stockType", "minSize", "sizeIncrement", "suggestedSizeIncrement", "fundName", "fundFamily", "fundType", "fundFrontLoad", "fundBackLoad", "fundBackLoadTimeInterval", "fundManagementFee", "fundClosed", "fundClosedForNewInvestors", "fundClosedForNewMoney", "fundNotifyAmount", "fundMinimumInitialPurchase", "fundMinimumSubsequentPurchase", "fundBlueSkyStates", "fundBlueSkyTerritories", "fundDistributionPolicyIndicator", "fundAssetType", "cusip", "issueDate", "ratings", "bondType", "coupon", "couponType", "convertible", "callable", "puttable", "descAppend", "nextOptionDate", "nextOptionType", "nextOptionPartial", "bondNotes", "ineligibilityReasonList", "eventContract1", "eventContractDescription1", "eventContractDescription2")
+    class SecIdListEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    MARKETNAME_FIELD_NUMBER: _ClassVar[int]
+    MINTICK_FIELD_NUMBER: _ClassVar[int]
+    ORDERTYPES_FIELD_NUMBER: _ClassVar[int]
+    VALIDEXCHANGES_FIELD_NUMBER: _ClassVar[int]
+    PRICEMAGNIFIER_FIELD_NUMBER: _ClassVar[int]
+    UNDERCONID_FIELD_NUMBER: _ClassVar[int]
+    LONGNAME_FIELD_NUMBER: _ClassVar[int]
+    CONTRACTMONTH_FIELD_NUMBER: _ClassVar[int]
+    INDUSTRY_FIELD_NUMBER: _ClassVar[int]
+    CATEGORY_FIELD_NUMBER: _ClassVar[int]
+    SUBCATEGORY_FIELD_NUMBER: _ClassVar[int]
+    TIMEZONEID_FIELD_NUMBER: _ClassVar[int]
+    TRADINGHOURS_FIELD_NUMBER: _ClassVar[int]
+    LIQUIDHOURS_FIELD_NUMBER: _ClassVar[int]
+    EVRULE_FIELD_NUMBER: _ClassVar[int]
+    EVMULTIPLIER_FIELD_NUMBER: _ClassVar[int]
+    SECIDLIST_FIELD_NUMBER: _ClassVar[int]
+    AGGGROUP_FIELD_NUMBER: _ClassVar[int]
+    UNDERSYMBOL_FIELD_NUMBER: _ClassVar[int]
+    UNDERSECTYPE_FIELD_NUMBER: _ClassVar[int]
+    MARKETRULEIDS_FIELD_NUMBER: _ClassVar[int]
+    REALEXPIRATIONDATE_FIELD_NUMBER: _ClassVar[int]
+    STOCKTYPE_FIELD_NUMBER: _ClassVar[int]
+    MINSIZE_FIELD_NUMBER: _ClassVar[int]
+    SIZEINCREMENT_FIELD_NUMBER: _ClassVar[int]
+    SUGGESTEDSIZEINCREMENT_FIELD_NUMBER: _ClassVar[int]
+    FUNDNAME_FIELD_NUMBER: _ClassVar[int]
+    FUNDFAMILY_FIELD_NUMBER: _ClassVar[int]
+    FUNDTYPE_FIELD_NUMBER: _ClassVar[int]
+    FUNDFRONTLOAD_FIELD_NUMBER: _ClassVar[int]
+    FUNDBACKLOAD_FIELD_NUMBER: _ClassVar[int]
+    FUNDBACKLOADTIMEINTERVAL_FIELD_NUMBER: _ClassVar[int]
+    FUNDMANAGEMENTFEE_FIELD_NUMBER: _ClassVar[int]
+    FUNDCLOSED_FIELD_NUMBER: _ClassVar[int]
+    FUNDCLOSEDFORNEWINVESTORS_FIELD_NUMBER: _ClassVar[int]
+    FUNDCLOSEDFORNEWMONEY_FIELD_NUMBER: _ClassVar[int]
+    FUNDNOTIFYAMOUNT_FIELD_NUMBER: _ClassVar[int]
+    FUNDMINIMUMINITIALPURCHASE_FIELD_NUMBER: _ClassVar[int]
+    FUNDMINIMUMSUBSEQUENTPURCHASE_FIELD_NUMBER: _ClassVar[int]
+    FUNDBLUESKYSTATES_FIELD_NUMBER: _ClassVar[int]
+    FUNDBLUESKYTERRITORIES_FIELD_NUMBER: _ClassVar[int]
+    FUNDDISTRIBUTIONPOLICYINDICATOR_FIELD_NUMBER: _ClassVar[int]
+    FUNDASSETTYPE_FIELD_NUMBER: _ClassVar[int]
+    CUSIP_FIELD_NUMBER: _ClassVar[int]
+    ISSUEDATE_FIELD_NUMBER: _ClassVar[int]
+    RATINGS_FIELD_NUMBER: _ClassVar[int]
+    BONDTYPE_FIELD_NUMBER: _ClassVar[int]
+    COUPON_FIELD_NUMBER: _ClassVar[int]
+    COUPONTYPE_FIELD_NUMBER: _ClassVar[int]
+    CONVERTIBLE_FIELD_NUMBER: _ClassVar[int]
+    CALLABLE_FIELD_NUMBER: _ClassVar[int]
+    PUTTABLE_FIELD_NUMBER: _ClassVar[int]
+    DESCAPPEND_FIELD_NUMBER: _ClassVar[int]
+    NEXTOPTIONDATE_FIELD_NUMBER: _ClassVar[int]
+    NEXTOPTIONTYPE_FIELD_NUMBER: _ClassVar[int]
+    NEXTOPTIONPARTIAL_FIELD_NUMBER: _ClassVar[int]
+    BONDNOTES_FIELD_NUMBER: _ClassVar[int]
+    INELIGIBILITYREASONLIST_FIELD_NUMBER: _ClassVar[int]
+    EVENTCONTRACT1_FIELD_NUMBER: _ClassVar[int]
+    EVENTCONTRACTDESCRIPTION1_FIELD_NUMBER: _ClassVar[int]
+    EVENTCONTRACTDESCRIPTION2_FIELD_NUMBER: _ClassVar[int]
+    marketName: str
+    minTick: str
+    orderTypes: str
+    validExchanges: str
+    priceMagnifier: int
+    underConId: int
+    longName: str
+    contractMonth: str
+    industry: str
+    category: str
+    subcategory: str
+    timeZoneId: str
+    tradingHours: str
+    liquidHours: str
+    evRule: str
+    evMultiplier: float
+    secIdList: _containers.ScalarMap[str, str]
+    aggGroup: int
+    underSymbol: str
+    underSecType: str
+    marketRuleIds: str
+    realExpirationDate: str
+    stockType: str
+    minSize: str
+    sizeIncrement: str
+    suggestedSizeIncrement: str
+    fundName: str
+    fundFamily: str
+    fundType: str
+    fundFrontLoad: str
+    fundBackLoad: str
+    fundBackLoadTimeInterval: str
+    fundManagementFee: str
+    fundClosed: bool
+    fundClosedForNewInvestors: bool
+    fundClosedForNewMoney: bool
+    fundNotifyAmount: str
+    fundMinimumInitialPurchase: str
+    fundMinimumSubsequentPurchase: str
+    fundBlueSkyStates: str
+    fundBlueSkyTerritories: str
+    fundDistributionPolicyIndicator: str
+    fundAssetType: str
+    cusip: str
+    issueDate: str
+    ratings: str
+    bondType: str
+    coupon: float
+    couponType: str
+    convertible: bool
+    callable: bool
+    puttable: bool
+    descAppend: str
+    nextOptionDate: str
+    nextOptionType: str
+    nextOptionPartial: bool
+    bondNotes: str
+    ineligibilityReasonList: _containers.RepeatedCompositeFieldContainer[_IneligibilityReason_pb2.IneligibilityReason]
+    eventContract1: str
+    eventContractDescription1: str
+    eventContractDescription2: str
+    def __init__(self, marketName: _Optional[str] = ..., minTick: _Optional[str] = ..., orderTypes: _Optional[str] = ..., validExchanges: _Optional[str] = ..., priceMagnifier: _Optional[int] = ..., underConId: _Optional[int] = ..., longName: _Optional[str] = ..., contractMonth: _Optional[str] = ..., industry: _Optional[str] = ..., category: _Optional[str] = ..., subcategory: _Optional[str] = ..., timeZoneId: _Optional[str] = ..., tradingHours: _Optional[str] = ..., liquidHours: _Optional[str] = ..., evRule: _Optional[str] = ..., evMultiplier: _Optional[float] = ..., secIdList: _Optional[_Mapping[str, str]] = ..., aggGroup: _Optional[int] = ..., underSymbol: _Optional[str] = ..., underSecType: _Optional[str] = ..., marketRuleIds: _Optional[str] = ..., realExpirationDate: _Optional[str] = ..., stockType: _Optional[str] = ..., minSize: _Optional[str] = ..., sizeIncrement: _Optional[str] = ..., suggestedSizeIncrement: _Optional[str] = ..., fundName: _Optional[str] = ..., fundFamily: _Optional[str] = ..., fundType: _Optional[str] = ..., fundFrontLoad: _Optional[str] = ..., fundBackLoad: _Optional[str] = ..., fundBackLoadTimeInterval: _Optional[str] = ..., fundManagementFee: _Optional[str] = ..., fundClosed: bool = ..., fundClosedForNewInvestors: bool = ..., fundClosedForNewMoney: bool = ..., fundNotifyAmount: _Optional[str] = ..., fundMinimumInitialPurchase: _Optional[str] = ..., fundMinimumSubsequentPurchase: _Optional[str] = ..., fundBlueSkyStates: _Optional[str] = ..., fundBlueSkyTerritories: _Optional[str] = ..., fundDistributionPolicyIndicator: _Optional[str] = ..., fundAssetType: _Optional[str] = ..., cusip: _Optional[str] = ..., issueDate: _Optional[str] = ..., ratings: _Optional[str] = ..., bondType: _Optional[str] = ..., coupon: _Optional[float] = ..., couponType: _Optional[str] = ..., convertible: bool = ..., callable: bool = ..., puttable: bool = ..., descAppend: _Optional[str] = ..., nextOptionDate: _Optional[str] = ..., nextOptionType: _Optional[str] = ..., nextOptionPartial: bool = ..., bondNotes: _Optional[str] = ..., ineligibilityReasonList: _Optional[_Iterable[_Union[_IneligibilityReason_pb2.IneligibilityReason, _Mapping]]] = ..., eventContract1: _Optional[str] = ..., eventContractDescription1: _Optional[str] = ..., eventContractDescription2: _Optional[str] = ...) -> None: ...

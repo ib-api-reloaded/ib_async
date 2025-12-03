@@ -1,26 +1,20 @@
 """Deserialize and dispatch messages."""
 
-import dataclasses
 import logging
-from datetime import datetime
-from typing import Any, cast
+
+from ib_async.protobuf_converters.subscription_converters import createScannerDataList
 
 from .contract import (
-    ComboLeg,
     Contract,
     ContractDescription,
     ContractDetails,
     DeltaNeutralContract,
 )
+from .message import MessageId
 from .objects import (
-    BarData,
-    CommissionReport,
     DepthMktDataDescription,
-    Execution,
     FamilyCode,
     HistogramData,
-    HistoricalSession,
-    HistoricalTick,
     HistoricalTickBidAsk,
     HistoricalTickLast,
     NewsProvider,
@@ -28,320 +22,625 @@ from .objects import (
     SmartComponent,
     SoftDollarTier,
     TagValue,
-    TickAttribBidAsk,
-    TickAttribLast,
+    TickType,
 )
-from .order import Order, OrderComboLeg, OrderCondition, OrderState
-from .util import parseIBDatetime, UNSET_DOUBLE, ZoneInfo
+from .order import OrderStatus
+from .protobuf.AccountDataEnd_pb2 import AccountDataEnd as AccountDataEndProto
+from .protobuf.AccountSummary_pb2 import AccountSummary as AccountSummaryProto
+from .protobuf.AccountSummaryEnd_pb2 import (
+    AccountSummaryEnd as AccountSummaryEndProto,
+)
+from .protobuf.AccountUpdateMulti_pb2 import (
+    AccountUpdateMulti as AccountUpdateMultiProto,
+)
+from .protobuf.AccountUpdateMultiEnd_pb2 import (
+    AccountUpdateMultiEnd as AccountUpdateMultiEndProto,
+)
+from .protobuf.AccountUpdateTime_pb2 import AccountUpdateTime as AccountUpdateTimeProto
+from .protobuf.AccountValue_pb2 import AccountValue as AccountValueProto
+from .protobuf.CommissionAndFeesReport_pb2 import (
+    CommissionAndFeesReport as CommissionReportProto,
+)
+from .protobuf.CompletedOrder_pb2 import CompletedOrder as CompletedOrderProto
+from .protobuf.CompletedOrdersEnd_pb2 import (
+    CompletedOrdersEnd as CompletedOrdersEndProto,
+)
+from .protobuf.ContractData_pb2 import ContractData as ContractDataProto
+from .protobuf.ContractDataEnd_pb2 import ContractDataEnd as ContractDataEndProto
+from .protobuf.CurrentTime_pb2 import CurrentTime as CurrentTimeProto
+from .protobuf.CurrentTimeInMillis_pb2 import (
+    CurrentTimeInMillis as CurrentTimeInMillisProto,
+)
+from .protobuf.ErrorMessage_pb2 import ErrorMessage as ErrorMessageProto
+from .protobuf.ExecutionDetails_pb2 import ExecutionDetails as ExecutionDetailsProto
+from .protobuf.ExecutionDetailsEnd_pb2 import (
+    ExecutionDetailsEnd as ExecutionDetailsEndProto,
+)
+from .protobuf.FundamentalsData_pb2 import FundamentalsData as FundamentalsDataProto
+from .protobuf.HeadTimestamp_pb2 import HeadTimestamp as HeadTimestampProto
+from .protobuf.HistogramData_pb2 import HistogramData as HistogramDataProto
+from .protobuf.HistoricalData_pb2 import HistoricalData as HistoricalDataProto
+from .protobuf.HistoricalDataEnd_pb2 import HistoricalDataEnd as HistoricalDataEndProto
+from .protobuf.HistoricalDataUpdate_pb2 import (
+    HistoricalDataUpdate as HistoricalDataUpdateProto,
+)
+from .protobuf.HistoricalSchedule_pb2 import (
+    HistoricalSchedule as HistoricalScheduleProto,
+)
+from .protobuf.HistoricalTicks_pb2 import HistoricalTicks as HistoricalTicksProto
+from .protobuf.HistoricalTicksBidAsk_pb2 import (
+    HistoricalTicksBidAsk as HistoricalTicksBidAskProto,
+)
+from .protobuf.HistoricalTicksLast_pb2 import (
+    HistoricalTicksLast as HistoricalTicksLastProto,
+)
+from .protobuf.ManagedAccounts_pb2 import ManagedAccounts as ManagedAccountsProto
+from .protobuf.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
+from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
+from .protobuf.NextValidId_pb2 import NextValidId as NextValidIdProto
+from .protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
+from .protobuf.OpenOrdersEnd_pb2 import OpenOrdersEnd as OpenOrderEndProto
+from .protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
+from .protobuf.OrderBound_pb2 import OrderBound as OrderBoundProto
+from .protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
+from .protobuf.Position_pb2 import Position as PositionProto
+from .protobuf.PositionEnd_pb2 import PositionEnd as PositionEndProto
+from .protobuf.PnL_pb2 import PnL as PnLProto
+from .protobuf.PnLSingle_pb2 import PnLSingle as PnLSingleProto
+from .protobuf.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
+from .protobuf.ScannerParameters_pb2 import ScannerParameters as ScannerParametersProto
+from .protobuf.ScannerData_pb2 import ScannerData as ScannerDataProto
+from .protobuf.SecDefOptParameter_pb2 import (
+    SecDefOptParameter as SecDefOptParameterProto,
+)
+from .protobuf.SecDefOptParameterEnd_pb2 import (
+    SecDefOptParameterEnd as SecDefOptParameterEndProto,
+)
+from .protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
+from .protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
+from .protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
+from .protobuf.TickOptionComputation_pb2 import (
+    TickOptionComputation as TickOptionComputationProto,
+)
+from .protobuf.TickPrice_pb2 import TickPrice as TickPriceProto
+from .protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
+from .protobuf.TickSize_pb2 import TickSize as TickSizeProto
+from .protobuf.TickSnapshotEnd_pb2 import TickSnapshotEnd as TickSnapshotEndProto
+from .protobuf.TickString_pb2 import TickString as TickStringProto
+from .protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
+from .protobuf.UserInfo_pb2 import UserInfo as UserInfoProto
+from .protobuf_converters.account_converters import (
+    createAccountSummary,
+    createAccountValue,
+    createAccountValueFromUpdateMulti,
+    createPortfolioItem,
+    createPosition,
+)
+from .protobuf_converters.contract_converters import (
+    createContractDescription,
+    createContractDetails,
+    createOptionChain,
+    createSmartComponents,
+)
+from .protobuf_converters.historical_data_converters import (
+    createBarData,
+    createBarDataList,
+    createHistogramDataEntry,
+    createHistoricalSchedule,
+    createHistoricalTick,
+    createHistoricalTickBidAsk,
+    createHistoricalTickLast,
+    createRealTimeBarTick,
+)
+from .protobuf_converters.market_data_converters import (
+    createTickGenericData,
+    createTickOptionComputation,
+    createTickParams,
+    createTickPriceData,
+    createTickSizeData,
+    createTickStringData,
+)
+from .protobuf_converters.trade_converter import (
+    createCommissionReport,
+    createContract,
+    createFill,
+    createOrder,
+    createOrderStatus,
+    createTradeFromOpenOrder,
+)
+
+from .util import NO_VALID_ID, UNSET_DOUBLE, UNSET_INTEGER
 from .wrapper import Wrapper
 
 
 class Decoder:
-    """Decode IB messages and invoke corresponding wrapper methods."""
+    """Decode IB messages from bytes to proto and to ib-async objects, then invoke
+    corresponding wrapper methods.
+    """
+
+    # MessageId.IN -> (DataTypeProto, methodHandler)
+    PROTOBUF_MESSAGE_HANDLERS: dict[MessageId.IN, tuple[type, str]] = {
+        # Handles NEXT_VALID_ID message during handshake
+        MessageId.IN.NEXT_VALID_ID: (NextValidIdProto, "nextValidIdProto"),
+        # Handles incoming contract details for reqContractDetails
+        MessageId.IN.CONTRACT_DATA: (ContractDataProto, "contractDetailsProto"),
+        # Signals the end of a contract details stream
+        MessageId.IN.CONTRACT_DATA_END: (
+            ContractDataEndProto,
+            "contractDetailsEndProto",
+        ),
+        # Handles the response for reqMarketRule
+        MessageId.IN.MARKET_RULE: (MarketRuleProto, "marketRuleProto"),
+        # Handles the response for reqMatchingSymbols
+        MessageId.IN.SYMBOL_SAMPLES: (SymbolSamplesProto, "symbolSamplesProto"),
+        # Handles incoming security definition option parameters for reqSecDefOptParams
+        MessageId.IN.SECURITY_DEFINITION_OPTION_PARAMETER: (
+            SecDefOptParameterProto,
+            "secDefOptParameterProto",
+        ),
+        # Signals the end of a security definition option parameters stream
+        MessageId.IN.SECURITY_DEFINITION_OPTION_PARAMETER_END: (
+            SecDefOptParameterEndProto,
+            "secDefOptParameterEndProto",
+        ),
+        # Handles incoming error messages
+        MessageId.IN.ERR_MSG: (ErrorMessageProto, "errorMessageProto"),
+        # Handles incoming managed accounts list
+        MessageId.IN.MANAGED_ACCTS: (ManagedAccountsProto, "managedAccountsProto"),
+        # Handles incoming account value updates
+        MessageId.IN.ACCT_VALUE: (AccountValueProto, "accountValueProto"),
+        MessageId.IN.ACCT_DOWNLOAD_END: (
+            AccountDataEndProto,
+            "accountDownloadEnd",
+        ),
+        # Handles incoming position updates
+        MessageId.IN.POSITION_DATA: (PositionProto, "positionProto"),
+        # Signals the end of a position stream
+        MessageId.IN.POSITION_END: (PositionEndProto, "positionEndProto"),
+        # Handles incoming multi-account updates
+        MessageId.IN.ACCOUNT_UPDATE_MULTI: (
+            AccountUpdateMultiProto,
+            "accountUpdateMultiProto",
+        ),
+        # Signals the end of a multi-account update stream
+        MessageId.IN.ACCOUNT_UPDATE_MULTI_END: (
+            AccountUpdateMultiEndProto,
+            "accountUpdateMultiEndProto",
+        ),
+        # Handles incoming open order updates
+        MessageId.IN.OPEN_ORDER: (OpenOrderProto, "openOrderProto"),
+        MessageId.IN.OPEN_ORDER_END: (OpenOrderEndProto, "openOrderEndProto"),
+        # Handles incoming execution details
+        MessageId.IN.EXECUTION_DATA: (ExecutionDetailsProto, "execDetailsProto"),
+        MessageId.IN.EXECUTION_DATA_END: (
+            ExecutionDetailsEndProto,
+            "execDetailsEndProto",
+        ),
+        # Handles account summary
+        MessageId.IN.ACCOUNT_SUMMARY: (AccountSummaryProto, "accountSummaryProto"),
+        MessageId.IN.ACCOUNT_SUMMARY_END: (
+            AccountSummaryEndProto,
+            "accountSummaryEndProto",
+        ),
+        # Handles order status updates
+        MessageId.IN.ORDER_STATUS: (OrderStatusProto, "orderStatusProto"),
+        MessageId.IN.COMPLETED_ORDER: (CompletedOrderProto, "completedOrderProto"),
+        MessageId.IN.COMPLETED_ORDERS_END: (
+            CompletedOrdersEndProto,
+            "completedOrdersEndProto",
+        ),
+        MessageId.IN.ORDER_BOUND: (OrderBoundProto, "orderBoundProto"),
+        MessageId.IN.PORTFOLIO_VALUE: (PortfolioValueProto, "updatePortfolioProto"),
+        MessageId.IN.ACCT_UPDATE_TIME: (
+            AccountUpdateTimeProto,
+            "updateAccountTimeProto",
+        ),
+        MessageId.IN.MARKET_DATA_TYPE: (MarketDataTypeProto, "marketDataTypeProto"),
+        MessageId.IN.COMMISSION_AND_FEES_REPORT: (
+            CommissionReportProto,
+            "commissionReportProto",
+        ),
+        MessageId.IN.CURRENT_TIME: (CurrentTimeProto, "currentTimeProto"),
+        MessageId.IN.CURRENT_TIME_IN_MILLIS: (
+            CurrentTimeInMillisProto,
+            "currentTimeMiliProto",
+        ),
+        MessageId.IN.HEAD_TIMESTAMP: (HeadTimestampProto, "headTimestampProto"),
+        MessageId.IN.HISTORICAL_DATA: (HistoricalDataProto, "historicalDataProto"),
+        MessageId.IN.HISTORICAL_DATA_END: (
+            HistoricalDataEndProto,
+            "historicalDataProtoEnd",
+        ),
+        MessageId.IN.HISTORICAL_DATA_UPDATE: (
+            HistoricalDataUpdateProto,
+            "historicalDataUpdateProto",
+        ),
+        MessageId.IN.HISTORICAL_TICKS: (HistoricalTicksProto, "historicalTicksProto"),
+        MessageId.IN.HISTORICAL_TICKS_BID_ASK: (
+            HistoricalTicksBidAskProto,
+            "historicalTicksBidAskProto",
+        ),
+        MessageId.IN.HISTORICAL_TICKS_LAST: (
+            HistoricalTicksLastProto,
+            "historicalTicksLastProto",
+        ),
+        MessageId.IN.HISTOGRAM_DATA: (HistogramDataProto, "histogramDataProto"),
+        MessageId.IN.HISTORICAL_SCHEDULE: (
+            HistoricalScheduleProto,
+            "historicalScheduleProto",
+        ),
+        MessageId.IN.REAL_TIME_BARS: (RealTimeBarTickProto, "realTimeBarTickProto"),
+        MessageId.IN.TICK_REQ_PARAMS: (TickReqParamsProto, "tickReqParamsProto"),
+        MessageId.IN.TICK_PRICE: (TickPriceProto, "tickPriceProto"),
+        MessageId.IN.TICK_SIZE: (TickSizeProto, "tickSizeProto"),
+        MessageId.IN.TICK_GENERIC: (TickGenericProto, "tickGenericProto"),
+        MessageId.IN.TICK_STRING: (TickStringProto, "tickStringProto"),
+        MessageId.IN.TICK_OPTION_COMPUTATION: (
+            TickOptionComputationProto,
+            "tickOptionComputationProto",
+        ),
+        MessageId.IN.TICK_SNAPSHOT_END: (TickSnapshotEndProto, "tickSnapshotEndProto"),
+        MessageId.IN.TICK_BY_TICK: (
+            TickByTickDataProto,
+            "tickByTickDataProto",
+        ),
+        MessageId.IN.FUNDAMENTAL_DATA: (FundamentalsDataProto, "fundamentalsDataProto"),
+        MessageId.IN.SCANNER_PARAMETERS: (
+            ScannerParametersProto,
+            "scannerParametersProto",
+        ),
+        MessageId.IN.SCANNER_DATA: (ScannerDataProto, "scannerDataProto"),
+        MessageId.IN.PNL: (PnLProto, "pnlProto"),
+        MessageId.IN.PNL_SINGLE: (PnLSingleProto, "pnlSingleProto"),
+        MessageId.IN.USER_INFO: (UserInfoProto, "userInfoProto"),
+        MessageId.IN.SMART_COMPONENTS: (SmartComponentsProto, "smartComponentsProto"),
+    }
 
     def __init__(self, wrapper: Wrapper, serverVersion: int):
         self.wrapper = wrapper
         self.serverVersion = serverVersion
         self.logger = logging.getLogger("ib_async.Decoder")
-        self.handlers = {
-            1: self.priceSizeTick,
-            2: self.wrap("tickSize", [int, int, float]),
-            3: self.wrap(
-                "orderStatus",
-                [int, str, float, float, float, int, int, float, int, str, float],
-                skip=1,
-            ),
-            4: self.errorMsg,
-            5: self.openOrder,
-            6: self.wrap("updateAccountValue", [str, str, str, str]),
-            7: self.updatePortfolio,
-            8: self.wrap("updateAccountTime", [str]),
-            9: self.wrap("nextValidId", [int]),
-            10: self.contractDetails,
-            11: self.execDetails,
-            12: self.wrap("updateMktDepth", [int, int, int, int, float, float]),
-            13: self.wrap(
-                "updateMktDepthL2", [int, int, str, int, int, float, float, bool]
-            ),
-            14: self.wrap("updateNewsBulletin", [int, int, str, str]),
-            15: self.wrap("managedAccounts", [str]),
-            16: self.wrap("receiveFA", [int, str]),
-            17: self.historicalData,
-            18: self.bondContractDetails,
-            19: self.wrap("scannerParameters", [str]),
-            20: self.scannerData,
-            21: self.tickOptionComputation,
-            45: self.wrap("tickGeneric", [int, int, float]),
-            46: self.wrap("tickString", [int, int, str]),
-            47: self.wrap(
-                "tickEFP", [int, int, float, str, float, int, str, float, float]
-            ),
-            49: self.wrap("currentTime", [int]),
-            50: self.wrap(
-                "realtimeBar", [int, int, float, float, float, float, float, float, int]
-            ),
-            51: self.wrap("fundamentalData", [int, str]),
-            52: self.wrap("contractDetailsEnd", [int]),
-            53: self.wrap("openOrderEnd", []),
-            54: self.wrap("accountDownloadEnd", [str]),
-            55: self.wrap("execDetailsEnd", [int]),
-            56: self.deltaNeutralValidation,
-            57: self.wrap("tickSnapshotEnd", [int]),
-            58: self.wrap("marketDataType", [int, int]),
-            59: self.commissionReport,
-            61: self.position,
-            62: self.wrap("positionEnd", []),
-            63: self.wrap("accountSummary", [int, str, str, str, str]),
-            64: self.wrap("accountSummaryEnd", [int]),
-            65: self.wrap("verifyMessageAPI", [str]),
-            66: self.wrap("verifyCompleted", [bool, str]),
-            67: self.wrap("displayGroupList", [int, str]),
-            68: self.wrap("displayGroupUpdated", [int, str]),
-            69: self.wrap("verifyAndAuthMessageAPI", [str, str]),
-            70: self.wrap("verifyAndAuthCompleted", [bool, str]),
-            71: self.positionMulti,
-            72: self.wrap("positionMultiEnd", [int]),
-            73: self.wrap("accountUpdateMulti", [int, str, str, str, str, str]),
-            74: self.wrap("accountUpdateMultiEnd", [int]),
-            75: self.securityDefinitionOptionParameter,
-            76: self.wrap("securityDefinitionOptionParameterEnd", [int], skip=1),
-            77: self.softDollarTiers,
-            78: self.familyCodes,
-            79: self.symbolSamples,
-            80: self.mktDepthExchanges,
-            81: self.wrap("tickReqParams", [int, float, str, int], skip=1),
-            82: self.smartComponents,
-            83: self.wrap("newsArticle", [int, int, str], skip=1),
-            84: self.wrap("tickNews", [int, int, str, str, str, str], skip=1),
-            85: self.newsProviders,
-            86: self.wrap("historicalNews", [int, str, str, str, str], skip=1),
-            87: self.wrap("historicalNewsEnd", [int, bool], skip=1),
-            88: self.wrap("headTimestamp", [int, str], skip=1),
-            89: self.histogramData,
-            90: self.historicalDataUpdate,
-            91: self.wrap("rerouteMktDataReq", [int, int, str], skip=1),
-            92: self.wrap("rerouteMktDepthReq", [int, int, str], skip=1),
-            93: self.marketRule,
-            94: self.wrap("pnl", [int, float, float, float], skip=1),
-            95: self.wrap(
-                "pnlSingle", [int, float, float, float, float, float], skip=1
-            ),
-            96: self.historicalTicks,
-            97: self.historicalTicksBidAsk,
-            98: self.historicalTicksLast,
-            99: self.tickByTick,
-            100: self.wrap("orderBound", [int, int, int], skip=1),
-            101: self.completedOrder,
-            102: self.wrap("completedOrdersEnd", [], skip=1),
-            103: self.wrap("replaceFAEnd", [int, str], skip=1),
-            104: self.wrap("wshMetaData", [int, str], skip=1),
-            105: self.wrap("wshEventData", [int, str], skip=1),
-            106: self.historicalSchedule,
-            107: self.wrap("userInfo", [int, str], skip=1),
-        }
 
-    def wrap(self, methodName, types, skip=2):
+    def processProtoBuf(self, payload: bytes):
         """
-        Create a message handler that invokes a wrapper method
-        with the in-order message fields as parameters, skipping over
-        the first ``skip`` fields, and parsed according to the ``types`` list.
+        Process a binary Protobuf message payload by calling the appropriate handler
+        method.
+
+        `wrapper.PROTOBUF_MESSAGE_HANDLERS.get(msgId) -> (DataTypeProto, methodHandler)`
+
         """
-
-        def handler(fields):
-            method = getattr(self.wrapper, methodName, None)
-            if method:
-                try:
-                    args = [
-                        (
-                            field
-                            if typ is str
-                            else (
-                                int(field or 0)
-                                if typ is int
-                                else (
-                                    float(field or 0)
-                                    if typ is float
-                                    else bool(int(field or 0))
-                                )
-                            )
-                        )
-                        for (typ, field) in zip(types, fields[skip:])
-                    ]
-                    method(*args)
-                except Exception:
-                    self.logger.exception(f"Error for {methodName}({args}):")
-
-        return handler
-
-    def interpret(self, fields):
-        """Decode fields and invoke corresponding wrapper method."""
+        msgId_raw = int.from_bytes(payload[:4], "big")
         try:
-            msgId = int(fields[0])
-            handler = self.handlers[msgId]
-            handler(fields)
-        except Exception:
-            self.logger.exception(f"Error handling fields: {fields}")
-
-    def parse(self, obj):
-        """Parse the object's properties according to its default types."""
-        for field in dataclasses.fields(obj):
-            typ = type(field.default)
-            if typ is str:
-                continue
-            v = getattr(obj, field.name)
-
-            if typ is int:
-                setattr(obj, field.name, int(v) if v else field.default)
-            elif typ is float:
-                setattr(obj, field.name, float(v) if v else field.default)
-            elif typ is bool:
-                setattr(obj, field.name, bool(int(v)) if v else field.default)
-
-    def priceSizeTick(self, fields):
-        _, _, reqId, tickType, price, size, _ = fields
-
-        if price:
-            self.wrapper.priceSizeTick(
-                int(reqId), int(tickType), float(price), float(size or 0)
+            msgId = MessageId.IN(msgId_raw)
+            handler_info = self.PROTOBUF_MESSAGE_HANDLERS.get(msgId)
+            if handler_info:
+                proto_class, handler_method_name = handler_info
+                proto_message = proto_class()
+                proto_message.ParseFromString(payload[4:])
+                handler_method = getattr(self, handler_method_name)
+                handler_method(proto_message)
+            else:
+                self.logger.warning("Unknown Protobuf message id: %s", msgId)
+        except ValueError as err:
+            self.logger.warning(
+                "ValueError: Processing protobuf message id: %s, %s", msgId_raw, err
+            )
+        except Exception as err:
+            self.logger.exception(
+                "Error processing Protobuf message id: %s, %s", msgId_raw, err
             )
 
-    def errorMsg(self, fields):
-        _, _, reqId, errorCode, errorString, *fields = fields
-        advancedOrderRejectJson = ""
-        if self.serverVersion >= 166:
-            advancedOrderRejectJson, *fields = fields
+    def errorMessageProto(self, msg: ErrorMessageProto):
+        reqId = msg.id
+        errorCode = msg.errorCode
+        errorMsg = msg.errorMsg
+        advancedOrderRejectJson = msg.advancedOrderRejectJson
 
-        self.wrapper.error(
-            int(reqId), int(errorCode), errorString, advancedOrderRejectJson
+        self.wrapper.error(reqId, errorCode, errorMsg, advancedOrderRejectJson)
+
+    def contractDetailsProto(self, msg: ContractDataProto):
+        reqId = msg.reqId
+        contractDetails = createContractDetails(msg)
+        self.wrapper.contractDetails(reqId, contractDetails)
+
+    def contractDetailsEndProto(self, msg: ContractDataEndProto):
+        self.wrapper.contractDetailsEnd(msg.reqId)
+
+    def symbolSamplesProto(self, msg: SymbolSamplesProto):
+        reqId = msg.reqId
+        contractDescriptions: list[ContractDescription] = []
+        for contractDescriptionProto in msg.contractDescriptions:
+            contractDescriptions.append(
+                createContractDescription(contractDescriptionProto)
+            )
+        self.wrapper.symbolSamples(reqId, contractDescriptions)
+
+    def marketRuleProto(self, msg: MarketRuleProto):
+        reqId = msg.marketRuleId
+        priceIncrements: list[PriceIncrement] = []
+        for priceIncrementProto in msg.priceIncrements:
+            priceIncrements.append(
+                PriceIncrement(
+                    lowEdge=priceIncrementProto.lowEdge,
+                    increment=priceIncrementProto.increment,
+                )
+            )
+        self.wrapper.marketRule(reqId, priceIncrements)
+
+    def secDefOptParameterProto(self, msg: SecDefOptParameterProto):
+        reqId = msg.reqId
+        optionChain = createOptionChain(msg)
+        self.wrapper.securityDefinitionOptionParameter(reqId, optionChain)
+
+    def secDefOptParameterEndProto(self, msg: SecDefOptParameterEndProto):
+        self.wrapper.securityDefinitionOptionParameterEnd(msg.reqId)
+
+    def managedAccountsProto(self, msg: ManagedAccountsProto):
+        accountsList = msg.accountsList
+        self.wrapper.managedAccounts(accountsList)
+
+    def accountValueProto(self, msg: AccountValueProto):
+        accountValue = createAccountValue(msg)
+        self.wrapper.updateAccountValue(accountValue)
+
+    def accountDownloadEnd(self, msg: str):
+        self.wrapper.accountDownloadEnd(msg)
+
+    def positionProto(self, msg: PositionProto):
+        position = createPosition(msg)
+        self.wrapper.position(position)
+
+    def positionEndProto(self, msg: PositionEndProto):
+        self.wrapper.positionEnd()
+
+    def updatePortfolioProto(self, msg: PortfolioValueProto):
+        portfolioItem = createPortfolioItem(msg)
+        self.wrapper.updatePortfolio(portfolioItem)
+
+    def accountUpdateMultiProto(self, msg: AccountUpdateMultiProto):
+        accountValue = createAccountValueFromUpdateMulti(msg)
+        self.wrapper.accountUpdateMulti(msg.reqId, accountValue)
+
+    def accountUpdateMultiEndProto(self, msg: AccountUpdateMultiEndProto):
+        self.wrapper.accountUpdateMultiEnd(msg.reqId)
+
+    def accountSummaryProto(self, msg: AccountSummaryProto):
+        accountValue = createAccountSummary(msg)
+        self.wrapper.accountSummary(msg.reqId, accountValue)
+
+    def accountSummaryEndProto(self, msg: AccountSummaryEndProto):
+        self.wrapper.accountSummaryEnd(msg.reqId)
+
+    def nextValidIdProto(self, msg: NextValidIdProto):
+        self.wrapper.nextValidId(msg.orderId)
+
+    def openOrderProto(self, msg: OpenOrderProto):
+        trade, orderState = createTradeFromOpenOrder(msg)
+        if trade:
+            self.wrapper.openOrder(trade, orderState)
+            return
+        self.logger.error("Error processing order, %r", msg)
+
+    def openOrderEndProto(self, msg: OpenOrderEndProto):
+        self.wrapper.openOrderEnd()
+
+    def execDetailsProto(self, msg: ExecutionDetailsProto):
+        fill = createFill(msg)
+        self.wrapper.execDetails(msg.reqId, fill)
+
+    def execDetailsEndProto(self, msg: ExecutionDetailsEndProto):
+        self.wrapper.execDetailsEnd(msg.reqId)
+
+    def orderStatusProto(self, msg: OrderStatusProto):
+        orderStatus = createOrderStatus(msg)
+        self.wrapper.orderStatus(orderStatus)
+
+    def completedOrderProto(self, msg: CompletedOrderProto):
+        contract = createContract(msg.contract)
+        order = createOrder(msg.order.orderId, msg.contract, msg.order)
+        order_status = OrderStatus(orderId=order.orderId, status=msg.orderState.status)
+        self.wrapper.completedOrder(contract, order, order_status)
+
+    def completedOrdersEndProto(self, msg: CompletedOrdersEndProto):
+        self.wrapper.completedOrdersEnd()
+
+    def orderBoundProto(self, msg: OrderBoundProto):
+        permId = msg.permId if msg.HasField("permId") else UNSET_INTEGER
+        clientId = msg.clientId if msg.HasField("clientId") else UNSET_INTEGER
+        orderId = msg.orderId if msg.HasField("orderId") else UNSET_INTEGER
+        self.wrapper.orderBound(permId, clientId, orderId)
+
+    def updateAccountTimeProto(self, msg: AccountUpdateTimeProto):
+        time = msg.timeStamp if msg.HasField("timeStamp") else ""
+        self.wrapper.updateAccountTime(time)
+
+    def commissionReportProto(self, msg: CommissionReportProto):
+        commissionReport = createCommissionReport(msg)
+        self.wrapper.commissionReport(commissionReport)
+
+    def currentTimeProto(self, msg: CurrentTimeProto):
+        self.wrapper.currentTime(msg.currentTime)
+
+    def currentTimeMiliProto(self, msg: CurrentTimeInMillisProto):
+        self.wrapper.currentTimeMili(msg.currentTimeInMillis)
+
+    def headTimestampProto(self, msg: HeadTimestampProto):
+        self.wrapper.headTimestamp(msg.reqId, msg.headTimestamp)
+
+    def historicalDataProto(self, msg: HistoricalDataProto):
+        bar_data = createBarDataList(msg.historicalDataBars)
+        self.wrapper.historicalData(msg.reqId, bar_data)
+
+    def historicalDataProtoEnd(self, msg: HistoricalDataEndProto):
+        self.wrapper.historicalDataEnd(msg.reqId, msg.startDateStr, msg.endDateStr)
+
+    def historicalTicksProto(self, msg: HistoricalTicksProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        isDone = msg.isDone if msg.HasField("isDone") else False
+        historicalTicks = []
+        if msg.historicalTicks:
+            for historicalTickProto in msg.historicalTicks:
+                historicalTick = createHistoricalTick(
+                    historicalTickProto, self.wrapper.defaults.timezone
+                )
+                historicalTicks.append(historicalTick)
+        self.wrapper.historicalTicks(reqId, historicalTicks, isDone)
+
+    def historicalTicksBidAskProto(self, msg: HistoricalTicksBidAskProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        isDone = msg.isDone if msg.HasField("isDone") else False
+        historicalTicksBidAsk: list[HistoricalTickBidAsk] = []
+        if msg.historicalTicksBidAsk:
+            for historicalTickProto in msg.historicalTicksBidAsk:
+                historicalTickBidAsk = createHistoricalTickBidAsk(
+                    historicalTickProto, self.wrapper.defaults.timezone
+                )
+                historicalTicksBidAsk.append(historicalTickBidAsk)
+        self.wrapper.historicalTicksBidAsk(reqId, historicalTicksBidAsk, isDone)
+
+    def historicalTicksLastProto(self, msg: HistoricalTicksLastProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        isDone = msg.isDone if msg.HasField("isDone") else False
+        historicalTicksLast: list[HistoricalTickLast] = []
+        if msg.historicalTicksLast:
+            for historicalTickProto in msg.historicalTicksLast:
+                historicalTickLast = createHistoricalTickLast(
+                    historicalTickProto, self.wrapper.defaults.timezone
+                )
+                historicalTicksLast.append(historicalTickLast)
+        self.wrapper.historicalTicksLast(reqId, historicalTicksLast, isDone)
+
+    def histogramDataProto(self, msg: HistogramDataProto):
+        histogram: list[HistogramData] = []
+        if msg.histogramDataEntries:
+            for histogramDataEntryProto in msg.histogramDataEntries:
+                histogramEntry = createHistogramDataEntry(histogramDataEntryProto)
+                histogram.append(histogramEntry)
+        self.wrapper.histogramData(msg.reqId, histogram)
+
+    def historicalDataUpdateProto(self, msg: HistoricalDataUpdateProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        bar = createBarData(msg.historicalDataBar)
+        self.wrapper.historicalDataUpdate(reqId, bar)
+
+    def historicalScheduleProto(self, msg: HistoricalScheduleProto):
+        historicalSchedule = createHistoricalSchedule(msg)
+        self.wrapper.historicalSchedule(msg.reqId, historicalSchedule)
+
+    def realTimeBarTickProto(self, msg: RealTimeBarTickProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+
+        realTimeBarTick = createRealTimeBarTick(msg, self.wrapper.defaults.timezone)
+        self.wrapper.realtimeBar(reqId, realTimeBarTick)
+
+    def marketDataTypeProto(self, msg: MarketDataTypeProto):
+        self.wrapper.marketDataType(msg.reqId, msg.marketDataType)
+
+    def tickReqParamsProto(self, msg: TickReqParamsProto):
+        tickParams = createTickParams(msg)
+        self.wrapper.tickReqParams(tickParams.reqId, tickParams)
+
+    def tickPriceProto(self, msg: TickPriceProto):
+        tickPrice, tickSize = createTickPriceData(msg)
+        self.wrapper.priceSizeTick(tickPrice.reqId, tickPrice)
+        if tickSize.tickType != TickType.NOT_SET:
+            self.wrapper.tickSize(tickSize.reqId, tickSize)
+
+    def tickSizeProto(self, msg: TickSizeProto):
+        tickSize = createTickSizeData(msg)
+        self.wrapper.tickSize(tickSize.reqId, tickSize)
+
+    def tickGenericProto(self, msg: TickGenericProto):
+        tickGeneric = createTickGenericData(msg)
+        self.wrapper.tickGeneric(tickGeneric.reqId, tickGeneric)
+
+    def tickStringProto(self, msg: TickStringProto):
+        tickString = createTickStringData(msg)
+        self.wrapper.tickString(tickString.reqId, tickString)
+
+    def tickOptionComputationProto(self, msg: TickOptionComputationProto):
+        tick_computation = createTickOptionComputation(msg)
+        self.wrapper.tickOptionComputation(tick_computation.reqId, tick_computation)
+
+    def tickSnapshotEndProto(self, msg: TickSnapshotEndProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        self.wrapper.tickSnapshotEnd(reqId)
+
+    def tickByTickDataProto(self, msg: TickByTickDataProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        tickType = msg.tickType if msg.HasField("tickType") else 0
+
+        if tickType == 0:
+            pass
+        elif tickType == 1 or tickType == 2:
+            # Last or AllLast
+            if msg.HasField("historicalTickLast"):
+                tick_last = createHistoricalTickLast(
+                    msg.historicalTickLast, self.wrapper.defaults.timezone
+                )
+                self.wrapper.tickByTickAllLast(reqId, tick_last)
+        elif tickType == 3:
+            # BidAsk
+            if msg.HasField("historicalTickBidAsk"):
+                tick_bid_ask = createHistoricalTickBidAsk(
+                    msg.historicalTickBidAsk, self.wrapper.defaults.timezone
+                )
+                self.wrapper.tickByTickBidAsk(reqId, tick_bid_ask)
+        elif tickType == 4:
+            # MidPoint
+            if msg.HasField("historicalTickMidPoint"):
+                tick_mid = createHistoricalTick(
+                    msg.historicalTickMidPoint, self.wrapper.defaults.timezone
+                )
+                self.wrapper.tickByTickMidPoint(reqId, tick_mid)
+
+    def fundamentatalDataProto(self, msg: FundamentalsDataProto):
+        self.wrapper.fundamentalData(msg.reqId, msg.fundamentalData)
+
+    def scannerParametersProto(self, msg: ScannerParametersProto):
+        xml = msg.xml if msg.HasField("xml") else ""
+        self.wrapper.scannerParameters(xml)
+
+    def scannerDataProto(self, msg: ScannerDataProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        scanData = createScannerDataList(msg)
+        self.wrapper.scannerData(reqId, scanData)
+
+    def pnlProto(self, msg: PnLProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        dailyPnL = msg.dailyPnL if msg.HasField("dailyPnL") else UNSET_DOUBLE
+        unrealizedPnL = (
+            msg.unrealizedPnL if msg.HasField("unrealizedPnL") else UNSET_DOUBLE
+        )
+        realizedPnL = msg.realizedPnL if msg.HasField("realizedPnL") else UNSET_DOUBLE
+
+        self.wrapper.pnl(reqId, dailyPnL, unrealizedPnL, realizedPnL)
+
+    def pnlSingleProto(self, msg: PnLSingleProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        position = int(msg.position) if msg.HasField("position") else UNSET_INTEGER
+        dailyPnL = msg.dailyPnL if msg.HasField("dailyPnL") else UNSET_DOUBLE
+        unrealizedPnL = (
+            msg.unrealizedPnL if msg.HasField("unrealizedPnL") else UNSET_DOUBLE
+        )
+        realizedPnL = msg.realizedPnL if msg.HasField("realizedPnL") else UNSET_DOUBLE
+        value = msg.value if msg.HasField("value") else UNSET_DOUBLE
+
+        self.wrapper.pnlSingle(
+            reqId, position, dailyPnL, unrealizedPnL, realizedPnL, value
         )
 
-    def updatePortfolio(self, fields):
-        c = Contract()
-        (
-            _,
-            _,
-            c.conId,
-            c.symbol,
-            c.secType,
-            c.lastTradeDateOrContractMonth,
-            c.strike,
-            c.right,
-            c.multiplier,
-            c.primaryExchange,
-            c.currency,
-            c.localSymbol,
-            c.tradingClass,
-            position,
-            marketPrice,
-            marketValue,
-            averageCost,
-            unrealizedPNL,
-            realizedPNL,
-            accountName,
-        ) = fields
+    def userInfoProto(self, msg: UserInfoProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        whiteBrandingId = msg.whiteBrandingId if msg.HasField("whiteBrandingId") else ""
+        self.wrapper.userInfo(reqId, whiteBrandingId)
 
-        self.parse(c)
-        self.wrapper.updatePortfolio(
-            c,
-            float(position),
-            float(marketPrice),
-            float(marketValue),
-            float(averageCost),
-            float(unrealizedPNL),
-            float(realizedPNL),
-            accountName,
-        )
+    def smartComponentsProto(self, msg: SmartComponentsProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        components = createSmartComponents(msg)
+        self.wrapper.smartComponents(reqId, components)
 
-    def contractDetails(self, fields):
-        cd = ContractDetails()
-        cd.contract = c = Contract()
-        if self.serverVersion < 164:
-            fields.pop(0)
-        (
-            _,
-            reqId,
-            c.symbol,
-            c.secType,
-            lastTimes,
-            c.strike,
-            c.right,
-            c.exchange,
-            c.currency,
-            c.localSymbol,
-            cd.marketName,
-            c.tradingClass,
-            c.conId,
-            cd.minTick,
-            *fields,
-        ) = fields
-        if self.serverVersion < 164:
-            fields.pop(0)  # obsolete mdSizeMultiplier
-
-        (
-            c.multiplier,
-            cd.orderTypes,
-            cd.validExchanges,
-            cd.priceMagnifier,
-            cd.underConId,
-            cd.longName,
-            c.primaryExchange,
-            cd.contractMonth,
-            cd.industry,
-            cd.category,
-            cd.subcategory,
-            cd.timeZoneId,
-            cd.tradingHours,
-            cd.liquidHours,
-            cd.evRule,
-            cd.evMultiplier,
-            numSecIds,
-            *fields,
-        ) = fields
-
-        numSecIds = int(numSecIds)
-        if numSecIds > 0:
-            cd.secIdList = []
-            for _ in range(numSecIds):
-                tag, value, *fields = fields
-                cd.secIdList += [TagValue(tag, value)]
-
-        (
-            cd.aggGroup,
-            cd.underSymbol,
-            cd.underSecType,
-            cd.marketRuleIds,
-            cd.realExpirationDate,
-            cd.stockType,
-            *fields,
-        ) = fields
-
-        if self.serverVersion == 163:
-            cd.suggestedSizeIncrement, *fields = fields
-
-        if self.serverVersion >= 164:
-            (
-                cd.minSize,
-                cd.sizeIncrement,
-                cd.suggestedSizeIncrement,
-                # cd.minCashQtySize,
-                *fields,
-            ) = fields
-
-        times = lastTimes.split("-" if "-" in lastTimes else None)
-
-        if len(times) > 0:
-            c.lastTradeDateOrContractMonth = times[0]
-
-        if len(times) > 1:
-            cd.lastTradeTime = times[1]
-
-        if len(times) > 2:
-            cd.timeZoneId = times[2]
-
-        cd.longName = cd.longName.encode().decode("unicode-escape")
-        self.parse(cd)
-        self.parse(c)
-        self.wrapper.contractDetails(int(reqId), cd)
+    ##################### legacy methods ##########################################
 
     def bondContractDetails(self, fields):
         cd = ContractDetails()
@@ -423,252 +722,12 @@ class Decoder:
         self.parse(c)
         self.wrapper.bondContractDetails(int(reqId), cd)
 
-    def execDetails(self, fields):
-        c = Contract()
-        ex = Execution()
-        (
-            _,
-            reqId,
-            ex.orderId,
-            c.conId,
-            c.symbol,
-            c.secType,
-            c.lastTradeDateOrContractMonth,
-            c.strike,
-            c.right,
-            c.multiplier,
-            c.exchange,
-            c.currency,
-            c.localSymbol,
-            c.tradingClass,
-            ex.execId,
-            timeStr,
-            ex.acctNumber,
-            ex.exchange,
-            ex.side,
-            ex.shares,
-            ex.price,
-            ex.permId,
-            ex.clientId,
-            ex.liquidation,
-            ex.cumQty,
-            ex.avgPrice,
-            ex.orderRef,
-            ex.evRule,
-            ex.evMultiplier,
-            ex.modelCode,
-            ex.lastLiquidity,
-            *fields,
-        ) = fields
-        if self.serverVersion >= 178:
-            ex.pendingPriceRevision, *fields = fields
-
-        self.parse(c)
-        self.parse(ex)
-        time = cast(datetime, parseIBDatetime(timeStr))
-        if not time.tzinfo:
-            tz = self.wrapper.ib.TimezoneTWS
-            if tz:
-                time = time.replace(tzinfo=ZoneInfo(str(tz)))
-
-        ex.time = time.astimezone(self.wrapper.defaultTimezone)
-        self.wrapper.execDetails(int(reqId), c, ex)
-
-    def historicalData(self, fields):
-        _, reqId, startDateStr, endDateStr, numBars, *fields = fields
-        get = iter(fields).__next__
-
-        for _ in range(int(numBars)):
-            bar = BarData(
-                date=get(),
-                open=float(get()),
-                high=float(get()),
-                low=float(get()),
-                close=float(get()),
-                volume=float(get()),
-                average=float(get()),
-                barCount=int(get()),
-            )
-            self.wrapper.historicalData(int(reqId), bar)
-
-        self.wrapper.historicalDataEnd(int(reqId), startDateStr, endDateStr)
-
-    def historicalDataUpdate(self, fields):
-        _, reqId, *fields = fields
-        get = iter(fields).__next__
-
-        bar = BarData(
-            barCount=int(get() or 0),
-            date=get(),
-            open=float(get() or 0),
-            close=float(get() or 0),
-            high=float(get() or 0),
-            low=float(get() or 0),
-            average=float(get() or 0),
-            volume=float(get() or 0),
-        )
-
-        self.wrapper.historicalDataUpdate(int(reqId), bar)
-
-    def scannerData(self, fields):
-        _, _, reqId, n, *fields = fields
-
-        for _ in range(int(n)):
-            cd = ContractDetails()
-            cd.contract = c = Contract()
-            (
-                rank,
-                c.conId,
-                c.symbol,
-                c.secType,
-                c.lastTradeDateOrContractMonth,
-                c.strike,
-                c.right,
-                c.exchange,
-                c.currency,
-                c.localSymbol,
-                cd.marketName,
-                c.tradingClass,
-                distance,
-                benchmark,
-                projection,
-                legsStr,
-                *fields,
-            ) = fields
-
-            self.parse(cd)
-            self.parse(c)
-            self.wrapper.scannerData(
-                int(reqId), int(rank), cd, distance, benchmark, projection, legsStr
-            )
-
-        self.wrapper.scannerDataEnd(int(reqId))
-
-    def tickOptionComputation(self, fields):
-        _, reqId, tickTypeInt, tickAttrib, *fields = fields
-        impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice = fields
-
-        self.wrapper.tickOptionComputation(
-            int(reqId),
-            int(tickTypeInt),
-            int(tickAttrib),
-            float(impliedVol),
-            float(delta),
-            float(optPrice),
-            float(pvDividend),
-            float(gamma),
-            float(vega),
-            float(theta),
-            float(undPrice),
-        )
-
     def deltaNeutralValidation(self, fields):
         _, _, reqId, conId, delta, price = fields
 
         self.wrapper.deltaNeutralValidation(
             int(reqId),
             DeltaNeutralContract(int(conId), float(delta or 0), float(price or 0)),
-        )
-
-    def commissionReport(self, fields):
-        (
-            _,
-            _,
-            execId,
-            commission,
-            currency,
-            realizedPNL,
-            yield_,
-            yieldRedemptionDate,
-        ) = fields
-
-        self.wrapper.commissionReport(
-            CommissionReport(
-                execId,
-                float(commission or 0),
-                currency,
-                float(realizedPNL or 0),
-                float(yield_ or 0),
-                int(yieldRedemptionDate or 0),
-            )
-        )
-
-    def position(self, fields):
-        c = Contract()
-        (
-            _,
-            _,
-            account,
-            c.conId,
-            c.symbol,
-            c.secType,
-            c.lastTradeDateOrContractMonth,
-            c.strike,
-            c.right,
-            c.multiplier,
-            c.exchange,
-            c.currency,
-            c.localSymbol,
-            c.tradingClass,
-            position,
-            avgCost,
-        ) = fields
-
-        self.parse(c)
-        self.wrapper.position(account, c, float(position or 0), float(avgCost or 0))
-
-    def positionMulti(self, fields):
-        c = Contract()
-        (
-            _,
-            _,
-            reqId,
-            account,
-            c.conId,
-            c.symbol,
-            c.secType,
-            c.lastTradeDateOrContractMonth,
-            c.strike,
-            c.right,
-            c.multiplier,
-            c.exchange,
-            c.currency,
-            c.localSymbol,
-            c.tradingClass,
-            position,
-            avgCost,
-            modelCode,
-        ) = fields
-
-        self.parse(c)
-        self.wrapper.positionMulti(
-            int(reqId), account, modelCode, c, float(position or 0), float(avgCost or 0)
-        )
-
-    def securityDefinitionOptionParameter(self, fields):
-        (
-            _,
-            reqId,
-            exchange,
-            underlyingConId,
-            tradingClass,
-            multiplier,
-            n,
-            *fields,
-        ) = fields
-        n = int(n)
-
-        expirations = fields[:n]
-        strikes = [float(field) for field in fields[n + 1 :]]
-
-        self.wrapper.securityDefinitionOptionParameter(
-            int(reqId),
-            exchange,
-            underlyingConId,
-            tradingClass,
-            multiplier,
-            expirations,
-            strikes,
         )
 
     def softDollarTiers(self, fields):
@@ -691,32 +750,6 @@ class Decoder:
         ]
 
         self.wrapper.familyCodes(familyCodes)
-
-    def symbolSamples(self, fields):
-        _, reqId, n, *fields = fields
-
-        cds = []
-        for _ in range(int(n)):
-            cd = ContractDescription()
-            cd.contract = c = Contract()
-            (
-                c.conId,
-                c.symbol,
-                c.secType,
-                c.primaryExchange,
-                c.currency,
-                m,
-                *fields,
-            ) = fields
-            c.conId = int(c.conId)
-            m = int(m)
-            cd.derivativeSecTypes = fields[:m]
-            fields = fields[m:]
-            if self.serverVersion >= 176:
-                (cd.contract.description, cd.contract.issuerId, *fields) = fields
-            cds.append(cd)
-
-        self.wrapper.symbolSamples(int(reqId), cds)
 
     def smartComponents(self, fields):
         _, reqId, n, *fields = fields
@@ -753,618 +786,3 @@ class Decoder:
         providers = [NewsProvider(code=get(), name=get()) for _ in range(int(n))]
 
         self.wrapper.newsProviders(providers)
-
-    def histogramData(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        histogram = [
-            HistogramData(price=float(get()), count=int(get())) for _ in range(int(n))
-        ]
-
-        self.wrapper.histogramData(int(reqId), histogram)
-
-    def marketRule(self, fields):
-        _, marketRuleId, n, *fields = fields
-        get = iter(fields).__next__
-
-        increments = [
-            PriceIncrement(lowEdge=float(get()), increment=float(get()))
-            for _ in range(int(n))
-        ]
-
-        self.wrapper.marketRule(int(marketRuleId), increments)
-
-    def historicalTicks(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        ticks = []
-        for _ in range(int(n)):
-            time = int(get())
-            get()
-            price = float(get())
-            size = float(get())
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
-            ticks.append(HistoricalTick(dt, price, size))
-
-        done = bool(int(get()))
-        self.wrapper.historicalTicks(int(reqId), ticks, done)
-
-    def historicalTicksBidAsk(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        ticks = []
-        for _ in range(int(n)):
-            time = int(get())
-            mask = int(get())
-            attrib = TickAttribBidAsk(
-                askPastHigh=bool(mask & 1), bidPastLow=bool(mask & 2)
-            )
-            priceBid = float(get())
-            priceAsk = float(get())
-            sizeBid = float(get())
-            sizeAsk = float(get())
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
-            ticks.append(
-                HistoricalTickBidAsk(dt, attrib, priceBid, priceAsk, sizeBid, sizeAsk)
-            )
-
-        done = bool(int(get()))
-        self.wrapper.historicalTicksBidAsk(int(reqId), ticks, done)
-
-    def historicalTicksLast(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        ticks = []
-        for _ in range(int(n)):
-            time = int(get())
-            mask = int(get())
-            attrib = TickAttribLast(pastLimit=bool(mask & 1), unreported=bool(mask & 2))
-            price = float(get())
-            size = float(get())
-            exchange = get()
-            specialConditions = get()
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
-            ticks.append(
-                HistoricalTickLast(dt, attrib, price, size, exchange, specialConditions)
-            )
-
-        done = bool(int(get()))
-        self.wrapper.historicalTicksLast(int(reqId), ticks, done)
-
-    def tickByTick(self, fields):
-        _, reqId, tickType, time, *fields = fields
-        reqId = int(reqId)
-        tickType = int(tickType)
-        time = int(time)
-
-        if tickType in {1, 2}:
-            price, size, mask, exchange, specialConditions = fields
-            mask = int(mask)
-            attrib: Any = TickAttribLast(
-                pastLimit=bool(mask & 1), unreported=bool(mask & 2)
-            )
-
-            self.wrapper.tickByTickAllLast(
-                reqId,
-                tickType,
-                time,
-                float(price),
-                float(size),
-                attrib,
-                exchange,
-                specialConditions,
-            )
-        elif tickType == 3:
-            bidPrice, askPrice, bidSize, askSize, mask = fields
-            mask = int(mask)
-            attrib = TickAttribBidAsk(
-                bidPastLow=bool(mask & 1), askPastHigh=bool(mask & 2)
-            )
-
-            self.wrapper.tickByTickBidAsk(
-                reqId,
-                time,
-                float(bidPrice),
-                float(askPrice),
-                float(bidSize),
-                float(askSize),
-                attrib,
-            )
-        elif tickType == 4:
-            (midPoint,) = fields
-
-            self.wrapper.tickByTickMidPoint(reqId, time, float(midPoint))
-
-    def openOrder(self, fields):
-        o = Order()
-        c = Contract()
-        st = OrderState()
-        (
-            _,
-            o.orderId,
-            c.conId,
-            c.symbol,
-            c.secType,
-            c.lastTradeDateOrContractMonth,
-            c.strike,
-            c.right,
-            c.multiplier,
-            c.exchange,
-            c.currency,
-            c.localSymbol,
-            c.tradingClass,
-            o.action,
-            o.totalQuantity,
-            o.orderType,
-            o.lmtPrice,
-            o.auxPrice,
-            o.tif,
-            o.ocaGroup,
-            o.account,
-            o.openClose,
-            o.origin,
-            o.orderRef,
-            o.clientId,
-            o.permId,
-            o.outsideRth,
-            o.hidden,
-            o.discretionaryAmt,
-            o.goodAfterTime,
-            _,
-            o.faGroup,
-            o.faMethod,
-            o.faPercentage,
-            *fields,
-        ) = fields
-
-        if self.serverVersion < 177:
-            o.faProfile, *fields = fields
-
-        (
-            o.modelCode,
-            o.goodTillDate,
-            o.rule80A,
-            o.percentOffset,
-            o.settlingFirm,
-            o.shortSaleSlot,
-            o.designatedLocation,
-            o.exemptCode,
-            o.auctionStrategy,
-            o.startingPrice,
-            o.stockRefPrice,
-            o.delta,
-            o.stockRangeLower,
-            o.stockRangeUpper,
-            o.displaySize,
-            o.blockOrder,
-            o.sweepToFill,
-            o.allOrNone,
-            o.minQty,
-            o.ocaType,
-            o.eTradeOnly,
-            o.firmQuoteOnly,
-            o.nbboPriceCap,
-            o.parentId,
-            o.triggerMethod,
-            o.volatility,
-            o.volatilityType,
-            o.deltaNeutralOrderType,
-            o.deltaNeutralAuxPrice,
-            *fields,
-        ) = fields
-
-        if o.deltaNeutralOrderType:
-            (
-                o.deltaNeutralConId,
-                o.deltaNeutralSettlingFirm,
-                o.deltaNeutralClearingAccount,
-                o.deltaNeutralClearingIntent,
-                o.deltaNeutralOpenClose,
-                o.deltaNeutralShortSale,
-                o.deltaNeutralShortSaleSlot,
-                o.deltaNeutralDesignatedLocation,
-                *fields,
-            ) = fields
-
-        (
-            o.continuousUpdate,
-            o.referencePriceType,
-            o.trailStopPrice,
-            o.trailingPercent,
-            o.basisPoints,
-            o.basisPointsType,
-            c.comboLegsDescrip,
-            *fields,
-        ) = fields
-
-        numLegs = int(fields.pop(0))
-        c.comboLegs = []
-        for _ in range(numLegs):
-            leg: Any = ComboLeg()
-            (
-                leg.conId,
-                leg.ratio,
-                leg.action,
-                leg.exchange,
-                leg.openClose,
-                leg.shortSaleSlot,
-                leg.designatedLocation,
-                leg.exemptCode,
-                *fields,
-            ) = fields
-            self.parse(leg)
-            c.comboLegs.append(leg)
-
-        numOrderLegs = int(fields.pop(0))
-        o.orderComboLegs = []
-        for _ in range(numOrderLegs):
-            leg = OrderComboLeg()
-            leg.price = fields.pop(0)
-            self.parse(leg)
-            o.orderComboLegs.append(leg)
-
-        numParams = int(fields.pop(0))
-        if numParams > 0:
-            o.smartComboRoutingParams = []
-            for _ in range(numParams):
-                tag, value, *fields = fields
-                o.smartComboRoutingParams.append(TagValue(tag, value))
-
-        (o.scaleInitLevelSize, o.scaleSubsLevelSize, increment, *fields) = fields
-
-        o.scalePriceIncrement = float(increment or UNSET_DOUBLE)
-        if 0 < o.scalePriceIncrement < UNSET_DOUBLE:
-            (
-                o.scalePriceAdjustValue,
-                o.scalePriceAdjustInterval,
-                o.scaleProfitOffset,
-                o.scaleAutoReset,
-                o.scaleInitPosition,
-                o.scaleInitFillQty,
-                o.scaleRandomPercent,
-                *fields,
-            ) = fields
-
-        o.hedgeType = fields.pop(0)
-        if o.hedgeType:
-            o.hedgeParam = fields.pop(0)
-
-        (
-            o.optOutSmartRouting,
-            o.clearingAccount,
-            o.clearingIntent,
-            o.notHeld,
-            dncPresent,
-            *fields,
-        ) = fields
-
-        if int(dncPresent):
-            conId, delta, price, *fields = fields
-            c.deltaNeutralContract = DeltaNeutralContract(
-                int(conId or 0), float(delta or 0), float(price or 0)
-            )
-
-        o.algoStrategy = fields.pop(0)
-        if o.algoStrategy:
-            numParams = int(fields.pop(0))
-            if numParams > 0:
-                o.algoParams = []
-                for _ in range(numParams):
-                    tag, value, *fields = fields
-                    o.algoParams.append(TagValue(tag, value))
-
-        (
-            o.solicited,
-            o.whatIf,
-            st.status,
-            st.initMarginBefore,
-            st.maintMarginBefore,
-            st.equityWithLoanBefore,
-            st.initMarginChange,
-            st.maintMarginChange,
-            st.equityWithLoanChange,
-            st.initMarginAfter,
-            st.maintMarginAfter,
-            st.equityWithLoanAfter,
-            st.commission,
-            st.minCommission,
-            st.maxCommission,
-            st.commissionCurrency,
-            st.warningText,
-            o.randomizeSize,
-            o.randomizePrice,
-            *fields,
-        ) = fields
-
-        if o.orderType in {"PEG BENCH", "PEGBENCH"}:
-            (
-                o.referenceContractId,
-                o.isPeggedChangeAmountDecrease,
-                o.peggedChangeAmount,
-                o.referenceChangeAmount,
-                o.referenceExchangeId,
-                *fields,
-            ) = fields
-
-        numConditions = int(fields.pop(0))
-        if numConditions > 0:
-            for _ in range(numConditions):
-                condType = int(fields.pop(0))
-                condCls = OrderCondition.createClass(condType)
-                n = len(dataclasses.fields(condCls)) - 1
-                cond = condCls(condType, *fields[:n])
-                self.parse(cond)
-                o.conditions.append(cond)
-                fields = fields[n:]
-            (o.conditionsIgnoreRth, o.conditionsCancelOrder, *fields) = fields
-
-        (
-            o.adjustedOrderType,
-            o.triggerPrice,
-            o.trailStopPrice,
-            o.lmtPriceOffset,
-            o.adjustedStopPrice,
-            o.adjustedStopLimitPrice,
-            o.adjustedTrailingAmount,
-            o.adjustableTrailingUnit,
-            o.softDollarTier.name,
-            o.softDollarTier.val,
-            o.softDollarTier.displayName,
-            o.cashQty,
-            o.dontUseAutoPriceForHedge,
-            o.isOmsContainer,
-            o.discretionaryUpToLimitPrice,
-            o.usePriceMgmtAlgo,
-            *fields,
-        ) = fields
-
-        if self.serverVersion >= 159:
-            o.duration = fields.pop(0)
-
-        if self.serverVersion >= 160:
-            o.postToAts = fields.pop(0)
-
-        if self.serverVersion >= 162:
-            o.autoCancelParent = fields.pop(0)
-
-        if self.serverVersion >= 170:
-            (
-                o.minTradeQty,
-                o.minCompeteSize,
-                o.competeAgainstBestOffset,
-                o.midOffsetAtWhole,
-                o.midOffsetAtHalf,
-                *fields,
-            ) = fields
-
-        self.parse(c)
-        self.parse(o)
-        self.parse(st)
-        self.wrapper.openOrder(o.orderId, c, o, st)
-
-    def completedOrder(self, fields):
-        o = Order()
-        c = Contract()
-        st = OrderState()
-
-        (
-            _,
-            c.conId,
-            c.symbol,
-            c.secType,
-            c.lastTradeDateOrContractMonth,
-            c.strike,
-            c.right,
-            c.multiplier,
-            c.exchange,
-            c.currency,
-            c.localSymbol,
-            c.tradingClass,
-            o.action,
-            o.totalQuantity,
-            o.orderType,
-            o.lmtPrice,
-            o.auxPrice,
-            o.tif,
-            o.ocaGroup,
-            o.account,
-            o.openClose,
-            o.origin,
-            o.orderRef,
-            o.permId,
-            o.outsideRth,
-            o.hidden,
-            o.discretionaryAmt,
-            o.goodAfterTime,
-            o.faGroup,
-            o.faMethod,
-            o.faPercentage,
-            *fields,
-        ) = fields
-        if self.serverVersion < 177:
-            o.faProfile, *fields = fields
-
-        (
-            o.modelCode,
-            o.goodTillDate,
-            o.rule80A,
-            o.percentOffset,
-            o.settlingFirm,
-            o.shortSaleSlot,
-            o.designatedLocation,
-            o.exemptCode,
-            o.startingPrice,
-            o.stockRefPrice,
-            o.delta,
-            o.stockRangeLower,
-            o.stockRangeUpper,
-            o.displaySize,
-            o.sweepToFill,
-            o.allOrNone,
-            o.minQty,
-            o.ocaType,
-            o.triggerMethod,
-            o.volatility,
-            o.volatilityType,
-            o.deltaNeutralOrderType,
-            o.deltaNeutralAuxPrice,
-            *fields,
-        ) = fields
-
-        if o.deltaNeutralOrderType:
-            (
-                o.deltaNeutralConId,
-                o.deltaNeutralShortSale,
-                o.deltaNeutralShortSaleSlot,
-                o.deltaNeutralDesignatedLocation,
-                *fields,
-            ) = fields
-
-        (
-            o.continuousUpdate,
-            o.referencePriceType,
-            o.trailStopPrice,
-            o.trailingPercent,
-            c.comboLegsDescrip,
-            *fields,
-        ) = fields
-
-        numLegs = int(fields.pop(0))
-        c.comboLegs = []
-        for _ in range(numLegs):
-            leg: Any = ComboLeg()
-            (
-                leg.conId,
-                leg.ratio,
-                leg.action,
-                leg.exchange,
-                leg.openClose,
-                leg.shortSaleSlot,
-                leg.designatedLocation,
-                leg.exemptCode,
-                *fields,
-            ) = fields
-            self.parse(leg)
-            c.comboLegs.append(leg)
-
-        numOrderLegs = int(fields.pop(0))
-        o.orderComboLegs = []
-        for _ in range(numOrderLegs):
-            leg = OrderComboLeg()
-            leg.price = fields.pop(0)
-            self.parse(leg)
-            o.orderComboLegs.append(leg)
-
-        numParams = int(fields.pop(0))
-        if numParams > 0:
-            o.smartComboRoutingParams = []
-            for _ in range(numParams):
-                tag, value, *fields = fields
-                o.smartComboRoutingParams.append(TagValue(tag, value))
-        (o.scaleInitLevelSize, o.scaleSubsLevelSize, increment, *fields) = fields
-
-        o.scalePriceIncrement = float(increment or UNSET_DOUBLE)
-        if 0 < o.scalePriceIncrement < UNSET_DOUBLE:
-            (
-                o.scalePriceAdjustValue,
-                o.scalePriceAdjustInterval,
-                o.scaleProfitOffset,
-                o.scaleAutoReset,
-                o.scaleInitPosition,
-                o.scaleInitFillQty,
-                o.scaleRandomPercent,
-                *fields,
-            ) = fields
-
-        o.hedgeType = fields.pop(0)
-        if o.hedgeType:
-            o.hedgeParam = fields.pop(0)
-
-        (o.clearingAccount, o.clearingIntent, o.notHeld, dncPresent, *fields) = fields
-
-        if int(dncPresent):
-            conId, delta, price, *fields = fields
-            c.deltaNeutralContract = DeltaNeutralContract(
-                int(conId or 0), float(delta or 0), float(price or 0)
-            )
-
-        o.algoStrategy = fields.pop(0)
-        if o.algoStrategy:
-            numParams = int(fields.pop(0))
-            if numParams > 0:
-                o.algoParams = []
-                for _ in range(numParams):
-                    tag, value, *fields = fields
-                    o.algoParams.append(TagValue(tag, value))
-        (o.solicited, st.status, o.randomizeSize, o.randomizePrice, *fields) = fields
-
-        if o.orderType in {"PEG BENCH", "PEGBENCH"}:
-            (
-                o.referenceContractId,
-                o.isPeggedChangeAmountDecrease,
-                o.peggedChangeAmount,
-                o.referenceChangeAmount,
-                o.referenceExchangeId,
-                *fields,
-            ) = fields
-
-        numConditions = int(fields.pop(0))
-        if numConditions > 0:
-            for _ in range(numConditions):
-                condType = int(fields.pop(0))
-                condCls = OrderCondition.createClass(condType)
-                n = len(dataclasses.fields(condCls)) - 1
-                cond = condCls(condType, *fields[:n])
-                self.parse(cond)
-                o.conditions.append(cond)
-                fields = fields[n:]
-            (o.conditionsIgnoreRth, o.conditionsCancelOrder, *fields) = fields
-
-        (
-            o.trailStopPrice,
-            o.lmtPriceOffset,
-            o.cashQty,
-            o.dontUseAutoPriceForHedge,
-            o.isOmsContainer,
-            o.autoCancelDate,
-            o.filledQuantity,
-            o.refFuturesConId,
-            o.autoCancelParent,
-            o.shareholder,
-            o.imbalanceOnly,
-            o.routeMarketableToBbo,
-            o.parentPermId,
-            st.completedTime,
-            st.completedStatus,
-            *fields,
-        ) = fields
-
-        if self.serverVersion >= 170:
-            (
-                o.minTradeQty,
-                o.minCompeteSize,
-                o.competeAgainstBestOffset,
-                o.midOffsetAtWhole,
-                o.midOffsetAtHalf,
-                *fields,
-            ) = fields
-
-        self.parse(c)
-        self.parse(o)
-        self.parse(st)
-        self.wrapper.completedOrder(c, o, st)
-
-    def historicalSchedule(self, fields):
-        (_, reqId, startDateTime, endDateTime, timeZone, count, *fields) = fields
-        get = iter(fields).__next__
-        sessions = [
-            HistoricalSession(startDateTime=get(), endDateTime=get(), refDate=get())
-            for _ in range(int(count))
-        ]
-        self.wrapper.historicalSchedule(
-            int(reqId), startDateTime, endDateTime, timeZone, sessions
-        )

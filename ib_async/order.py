@@ -6,13 +6,13 @@ import dataclasses
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import ClassVar, NamedTuple
+from typing import ClassVar, NamedTuple, TypeAlias
 
 from eventkit import Event
 
 from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry
-from .util import dataclassNonDefaults, UNSET_DOUBLE, UNSET_INTEGER
+from .util import UNSET_DECIMAL, dataclassNonDefaults, UNSET_DOUBLE, UNSET_INTEGER
 
 
 @dataclass
@@ -21,6 +21,8 @@ class Order:
     Order for trading contracts.
 
     https://interactivebrokers.github.io/tws-api/available_orders.html
+
+    https://www.interactivebrokers.com/campus/ibkr-api-page/twsapi-ref/#order-ref
     """
 
     orderId: int = 0
@@ -131,7 +133,7 @@ class Order:
     adjustedTrailingAmount: float | Decimal = UNSET_DOUBLE
     adjustableTrailingUnit: int = 0
     lmtPriceOffset: float | Decimal = UNSET_DOUBLE
-    conditions: list[OrderCondition] = field(default_factory=list)
+    conditions: list[OrderConditionType] = field(default_factory=list)
     conditionsCancelOrder: bool = False
     conditionsIgnoreRth: bool = False
     extOperator: str = ""
@@ -162,6 +164,12 @@ class Order:
     competeAgainstBestOffset: float | Decimal = UNSET_DOUBLE
     midOffsetAtWhole: float | Decimal = UNSET_DOUBLE
     midOffsetAtHalf: float | Decimal = UNSET_DOUBLE
+    customerAccount: str = ""
+    professionalCustomer: bool = False
+    bondAccruedInterest: str = ""
+    includeOvernight: bool = False
+    manualOrderIndicator: int = UNSET_INTEGER
+    submitter: str = ""
 
     def __repr__(self):
         attrs = dataclassNonDefaults(self)
@@ -237,6 +245,11 @@ class StopLimitOrder(Order):
 
 @dataclass
 class OrderStatus:
+    """
+    Reference:
+    https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#order-status
+    """
+
     orderId: int = 0
     status: str = ""
     filled: float = 0.0
@@ -321,6 +334,19 @@ class OrderState:
     minCommission: float = UNSET_DOUBLE
     maxCommission: float = UNSET_DOUBLE
     commissionCurrency: str = ""
+    marginCurrency: str = ""
+    initMarginBeforeOutsideRTH: float = UNSET_DOUBLE  # type: float
+    maintMarginBeforeOutsideRTH: float = UNSET_DOUBLE  # type: float
+    equityWithLoanBeforeOutsideRTH: float = UNSET_DOUBLE  # type: float
+    initMarginChangeOutsideRTH: float = UNSET_DOUBLE  # type: float
+    maintMarginChangeOutsideRTH: float = UNSET_DOUBLE  # type: float
+    equityWithLoanChangeOutsideRTH: float = UNSET_DOUBLE  # type: float
+    initMarginAfterOutsideRTH: float = UNSET_DOUBLE  # type: float
+    maintMarginAfterOutsideRTH: float = UNSET_DOUBLE  # type: float
+    equityWithLoanAfterOutsideRTH: float = UNSET_DOUBLE  # type: float
+    suggestedSize = UNSET_DECIMAL
+    rejectReason = ""
+    orderAllocations = None
     warningText: str = ""
     completedTime: str = ""
     completedStatus: str = ""
@@ -555,3 +581,49 @@ class PercentChangeCondition(OrderCondition):
     changePercent: float = 0.0
     conId: int = 0
     exch: str = ""
+
+
+OrderConditionType: TypeAlias = (
+    PriceCondition
+    | TimeCondition
+    | MarginCondition
+    | ExecutionCondition
+    | VolumeCondition
+    | PercentChangeCondition
+)
+
+
+@dataclass
+class OrderAllocation:
+    """
+    Reference: https://ibkrcampus.com/campus/ibkr-api-page/twsapi-ref/#order-static-pub-func
+    """
+
+    account = ""
+    position: Decimal = UNSET_DECIMAL
+    positionDesired: Decimal = UNSET_DECIMAL
+    positionAfter: Decimal = UNSET_DECIMAL
+    desiredAllocQty: Decimal = UNSET_DECIMAL
+    allowedAllocQty: Decimal = UNSET_DECIMAL
+    isMonetary = False
+
+
+@dataclass
+class OrderCancel:
+    """
+    Reference https://ibkrcampus.com/campus/ibkr-api-page/twsapi-ref/#orderallocation-ref
+
+    manualOrderCancelTime: Used by brokers and advisors when manually entering an order
+                           cancellation request. Format should be “YYYYMMDD-HH:mm:ss”
+                           using UTC as the timezone value.
+
+    extOperator: Following CME Rule 576, the ExtOperator field will signify the unique
+                 API operator at the time of trading for order management.
+
+    manualOrderIndicator: Following CME Rule 576, the ManualOrderIndicator field will
+                          signify if an order is manual (1) or automated (0).
+    """
+
+    manualOrderCancelTime: str = ""
+    extOperator: str = ""
+    manualOrderIndicator: int = UNSET_INTEGER

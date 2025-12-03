@@ -19,6 +19,8 @@ class Connection(asyncio.Protocol):
           of error, or an empty string in case of a normal disconnect.
     """
 
+    transport: asyncio.Transport | None
+
     def __init__(self):
         self.hasData = Event("hasData")
         self.disconnected = Event("disconnected")

@@ -9,6 +9,7 @@ import signal
 import sys
 import time
 from dataclasses import fields, is_dataclass
+from decimal import Decimal
 from typing import (
     Any,
     AsyncIterator,
@@ -38,6 +39,8 @@ Event to emit global exceptions.
 EPOCH: Final = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
 UNSET_INTEGER: Final = 2**31 - 1
 UNSET_DOUBLE: Final = sys.float_info.max
+UNSET_DECIMAL: Final = Decimal(2**127 - 1)
+NO_VALID_ID: Final = -1
 
 Time_t: TypeAlias = dt.time | dt.datetime
 
@@ -117,6 +120,7 @@ def dataclassNonDefaults(obj) -> dict[str, Any]:
         if value is not None
         and value != field.default
         and value == value
+        and field.repr
         and not (
             (isinstance(value, list) and value == [])
             or (isinstance(value, dict) and value == {})
@@ -132,10 +136,20 @@ def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
 
-    for srcObj in srcObjs:
-        obj.__dict__.update(dataclassAsDict(srcObj))  # type: ignore
+    valid_fields = {f.name for f in fields(obj)}
 
-    obj.__dict__.update(**kwargs)  # type: ignore
+    for srcObj in srcObjs:
+        if not is_dataclass(srcObj):
+            continue
+        for f in fields(srcObj):
+            if f.name in valid_fields:
+                value = getattr(srcObj, f.name)
+                setattr(obj, f.name, value)
+
+    for key, value in kwargs.items():
+        if key in valid_fields:
+            setattr(obj, key, value)
+
     return obj
 
 
@@ -598,3 +612,35 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
         t = dt.datetime.strptime(ss, "%Y%m%d%H:%M:%S")
 
     return t
+
+
+def parseIBTimeStamp(t: int, tz: dt.tzinfo = dt.timezone.utc) -> dt.datetime:
+    return dt.datetime.fromtimestamp(t, tz)
+
+
+def decimalMaxString(val: Decimal):
+    val = Decimal(val)
+    return f"{val:f}" if val != UNSET_DECIMAL else ""
+
+
+def floatMaxString(val: float):
+    if val is None:
+        return ""
+    return (
+        f"{val:.8f}".rstrip("0").rstrip(".").rstrip(",") if val != UNSET_DOUBLE else ""
+    )
+
+
+def getEnumTypeFromString(cls, stringIn):
+    for item in cls:
+        if item.value[0] == stringIn:
+            return item
+    return listOfValues(cls)[0]
+
+
+def listOfValues(cls):
+    return list(map(lambda c: c, cls))
+
+
+def isValidIntValue(val: int) -> bool:
+    return val != UNSET_INTEGER

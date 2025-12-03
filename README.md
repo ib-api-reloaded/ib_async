@@ -496,26 +496,39 @@ poetry run ruff format
 poetry run ruff check --fix
 ```
 
+### Generate protobuf dependencies
+
+Build protobuf files
+
+Copy `*.proto` files from `twsapi` into `ib_async/proto`, then run:
+
+```bash
+poetry run python -m grpc_tools.protoc -I=proto --python_out=ib_async/protobuf --pyi_out=ib_async/protobuf proto/*.proto
+# 
+poetry run python scripts/fix_proto_imports.py
+```
+
 ### Local Development
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/ib-api-reloaded/ib_async.git
 cd ib_async
 ```
 
-2. Install dependencies:
+1. Install dependencies:
 ```bash
 poetry install --with=dev,docs
 ```
 
-3. Make your changes and run tests:
+1. Make your changes and run tests:
 ```bash
 poetry run pytest
 poetry run mypy ib_async
 ```
 
-4. Submit a pull request with:
+1. Submit a pull request with:
    - Clear description of changes
    - Tests for new functionality
    - Updated documentation if needed
