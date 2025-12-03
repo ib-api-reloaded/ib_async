@@ -25,10 +25,12 @@ class FundDistributionPolicyIndicator(Enum):
     AccumulationFund = ("N", "Accumulation Fund")
     IncomeFund = ("Y", "Income Fund")
 
+
 @dataclass
 class IneligibilityReason:
     id_: str = field(default_factory=str)
     description: str = field(default_factory=str)
+
 
 @dataclass(slots=True)
 class Contract:

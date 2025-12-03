@@ -1,4 +1,3 @@
-import logging
 from ib_async.objects import ScannerSubscription, TagValue
 from ib_async.util import UNSET_DOUBLE, isValidIntValue
 from ib_async.contract import ScanData, ContractDetails
@@ -190,4 +189,3 @@ def createScannerDataList(scannerDataProto: ScannerDataProto) -> list[ScanData]:
             )
             dataList.append(scanData)
     return dataList
-

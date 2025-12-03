@@ -345,7 +345,7 @@ class TickAttribLast:
     unreported: bool = False
 
 
-@dataclass(slots=True,frozen=True)
+@dataclass(slots=True, frozen=True)
 class TickPriceData:
     """Data from a TickPriceProto message."""
 
@@ -468,7 +468,7 @@ class PnL:
     dailyPnL: float = nan
     unrealizedPnL: float = nan
     realizedPnL: float = nan
-    
+
     def getKey(self):
         """return PnL key
         ie: ib.cancelPnL(pnl.getKey())
@@ -494,7 +494,7 @@ class PnLSingle:
     realizedPnL: float = nan
     position: int = 0
     value: float = nan
-    
+
     def getKey(self):
         """return PnLSingle key
         ie: ib.cancelPnLSingle(pnl_single.getKey())
@@ -626,6 +626,7 @@ class Position(NamedTuple):
     position: float
     avgCost: float
 
+
 @dataclass(slots=True)
 class Fill:
     contract: Contract
@@ -732,7 +733,6 @@ class BarDataList(List[BarData]):
         self.updateEvent = Event("updateEvent")
         self.subscription_bus = Event("Subscription bus")
 
-
     def __eq__(self, other) -> bool:
         return self is other
 
@@ -806,11 +806,11 @@ class ScanDataList(list[ScanData]):
 
     def __eq__(self, other):
         return self is other
-    
+
     def _on_data(self, ib: "IB", data: ScanData):
         """Called on scanner data."""
         rank = data[0].rank if 0 <= len(data) else None
-        if rank == 0:        
+        if rank == 0:
             self.clear()
         self.extend(data)
         ib.scannerDataEvent.emit(self)

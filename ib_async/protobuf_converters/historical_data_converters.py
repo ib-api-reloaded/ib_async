@@ -123,9 +123,11 @@ def createHistoricalDataRequestProto(
     fillTagValueList(chartOptionsList, historicalDataRequestProto.chartOptions)
     return historicalDataRequestProto
 
+
 def createCancelHistoricalDataProto(reqId: int) -> CancelHistoricalDataProto:
     cancelHistoricalDataProto = CancelHistoricalDataProto()
-    if isValidIntValue(reqId): cancelHistoricalDataProto.reqId = reqId
+    if isValidIntValue(reqId):
+        cancelHistoricalDataProto.reqId = reqId
     return cancelHistoricalDataProto
 
 

@@ -127,8 +127,8 @@ class TestBiDict:
         bidict = BiDict[str, object]()
         obj_value = "My Test Object"
         object_id = "temp_key"
-        initial_request_id = 100 # Represents an orderId
-        final_request_id = 5000 # Represents a permId
+        initial_request_id = 100  # Represents an orderId
+        final_request_id = 5000  # Represents a permId
 
         # Add the object with initial (dummy) request_id
         bidict.add(initial_request_id, object_id, obj_value)
@@ -143,11 +143,19 @@ class TestBiDict:
         bidict.update_request_id(object_id, final_request_id)
 
         # Verify updated state
-        assert bidict.get_by_request_id(initial_request_id) is None # Old request_id should no longer work
-        assert bidict.get_by_request_id(final_request_id) is obj_value # New request_id should work
-        assert bidict.get_by_object_id(object_id) is obj_value # object_id should still work
-        assert bidict.get_request_id(object_id) == final_request_id # object_id maps to new request_id
-        assert len(bidict) == 1 # Size should remain the same
+        assert (
+            bidict.get_by_request_id(initial_request_id) is None
+        )  # Old request_id should no longer work
+        assert (
+            bidict.get_by_request_id(final_request_id) is obj_value
+        )  # New request_id should work
+        assert (
+            bidict.get_by_object_id(object_id) is obj_value
+        )  # object_id should still work
+        assert (
+            bidict.get_request_id(object_id) == final_request_id
+        )  # object_id maps to new request_id
+        assert len(bidict) == 1  # Size should remain the same
 
         # Verify object identity (it's the same object, just re-indexed)
         retrieved_obj_by_new_req_id = bidict.get_by_request_id(final_request_id)

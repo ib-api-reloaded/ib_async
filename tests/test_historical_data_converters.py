@@ -7,13 +7,10 @@ from ib_async.objects import (
     BarData,
     HistogramData,
     HistoricalSchedule,
-    HistoricalSession,
     HistoricalTick,
     HistoricalTickBidAsk,
     HistoricalTickLast,
     RealTimeBar,
-    TickAttribBidAsk,
-    TickAttribLast,
 )
 from ib_async.protobuf.FundamentalsDataRequest_pb2 import (
     FundamentalsDataRequest as FundamentalsDataRequestProto,

@@ -5,19 +5,15 @@ import copy
 import datetime
 import logging
 import time
-from asyncio import TimeoutError
 from enum import Flag, auto
 from typing import (
     Any,
-    AsyncIterator,
     Awaitable,
-    Callable,
     Iterator,
     List,
     Optional,
     TypeVar,
     Union,
-    cast,
 )
 
 from eventkit import Event
@@ -61,13 +57,12 @@ from ib_async.order import (
     Order,
     OrderCancel,
     OrderState,
-    OrderStateNumeric,
     OrderStatus,
     StopOrder,
     Trade,
 )
 from ib_async.ticker import Ticker
-from ib_async.wrapper import RequestError, Wrapper
+from ib_async.wrapper import Wrapper
 
 _T = TypeVar("_T")
 
@@ -1544,7 +1539,7 @@ class IB:
 
         Note: The exchanges must be open when using this request, otherwise an
         empty list is returned.
-        
+
         ie `ib.reqSmartComponents(spy_ticker.bboExchange)`
         """
         return self._run(self.reqSmartComponentsAsync(bboExchange))
@@ -2258,7 +2253,7 @@ class IB:
     def whatIfOrderAsync(
         self, contract: Contract, order: Order
     ) -> Awaitable[OrderState]:
-        reqId = self.client.getReqId()        
+        reqId = self.client.getReqId()
         whatIfOrder = copy.copy(order)
         whatIfOrder.whatIf = True
         whatIfOrder.orderId = reqId
@@ -2276,6 +2271,7 @@ class IB:
             self.wrapper.response_bus.filter(lambda key, _: key == "currentTime")
             .pluck(1)
             .take(1)
+            .map(self._raise_if_error)
         )
 
     def reqCurrentTimeMiliAsync(self) -> Awaitable[datetime.datetime]:
@@ -2284,6 +2280,7 @@ class IB:
             self.wrapper.response_bus.filter(lambda key, _: key == "currentTimeMili")
             .pluck(1)
             .take(1)
+            .map(self._raise_if_error)
         )
 
     def reqAccountUpdatesAsync(self, account: str = "") -> Awaitable[None]:
@@ -2299,9 +2296,11 @@ class IB:
         """
         acctCode = account or self.wrapper.accounts[0]
         self.client.reqAccountUpdates(True, acctCode)
-        return self.wrapper.response_bus.filter(
-            lambda key, _: key == "accountValues"
-        ).take(1)
+        return (
+            self.wrapper.response_bus.filter(lambda key, _: key == "accountValues")
+            .take(1)
+            .map(self._raise_if_error)
+        )
 
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
@@ -2362,6 +2361,7 @@ class IB:
             self.wrapper.response_bus.filter(lambda key, _: key == "openOrders")
             .takewhile(lambda key, data: data is not None)
             .pluck(1)
+            .map(self._raise_if_error)
             .list()
         )
 
@@ -2371,6 +2371,7 @@ class IB:
             self.wrapper.response_bus.filter(lambda key, _: key == "openOrders")
             .takewhile(lambda key, data: data is not None)
             .pluck(1)
+            .map(self._raise_if_error)
             .list()
         )
 
@@ -2380,6 +2381,7 @@ class IB:
             self.wrapper.response_bus.filter(lambda key, _: key == "completedOrders")
             .takewhile(lambda key, data: data is not None)
             .pluck(1)
+            .map(self._raise_if_error)
             .list()
         )
 
@@ -2405,6 +2407,7 @@ class IB:
             self.wrapper.response_bus.filter(lambda name, _: name == "position")
             .takewhile(lambda name, data: data is not None)
             .pluck(1)
+            .map(self._raise_if_error)
         )
 
     def reqContractDetailsAsync(
@@ -2757,6 +2760,7 @@ class IB:
             self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
             .takewhile(lambda rId, data: data is not None)
             .pluck(1)
+            .map(self._raise_if_error)
             .list()
         )
 

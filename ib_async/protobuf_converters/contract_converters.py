@@ -562,7 +562,5 @@ def createSmartComponents(
                 if smartComponentProto.HasField("exchangeLetter")
                 else " "
             )
-            smartComponents.append(
-                SmartComponent(bitNumber, exchange, exchangeLetter)
-            )
+            smartComponents.append(SmartComponent(bitNumber, exchange, exchangeLetter))
     return smartComponents

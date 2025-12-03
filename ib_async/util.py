@@ -613,7 +613,8 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
 
     return t
 
-def parseIBTimeStamp(t:int, tz:dt.tzinfo=dt.timezone.utc) -> dt.datetime:
+
+def parseIBTimeStamp(t: int, tz: dt.tzinfo = dt.timezone.utc) -> dt.datetime:
     return dt.datetime.fromtimestamp(t, tz)
 
 

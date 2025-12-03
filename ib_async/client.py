@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import math
 import struct
 import time
 from collections import deque
@@ -112,8 +111,7 @@ from .protobuf_converters.trade_converter import (
     createGlobalCancelRequestProto,
     createPlaceOrderRequestProto,
 )
-from .util import UNSET_DOUBLE, dataclassAsTuple, getLoop, run
-
+from .util import getLoop, run
 
 
 class Client:
@@ -510,10 +508,8 @@ class Client:
             cancelMarketDataProto(reqId),
         )
 
-    def placeOrder(self,orderId:int, contract: Contract, order: Order):
-        orderRequestProto = createPlaceOrderRequestProto(
-            orderId, contract, order
-        )
+    def placeOrder(self, orderId: int, contract: Contract, order: Order):
+        orderRequestProto = createPlaceOrderRequestProto(orderId, contract, order)
         self.sendProto(MessageId.OUT.PLACE_ORDER, orderRequestProto)
 
     def cancelOrder(self, orderId: int, orderCancel: OrderCancel):
@@ -667,10 +663,9 @@ class Client:
         self.sendProto(
             MessageId.OUT.EXERCISE_OPTIONS,
             createExerciseOptionsRequestProto(
-                reqId,contract, exerciseAction, exerciseQuantity, account, override
-            )
+                reqId, contract, exerciseAction, exerciseQuantity, account, override
+            ),
         )
-
 
     def reqScannerSubscription(
         self,
@@ -974,28 +969,20 @@ class Client:
 
     def reqPnL(self, reqId, account, modelCode):
         self.sendProto(
-            MessageId.OUT.REQ_PNL,
-            createPnLRequestProto(reqId, account, modelCode)
+            MessageId.OUT.REQ_PNL, createPnLRequestProto(reqId, account, modelCode)
         )
-        
 
     def cancelPnL(self, reqId):
-        self.sendProto(
-            MessageId.OUT.CANCEL_PNL,
-            createCancelPnLProto(reqId)
-        )
+        self.sendProto(MessageId.OUT.CANCEL_PNL, createCancelPnLProto(reqId))
 
     def reqPnLSingle(self, reqId, account, modelCode, conid):
         self.sendProto(
             MessageId.OUT.REQ_PNL_SINGLE,
-            createPnLSingleRequestProto(reqId, account, modelCode, conid)
+            createPnLSingleRequestProto(reqId, account, modelCode, conid),
         )
 
     def cancelPnLSingle(self, reqId):
-        self.sendProto(
-            MessageId.OUT.CANCEL_PNL_SINGLE,
-            createCancelPnLProto(reqId)
-        )
+        self.sendProto(MessageId.OUT.CANCEL_PNL_SINGLE, createCancelPnLProto(reqId))
 
     def reqHistoricalTicks(
         self,
@@ -1075,4 +1062,3 @@ class Client:
             MessageId.OUT.REQ_USER_INFO,
             createUserInfoRequestProto(reqId),
         )
-

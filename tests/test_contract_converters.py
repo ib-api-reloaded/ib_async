@@ -6,8 +6,6 @@ from ib_async.contract import (
     ContractDescription,
     ContractDetails,
     DeltaNeutralContract,
-    FundAssetType,
-    FundDistributionPolicyIndicator,
     IneligibilityReason,
 )
 from ib_async.objects import OptionChain, SmartComponent
@@ -18,11 +16,15 @@ from ib_async.protobuf.ContractData_pb2 import ContractData as ContractDataProto
 from ib_async.protobuf.ContractDescription_pb2 import (
     ContractDescription as ContractDescriptionProto,
 )
-from ib_async.protobuf.ContractDetails_pb2 import ContractDetails as ContractDetailsProto
+from ib_async.protobuf.ContractDetails_pb2 import (
+    ContractDetails as ContractDetailsProto,
+)
 from ib_async.protobuf.DeltaNeutralContract_pb2 import (
     DeltaNeutralContract as DeltaNeutralContractProto,
 )
-from ib_async.protobuf.MarketRuleRequest_pb2 import MarketRuleRequest as MarketRuleRequestProto
+from ib_async.protobuf.MarketRuleRequest_pb2 import (
+    MarketRuleRequest as MarketRuleRequestProto,
+)
 from ib_async.protobuf.MatchingSymbolsRequest_pb2 import (
     MatchingSymbolsRequest as MatchingSymbolsRequestProto,
 )
@@ -35,7 +37,9 @@ from ib_async.protobuf.SecDefOptParamsRequest_pb2 import (
 from ib_async.protobuf.SmartComponentsRequest_pb2 import (
     SmartComponentsRequest as SmartComponentsRequestProto,
 )
-from ib_async.protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
+from ib_async.protobuf.SmartComponents_pb2 import (
+    SmartComponents as SmartComponentsProto,
+)
 from ib_async.protobuf_converters.contract_converters import (
     createSecDefOptParamsRequestProto,
     createOptionChain,
@@ -56,8 +60,8 @@ from ib_async.protobuf_converters.contract_converters import (
     createSmartComponents,
 )
 
-class TestContractConverters:
 
+class TestContractConverters:
     def test_createSecDefOptParamsRequestProto(self):
         proto = createSecDefOptParamsRequestProto(1, "SPX", "SMART", "IND", 123)
         assert isinstance(proto, SecDefOptParamsRequestProto)
@@ -74,7 +78,7 @@ class TestContractConverters:
             tradingClass="SPXW",
             multiplier="100",
             expirations=["202512", "202603"],
-            strikes=[4000.0, 4100.0]
+            strikes=[4000.0, 4100.0],
         )
         option_chain = createOptionChain(proto)
         assert isinstance(option_chain, OptionChain)
@@ -87,11 +91,7 @@ class TestContractConverters:
 
     def test_createContract(self):
         proto = ContractProto(
-            conId=1,
-            symbol="AAPL",
-            secType="STK",
-            exchange="SMART",
-            currency="USD"
+            conId=1, symbol="AAPL", secType="STK", exchange="SMART", currency="USD"
         )
         contract = createContract(proto)
         assert isinstance(contract, Contract)
@@ -108,7 +108,7 @@ class TestContractConverters:
         leg1.ratio = 1
         leg1.action = "BUY"
         leg1.exchange = "SMART"
-        
+
         combo_legs = createComboLegs(proto)
         assert len(combo_legs) == 1
         leg = combo_legs[0]
@@ -124,7 +124,7 @@ class TestContractConverters:
         dn_proto.conId = 123
         dn_proto.delta = 0.5
         dn_proto.price = 10.0
-        
+
         dn_contract = createDeltaNeutralContract(proto)
         assert isinstance(dn_contract, DeltaNeutralContract)
         assert dn_contract.conId == 123
@@ -136,7 +136,7 @@ class TestContractConverters:
         reason1 = proto.ineligibilityReasonList.add()
         reason1.id = "1"
         reason1.description = "Reason 1"
-        
+
         reasons = createIneligibilityReasonList(proto)
         assert len(reasons) == 1
         reason = reasons[0]
@@ -157,7 +157,7 @@ class TestContractConverters:
         contract_proto = ContractProto(symbol="TSLA", secType="STK")
         details_proto = ContractDetailsProto(marketName="Tesla", longName="Tesla Inc.")
         msg = ContractDataProto(contract=contract_proto, contractDetails=details_proto)
-        
+
         cd = createContractDetails(msg)
         assert isinstance(cd, ContractDetails)
         assert cd.contract.symbol == "TSLA"
@@ -168,7 +168,7 @@ class TestContractConverters:
         contract_proto = ContractProto(symbol="GOOG", secType="STK")
         desc_proto = ContractDescriptionProto(contract=contract_proto)
         desc_proto.derivativeSecTypes.extend(["OPT", "FUT"])
-        
+
         desc = createContractDescription(desc_proto)
         assert isinstance(desc, ContractDescription)
         assert desc.contract.symbol == "GOOG"
@@ -186,7 +186,9 @@ class TestContractConverters:
         assert proto.marketRuleId == 123
 
     def test_createContractProto(self):
-        contract = Contract(symbol="MSFT", secType="STK", exchange="SMART", currency="USD")
+        contract = Contract(
+            symbol="MSFT", secType="STK", exchange="SMART", currency="USD"
+        )
         proto = createContractProto(contract, None)
         assert isinstance(proto, ContractProto)
         assert proto.symbol == "MSFT"
@@ -208,7 +210,7 @@ class TestContractConverters:
         leg2 = ComboLeg(conId=2, ratio=2, action="SELL")
         contract = Contract(comboLegs=[leg1, leg2])
         order = Order(orderComboLegs=[Mock(price=10.0), Mock(price=20.0)])
-        
+
         proto_list = createComboLegProtoList(contract, order)
         assert len(proto_list) == 2
         assert proto_list[0].conId == 1
@@ -249,7 +251,7 @@ class TestContractConverters:
         smart_components = createSmartComponents(smart_components_proto)
         assert isinstance(smart_components, list)
         assert len(smart_components) == 2
-        
+
         assert isinstance(smart_components[0], SmartComponent)
         assert smart_components[0].bitNumber == 1
         assert smart_components[0].exchange == "SMART"

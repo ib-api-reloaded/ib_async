@@ -2,10 +2,9 @@
 Converters for trade-related Protobuf messages.
 """
 
-from datetime import datetime
 from decimal import Decimal
 
-from ib_async.contract import ComboLeg, Contract, DeltaNeutralContract
+from ib_async.contract import Contract
 from ib_async.objects import (
     CommissionReport,
     Execution,
@@ -62,9 +61,6 @@ from ..protobuf.GlobalCancelRequest_pb2 import (
 )
 from ..protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
 from ..protobuf.Order_pb2 import Order as OrderProto
-from ..protobuf.OrderAllocation_pb2 import (
-    OrderAllocation as OrderAllocationProto,
-)
 from ..protobuf.OrderCancel_pb2 import OrderCancel as OrderCancelProto
 from ..protobuf.OrderCondition_pb2 import OrderCondition as OrderConditionProto
 from ..protobuf.OrderState_pb2 import OrderState as OrderStateProto

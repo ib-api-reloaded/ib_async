@@ -3,9 +3,8 @@ from datetime import datetime
 from decimal import Decimal
 from unittest.mock import Mock
 
-from ib_async.contract import Contract, ComboLeg, DeltaNeutralContract
+from ib_async.contract import Contract, ComboLeg
 from ib_async.objects import (
-    TagValue,
     OptionExerciseType,
     SoftDollarTier,
     Execution,
@@ -26,7 +25,6 @@ from ib_async.order import (
     VolumeCondition,
     PercentChangeCondition,
     OrderCancel,
-    OrderAllocation,
 )
 from ib_async.protobuf.Order_pb2 import Order as OrderProto
 from ib_async.protobuf.PlaceOrderRequest_pb2 import (
@@ -699,7 +697,7 @@ class TestTradeConverters:
         assert tag_value_list[1].value == "Value2"
 
     def test_createTagValueList_empty(self):
-        proto_map = {} # type: ignore
+        proto_map = {}  # type: ignore
         tag_value_list = createTagValueList(proto_map)
         assert len(tag_value_list) == 0
 
@@ -881,7 +879,7 @@ class TestTradeConverters:
         assert proto.extOperator == "OP1"
 
     def test_createOrderCancelProto_none(self):
-        proto = createOrderCancelProto(None) # type: ignore
+        proto = createOrderCancelProto(None)  # type: ignore
         assert proto is None
 
     def test_createGlobalCancelRequestProto(self):

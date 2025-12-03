@@ -21,6 +21,7 @@ async def ib():
     yield ib
     ib.disconnect()
 
+
 @pytest.fixture
 def mock_ib():
     """Fixture for a mocked IB instance."""

@@ -1,4 +1,3 @@
-
 import asyncio
 import pytest
 from unittest.mock import Mock, patch
@@ -6,10 +5,17 @@ from unittest.mock import Mock, patch
 from ib_async import IB, Contract, ContractDetails, ContractDescription, OptionChain
 from ib_async.objects import ConnectionStats
 from ib_async.protobuf.Contract_pb2 import Contract as ContractProto
-from ib_async.protobuf.ContractDescription_pb2 import ContractDescription as ContractDescriptionProto
+from ib_async.protobuf.ContractDescription_pb2 import (
+    ContractDescription as ContractDescriptionProto,
+)
 from ib_async.protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
-from ib_async.protobuf_converters.contract_converters import createContractDescription, createOptionChain
-from ib_async.protobuf.SecDefOptParameter_pb2 import SecDefOptParameter as SecDefOptParameterProto
+from ib_async.protobuf_converters.contract_converters import (
+    createContractDescription,
+    createOptionChain,
+)
+from ib_async.protobuf.SecDefOptParameter_pb2 import (
+    SecDefOptParameter as SecDefOptParameterProto,
+)
 
 
 @pytest.mark.asyncio
@@ -39,16 +45,14 @@ async def test_reqContractDetailsAsync():
         ib.wrapper.response_bus.emit(1, cd2)
         ib.wrapper.response_bus.emit(1, None)
 
-    results, _ = await asyncio.gather(
-        event,
-        emitter()
-    )
+    results, _ = await asyncio.gather(event, emitter())
     assert len(results) == 2
     assert results[0].contract.conId == 1
     assert results[1].contract.conId == 2
 
     # Check that the underlying client method was called
     ib.client.reqContractDetails.assert_called_once_with(1, contract)
+
 
 @pytest.mark.asyncio
 async def test_reqContractDetails_protobuf_not_supported():
@@ -72,6 +76,7 @@ async def test_reqContractDetails_protobuf_not_supported():
     assert "Protobuf not supported by server." in str(exc_info.value)
     ib.client.reqContractDetails.assert_not_called()
 
+
 @pytest.mark.asyncio
 async def test_reqMatchingSymbolsAsync():
     """
@@ -92,21 +97,22 @@ async def test_reqMatchingSymbolsAsync():
     async def emitter():
         await asyncio.sleep(0.01)  # give consumer time to subscribe
         # Simulate the response from TWS
-        cd_proto1 = ContractDescriptionProto(contract=ContractProto(symbol="AAPL", conId=10))
-        cd_proto2 = ContractDescriptionProto(contract=ContractProto(symbol="AAPL", conId=20))
-        
+        cd_proto1 = ContractDescriptionProto(
+            contract=ContractProto(symbol="AAPL", conId=10)
+        )
+        cd_proto2 = ContractDescriptionProto(
+            contract=ContractProto(symbol="AAPL", conId=20)
+        )
+
         # The Decoder.symbolSamples method emits a list of ContractDescription objects
         contract_descriptions = [
             createContractDescription(cd_proto1),
-            createContractDescription(cd_proto2)
+            createContractDescription(cd_proto2),
         ]
 
         ib.wrapper.response_bus.emit(1, contract_descriptions)
 
-    results, _ = await asyncio.gather(
-        event,
-        emitter()
-    )
+    results, _ = await asyncio.gather(event, emitter())
 
     assert len(results) == 2
     assert results[0].contract.conId == 10
@@ -134,7 +140,9 @@ async def test_reqSecDefOptParamsAsync():
     underlyingConId = 123
 
     # Call the async method
-    event = ib.reqSecDefOptParamsAsync(underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId)
+    event = ib.reqSecDefOptParamsAsync(
+        underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
+    )
 
     async def emitter():
         await asyncio.sleep(0.1)  # give consumer time to subscribe
@@ -165,10 +173,7 @@ async def test_reqSecDefOptParamsAsync():
         ib.wrapper.response_bus.emit(1, option_chain2)
         ib.wrapper.response_bus.emit(1, None)
 
-    results, _ = await asyncio.gather(
-        event,
-        emitter()
-    )
+    results, _ = await asyncio.gather(event, emitter())
 
     assert len(results) == 2
     assert results[0].exchange == "SMART"
@@ -176,4 +181,6 @@ async def test_reqSecDefOptParamsAsync():
     assert results[1].expirations == ["202503", "202504"]
 
     # Check that the underlying client method was called
-    ib.client.reqSecDefOptParams.assert_called_once_with(1, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId)
+    ib.client.reqSecDefOptParams.assert_called_once_with(
+        1, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
+    )

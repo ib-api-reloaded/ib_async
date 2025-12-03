@@ -129,7 +129,8 @@ class BiDict(Generic[K, V]):
         """Bidirectional mapping
 
         Args:
-            track_objects_weakly (bool, optional): enable get_request_id_by_object, using weakreferences. Defaults to False.
+            track_objects_weakly (bool, optional): enable get_request_id_by_object,
+                                                using weakreferences. Defaults to False.
         """
         # Primary storage: request_id → (object_id, object)
         self._by_request: dict[int, tuple[K, V]] = {}
@@ -231,7 +232,7 @@ class BiDict(Generic[K, V]):
 
     def update_request_id(self, object_id: K, new_request_id: int):
         """
-        Updates the request_id associated with an existing entry, identified by its 
+        Updates the request_id associated with an existing entry, identified by its
         object_id.
 
         This method is used when the primary request_id (e.g., permId for a Trade)
@@ -240,9 +241,9 @@ class BiDict(Generic[K, V]):
         preserving the object's identity and its association with the object_id.
 
         Args:
-            object_id (K): The unique identifier for the object (e.g., (clientId, 
+            object_id (K): The unique identifier for the object (e.g., (clientId,
                            orderId) for a Trade).
-            new_request_id (int): The new, permanent request ID to associate with the  
+            new_request_id (int): The new, permanent request ID to associate with the
                                   object (e.g., permId).
         """
         old_request_id = self._request_by_object_id.get(object_id)
@@ -589,7 +590,6 @@ class Wrapper:
             self.ib.positionEvent.emit(position)
         self.response_bus.emit("position", position)
 
-
     def positionEnd(self):
         self._endReq("position")
 
@@ -612,7 +612,7 @@ class Wrapper:
     ):
         pnl = self.Pnl.get_by_request_id(reqId)
         if not pnl:
-            self._logger.error("pnl: No pnl found for reqId %s",reqId)
+            self._logger.error("pnl: No pnl found for reqId %s", reqId)
             return
 
         pnl.dailyPnL = dailyPnL
@@ -631,7 +631,7 @@ class Wrapper:
     ):
         pnlSingle = self.pnlSingles.get_by_request_id(reqId)
         if not pnlSingle:
-            self._logger.error("pnlSingle: No pnlSingle found for reqId %s",reqId)
+            self._logger.error("pnlSingle: No pnlSingle found for reqId %s", reqId)
             return
 
         pnlSingle.position = pos
@@ -650,7 +650,7 @@ class Wrapper:
             key = (clientId, orderId)
         return key
 
-    def openOrder(self, trade: Trade,orderState: OrderState):
+    def openOrder(self, trade: Trade, orderState: OrderState):
         """
         This wrapper is called to:
 
@@ -661,7 +661,7 @@ class Wrapper:
         * handle openOrders and allOpenOrders responses.
         """
         if trade.order.whatIf:
-            self.response_bus.emit(trade.order.orderId,orderState)
+            self.response_bus.emit(trade.order.orderId, orderState)
             return
 
         key = self.orderKey(
@@ -855,7 +855,7 @@ class Wrapper:
 
     def historicalDataEnd(self, reqId, _start: str, _end: str):
         self._endReq(reqId)
-        
+
     def historicalDataUpdate(self, reqId: int, bar: BarData):
         subscription = self.subscriptions.get_by_request_id(reqId)
         if subscription:
@@ -1001,8 +1001,10 @@ class Wrapper:
 
         # if you're curious when these operations run and what they do, enable this too:
         # fmt: off
-        # print("BID" if side else "ASK", "OPERATION", operation, "at position", position, "for price", price, "at qty", size)
-        # assert list(dom.keys()) == list(range(0, len(dom))), f"Keys aren't sequential? {dom} :: {ticker}"
+        # print("BID" if side else "ASK", "OPERATION", operation, "at position", 
+        # position, "for price", price, "at qty", size)
+        # assert list(dom.keys()) == list(range(0, len(dom))), f"Keys aren't 
+        # sequential? {dom} :: {ticker}"
         # fmt: on
 
         if operation in {0, 1}:
