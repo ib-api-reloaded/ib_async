@@ -7,9 +7,10 @@ from ..contract import (
     ContractDetails,
     DeltaNeutralContract,
     FundAssetType,
-    FundDistributionPolicyIndicator, IneligibilityReason
+    FundDistributionPolicyIndicator,
+    IneligibilityReason,
 )
-from ..objects import OptionChain
+from ..objects import OptionChain, SmartComponent
 from ..order import Order
 from ..protobuf.ComboLeg_pb2 import ComboLeg as ComboLegProto
 from ..protobuf.Contract_pb2 import Contract as ContractProto
@@ -31,10 +32,15 @@ from ..protobuf.SecDefOptParameter_pb2 import (
 from ..protobuf.SecDefOptParamsRequest_pb2 import (
     SecDefOptParamsRequest as SecDefOptParamsRequestProto,
 )
+from ..protobuf.SmartComponentsRequest_pb2 import (
+    SmartComponentsRequest as SmartComponentsRequestProto,
+)
+from ..protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
 from ..util import (
     UNSET_DOUBLE,
     floatMaxString,
     getEnumTypeFromString,
+    isValidIntValue,
 )
 
 
@@ -494,7 +500,7 @@ def createComboLegProtoList(
         for i, comboLeg in enumerate(comboLegs):
             perLegPrice = UNSET_DOUBLE
             if orderComboLegs and i < len(orderComboLegs):
-                perLegPrice:float = orderComboLegs[i].price
+                perLegPrice: float = orderComboLegs[i].price
                 comboLegProto = createComboLegProto(comboLeg, perLegPrice)
             if comboLegProto is not None:
                 comboLegProtoList.append(comboLegProto)
@@ -522,3 +528,41 @@ def createComboLegProto(comboLeg: ComboLeg, perLegPrice: float) -> ComboLegProto
     if comboLegProto.perLegPrice is not None:
         comboLegProto.perLegPrice = perLegPrice
     return comboLegProto
+
+
+def createSmartComponentsRequestProto(
+    reqId: int, bboExchange: str
+) -> SmartComponentsRequestProto:
+    smartComponentsRequestProto = SmartComponentsRequestProto()
+    if isValidIntValue(reqId):
+        smartComponentsRequestProto.reqId = reqId
+    if bboExchange:
+        smartComponentsRequestProto.bboExchange = bboExchange
+    return smartComponentsRequestProto
+
+
+def createSmartComponents(
+    smartComponentsProto: SmartComponentsProto,
+) -> list[SmartComponent]:
+    smartComponents = []
+    if smartComponentsProto and smartComponentsProto.smartComponents:
+        for smartComponentProto in smartComponentsProto.smartComponents:
+            bitNumber = (
+                smartComponentProto.bitNumber
+                if smartComponentProto.HasField("bitNumber")
+                else 0
+            )
+            exchange = (
+                smartComponentProto.exchange
+                if smartComponentProto.HasField("exchange")
+                else ""
+            )
+            exchangeLetter = (
+                smartComponentProto.exchangeLetter
+                if smartComponentProto.HasField("exchangeLetter")
+                else " "
+            )
+            smartComponents.append(
+                SmartComponent(bitNumber, exchange, exchangeLetter)
+            )
+    return smartComponents

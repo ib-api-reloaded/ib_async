@@ -2,6 +2,7 @@
 Converters for trade-related Protobuf messages.
 """
 
+from datetime import datetime
 from decimal import Decimal
 
 from ib_async.contract import ComboLeg, Contract, DeltaNeutralContract
@@ -19,8 +20,10 @@ from ib_async.order import (
     MarginCondition,
     Order,
     OrderAllocation,
+    OrderCancel,
     OrderComboLeg,
     OrderCondition,
+    OrderConditionType,
     OrderState,
     OrderStatus,
     PercentChangeCondition,
@@ -31,12 +34,16 @@ from ib_async.order import (
 )
 from ib_async.util import (
     UNSET_INTEGER,
+    UNSET_DOUBLE,
     decimalMaxString,
     getEnumTypeFromString,
     isValidIntValue,
     parseIBDatetime,
 )
 
+from ..protobuf.CancelOrderRequest_pb2 import (
+    CancelOrderRequest as CancelOrderRequestProto,
+)
 from ..protobuf.CommissionAndFeesReport_pb2 import (
     CommissionAndFeesReport as CommissionReportProto,
 )
@@ -47,16 +54,362 @@ from ..protobuf.ExecutionDetails_pb2 import (
 )
 from ..protobuf.ExecutionFilter_pb2 import ExecutionFilter as ExecutionFilterProto
 from ..protobuf.ExecutionRequest_pb2 import ExecutionRequest as ExecutionRequestProto
+from ..protobuf.ExerciseOptionsRequest_pb2 import (
+    ExerciseOptionsRequest as ExerciseOptionsRequestProto,
+)
+from ..protobuf.GlobalCancelRequest_pb2 import (
+    GlobalCancelRequest as GlobalCancelRequestProto,
+)
 from ..protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
 from ..protobuf.Order_pb2 import Order as OrderProto
 from ..protobuf.OrderAllocation_pb2 import (
     OrderAllocation as OrderAllocationProto,
 )
+from ..protobuf.OrderCancel_pb2 import OrderCancel as OrderCancelProto
 from ..protobuf.OrderCondition_pb2 import OrderCondition as OrderConditionProto
 from ..protobuf.OrderState_pb2 import OrderState as OrderStateProto
 from ..protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
 from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
-from ..protobuf_converters.contract_converters import createContract
+from ..protobuf.PlaceOrderRequest_pb2 import PlaceOrderRequest as PlaceOrderRequestProto
+from ..protobuf_converters.contract_converters import (
+    createContract,
+    createContractProto,
+)
+from ..protobuf_converters.historical_data_converters import fillTagValueList
+
+
+class ClientException(Exception):
+    def __init__(self, code, message, text):
+        super().__init__(f"Client request error: {code}: {message}, {text}")
+        self.code = code
+        self.message = message
+        self.text = text
+
+
+def createPlaceOrderRequestProto(
+    orderId: int, contract: Contract, order: Order
+) -> PlaceOrderRequestProto:
+    placeOrderRequestProto = PlaceOrderRequestProto()
+    if isValidIntValue(orderId):
+        placeOrderRequestProto.orderId = orderId
+    contractProto = createContractProto(contract, order)
+    if contractProto is not None:
+        placeOrderRequestProto.contract.CopyFrom(contractProto)
+    orderProto = createOrderProto(order)
+    if orderProto is not None:
+        placeOrderRequestProto.order.CopyFrom(orderProto)
+    return placeOrderRequestProto
+
+
+def createOrderProto(order: Order) -> OrderProto:
+    orderProto = OrderProto()
+    if isValidIntValue(order.clientId):
+        order.clientId = order.clientId
+    if isValidIntValue(order.permId):
+        orderProto.permId = order.permId
+    if isValidIntValue(order.parentId):
+        orderProto.parentId = order.parentId
+    if order.action:
+        orderProto.action = order.action
+    if order.totalQuantity != UNSET_DOUBLE:
+        orderProto.totalQuantity = decimalMaxString(order.totalQuantity)
+    if isValidIntValue(order.displaySize):
+        orderProto.displaySize = order.displaySize
+    if order.orderType:
+        orderProto.orderType = order.orderType
+    if order.lmtPrice != UNSET_DOUBLE:
+        orderProto.lmtPrice = float(order.lmtPrice)
+    if order.auxPrice != UNSET_DOUBLE:
+        orderProto.auxPrice = float(order.auxPrice)
+    if order.tif:
+        orderProto.tif = order.tif
+    if order.account:
+        orderProto.account = order.account
+    if order.settlingFirm:
+        orderProto.settlingFirm = order.settlingFirm
+    if order.clearingAccount:
+        orderProto.clearingAccount = order.clearingAccount
+    if order.clearingIntent:
+        orderProto.clearingIntent = order.clearingIntent
+    if order.allOrNone:
+        orderProto.allOrNone = order.allOrNone
+    if order.blockOrder:
+        orderProto.blockOrder = order.blockOrder
+    if order.hidden:
+        orderProto.hidden = order.hidden
+    if order.outsideRth:
+        orderProto.outsideRth = order.outsideRth
+    if order.sweepToFill:
+        orderProto.sweepToFill = order.sweepToFill
+    if order.percentOffset != UNSET_DOUBLE:
+        orderProto.percentOffset = float(order.percentOffset)
+    if order.trailingPercent:
+        orderProto.trailingPercent = float(order.trailingPercent)
+    if order.trailStopPrice != UNSET_DOUBLE:
+        orderProto.trailStopPrice = float(order.trailStopPrice)
+    if isValidIntValue(order.minQty):
+        orderProto.minQty = order.minQty
+    if order.goodAfterTime:
+        orderProto.goodAfterTime = order.goodAfterTime
+    if order.goodTillDate:
+        orderProto.goodTillDate = order.goodTillDate
+    if order.ocaGroup:
+        orderProto.ocaGroup = order.ocaGroup
+    if order.orderRef:
+        orderProto.orderRef = order.orderRef
+    if order.rule80A:
+        orderProto.rule80A = order.rule80A
+    if isValidIntValue(order.ocaType):
+        orderProto.ocaType = order.ocaType
+    if isValidIntValue(order.triggerMethod):
+        orderProto.triggerMethod = order.triggerMethod
+    if order.activeStartTime:
+        orderProto.activeStartTime = order.activeStartTime
+    if order.activeStopTime:
+        orderProto.activeStopTime = order.activeStopTime
+    if order.faGroup:
+        orderProto.faGroup = order.faGroup
+    if order.faMethod:
+        orderProto.faMethod = order.faMethod
+    if order.faPercentage:
+        orderProto.faPercentage = order.faPercentage
+    if order.volatility != UNSET_DOUBLE:
+        orderProto.volatility = float(order.volatility)
+    if isValidIntValue(order.volatilityType):
+        orderProto.volatilityType = order.volatilityType
+    if order.continuousUpdate:
+        orderProto.continuousUpdate = order.continuousUpdate
+    if isValidIntValue(order.referencePriceType):
+        orderProto.referencePriceType = order.referencePriceType
+    if order.deltaNeutralOrderType:
+        orderProto.deltaNeutralOrderType = order.deltaNeutralOrderType
+    if order.deltaNeutralAuxPrice != UNSET_DOUBLE:
+        orderProto.deltaNeutralAuxPrice = float(order.deltaNeutralAuxPrice)
+    if isValidIntValue(order.deltaNeutralConId):
+        orderProto.deltaNeutralConId = order.deltaNeutralConId
+    if order.deltaNeutralOpenClose:
+        orderProto.deltaNeutralOpenClose = order.deltaNeutralOpenClose
+    if order.deltaNeutralShortSale:
+        orderProto.deltaNeutralShortSale = order.deltaNeutralShortSale
+    if isValidIntValue(order.deltaNeutralShortSaleSlot):
+        orderProto.deltaNeutralShortSaleSlot = order.deltaNeutralShortSaleSlot
+    if order.deltaNeutralDesignatedLocation:
+        orderProto.deltaNeutralDesignatedLocation = order.deltaNeutralDesignatedLocation
+    if isValidIntValue(order.scaleInitLevelSize):
+        orderProto.scaleInitLevelSize = order.scaleInitLevelSize
+    if isValidIntValue(order.scaleSubsLevelSize):
+        orderProto.scaleSubsLevelSize = order.scaleSubsLevelSize
+    if order.scalePriceIncrement != UNSET_DOUBLE:
+        orderProto.scalePriceIncrement = float(order.scalePriceIncrement)
+    if order.scalePriceAdjustValue != UNSET_DOUBLE:
+        orderProto.scalePriceAdjustValue = float(order.scalePriceAdjustValue)
+    if isValidIntValue(order.scalePriceAdjustInterval):
+        orderProto.scalePriceAdjustInterval = order.scalePriceAdjustInterval
+    if order.scaleProfitOffset != UNSET_DOUBLE:
+        orderProto.scaleProfitOffset = float(order.scaleProfitOffset)
+    if order.scaleAutoReset:
+        orderProto.scaleAutoReset = order.scaleAutoReset
+    if isValidIntValue(order.scaleInitPosition):
+        orderProto.scaleInitPosition = order.scaleInitPosition
+    if isValidIntValue(order.scaleInitFillQty):
+        orderProto.scaleInitFillQty = order.scaleInitFillQty
+    if order.scaleRandomPercent:
+        orderProto.scaleRandomPercent = order.scaleRandomPercent
+    if order.scaleTable:
+        orderProto.scaleTable = order.scaleTable
+    if order.hedgeType:
+        orderProto.hedgeType = order.hedgeType
+    if order.hedgeParam:
+        orderProto.hedgeParam = order.hedgeParam
+
+    if order.algoStrategy:
+        orderProto.algoStrategy = order.algoStrategy
+    fillTagValueList(order.algoParams, orderProto.algoParams)
+    if order.algoId:
+        orderProto.algoId = order.algoId
+
+    fillTagValueList(order.smartComboRoutingParams, orderProto.smartComboRoutingParams)
+
+    if order.whatIf:
+        orderProto.whatIf = order.whatIf
+    if order.transmit:
+        orderProto.transmit = order.transmit
+    if order.overridePercentageConstraints:
+        orderProto.overridePercentageConstraints = order.overridePercentageConstraints
+    if order.openClose:
+        orderProto.openClose = order.openClose
+    if isValidIntValue(order.origin):
+        orderProto.origin = order.origin
+    if isValidIntValue(order.shortSaleSlot):
+        orderProto.shortSaleSlot = order.shortSaleSlot
+    if order.designatedLocation:
+        orderProto.designatedLocation = order.designatedLocation
+    if isValidIntValue(order.exemptCode):
+        orderProto.exemptCode = order.exemptCode
+    if order.deltaNeutralSettlingFirm:
+        orderProto.deltaNeutralSettlingFirm = order.deltaNeutralSettlingFirm
+    if order.deltaNeutralClearingAccount:
+        orderProto.deltaNeutralClearingAccount = order.deltaNeutralClearingAccount
+    if order.deltaNeutralClearingIntent:
+        orderProto.deltaNeutralClearingIntent = order.deltaNeutralClearingIntent
+    if order.discretionaryAmt != UNSET_DOUBLE:
+        orderProto.discretionaryAmt = order.discretionaryAmt
+    if order.optOutSmartRouting:
+        orderProto.optOutSmartRouting = order.optOutSmartRouting
+    if isValidIntValue(order.exemptCode):
+        orderProto.exemptCode = order.exemptCode
+    if order.startingPrice != UNSET_DOUBLE:
+        orderProto.startingPrice = float(order.startingPrice)
+    if order.stockRefPrice != UNSET_DOUBLE:
+        orderProto.stockRefPrice = float(order.stockRefPrice)
+    if order.delta != UNSET_DOUBLE:
+        orderProto.delta = float(order.delta)
+    if order.stockRangeLower != UNSET_DOUBLE:
+        orderProto.stockRangeLower = float(order.stockRangeLower)
+    if order.stockRangeUpper != UNSET_DOUBLE:
+        orderProto.stockRangeUpper = float(order.stockRangeUpper)
+    if order.notHeld:
+        orderProto.notHeld = order.notHeld
+
+    fillTagValueList(order.orderMiscOptions, orderProto.orderMiscOptions)
+
+    if order.solicited:
+        orderProto.solicited = order.solicited
+    if order.randomizeSize:
+        orderProto.randomizeSize = order.randomizeSize
+    if order.randomizePrice:
+        orderProto.randomizePrice = order.randomizePrice
+    if isValidIntValue(order.referenceContractId):
+        orderProto.referenceContractId = order.referenceContractId
+    if order.peggedChangeAmount != UNSET_DOUBLE:
+        orderProto.peggedChangeAmount = order.peggedChangeAmount
+    if order.isPeggedChangeAmountDecrease:
+        orderProto.isPeggedChangeAmountDecrease = order.isPeggedChangeAmountDecrease
+    if order.referenceChangeAmount != UNSET_DOUBLE:
+        orderProto.referenceChangeAmount = order.referenceChangeAmount
+    if order.referenceExchangeId:
+        orderProto.referenceExchangeId = order.referenceExchangeId
+    if order.adjustedOrderType:
+        orderProto.adjustedOrderType = order.adjustedOrderType
+    if order.triggerPrice != UNSET_DOUBLE:
+        orderProto.triggerPrice = order.triggerPrice
+    if order.adjustedStopPrice != UNSET_DOUBLE:
+        orderProto.adjustedStopPrice = order.adjustedStopPrice
+    if order.adjustedStopLimitPrice != UNSET_DOUBLE:
+        orderProto.adjustedStopLimitPrice = order.adjustedStopLimitPrice
+    if order.adjustedTrailingAmount != UNSET_DOUBLE:
+        orderProto.adjustedTrailingAmount = order.adjustedTrailingAmount
+    if isValidIntValue(order.adjustableTrailingUnit):
+        orderProto.adjustableTrailingUnit = order.adjustableTrailingUnit
+    if order.lmtPriceOffset != UNSET_DOUBLE:
+        orderProto.lmtPriceOffset = order.lmtPriceOffset
+
+    orderConditionList = createConditionsProto(order)
+    if orderConditionList is not None and orderConditionList:
+        orderProto.conditions.extend(orderConditionList)
+    if order.conditionsCancelOrder:
+        orderProto.conditionsCancelOrder = order.conditionsCancelOrder
+    if order.conditionsIgnoreRth:
+        orderProto.conditionsIgnoreRth = order.conditionsIgnoreRth
+
+    if order.modelCode:
+        orderProto.modelCode = order.modelCode
+    if order.extOperator:
+        orderProto.extOperator = order.extOperator
+
+    softDollarTier = createSoftDollarTierProto(order)
+    if softDollarTier is not None:
+        orderProto.softDollarTier.CopyFrom(softDollarTier)
+
+    if order.cashQty != UNSET_DOUBLE:
+        orderProto.cashQty = order.cashQty
+    if order.mifid2DecisionMaker:
+        orderProto.mifid2DecisionMaker = order.mifid2DecisionMaker
+    if order.mifid2DecisionAlgo:
+        orderProto.mifid2DecisionAlgo = order.mifid2DecisionAlgo
+    if order.mifid2ExecutionTrader:
+        orderProto.mifid2ExecutionTrader = order.mifid2ExecutionTrader
+    if order.mifid2ExecutionAlgo:
+        orderProto.mifid2ExecutionAlgo = order.mifid2ExecutionAlgo
+    if order.dontUseAutoPriceForHedge:
+        orderProto.dontUseAutoPriceForHedge = order.dontUseAutoPriceForHedge
+    if order.isOmsContainer:
+        orderProto.isOmsContainer = order.isOmsContainer
+    if order.discretionaryUpToLimitPrice:
+        orderProto.discretionaryUpToLimitPrice = order.discretionaryUpToLimitPrice
+    if order.usePriceMgmtAlgo is not None:
+        orderProto.usePriceMgmtAlgo = 1 if order.usePriceMgmtAlgo else 0
+    if isValidIntValue(order.duration):
+        orderProto.duration = order.duration
+    if isValidIntValue(order.postToAts):
+        orderProto.postToAts = order.postToAts
+    if order.advancedErrorOverride:
+        orderProto.advancedErrorOverride = order.advancedErrorOverride
+    if order.manualOrderTime:
+        orderProto.manualOrderTime = order.manualOrderTime
+    if isValidIntValue(order.minTradeQty):
+        orderProto.minTradeQty = order.minTradeQty
+    if isValidIntValue(order.minCompeteSize):
+        orderProto.minCompeteSize = order.minCompeteSize
+    if order.competeAgainstBestOffset != UNSET_DOUBLE:
+        orderProto.competeAgainstBestOffset = order.competeAgainstBestOffset
+    if order.midOffsetAtWhole != UNSET_DOUBLE:
+        orderProto.midOffsetAtWhole = order.midOffsetAtWhole
+    if order.midOffsetAtHalf != UNSET_DOUBLE:
+        orderProto.midOffsetAtHalf = order.midOffsetAtHalf
+    if order.customerAccount:
+        orderProto.customerAccount = order.customerAccount
+    if order.professionalCustomer:
+        orderProto.professionalCustomer = order.professionalCustomer
+    if order.bondAccruedInterest:
+        orderProto.bondAccruedInterest = order.bondAccruedInterest
+    if order.includeOvernight:
+        orderProto.includeOvernight = order.includeOvernight
+    if isValidIntValue(order.manualOrderIndicator):
+        orderProto.manualOrderIndicator = order.manualOrderIndicator
+    if order.submitter:
+        orderProto.submitter = order.submitter
+    if order.autoCancelParent:
+        orderProto.autoCancelParent = order.autoCancelParent
+    if order.imbalanceOnly:
+        orderProto.imbalanceOnly = order.imbalanceOnly
+
+    return orderProto
+
+
+def createConditionsProto(order: Order) -> list[OrderConditionProto]:
+    orderConditionProtoList = []
+    try:
+        if order.conditions is not None and order.conditions:
+            for orderCondition in order.conditions:
+                conditionType = getattr(orderCondition, "condType", None)
+
+                if PriceCondition.condType == conditionType:
+                    orderConditionProto = createPriceConditionProto(orderCondition)
+                elif TimeCondition.condType == conditionType:
+                    orderConditionProto = createTimeConditionProto(orderCondition)
+                elif MarginCondition.condType == conditionType:
+                    orderConditionProto = createMarginConditionProto(orderCondition)
+                elif ExecutionCondition.condType == conditionType:
+                    orderConditionProto = createExecutionConditionProto(orderCondition)
+                elif VolumeCondition.condType == conditionType:
+                    orderConditionProto = createVolumeConditionProto(orderCondition)
+                elif PercentChangeCondition.condType == conditionType:
+                    orderConditionProto = createPercentChangeConditionProto(
+                        orderCondition
+                    )
+
+                if orderConditionProto is not None:
+                    orderConditionProtoList.append(orderConditionProto)
+
+    except Exception:
+        raise ClientException(
+            588,
+            "Error encoding protobuf - ",
+            "Error encoding conditions",
+        )
+
+    return orderConditionProtoList
 
 
 def createOrderComboLegs(contractProto: ContractProto) -> list[OrderComboLeg]:
@@ -72,6 +425,121 @@ def createOrderComboLegs(contractProto: ContractProto) -> list[OrderComboLeg]:
     return orderComboLegs
 
 
+def createOrderConditionProto(
+    orderCondition: OrderConditionType,
+) -> OrderConditionProto:
+    conditionType = orderCondition.condType
+    # Returns True if conjuction is AND, False if OR
+    isConjunctionConnection = orderCondition.conjunction == "a"
+    orderConditionProto = OrderConditionProto()
+    if isValidIntValue(conditionType):
+        orderConditionProto.type = conditionType
+    orderConditionProto.isConjunctionConnection = isConjunctionConnection
+    return orderConditionProto
+
+
+def createOperatorConditionProto(
+    operatorCondition: OrderConditionType,
+) -> OrderConditionProto:
+    orderConditionProto = createOrderConditionProto(operatorCondition)
+    operatorConditionProto = OrderConditionProto()
+    operatorConditionProto.MergeFrom(orderConditionProto)
+    if hasattr(operatorCondition, "isMore"):
+        operatorConditionProto.isMore = operatorCondition.isMore
+    return operatorConditionProto
+
+
+def createContractConditionProto(
+    contractCondition: OrderConditionType,
+) -> OrderConditionProto:
+    operatorConditionProto = createOperatorConditionProto(contractCondition)
+    contractConditionProto = OrderConditionProto()
+    contractConditionProto.MergeFrom(operatorConditionProto)
+    if hasattr(contractCondition, "conId") and isValidIntValue(contractCondition.conId):
+        contractConditionProto.conId = contractCondition.conId
+    if hasattr(contractCondition, "exch"):
+        contractConditionProto.exchange = contractCondition.exch
+    return contractConditionProto
+
+
+def createPriceConditionProto(priceCondition: PriceCondition) -> OrderConditionProto:
+    contractConditionProto = createContractConditionProto(priceCondition)
+    priceConditionProto = OrderConditionProto()
+    priceConditionProto.MergeFrom(contractConditionProto)
+    if priceCondition.price != UNSET_DOUBLE:
+        priceConditionProto.price = priceCondition.price
+    if isValidIntValue(priceCondition.triggerMethod):
+        priceConditionProto.triggerMethod = priceCondition.triggerMethod
+    return priceConditionProto
+
+
+def createTimeConditionProto(timeCondition: TimeCondition) -> OrderConditionProto:
+    operatorConditionProto = createOperatorConditionProto(timeCondition)
+    timeConditionProto = OrderConditionProto()
+    timeConditionProto.MergeFrom(operatorConditionProto)
+    if timeCondition.time:
+        timeConditionProto.time = timeCondition.time
+    return timeConditionProto
+
+
+def createMarginConditionProto(marginCondition: MarginCondition) -> OrderConditionProto:
+    operatorConditionProto = createOperatorConditionProto(marginCondition)
+    marginConditionProto = OrderConditionProto()
+    marginConditionProto.MergeFrom(operatorConditionProto)
+    if marginCondition.percent != UNSET_DOUBLE:
+        marginConditionProto.percent = marginCondition.percent
+    return marginConditionProto
+
+
+def createExecutionConditionProto(
+    executionCondition: ExecutionCondition,
+) -> OrderConditionProto:
+    orderConditionProto = createOrderConditionProto(executionCondition)
+    executionConditionProto = OrderConditionProto()
+    executionConditionProto.MergeFrom(orderConditionProto)
+    if executionCondition.secType:
+        executionConditionProto.secType = executionCondition.secType
+    if executionCondition.exch:
+        executionConditionProto.exchange = executionCondition.exch
+    if executionCondition.symbol:
+        executionConditionProto.symbol = executionCondition.symbol
+    return executionConditionProto
+
+
+def createVolumeConditionProto(volumeCondition: VolumeCondition) -> OrderConditionProto:
+    contractConditionProto = createContractConditionProto(volumeCondition)
+    volumeConditionProto = OrderConditionProto()
+    volumeConditionProto.MergeFrom(contractConditionProto)
+    if isValidIntValue(volumeCondition.volume):
+        volumeConditionProto.volume = volumeCondition.volume
+    return volumeConditionProto
+
+
+def createPercentChangeConditionProto(
+    percentChangeCondition: PercentChangeCondition,
+) -> OrderConditionProto:
+    contractConditionProto = createContractConditionProto(percentChangeCondition)
+    percentChangeConditionProto = OrderConditionProto()
+    percentChangeConditionProto.MergeFrom(contractConditionProto)
+    if percentChangeCondition.changePercent != UNSET_DOUBLE:
+        percentChangeConditionProto.changePercent = percentChangeCondition.changePercent
+    return percentChangeConditionProto
+
+
+def createSoftDollarTierProto(order: Order) -> SoftDollarTierProto:
+    softDollarTierProto = None
+    tier = order.softDollarTier
+    if tier is not None:
+        softDollarTierProto = SoftDollarTierProto()
+        if tier.name:
+            softDollarTierProto.name = tier.name
+        if tier.val:
+            softDollarTierProto.value = tier.val
+        if tier.displayName:
+            softDollarTierProto.displayName = tier.displayName
+    return softDollarTierProto
+
+
 def createOrder(
     orderId: int, contractProto: ContractProto, orderProto: OrderProto
 ) -> Order:
@@ -83,7 +551,7 @@ def createOrder(
     if orderProto.HasField("action"):
         order.action = orderProto.action
     if orderProto.HasField("totalQuantity"):
-        order.totalQuantity = orderProto.totalQuantity
+        order.totalQuantity = float(orderProto.totalQuantity)
     if orderProto.HasField("orderType"):
         order.orderType = orderProto.orderType
     if orderProto.HasField("lmtPrice"):
@@ -348,8 +816,8 @@ def createOrder(
     return order
 
 
-def createOrderConditions(orderProto: OrderProto) -> list[OrderCondition]:
-    orderConditions: list[OrderCondition] = []
+def createOrderConditions(orderProto: OrderProto) -> list[OrderConditionType]:
+    orderConditions: list[OrderConditionType] = []
     orderConditionsProtoList = []
     if orderProto.conditions is not None:
         orderConditionsProtoList = orderProto.conditions
@@ -360,23 +828,19 @@ def createOrderConditions(orderProto: OrderProto) -> list[OrderCondition]:
                 orderConditionProto.type if orderConditionProto.HasField("type") else 0
             )
 
-            condition = None
+            condition: OrderCondition | None = None
             if PriceCondition.condType == conditionType:
-                condition: PriceCondition = createPriceCondition(orderConditionProto)
+                condition = createPriceCondition(orderConditionProto)
             elif TimeCondition.condType == conditionType:
-                condition: TimeCondition = createTimeCondition(orderConditionProto)
+                condition = createTimeCondition(orderConditionProto)
             elif MarginCondition.condType == conditionType:
-                condition: MarginCondition = createMarginCondition(orderConditionProto)
+                condition = createMarginCondition(orderConditionProto)
             elif ExecutionCondition.condType == conditionType:
-                condition: ExecutionCondition = createExecutionCondition(
-                    orderConditionProto
-                )
+                condition = createExecutionCondition(orderConditionProto)
             elif VolumeCondition.condType == conditionType:
-                condition: VolumeCondition = createVolumeCondition(orderConditionProto)
+                condition = createVolumeCondition(orderConditionProto)
             elif PercentChangeCondition.condType == conditionType:
-                condition: PercentChangeCondition = createPercentChangeCondition(
-                    orderConditionProto
-                )
+                condition = createPercentChangeCondition(orderConditionProto)
 
             if condition is not None:
                 orderConditions.append(condition)
@@ -394,7 +858,7 @@ def setConditionFields(
 
 
 def setOperatorConditionFields(
-    orderConditionProto: OrderConditionProto, operatorCondition: PriceCondition
+    orderConditionProto: OrderConditionProto, operatorCondition: OrderConditionType
 ):
     setConditionFields(orderConditionProto, operatorCondition)
     if orderConditionProto.HasField("isMore"):
@@ -402,7 +866,7 @@ def setOperatorConditionFields(
 
 
 def setContractConditionFields(
-    orderConditionProto: OrderConditionProto, contractCondition: PriceCondition
+    orderConditionProto: OrderConditionProto, contractCondition: OrderConditionType
 ):
     setOperatorConditionFields(orderConditionProto, contractCondition)
     if orderConditionProto.HasField("conId"):
@@ -473,11 +937,14 @@ def createSoftDollarTierFromOrder(orderProto: OrderProto) -> SoftDollarTier | No
     softDollarTierProto = None
     if orderProto.softDollarTier is not None:
         softDollarTierProto = orderProto.softDollarTier
-    return (
-        createSoftDollarTier(softDollarTierProto)
-        if softDollarTierProto is not None
-        else None
-    )
+
+    softDollarTier = None
+    if softDollarTierProto is not None:
+        created_tier = createSoftDollarTier(softDollarTierProto)
+        if created_tier:  # Check if the created tier is not empty
+            softDollarTier = created_tier
+
+    return softDollarTier
 
 
 def createSoftDollarTier(softDollarTierProto: SoftDollarTierProto) -> SoftDollarTier:
@@ -511,7 +978,7 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     if orderStateProto.HasField("status"):
         orderState.status = orderStateProto.status
     if orderStateProto.HasField("initMarginBefore"):
-        orderState.initMarginBefore = orderStateProto.initMarginBefore
+        orderState.initMarginBefore = str(orderStateProto.initMarginBefore)
     if orderStateProto.HasField("maintMarginBefore"):
         orderState.maintMarginBefore = decimalMaxString(
             orderStateProto.maintMarginBefore
@@ -539,13 +1006,13 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
             orderStateProto.equityWithLoanAfter
         )
     if orderStateProto.HasField("commissionAndFees"):
-        orderState.commissionAndFees = orderStateProto.commissionAndFees
+        orderState.commission = orderStateProto.commissionAndFees
     if orderStateProto.HasField("minCommissionAndFees"):
-        orderState.minCommissionAndFees = orderStateProto.minCommissionAndFees
+        orderState.minCommission = orderStateProto.minCommissionAndFees
     if orderStateProto.HasField("maxCommissionAndFees"):
-        orderState.maxCommissionAndFees = orderStateProto.maxCommissionAndFees
+        orderState.maxCommission = orderStateProto.maxCommissionAndFees
     if orderStateProto.HasField("commissionAndFeesCurrency"):
-        orderState.commissionAndFeesCurrency = orderStateProto.commissionAndFeesCurrency
+        orderState.commissionCurrency = orderStateProto.commissionAndFeesCurrency
     if orderStateProto.HasField("warningText"):
         orderState.warningText = orderStateProto.warningText
     if orderStateProto.HasField("marginCurrency"):
@@ -608,7 +1075,7 @@ def createOrderAllocations(orderStateProto: OrderStateProto) -> list[OrderAlloca
         orderAllocationProtoList = orderStateProto.orderAllocations
     if orderAllocationProtoList:
         for orderAllocationProto in orderAllocationProtoList:
-            orderAllocation = OrderAllocationProto()
+            orderAllocation = OrderAllocation()
             if orderAllocationProto.HasField("account"):
                 orderAllocation.account = orderAllocationProto.account
             if orderAllocationProto.HasField("position"):
@@ -728,15 +1195,22 @@ def createFill(execDetailsProto: ExecutionDetailsProto) -> Fill:
     )
 
 
-def createTradeFromOpenOrder(openOrderProto: OpenOrderProto) -> "Trade":
-    from ib_async.order import Trade
-
+def createTradeFromOpenOrder(
+    openOrderProto: OpenOrderProto,
+) -> tuple[Trade, OrderState] | None:
+    if not openOrderProto.HasField("contract"):
+        return None
     contract = createContract(openOrderProto.contract)
+    if not openOrderProto.HasField("order"):
+        return None
     order = createOrder(
         openOrderProto.order.orderId, openOrderProto.contract, openOrderProto.order
     )
-    orderStatus = createOrderStatus(openOrderProto.order)
-    return Trade(contract, order, orderStatus, [], [])
+    if not openOrderProto.HasField("orderState"):
+        return None
+    orderState = createOrderState(openOrderProto.orderState)
+    orderStatus = OrderStatus(orderId=order.orderId, status=orderState.status)
+    return Trade(contract, order, orderStatus, [], []), orderState
 
 
 def createCommissionReport(
@@ -806,3 +1280,72 @@ def createExecutionRequestProto(
     executionRequestProto.reqId = reqId
     executionRequestProto.executionFilter.CopyFrom(executionFilterProto)
     return executionRequestProto
+
+
+def createOrderCancelProto(orderCancel: OrderCancel) -> OrderCancelProto:
+    if orderCancel is None:
+        return None
+    orderCancelProto = OrderCancelProto()
+    if orderCancel.manualOrderCancelTime:
+        orderCancelProto.manualOrderCancelTime = orderCancel.manualOrderCancelTime
+    if orderCancel.extOperator:
+        orderCancelProto.extOperator = orderCancel.extOperator
+    if isValidIntValue(orderCancel.manualOrderIndicator):
+        orderCancelProto.manualOrderIndicator = orderCancel.manualOrderIndicator
+    return orderCancelProto
+
+
+def createGlobalCancelRequestProto(
+    orderCancel: OrderCancel,
+) -> GlobalCancelRequestProto:
+    globalCancelRequestProto = GlobalCancelRequestProto()
+    orderCancelProto = createOrderCancelProto(orderCancel)
+    if orderCancelProto is not None:
+        globalCancelRequestProto.orderCancel.CopyFrom(orderCancelProto)
+    return globalCancelRequestProto
+
+
+def createCancelOrderRequestProto(
+    orderId: int, orderCancel: OrderCancel
+) -> CancelOrderRequestProto:
+    cancelOrderRequestProto = CancelOrderRequestProto()
+    if isValidIntValue(orderId):
+        cancelOrderRequestProto.orderId = orderId
+    orderCancelProto = createOrderCancelProto(orderCancel)
+    if orderCancelProto is not None:
+        cancelOrderRequestProto.orderCancel.CopyFrom(orderCancelProto)
+    return cancelOrderRequestProto
+
+
+def createExerciseOptionsRequestProto(
+    orderId: int,
+    contract: Contract,
+    exerciseAction: int,
+    exerciseQuantity: int,
+    account: str,
+    override: bool,
+    manualOrderTime: str,
+    customerAccount: str,
+    professionalCustomer: bool,
+) -> ExerciseOptionsRequestProto:
+    exerciseOptionsRequestProto = ExerciseOptionsRequestProto()
+    if isValidIntValue(orderId):
+        exerciseOptionsRequestProto.orderId = orderId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        exerciseOptionsRequestProto.contract.CopyFrom(contractProto)
+    if isValidIntValue(exerciseAction):
+        exerciseOptionsRequestProto.exerciseAction = exerciseAction
+    if isValidIntValue(exerciseQuantity):
+        exerciseOptionsRequestProto.exerciseQuantity = exerciseQuantity
+    if account:
+        exerciseOptionsRequestProto.account = account
+    if override:
+        exerciseOptionsRequestProto.override = override
+    if manualOrderTime:
+        exerciseOptionsRequestProto.manualOrderTime = manualOrderTime
+    if customerAccount:
+        exerciseOptionsRequestProto.customerAccount = customerAccount
+    if professionalCustomer:
+        exerciseOptionsRequestProto.professionalCustomer = professionalCustomer
+    return exerciseOptionsRequestProto

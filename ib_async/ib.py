@@ -59,6 +59,7 @@ from ib_async.order import (
     BracketOrder,
     LimitOrder,
     Order,
+    OrderCancel,
     OrderState,
     OrderStateNumeric,
     OrderStatus,
@@ -185,6 +186,9 @@ class IB:
         * ``newOrderEvent`` (trade: :class:`.Trade`):
           Emits a newly placed trade.
 
+        * ``orderBoundEvent`` (permId: int, clientId: int, orderId: int):
+          Emits when TWS order is bound.
+
         * ``orderModifyEvent`` (trade: :class:`.Trade`):
           Emits when order is modified.
 
@@ -263,6 +267,7 @@ class IB:
         "newOrderEvent",
         "orderModifyEvent",
         "cancelOrderEvent",
+        "orderBoundEvent",
         "openOrderEvent",
         "orderStatusEvent",
         "execDetailsEvent",
@@ -302,6 +307,7 @@ class IB:
         self.pendingTickersEvent = Event("pendingTickersEvent")
         self.barUpdateEvent = Event("barUpdateEvent")
         self.newOrderEvent = Event("newOrderEvent")
+        self.orderBoundEvent = Event("orderBoundEvent")
         self.orderModifyEvent = Event("orderModifyEvent")
         self.cancelOrderEvent = Event("cancelOrderEvent")
         self.openOrderEvent = Event("openOrderEvent")
@@ -447,16 +453,6 @@ class IB:
             raise data
         return data
 
-    @staticmethod
-    async def _raise_if_error_async(ait: AsyncIterator[_T]) -> AsyncIterator[_T]:
-        """
-        Raise error in asyn iterator.
-        """
-        async for item in ait:
-            if isinstance(item, RequestError):
-                raise item
-            yield item
-
     def _run(self, *awaitables: Awaitable):
         return util.run(*awaitables, timeout=self.RequestTimeout)
 
@@ -597,7 +593,7 @@ class IB:
         """
         return [
             v
-            for v in self.wrapper.reqId2PnL.values()
+            for v in self.wrapper.Pnl.values()
             if (not account or v.account == account)
             and (not modelCode or v.modelCode == modelCode)
         ]
@@ -618,7 +614,7 @@ class IB:
         """
         return [
             v
-            for v in self.wrapper.reqId2PnlSingle.values()
+            for v in self.wrapper.pnlSingles.values()
             if (not account or v.account == account)
             and (not modelCode or v.modelCode == modelCode)
             and (not conId or v.conId == conId)
@@ -665,14 +661,11 @@ class IB:
         Args:
             contract: Contract to get ticker for.
         """
-        for ticker in self.wrapper.reqId2Ticker.values():
-            if hash(ticker.contract) == hash(contract):
-                return ticker
-        return None
+        return self.wrapper.tickers.get_by_object_id(hash(contract))
 
     def tickers(self) -> list[Ticker]:
         """Get a list of all tickers."""
-        return list(self.wrapper.reqId2Ticker.values())
+        return list(self.wrapper.tickers.values())
 
     def pendingTickers(self) -> list[Ticker]:
         """Get a list of all tickers that have pending ticks or domTicks."""
@@ -827,7 +820,7 @@ class IB:
         self.client.placeOrder(orderId, contract, order)
         now = datetime.datetime.now(self.wrapper.defaultTimezone)
         key = self.wrapper.orderKey(self.wrapper.clientId, orderId, order.permId)
-        trade = self.wrapper.trades.get(key)
+        trade = self.wrapper.trades.get_by_object_id(key)
         if trade:
             # this is a modification of an existing order
             assert trade.orderStatus.status not in OrderStatus.DoneStates
@@ -843,26 +836,29 @@ class IB:
             orderStatus = OrderStatus(orderId=orderId, status=OrderStatus.PendingSubmit)
             logEntry = TradeLogEntry(now, orderStatus.status)
             trade = Trade(contract, order, orderStatus, [], [logEntry])
-            self.wrapper.trades[key] = trade
+            # use orderId temporaly as id, wrapper.openOrder will update it
+            self.wrapper.trades.add(orderId, key, trade)
             self._logger.info(f"placeOrder: New order {trade}")
             self.newOrderEvent.emit(trade)
 
         return trade
 
     def cancelOrder(
-        self, order: Order, manualCancelOrderTime: str = ""
+        self, order: Order, orderCancel: OrderCancel | None = None
     ) -> Optional[Trade]:
         """
         Cancel the order and return the Trade it belongs to.
 
         Args:
             order: The order to be canceled.
-            manualCancelOrderTime: For audit trail.
+            orderCancel: (OrderCancel) default None.
         """
-        self.client.cancelOrder(order.orderId, manualCancelOrderTime)
+        if orderCancel is None:
+            orderCancel = OrderCancel()
+        self.client.cancelOrder(order.orderId, orderCancel)
         now = datetime.datetime.now(self.wrapper.defaultTimezone)
         key = self.wrapper.orderKey(order.clientId, order.orderId, order.permId)
-        trade = self.wrapper.trades.get(key)
+        trade = self.wrapper.trades.get_by_object_id(key)
         if trade:
             if not trade.isDone():
                 status = trade.orderStatus.status
@@ -890,12 +886,17 @@ class IB:
 
         return trade
 
-    def reqGlobalCancel(self):
+    def reqGlobalCancel(self, orderCancel: OrderCancel | None = None):
         """
         Cancel all active trades including those placed by other
         clients or TWS/IB gateway.
+
+        Args:
+            orderCancel: (OrderCancel|None) default None
         """
-        self.client.reqGlobalCancel()
+        if orderCancel is None:
+            orderCancel = OrderCancel()
+        self.client.reqGlobalCancel(orderCancel)
         self._logger.info("reqGlobalCancel")
 
     def reqCurrentTime(self) -> datetime.datetime:
@@ -1039,12 +1040,11 @@ class IB:
             modelCode: If specified, filter for this account model.
         """
         key = (account, modelCode)
-        assert key not in self.wrapper.pnlKey2ReqId
+        assert key not in self.wrapper.Pnl
 
         reqId = self.client.getReqId()
-        self.wrapper.pnlKey2ReqId[key] = reqId
         pnl = PnL(account, modelCode)
-        self.wrapper.reqId2PnL[reqId] = pnl
+        self.wrapper.Pnl.add(reqId, key, pnl)
         self.client.reqPnL(reqId, account, modelCode)
 
         return pnl
@@ -1058,10 +1058,10 @@ class IB:
             modelCode: If specified, cancel for this account model.
         """
         key = (account, modelCode)
-        reqId = self.wrapper.pnlKey2ReqId.pop(key, None)
+        reqId = self.wrapper.Pnl.get_request_id(key)
         if reqId:
             self.client.cancelPnL(reqId)
-            self.wrapper.reqId2PnL.pop(reqId, None)
+            self.wrapper.Pnl.remove_by_request_id(reqId)
         else:
             self._logger.error(
                 "cancelPnL: No subscription for "
@@ -1083,12 +1083,11 @@ class IB:
             conId: Filter for this contract ID.
         """
         key = (account, modelCode, conId)
-        assert key not in self.wrapper.pnlSingleKey2ReqId
+        assert key not in self.wrapper.pnlSingles
 
         reqId = self.client.getReqId()
-        self.wrapper.pnlSingleKey2ReqId[key] = reqId
         pnlSingle = PnLSingle(account, modelCode, conId)
-        self.wrapper.reqId2PnlSingle[reqId] = pnlSingle
+        self.wrapper.pnlSingles.add(reqId, key, pnlSingle)
         self.client.reqPnLSingle(reqId, account, modelCode, conId)
 
         return pnlSingle
@@ -1104,10 +1103,10 @@ class IB:
             conId: Cancel for this contract ID.
         """
         key = (account, modelCode, conId)
-        reqId = self.wrapper.pnlSingleKey2ReqId.pop(key, None)
+        reqId = self.wrapper.pnlSingles.get_request_id(key)
         if reqId:
             self.client.cancelPnLSingle(reqId)
-            self.wrapper.reqId2PnlSingle.pop(reqId, None)
+            self.wrapper.pnlSingles.remove_by_request_id(reqId)
         else:
             self._logger.error(
                 "cancelPnLSingle: No subscription for "
@@ -1545,6 +1544,8 @@ class IB:
 
         Note: The exchanges must be open when using this request, otherwise an
         empty list is returned.
+        
+        ie `ib.reqSmartComponents(spy_ticker.bboExchange)`
         """
         return self._run(self.reqSmartComponentsAsync(bboExchange))
 
@@ -1672,7 +1673,7 @@ class IB:
 
         This method is blocking.
 
-        https://interactivebrokers.github.io/tws-api/market_scanners.html
+        https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#market-scanner
 
         Args:
             subscription: Basic filters.
@@ -1696,7 +1697,7 @@ class IB:
         """
         Subscribe to market scan data.
 
-        https://interactivebrokers.github.io/tws-api/market_scanners.html
+        https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#market-scanner
 
         Args:
             subscription: What to scan for.
@@ -1711,6 +1712,7 @@ class IB:
         dataList.scannerSubscriptionFilterOptions = (
             scannerSubscriptionFilterOptions or []
         )
+
         self.wrapper.startSubscription(reqId, dataList)
         self.client.reqScannerSubscription(
             reqId,
@@ -1724,7 +1726,7 @@ class IB:
         """
         Cancel market data subscription.
 
-        https://interactivebrokers.github.io/tws-api/market_scanners.html
+        https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#market-scanner
 
         Args:
             dataList: The scan data list that was obtained from
@@ -1738,6 +1740,7 @@ class IB:
         Requests an XML list of scanner parameters.
 
         This method is blocking.
+        https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#market-scanner
         """
         return self._run(self.reqScannerParametersAsync())
 
@@ -2066,7 +2069,7 @@ class IB:
         """Get the White Branding ID of the user."""
         return self._run(self.reqUserInfoAsync())
 
-    # now entering the parallel async universe
+    # now entering the parallel async universe, fasten your belt
 
     async def connectAsync(
         self,
@@ -2133,6 +2136,10 @@ class IB:
                     msg = f"{name} request timed out"
                     errors.append(msg)
                     self._logger.error(msg)
+                elif isinstance(resp, Exception):
+                    msg = f"{name} request failed: {resp}"
+                    errors.append(msg)
+                    self._logger.error(msg, exc_info=resp)
 
             # the request for executions must come after all orders are in
             if fetchFields & StartupFetch.EXECUTIONS:
@@ -2234,34 +2241,34 @@ class IB:
     async def reqTickersAsync(
         self, *contracts: Contract, regulatorySnapshot: bool = False
     ) -> list[Ticker]:
-        futures = []
         tickers = []
         reqIds = []
         for contract in contracts:
             reqId = self.client.getReqId()
             reqIds.append(reqId)
-            future = self.wrapper.startReq(reqId, contract)
-            futures.append(future)
             ticker = self.wrapper.startTicker(reqId, contract, "snapshot")
             tickers.append(ticker)
             self.client.reqMktData(reqId, contract, "", True, regulatorySnapshot, [])
 
-        await asyncio.gather(*futures)
-
-        for ticker in tickers:
-            self.wrapper.endTicker(ticker, "snapshot")
+        awaitables = [t.ticker_bus for t in tickers]
+        await asyncio.gather(*awaitables)
 
         return tickers
 
     def whatIfOrderAsync(
         self, contract: Contract, order: Order
     ) -> Awaitable[OrderState]:
+        reqId = self.client.getReqId()        
         whatIfOrder = copy.copy(order)
         whatIfOrder.whatIf = True
-        reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
+        whatIfOrder.orderId = reqId
         self.client.placeOrder(reqId, contract, whatIfOrder)
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
         self.client.reqCurrentTime()
@@ -2383,9 +2390,7 @@ class IB:
         reqId = self.client.getReqId()
         self.client.reqExecutions(reqId, execFilter or ExecutionFilter())
         fills = (
-            self.wrapper.response_bus.filter(
-                lambda rId, e: rId == reqId
-            )
+            self.wrapper.response_bus.filter(lambda rId, e: rId == reqId)
             .takewhile(lambda r, data: data is not None)
             .pluck(1)
             .map(self._raise_if_error)
@@ -2488,9 +2493,20 @@ class IB:
         timeout: float = 60,
     ) -> BarDataList:
         reqId = self.client.getReqId()
-        # if keepUpToDate:
-        #     self.wrapper.startSubscription(reqId, bars, contract)
         end = util.formatIBDatetime(endDateTime)
+
+        bars = BarDataList()
+        bars.reqId = reqId
+        bars.contract = contract
+        bars.endDateTime = endDateTime
+        bars.durationStr = durationStr
+        bars.barSizeSetting = barSizeSetting
+        bars.whatToShow = whatToShow
+        bars.useRTH = useRTH
+        bars.formatDate = formatDate
+        bars.keepUpToDate = keepUpToDate
+        bars.chartOptions = chartOptions or []
+
         self.client.reqHistoricalData(
             reqId,
             contract,
@@ -2515,19 +2531,12 @@ class IB:
         except asyncio.TimeoutError:
             self.client.cancelHistoricalData(reqId)
             self._logger.warning(f"reqHistoricalData: Timeout for {contract}")
-
-        bars = BarDataList()
-        bars.reqId = reqId
-        bars.contract = contract
-        bars.endDateTime = endDateTime
-        bars.durationStr = durationStr
-        bars.barSizeSetting = barSizeSetting
-        bars.whatToShow = whatToShow
-        bars.useRTH = useRTH
-        bars.formatDate = formatDate
-        bars.keepUpToDate = keepUpToDate
-        bars.chartOptions = chartOptions or []
+        # add data
         bars.extend(result)
+
+        if keepUpToDate:
+            self.wrapper.startSubscription(reqId, bars, contract)
+
         return bars
 
     def reqHistoricalScheduleAsync(
@@ -2608,12 +2617,16 @@ class IB:
 
         return result
 
-    def reqSmartComponentsAsync(self, bboExchange):
+    def reqSmartComponentsAsync(self, bboExchange) -> Awaitable[list[SmartComponent]]:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId)
         self.client.reqSmartComponents(reqId, bboExchange)
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
     def reqMktDepthExchangesAsync(self) -> Awaitable[list[DepthMktDataDescription]]:
         future = self.wrapper.startReq("mktDepthExchanges")
@@ -2639,12 +2652,15 @@ class IB:
         fundamentalDataOptions: list[TagValue] = [],
     ) -> Awaitable[str]:
         reqId = self.client.getReqId()
-
-        future = self.wrapper.startReq(reqId, contract)
         self.client.reqFundamentalData(
             reqId, contract, reportType, fundamentalDataOptions
         )
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
     async def reqScannerDataAsync(
         self,
@@ -2658,16 +2674,21 @@ class IB:
             scannerSubscriptionFilterOptions or [],
         )
 
-        future = self.wrapper.startReq(dataList.reqId, container=dataList)
-        await future
+        self.wrapper.startSubscription(dataList.reqId, dataList)
+        await dataList.subscription_bus.take(1).pluck(1).map(self._raise_if_error)
 
-        self.client.cancelScannerSubscription(dataList.reqId)
-        return future.result()
+        self.cancelScannerSubscription(dataList)
+        return dataList
 
     def reqScannerParametersAsync(self) -> Awaitable[str]:
-        future = self.wrapper.startReq("scannerParams")
+        reqId = "scannerParams"
         self.client.reqScannerParameters()
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
     async def calculateImpliedVolatilityAsync(
         self,
@@ -2677,13 +2698,18 @@ class IB:
         implVolOptions: list[TagValue] = [],
     ) -> Optional[OptionComputation]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
         self.client.calculateImpliedVolatility(
             reqId, contract, optionPrice, underPrice, implVolOptions
         )
         try:
-            await asyncio.wait_for(future, 4)
-            return future.result()
+            awaitable = (
+                self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+                .take(1)
+                .pluck(1)
+                .map(self._raise_if_error)
+            )
+            result = await asyncio.wait_for(awaitable, 4)
+            return result
         except asyncio.TimeoutError:
             self._logger.error("calculateImpliedVolatilityAsync: Timeout")
             return None
@@ -2698,13 +2724,18 @@ class IB:
         optPrcOptions: list[TagValue] = [],
     ) -> Optional[OptionComputation]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
         self.client.calculateOptionPrice(
             reqId, contract, volatility, underPrice, optPrcOptions
         )
         try:
-            await asyncio.wait_for(future, 4)
-            return future.result()
+            awaitable = (
+                self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+                .take(1)
+                .pluck(1)
+                .map(self._raise_if_error)
+            )
+            result = await asyncio.wait_for(awaitable, 4)
+            return result
         except asyncio.TimeoutError:
             self._logger.error("calculateOptionPriceAsync: Timeout")
             return None
@@ -2797,11 +2828,15 @@ class IB:
         self.cancelWshEventData()
         return future.result()
 
-    def reqUserInfoAsync(self):
+    def reqUserInfoAsync(self) -> Awaitable[str]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
         self.client.reqUserInfo(reqId)
-        return future
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
 
 
 if __name__ == "__main__":

@@ -1,11 +1,15 @@
 """Object hierarchy."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass, field
-from datetime import date as date_, datetime, timezone, tzinfo
+from datetime import date as date_
+from datetime import datetime, timezone, tzinfo
 from enum import Enum
-from typing import Any, List, NamedTuple, Optional, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, List, NamedTuple, Optional, TypeAlias, Union
+
+if TYPE_CHECKING:
+    from ib_async import IB
+
 
 from eventkit import Event
 
@@ -62,7 +66,7 @@ class SoftDollarTier:
         return bool(self.name or self.val or self.displayName)
 
 
-@dataclass
+@dataclass(slots=True)
 class Execution:
     execId: str = ""
     time: datetime = field(default=EPOCH)
@@ -89,7 +93,7 @@ class Execution:
     )
 
 
-@dataclass
+@dataclass(slots=True)
 class CommissionReport:
     execId: str = ""
     commission: float = 0.0
@@ -99,7 +103,7 @@ class CommissionReport:
     yieldRedemptionDate: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class ExecutionFilter:
     clientId: int = 0
     acctCode: str = ""
@@ -112,7 +116,7 @@ class ExecutionFilter:
     specificDates: list[int] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class BarData:
     date: Union[date_, datetime] = EPOCH
     open: float = 0.0
@@ -124,7 +128,7 @@ class BarData:
     barCount: int = 0
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class RealTimeBar:
     time: datetime = EPOCH
     endTime: int = -1
@@ -135,6 +139,64 @@ class RealTimeBar:
     volume: float = 0.0
     wap: float = 0.0
     count: int = 0
+
+
+@dataclass(slots=True, frozen=True)
+class OptionComputation:
+    tickAttrib: int
+    impliedVol: float | None = None
+    delta: float | None = None
+    optPrice: float | None = None
+    pvDividend: float | None = None
+    gamma: float | None = None
+    vega: float | None = None
+    theta: float | None = None
+    undPrice: float | None = None
+
+    def __add__(self, other: OptionComputation) -> OptionComputation:
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Cannot add {type(self)} and {type(other)}")
+
+        return self.__class__(
+            tickAttrib=0,
+            impliedVol=(self.impliedVol or 0) + (other.impliedVol or 0),
+            delta=(self.delta or 0) + (other.delta or 0),
+            optPrice=(self.optPrice or 0) + (other.optPrice or 0),
+            gamma=(self.gamma or 0) + (other.gamma or 0),
+            vega=(self.vega or 0) + (other.vega or 0),
+            theta=(self.theta or 0) + (other.theta or 0),
+            undPrice=self.undPrice,
+        )
+
+    def __sub__(self, other: OptionComputation) -> OptionComputation:
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Cannot subtract {type(self)} and {type(other)}")
+
+        return self.__class__(
+            tickAttrib=0,
+            impliedVol=(self.impliedVol or 0) - (other.impliedVol or 0),
+            delta=(self.delta or 0) - (other.delta or 0),
+            optPrice=(self.optPrice or 0) - (other.optPrice or 0),
+            gamma=(self.gamma or 0) - (other.gamma or 0),
+            vega=(self.vega or 0) - (other.vega or 0),
+            theta=(self.theta or 0) - (other.theta or 0),
+            undPrice=self.undPrice,
+        )
+
+    def __mul__(self, other: int | float) -> OptionComputation:
+        if not isinstance(other, (int, float)):
+            raise TypeError(f"Cannot multiply {type(self)} and {type(other)}")
+
+        return self.__class__(
+            tickAttrib=0,
+            impliedVol=(self.impliedVol or 0) * other,
+            delta=(self.delta or 0) * other,
+            optPrice=(self.optPrice or 0) * other,
+            gamma=(self.gamma or 0) * other,
+            vega=(self.vega or 0) * other,
+            theta=(self.theta or 0) * other,
+            undPrice=self.undPrice,
+        )
 
 
 class TickType(Enum):
@@ -283,7 +345,7 @@ class TickAttribLast:
     unreported: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True,frozen=True)
 class TickPriceData:
     """Data from a TickPriceProto message."""
 
@@ -294,7 +356,7 @@ class TickPriceData:
     attribs: TickAttrib
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, frozen=True)
 class TickSizeData:
     """Data from a TickSizeProto message."""
 
@@ -303,7 +365,7 @@ class TickSizeData:
     size: float
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, frozen=True)
 class TickStringData:
     """Data from a TickStringProto message."""
 
@@ -312,7 +374,7 @@ class TickStringData:
     value: str
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, frozen=True)
 class TickGenericData:
     """Data from a generic tick message."""
 
@@ -320,7 +382,8 @@ class TickGenericData:
     tickType: TickType
     value: float
 
-@dataclass(frozen=True)
+
+@dataclass(slots=True, frozen=True)
 class TickComputationData:
     """Data from a TickComputationProto message."""
 
@@ -328,7 +391,8 @@ class TickComputationData:
     tickType: TickType
     computation: OptionComputation
 
-@dataclass(frozen=True)
+
+@dataclass(slots=True, frozen=True)
 class TickByTickAllLastData:
     """Data from a TickByTickAllLastProto message."""
 
@@ -342,7 +406,7 @@ class TickByTickAllLastData:
     specialConditions: str
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, frozen=True)
 class TickByTickBidAskData:
     """Data from a TickByTickBidAskProto message."""
 
@@ -355,7 +419,7 @@ class TickByTickBidAskData:
     tickAttribBidAsk: TickAttribBidAsk
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, frozen=True)
 class TickByTickMidPointData:
     """Data from a TickByTickMidPointProto message."""
 
@@ -382,7 +446,7 @@ class HistogramData:
     count: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class NewsProvider:
     code: str = ""
     name: str = ""
@@ -397,16 +461,22 @@ class DepthMktDataDescription:
     aggGroup: int = UNSET_INTEGER
 
 
-@dataclass
+@dataclass(slots=True)
 class PnL:
     account: str = ""
     modelCode: str = ""
     dailyPnL: float = nan
     unrealizedPnL: float = nan
     realizedPnL: float = nan
+    
+    def getKey(self):
+        """return PnL key
+        ie: ib.cancelPnL(pnl.getKey())
+        """
+        return (self.account, self.modelCode)
 
 
-@dataclass
+@dataclass(slots=True)
 class TradeLogEntry:
     time: datetime
     status: str = ""
@@ -414,7 +484,7 @@ class TradeLogEntry:
     errorCode: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class PnLSingle:
     account: str = ""
     modelCode: str = ""
@@ -424,16 +494,22 @@ class PnLSingle:
     realizedPnL: float = nan
     position: int = 0
     value: float = nan
+    
+    def getKey(self):
+        """return PnLSingle key
+        ie: ib.cancelPnLSingle(pnl_single.getKey())
+        """
+        return (self.account, self.modelCode, self.conId)
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class HistoricalSession:
     startDateTime: str = ""
     endDateTime: str = ""
     refDate: str = ""
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class HistoricalSchedule:
     startDateTime: str = ""
     endDateTime: str = ""
@@ -478,7 +554,7 @@ class HistoricalTickBidAsk:
     sizeAsk: float
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class HistoricalTickLast:
     time: datetime
     tickAttribLast: TickAttribLast
@@ -550,70 +626,12 @@ class Position(NamedTuple):
     position: float
     avgCost: float
 
-
-class Fill(NamedTuple):
+@dataclass(slots=True)
+class Fill:
     contract: Contract
     execution: Execution
     commissionReport: CommissionReport
     time: datetime
-
-
-@dataclass(slots=True, frozen=True)
-class OptionComputation:
-    tickAttrib: int
-    impliedVol: float | None = None
-    delta: float | None = None
-    optPrice: float | None = None
-    pvDividend: float | None = None
-    gamma: float | None = None
-    vega: float | None = None
-    theta: float | None = None
-    undPrice: float | None = None
-
-    def __add__(self, other: OptionComputation) -> OptionComputation:
-        if not isinstance(other, self.__class__):
-            raise TypeError(f"Cannot add {type(self)} and {type(other)}")
-
-        return self.__class__(
-            tickAttrib=0,
-            impliedVol=(self.impliedVol or 0) + (other.impliedVol or 0),
-            delta=(self.delta or 0) + (other.delta or 0),
-            optPrice=(self.optPrice or 0) + (other.optPrice or 0),
-            gamma=(self.gamma or 0) + (other.gamma or 0),
-            vega=(self.vega or 0) + (other.vega or 0),
-            theta=(self.theta or 0) + (other.theta or 0),
-            undPrice=self.undPrice,
-        )
-
-    def __sub__(self, other: OptionComputation) -> OptionComputation:
-        if not isinstance(other, self.__class__):
-            raise TypeError(f"Cannot subtract {type(self)} and {type(other)}")
-
-        return self.__class__(
-            tickAttrib=0,
-            impliedVol=(self.impliedVol or 0) - (other.impliedVol or 0),
-            delta=(self.delta or 0) - (other.delta or 0),
-            optPrice=(self.optPrice or 0) - (other.optPrice or 0),
-            gamma=(self.gamma or 0) - (other.gamma or 0),
-            vega=(self.vega or 0) - (other.vega or 0),
-            theta=(self.theta or 0) - (other.theta or 0),
-            undPrice=self.undPrice,
-        )
-
-    def __mul__(self, other: int | float) -> OptionComputation:
-        if not isinstance(other, (int, float)):
-            raise TypeError(f"Cannot multiply {type(self)} and {type(other)}")
-
-        return self.__class__(
-            tickAttrib=0,
-            impliedVol=(self.impliedVol or 0) * other,
-            delta=(self.delta or 0) * other,
-            optPrice=(self.optPrice or 0) * other,
-            gamma=(self.gamma or 0) * other,
-            vega=(self.vega or 0) * other,
-            theta=(self.theta or 0) * other,
-            undPrice=self.undPrice,
-        )
 
 
 @dataclass(slots=True, frozen=True)
@@ -712,12 +730,31 @@ class BarDataList(List[BarData]):
     def __init__(self, *args):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
+        self.subscription_bus = Event("Subscription bus")
+
 
     def __eq__(self, other) -> bool:
         return self is other
 
+    def _on_data(self, ib: "IB", bar: BarData):
+        """Called on bar update when keepUpToDate=True."""
 
-class RealTimeBarList(List[RealTimeBar]):
+        lastDate = self[-1].date
+        if bar.date < lastDate:
+            return
+
+        hasNewBar = len(self) == 0 or bar.date > lastDate
+        if hasNewBar:
+            self.append(bar)
+        elif self[-1] != bar:
+            self[-1] = bar
+        else:
+            return
+        ib.barUpdateEvent.emit(self, hasNewBar)
+        self.updateEvent.emit(self, hasNewBar)
+
+
+class RealTimeBarList(list[RealTimeBar]):
     """
     List of :class:`.RealTimeBar` that also stores all request parameters.
 
@@ -732,17 +769,24 @@ class RealTimeBarList(List[RealTimeBar]):
     barSize: int
     whatToShow: str
     useRTH: bool
-    realTimeBarsOptions: List[TagValue]
+    realTimeBarsOptions: list[TagValue]
 
     def __init__(self, *args):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
+        self.subscription_bus = Event("Subscription bus")
 
     def __eq__(self, other) -> bool:
         return self is other
 
+    def _on_data(self, ib: "IB", bar: RealTimeBar):
+        """Called on real time bar update."""
+        self.append(bar)
+        ib.barUpdateEvent.emit(self, True)
+        self.updateEvent.emit(self, True)
 
-class ScanDataList(List[ScanData]):
+
+class ScanDataList(list[ScanData]):
     """
     List of :class:`.ScanData` that also stores all request parameters.
 
@@ -752,15 +796,25 @@ class ScanDataList(List[ScanData]):
 
     reqId: int
     subscription: ScannerSubscription
-    scannerSubscriptionOptions: List[TagValue]
-    scannerSubscriptionFilterOptions: List[TagValue]
+    scannerSubscriptionOptions: list[TagValue]
+    scannerSubscriptionFilterOptions: list[TagValue]
 
     def __init__(self, *args):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
+        self.subscription_bus = Event("Subscription bus")
 
     def __eq__(self, other):
         return self is other
+    
+    def _on_data(self, ib: "IB", data: ScanData):
+        """Called on scanner data."""
+        rank = data[0].rank if 0 <= len(data) else None
+        if rank == 0:        
+            self.clear()
+        self.extend(data)
+        ib.scannerDataEvent.emit(self)
+        self.updateEvent.emit(self)
 
 
 class DynamicObject:
@@ -795,4 +849,3 @@ class IBDefaults:
 
     # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
     timezone: tzinfo = timezone.utc
-

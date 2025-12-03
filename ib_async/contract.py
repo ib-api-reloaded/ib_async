@@ -30,7 +30,7 @@ class IneligibilityReason:
     id_: str = field(default_factory=str)
     description: str = field(default_factory=str)
 
-@dataclass
+@dataclass(slots=True)
 class Contract:
     """
     ``Contract(**kwargs)`` can create any contract using keyword

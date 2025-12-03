@@ -4,7 +4,7 @@ import logging
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import ClassVar, Final, Optional, TypeAlias, Union
+from typing import ClassVar, Final, TypeAlias
 
 from eventkit import Event, Op
 
@@ -16,9 +16,9 @@ from ib_async.objects import (
     IBDefaults,
     MktDepthData,
     OptionComputation,
-    TickByTickAllLast,
-    TickByTickBidAsk,
-    TickByTickMidPoint,
+    HistoricalTickLast,
+    HistoricalTickBidAsk,
+    HistoricalTick,
     TickComputationData,
     TickData,
     TickDataType,
@@ -170,7 +170,7 @@ class Ticker:
     rtHistVolatility: float = nan
     rtVolume: float = nan
     rtTradeVolume: float = nan
-    rtTime: Optional[datetime] = None
+    rtTime: None | datetime = None
     avVolume: float = nan
     tradeCount: float = nan
     tradeRate: float = nan
@@ -189,21 +189,21 @@ class Ticker:
     avOptionVolume: float = nan
     histVolatility: float = nan
     impliedVolatility: float = nan
-    dividends: Optional[Dividends] = None
-    fundamentalRatios: Optional[FundamentalRatios] = None
+    dividends: None | Dividends = None
+    fundamentalRatios: None | FundamentalRatios = None
     ticks: list[TickData] = field(default_factory=list)
-    tickByTicks: list[
-        Union[TickByTickAllLast, TickByTickBidAsk, TickByTickMidPoint]
-    ] = field(default_factory=list)
+    tickByTicks: list[HistoricalTickLast | HistoricalTickBidAsk | HistoricalTick] = (
+        field(default_factory=list)
+    )
     domBids: list[DOMLevel] = field(default_factory=list)
     domBidsDict: dict[int, DOMLevel] = field(default_factory=dict)
     domAsks: list[DOMLevel] = field(default_factory=list)
     domAsksDict: dict[int, DOMLevel] = field(default_factory=dict)
     domTicks: list[MktDepthData] = field(default_factory=list)
-    bidGreeks: Optional[OptionComputation] = None
-    askGreeks: Optional[OptionComputation] = None
-    lastGreeks: Optional[OptionComputation] = None
-    modelGreeks: Optional[OptionComputation] = None
+    bidGreeks: None | OptionComputation = None
+    askGreeks: None | OptionComputation = None
+    lastGreeks: None | OptionComputation = None
+    modelGreeks: None | OptionComputation = None
     auctionVolume: float = nan
     auctionPrice: float = nan
     auctionImbalance: float = nan
@@ -220,6 +220,7 @@ class Ticker:
         # everything with _another_ post_init clear.
         if not self.created:
             self.updateEvent = TickerUpdateEvent("updateEvent")
+            self.ticker_bus = Event("Ticker bus")
             self.minTick = self.defaults.unset
             self.bid = self.defaults.unset
             self.bidSize = self.defaults.unset
@@ -303,6 +304,12 @@ class Ticker:
             self._on_tick_generic(tick_data, last_time)
         elif isinstance(tick_data, TickComputationData):
             self._on_opt_computation(tick_data)
+        elif isinstance(tick_data, HistoricalTickLast):
+            self._on_tick_last(tick_data)
+        elif isinstance(tick_data, HistoricalTickBidAsk):
+            self._on_tick_bidask(tick_data)
+        elif isinstance(tick_data, HistoricalTick):
+            self._on_tick_midpoint(tick_data)
         else:
             _logger.error("Ticker %s. Unknown tick data: %s", self.contract, tick_data)
 
@@ -558,6 +565,59 @@ class Ticker:
             tick_computation.computation,
         )
 
+    def _on_tick_last(self, historicalTickLast: HistoricalTickLast):
+        if historicalTickLast.price == -1 and historicalTickLast.size == 0:
+            price = self.defaults.emptyPrice
+            size = self.defaults.emptySize
+        else:
+            price = historicalTickLast.price
+            size = historicalTickLast.size
+
+        self.prevLast = self.last
+        self.prevLastSize = self.lastSize
+        self.last = price
+        self.lastSize = size
+
+        self.tickByTicks.append(historicalTickLast)
+
+    def _on_tick_bidask(self, historicalTickBidAsk: HistoricalTickBidAsk):
+        if historicalTickBidAsk.priceBid != self.bid:
+            self.prevBid = self.bid
+            self.bid = (
+                historicalTickBidAsk.priceBid
+                if historicalTickBidAsk.priceBid > 0
+                else self.defaults.emptyPrice
+            )
+
+        if historicalTickBidAsk.sizeBid != self.bidSize:
+            self.prevBidSize = self.bidSize
+            self.bidSize = (
+                historicalTickBidAsk.sizeBid
+                if historicalTickBidAsk.sizeBid > 0
+                else self.defaults.emptySize
+            )
+
+        if historicalTickBidAsk.priceAsk != self.ask:
+            self.prevAsk = self.ask
+            self.ask = (
+                historicalTickBidAsk.priceAsk
+                if historicalTickBidAsk.priceAsk > 0
+                else self.defaults.emptyPrice
+            )
+
+        if historicalTickBidAsk.sizeAsk != self.askSize:
+            self.prevAskSize = self.askSize
+            self.askSize = (
+                historicalTickBidAsk.sizeAsk
+                if historicalTickBidAsk.sizeAsk > 0
+                else self.defaults.emptySize
+            )
+
+        self.tickByTicks.append(historicalTickBidAsk)
+
+    def _on_tick_midpoint(self, historicalTickMidPoint: HistoricalTick):
+        self.tickByTicks.append(historicalTickMidPoint)
+
     def isUnset(self, value) -> bool:
         # if default value is nan and value is nan, it is unset.
         # else, if value matches default value, it is unset.
@@ -726,7 +786,7 @@ class Midpoints(Tickfilter):
 
 @dataclass
 class Bar:
-    time: Optional[datetime]
+    time: None | datetime
     open: float = nan
     high: float = nan
     low: float = nan
@@ -777,7 +837,7 @@ class TimeBars(Op):
     def _on_timer(self, time):
         if self.bars:
             bar = self.bars[-1]
-            if self.isUnset(bar.close) and len(self.bars) > 1:
+            if isNan(bar.close) and len(self.bars) > 1:
                 bar.open = bar.high = bar.low = bar.close = self.bars[-2].close
 
             self.bars.updateEvent.emit(self.bars, True)

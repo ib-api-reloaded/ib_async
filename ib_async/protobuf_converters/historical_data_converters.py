@@ -1,6 +1,6 @@
 """Historical data protobuf converters"""
 
-from datetime import datetime, tzinfo
+from datetime import tzinfo
 
 from ..contract import Contract, TagValue
 from ..objects import (
@@ -11,8 +11,16 @@ from ..objects import (
     HistoricalTick,
     HistoricalTickBidAsk,
     HistoricalTickLast,
+    IBDefaults,
+    RealTimeBar,
     TickAttribBidAsk,
     TickAttribLast,
+)
+from ..protobuf.CancelHistoricalData_pb2 import (
+    CancelHistoricalData as CancelHistoricalDataProto,
+)
+from ..protobuf.FundamentalsDataRequest_pb2 import (
+    FundamentalsDataRequest as FundamentalsDataRequestProto,
 )
 from ..protobuf.HeadTimestampRequest_pb2 import (
     HeadTimestampRequest as HeadTimestampRequestProto,
@@ -32,7 +40,6 @@ from ..protobuf.HistoricalDataRequest_pb2 import (
 from ..protobuf.HistoricalSchedule_pb2 import (
     HistoricalSchedule as HistoricalScheduleProto,
 )
-from ..protobuf.HistoricalSession_pb2 import HistoricalSession as HistoricalSessionProto
 from ..protobuf.HistoricalTick_pb2 import HistoricalTick as HistoricalTickProto
 from ..protobuf.HistoricalTickBidAsk_pb2 import (
     HistoricalTickBidAsk as HistoricalTickBidAskProto,
@@ -43,9 +50,17 @@ from ..protobuf.HistoricalTickLast_pb2 import (
 from ..protobuf.HistoricalTicksRequest_pb2 import (
     HistoricalTicksRequest as HistoricalTicksRequestProto,
 )
-from ..protobuf.TickAttribBidAsk_pb2 import TickAttribBidAsk as TickAttribBidAskProto
-from ..protobuf.TickAttribLast_pb2 import TickAttribLast as TickAttribLastProto
-from ..util import NO_VALID_ID, isValidIntValue, parseIBDatetime
+from ..protobuf.RealTimeBarsRequest_pb2 import (
+    RealTimeBarsRequest as RealTimeBarsRequestProto,
+)
+from ..protobuf.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
+from ..util import (
+    EPOCH,
+    UNSET_DOUBLE,
+    isValidIntValue,
+    parseIBDatetime,
+    parseIBTimeStamp,
+)
 from .contract_converters import createContractProto
 
 
@@ -108,31 +123,67 @@ def createHistoricalDataRequestProto(
     fillTagValueList(chartOptionsList, historicalDataRequestProto.chartOptions)
     return historicalDataRequestProto
 
+def createCancelHistoricalDataProto(reqId: int) -> CancelHistoricalDataProto:
+    cancelHistoricalDataProto = CancelHistoricalDataProto()
+    if isValidIntValue(reqId): cancelHistoricalDataProto.reqId = reqId
+    return cancelHistoricalDataProto
+
+
+def createRealTimeBarsRequestProto(
+    reqId: int,
+    contract: Contract,
+    barSize: int,
+    whatToShow: str,
+    useRTH: bool,
+    realTimeBarsOptionsList: list[TagValue],
+) -> RealTimeBarsRequestProto:
+    realTimeBarsRequestProto = RealTimeBarsRequestProto()
+    if isValidIntValue(reqId):
+        realTimeBarsRequestProto.reqId = reqId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        realTimeBarsRequestProto.contract.CopyFrom(contractProto)
+    if isValidIntValue(barSize):
+        realTimeBarsRequestProto.barSize = barSize
+    if whatToShow:
+        realTimeBarsRequestProto.whatToShow = whatToShow
+    if useRTH:
+        realTimeBarsRequestProto.useRTH = useRTH
+    fillTagValueList(
+        realTimeBarsOptionsList, realTimeBarsRequestProto.realTimeBarsOptions
+    )
+    return realTimeBarsRequestProto
+
 
 def createBarDataList(
     historicalDataBarsProto: list[HistoricalDataBarProto],
 ) -> list[BarData]:
     bars = []
     for barProto in historicalDataBarsProto:
-        bar = BarData()
-        if barProto.HasField("date"):
-            bar.date = parseIBDatetime(barProto.date)
-        if barProto.HasField("open"):
-            bar.open = barProto.open
-        if barProto.HasField("high"):
-            bar.high = barProto.high
-        if barProto.HasField("low"):
-            bar.low = barProto.low
-        if barProto.HasField("close"):
-            bar.close = barProto.close
-        if barProto.HasField("volume"):
-            bar.volume = float(barProto.volume)
-        if barProto.HasField("WAP"):
-            bar.average = float(barProto.WAP)
-        if barProto.HasField("barCount"):
-            bar.barCount = barProto.barCount
+        bar = createBarData(barProto)
         bars.append(bar)
     return bars
+
+
+def createBarData(historicalDataBarProto: HistoricalDataBarProto) -> BarData:
+    if historicalDataBarProto.HasField("date"):
+        date = parseIBDatetime(historicalDataBarProto.date)
+    if historicalDataBarProto.HasField("open"):
+        open_ = historicalDataBarProto.open
+    if historicalDataBarProto.HasField("high"):
+        high = historicalDataBarProto.high
+    if historicalDataBarProto.HasField("low"):
+        low = historicalDataBarProto.low
+    if historicalDataBarProto.HasField("close"):
+        close = historicalDataBarProto.close
+    if historicalDataBarProto.HasField("volume"):
+        volume = float(historicalDataBarProto.volume)
+    if historicalDataBarProto.HasField("WAP"):
+        average = float(historicalDataBarProto.WAP)
+    if historicalDataBarProto.HasField("barCount"):
+        barCount = historicalDataBarProto.barCount
+    bar = BarData(date, open_, high, low, close, volume, average, barCount)
+    return bar
 
 
 def createHistoricalTicksRequestProto(
@@ -171,9 +222,13 @@ def createHistoricalTicksRequestProto(
 def createHistoricalTick(
     historicalTickProto: HistoricalTickProto, tz: tzinfo
 ) -> HistoricalTick:
-    time = datetime.fromtimestamp(historicalTickProto.time, tz)
+    time = parseIBTimeStamp(historicalTickProto.time, tz)
     price = historicalTickProto.price
-    size = float(historicalTickProto.size)
+    size = (
+        float(historicalTickProto.size)
+        if historicalTickProto.size
+        else IBDefaults.emptySize
+    )
     historicalTick = HistoricalTick(time, price, size)
     return historicalTick
 
@@ -181,7 +236,7 @@ def createHistoricalTick(
 def createHistoricalTickBidAsk(
     historicalTickBidAskProto: HistoricalTickBidAskProto, tz: tzinfo
 ) -> HistoricalTickBidAsk:
-    time = datetime.fromtimestamp(historicalTickBidAskProto.time, tz)
+    time = parseIBTimeStamp(historicalTickBidAskProto.time, tz)
 
     tickAttribBidAskProto = historicalTickBidAskProto.tickAttribBidAsk
     bidPastLow = tickAttribBidAskProto.bidPastLow
@@ -203,8 +258,7 @@ def createHistoricalTickBidAsk(
 def createHistoricalTickLast(
     historicalTickLastProto: HistoricalTickLastProto, tz: tzinfo
 ) -> HistoricalTickLast:
-    time = datetime.fromtimestamp(historicalTickLastProto.time, tz)
-
+    time = parseIBTimeStamp(historicalTickLastProto.time, tz)
     tickAttribLastProto = historicalTickLastProto.tickAttribLast
     pastLimit = tickAttribLastProto.pastLimit
     unreported = tickAttribLastProto.unreported
@@ -252,17 +306,17 @@ def createHistogramDataEntry(
 def createHistoricalSchedule(
     historicalScheduleProto: HistoricalScheduleProto,
 ) -> HistoricalSchedule:
-    startDateTime = (
+    _startDateTime = (
         historicalScheduleProto.startDateTime
         if historicalScheduleProto.HasField("startDateTime")
         else ""
     )
-    endDateTime = (
+    _endDateTime = (
         historicalScheduleProto.endDateTime
         if historicalScheduleProto.HasField("endDateTime")
         else ""
     )
-    timeZone = (
+    _timeZone = (
         historicalScheduleProto.timeZone
         if historicalScheduleProto.HasField("timeZone")
         else ""
@@ -271,25 +325,79 @@ def createHistoricalSchedule(
     sessions = []
     if historicalScheduleProto.historicalSessions:
         for historicalSessionProto in historicalScheduleProto.historicalSessions:
-            historicalSession = HistoricalSession()
-            historicalSession.startDateTime = (
+            startDateTime = (
                 historicalSessionProto.startDateTime
                 if historicalSessionProto.HasField("startDateTime")
                 else ""
             )
-            historicalSession.endDateTime = (
+            endDateTime = (
                 historicalSessionProto.endDateTime
                 if historicalSessionProto.HasField("endDateTime")
                 else ""
             )
-            historicalSession.refDate = (
+            refDate = (
                 historicalSessionProto.refDate
                 if historicalSessionProto.HasField("refDate")
                 else ""
             )
+            historicalSession = HistoricalSession(
+                startDateTime,
+                endDateTime,
+                refDate,
+            )
             sessions.append(historicalSession)
 
     historicalSchedule = HistoricalSchedule(
-        startDateTime, endDateTime, timeZone, sessions
+        _startDateTime, _endDateTime, _timeZone, sessions
     )
     return historicalSchedule
+
+
+def createRealTimeBarTick(
+    realTimeBarTickProto: RealTimeBarTickProto, tz: tzinfo
+) -> RealTimeBar:
+    time = (
+        parseIBTimeStamp(realTimeBarTickProto.time, tz)
+        if realTimeBarTickProto.HasField("time")
+        else EPOCH
+    )
+    open_ = realTimeBarTickProto.open if realTimeBarTickProto.HasField("open") else 0.0
+    high = realTimeBarTickProto.high if realTimeBarTickProto.HasField("high") else 0.0
+    low = realTimeBarTickProto.low if realTimeBarTickProto.HasField("low") else 0.0
+    close = (
+        realTimeBarTickProto.close if realTimeBarTickProto.HasField("close") else 0.0
+    )
+    volume = (
+        float(realTimeBarTickProto.volume)
+        if realTimeBarTickProto.HasField("volume")
+        else UNSET_DOUBLE
+    )
+    wap = (
+        float(realTimeBarTickProto.WAP)
+        if realTimeBarTickProto.HasField("WAP")
+        else UNSET_DOUBLE
+    )
+    count = realTimeBarTickProto.count if realTimeBarTickProto.HasField("count") else 0
+    realTimeBar = RealTimeBar(time, -1, open_, high, low, close, volume, wap, count)
+    return realTimeBar
+
+
+def createFundamentalsDataRequestProto(
+    reqId: int,
+    contract: Contract,
+    reportType: str,
+    fundamentalsDataOptionsList: list[TagValue],
+) -> FundamentalsDataRequestProto:
+    fundamentalsDataRequestProto = FundamentalsDataRequestProto()
+    if isValidIntValue(reqId):
+        fundamentalsDataRequestProto.reqId = reqId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        fundamentalsDataRequestProto.contract.CopyFrom(contractProto)
+    if reportType:
+        fundamentalsDataRequestProto.reportType = reportType
+    fillTagValueList(
+        fundamentalsDataOptionsList,
+        fundamentalsDataRequestProto.fundamentalsDataOptions,
+    )
+    return fundamentalsDataRequestProto

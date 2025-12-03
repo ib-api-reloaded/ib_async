@@ -2,21 +2,24 @@
 Account data protobuf converters.
 """
 
+from ib_async.util import isValidIntValue
+
 from ..objects import AccountValue, PortfolioItem, Position
 from ..protobuf.AccountDataRequest_pb2 import (
     AccountDataRequest as AccountDataRequestProto,
 )
-from ..protobuf.AccountUpdatesMultiRequest_pb2 import (
-    AccountUpdatesMultiRequest as AccountUpdatesMultiRequestProto,
-)
 from ..protobuf.AccountSummary_pb2 import AccountSummary as AccountSummaryProto
-from ..protobuf.AccountValue_pb2 import AccountValue as AccountValueProto
 from ..protobuf.AccountUpdateMulti_pb2 import (
     AccountUpdateMulti as AccountUpdateMultiProto,
 )
+from ..protobuf.AccountUpdatesMultiRequest_pb2 import (
+    AccountUpdatesMultiRequest as AccountUpdatesMultiRequestProto,
+)
+from ..protobuf.AccountValue_pb2 import AccountValue as AccountValueProto
 from ..protobuf.CancelAccountUpdatesMulti_pb2 import (
     CancelAccountUpdatesMulti as CancelAccountUpdatesMultiProto,
 )
+from ..protobuf.IdsRequest_pb2 import IdsRequest as IdsRequestProto
 from ..protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
 from ..protobuf.Position_pb2 import Position as PositionProto
 from .contract_converters import createContract
@@ -169,3 +172,10 @@ def createPortfolioItem(portfolioValueProto: PortfolioValueProto) -> PortfolioIt
         realizedPNL=portfolioValueProto.realizedPNL,
         account=portfolioValueProto.accountName,
     )
+
+
+def createUserInfoRequestProto(reqId: int) -> IdsRequestProto:
+    idsRequestProto = IdsRequestProto()
+    if isValidIntValue(reqId):
+        idsRequestProto.numIds = reqId
+    return idsRequestProto

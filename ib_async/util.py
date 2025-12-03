@@ -136,10 +136,20 @@ def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
 
-    for srcObj in srcObjs:
-        obj.__dict__.update(dataclassAsDict(srcObj))  # type: ignore
+    valid_fields = {f.name for f in fields(obj)}
 
-    obj.__dict__.update(**kwargs)  # type: ignore
+    for srcObj in srcObjs:
+        if not is_dataclass(srcObj):
+            continue
+        for f in fields(srcObj):
+            if f.name in valid_fields:
+                value = getattr(srcObj, f.name)
+                setattr(obj, f.name, value)
+
+    for key, value in kwargs.items():
+        if key in valid_fields:
+            setattr(obj, key, value)
+
     return obj
 
 
@@ -602,6 +612,9 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
         t = dt.datetime.strptime(ss, "%Y%m%d%H:%M:%S")
 
     return t
+
+def parseIBTimeStamp(t:int, tz:dt.tzinfo=dt.timezone.utc) -> dt.datetime:
+    return dt.datetime.fromtimestamp(t, tz)
 
 
 def decimalMaxString(val: Decimal):

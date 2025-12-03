@@ -2,50 +2,53 @@
 Market data protobuf converters
 """
 
-from dataclasses import dataclass
-
 from ..objects import (
     Contract,
     OptionComputation,
     TagValue,
     TickAttrib,
-    TickAttribBidAsk,
-    TickAttribLast,
-    TickByTickAllLastData,
-    TickByTickBidAskData,
-    TickByTickMidPointData,
+    TickComputationData,
     TickGenericData,
     TickParams,
     TickPriceData,
     TickSizeData,
     TickStringData,
     TickType,
-    TickComputationData,
 )
+from ..protobuf.CalculateImpliedVolatilityRequest_pb2 import (
+    CalculateImpliedVolatilityRequest as CalculateImpliedVolatilityRequestProto,
+)
+from ..protobuf.CalculateOptionPriceRequest_pb2 import (
+    CalculateOptionPriceRequest as CalculateOptionPriceRequestProto,
+)
+from ..protobuf.CancelCalculateImpliedVolatility_pb2 import (
+    CancelCalculateImpliedVolatility as CancelCalculateImpliedVolatilityProto,
+)
+from ..protobuf.CancelCalculateOptionPrice_pb2 import (
+    CancelCalculateOptionPrice as CancelCalculateOptionPriceProto,
+)
+from ..protobuf.CancelMarketData_pb2 import CancelMarketData as CancelMarketDataProto
 from ..protobuf.MarketDataRequest_pb2 import (
     MarketDataRequest as MarketDataRequestProto,
-)
-from ..protobuf.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
-from ..protobuf.TickPrice_pb2 import TickPrice as TickPriceProto
-from ..protobuf.TickSize_pb2 import TickSize as TickSizeProto
-from ..protobuf.TickString_pb2 import TickString as TickStringProto
-from ..protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
-from ..protobuf.TickOptionComputation_pb2 import (
-    TickOptionComputation as TickOptionComputationProto,
-)
-from ..protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
-from ..protobuf.HistoricalTickLast_pb2 import (
-    HistoricalTickLast as HistoricalTickLastProto,
-)
-from ..protobuf.HistoricalTickBidAsk_pb2 import (
-    HistoricalTickBidAsk as HistoricalTickBidAskProto,
 )
 from ..protobuf.MarketDataTypeRequest_pb2 import (
     MarketDataTypeRequest as MarketDataTypeRequestProto,
 )
-from ..protobuf.HistoricalTick_pb2 import HistoricalTick as HistoricalTickProt
-from ..protobuf.CancelMarketData_pb2 import CancelMarketData as CancelMarketDataProto
-from ..util import NO_VALID_ID, UNSET_DOUBLE, UNSET_INTEGER, isValidIntValue
+from ..protobuf.TickByTickRequest_pb2 import TickByTickRequest as TickByTickRequestProto
+from ..protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
+from ..protobuf.TickOptionComputation_pb2 import (
+    TickOptionComputation as TickOptionComputationProto,
+)
+from ..protobuf.TickPrice_pb2 import TickPrice as TickPriceProto
+from ..protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
+from ..protobuf.TickSize_pb2 import TickSize as TickSizeProto
+from ..protobuf.TickString_pb2 import TickString as TickStringProto
+from ..util import (
+    NO_VALID_ID,
+    UNSET_DOUBLE,
+    UNSET_INTEGER,
+    isValidIntValue,
+)
 from .contract_converters import createContractProto
 from .historical_data_converters import fillTagValueList
 
@@ -86,6 +89,24 @@ def cancelMarketDataProto(reqId: int) -> CancelMarketDataProto:
     if isValidIntValue(reqId):
         cancelMarketDataProto.reqId = reqId
     return cancelMarketDataProto
+
+
+def createTickByTickRequestProto(
+    reqId: int, contract: Contract, tickType: str, numberOfTicks: int, ignoreSize: bool
+) -> TickByTickRequestProto:
+    tickByTickRequestProto = TickByTickRequestProto()
+    if isValidIntValue(reqId):
+        tickByTickRequestProto.reqId = reqId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        tickByTickRequestProto.contract.CopyFrom(contractProto)
+    if tickType:
+        tickByTickRequestProto.tickType = tickType
+    if isValidIntValue(numberOfTicks):
+        tickByTickRequestProto.numberOfTicks = numberOfTicks
+    if ignoreSize:
+        tickByTickRequestProto.ignoreSize = ignoreSize
+    return tickByTickRequestProto
 
 
 def createTickParams(msg: TickReqParamsProto) -> TickParams:
@@ -183,9 +204,7 @@ def createTickGenericData(msg: TickGenericProto) -> TickGenericData:
 def createTickOptionComputation(msg: TickOptionComputationProto) -> TickComputationData:
     """Create a OptionComputation object from a TickOptionCompuationProto message."""
 
-    tickType = (
-            TickType(msg.tickType) if msg.HasField("tickType") else TickType.NOT_SET
-        )
+    tickType = TickType(msg.tickType) if msg.HasField("tickType") else TickType.NOT_SET
     tickAttrib = msg.tickAttrib if msg.HasField("tickAttrib") else UNSET_INTEGER
     impliedVol = msg.impliedVol if msg.HasField("impliedVol") else None
     if impliedVol and impliedVol < 0:  # -1 is the "not computed" indicator
@@ -223,7 +242,7 @@ def createTickOptionComputation(msg: TickOptionComputationProto) -> TickComputat
         theta if theta != -2 else theta,
         undPrice if undPrice != -1 else None,
     )
-    
+
     tick_comp = TickComputationData(
         reqId=msg.reqId,
         tickType=tickType,
@@ -232,61 +251,66 @@ def createTickOptionComputation(msg: TickOptionComputationProto) -> TickComputat
     return tick_comp
 
 
-# def create_tick_by_tick_all_last_data(
-#     msg: TickByTickAllLastProto,
-# ) -> TickByTickAllLastData:
-#     """Create a TickByTickAllLastData object from a TickByTickAllLastProto message."""
-#     if msg.HasField("reqId"):
-#         reqId = msg.reqId
-#     if msg.HasField("tickType"):
-#         tickType = msg.tickType
-#     if msg.HasField("historicalTickLast"):
-#         historicalTickLast = msg.historicalTickLast
-#     if msg.HasField("historicalTickBidAsk"):
-#         historicalTickBidAsk = msg.historicalTickBidAsk
-#     if msg.HasField("historicalTickMidPoint"):
-#         historicalTickMidPoint = msg.historicalTickMidPoint
-
-#     tickByTickAllLastData = TickByTickAllLastData(
-#         reqId=reqId,
-#         tickType=tickType,
-#         time=msg.time,
-#         price=msg.price,
-#         size=msg.size,
-#         tickAttribLast=TickAttribLast(
-#             pastLimit=msg.tickAttribLast.pastLimit,
-#             unreported=msg.tickAttribLast.unreported,
-#         ),
-#         exchange=msg.exchange,
-#         specialConditions=msg.specialConditions,
-#     )
-#     return tickByTickAllLastData
+def createCalculateImpliedVolatilityRequestProto(
+    reqId: int,
+    contract: Contract,
+    optionPrice: float,
+    underPrice: float,
+    impliedVolatilityOptionsList: list[TagValue],
+) -> CalculateImpliedVolatilityRequestProto:
+    calculateImpliedVolatilityRequestProto = CalculateImpliedVolatilityRequestProto()
+    if isValidIntValue(reqId):
+        calculateImpliedVolatilityRequestProto.reqId = reqId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        calculateImpliedVolatilityRequestProto.contract.CopyFrom(contractProto)
+    if optionPrice != UNSET_DOUBLE:
+        calculateImpliedVolatilityRequestProto.optionPrice = optionPrice
+    if underPrice != UNSET_DOUBLE:
+        calculateImpliedVolatilityRequestProto.underPrice = underPrice
+    fillTagValueList(
+        impliedVolatilityOptionsList,
+        calculateImpliedVolatilityRequestProto.impliedVolatilityOptions,
+    )
+    return calculateImpliedVolatilityRequestProto
 
 
-# def create_tick_by_tick_bid_ask_data(
-#     msg: TickByTickBidAskProto,
-# ) -> TickByTickBidAskData:
-#     """Create a TickByTickBidAskData object from a TickByTickBidAskProto message."""
-#     return TickByTickBidAskData(
-#         reqId=msg.reqId,
-#         time=msg.time,
-#         bidPrice=msg.bidPrice,
-#         askPrice=msg.askPrice,
-#         bidSize=msg.bidSize,
-#         askSize=msg.askSize,
-#         tickAttribBidAsk=TickAttribBidAsk(
-#             bidPastLow=msg.tickAttribBidAsk.bidPastLow,
-#             askPastHigh=msg.tickAttribBidAsk.askPastHigh,
-#         ),
-#     )
+def createCalculateOptionPriceRequestProto(
+    reqId: int,
+    contract: Contract,
+    volatility: float,
+    underPrice: float,
+    optionPriceOptionsList: list[TagValue],
+) -> CalculateOptionPriceRequestProto:
+    calculateOptionPriceRequestProto = CalculateOptionPriceRequestProto()
+    if isValidIntValue(reqId):
+        calculateOptionPriceRequestProto.reqId = reqId
+    contractProto = createContractProto(contract, None)
+    if contractProto is not None:
+        calculateOptionPriceRequestProto.contract.CopyFrom(contractProto)
+    if volatility != UNSET_DOUBLE:
+        calculateOptionPriceRequestProto.volatility = volatility
+    if underPrice != UNSET_DOUBLE:
+        calculateOptionPriceRequestProto.underPrice = underPrice
+    fillTagValueList(
+        optionPriceOptionsList, calculateOptionPriceRequestProto.optionPriceOptions
+    )
+    return calculateOptionPriceRequestProto
 
 
-# def create_tick_by_tick_mid_point_data(
-#     msg: TickByTickMidPointProto,
-# ) -> TickByTickMidPointData:
-#     """Create a TickByTickMidPointData object from a TickByTickMidPointProto message."""
-#     return TickByTickMidPointData(
-#         reqId=msg.reqId,
-#         time=msg.time,
-#         midPoint=msg.midPoint,
-#     )
+def createCancelCalculateImpliedVolatilityProto(
+    reqId: int,
+) -> CancelCalculateImpliedVolatilityProto:
+    cancelCalculateImpliedVolatilityProto = CancelCalculateImpliedVolatilityProto()
+    if isValidIntValue(reqId):
+        cancelCalculateImpliedVolatilityProto.reqId = reqId
+    return cancelCalculateImpliedVolatilityProto
+
+
+def createCancelCalculateOptionPriceProto(
+    reqId: int,
+) -> CancelCalculateOptionPriceProto:
+    cancelCalculateOptionPriceProto = CancelCalculateOptionPriceProto()
+    if isValidIntValue(reqId):
+        cancelCalculateOptionPriceProto.reqId = reqId
+    return cancelCalculateOptionPriceProto

@@ -1,8 +1,8 @@
 """Deserialize and dispatch messages."""
 
 import logging
-from datetime import datetime
-from typing import Any
+
+from ib_async.protobuf_converters.subscription_converters import createScannerDataList
 
 from .contract import (
     Contract,
@@ -12,12 +12,9 @@ from .contract import (
 )
 from .message import MessageId
 from .objects import (
-    BarData,
     DepthMktDataDescription,
     FamilyCode,
     HistogramData,
-    HistoricalSession,
-    HistoricalTick,
     HistoricalTickBidAsk,
     HistoricalTickLast,
     NewsProvider,
@@ -25,8 +22,6 @@ from .objects import (
     SmartComponent,
     SoftDollarTier,
     TagValue,
-    TickAttribBidAsk,
-    TickAttribLast,
     TickType,
 )
 from .order import OrderStatus
@@ -61,10 +56,17 @@ from .protobuf.ExecutionDetails_pb2 import ExecutionDetails as ExecutionDetailsP
 from .protobuf.ExecutionDetailsEnd_pb2 import (
     ExecutionDetailsEnd as ExecutionDetailsEndProto,
 )
+from .protobuf.FundamentalsData_pb2 import FundamentalsData as FundamentalsDataProto
 from .protobuf.HeadTimestamp_pb2 import HeadTimestamp as HeadTimestampProto
 from .protobuf.HistogramData_pb2 import HistogramData as HistogramDataProto
 from .protobuf.HistoricalData_pb2 import HistoricalData as HistoricalDataProto
 from .protobuf.HistoricalDataEnd_pb2 import HistoricalDataEnd as HistoricalDataEndProto
+from .protobuf.HistoricalDataUpdate_pb2 import (
+    HistoricalDataUpdate as HistoricalDataUpdateProto,
+)
+from .protobuf.HistoricalSchedule_pb2 import (
+    HistoricalSchedule as HistoricalScheduleProto,
+)
 from .protobuf.HistoricalTicks_pb2 import HistoricalTicks as HistoricalTicksProto
 from .protobuf.HistoricalTicksBidAsk_pb2 import (
     HistoricalTicksBidAsk as HistoricalTicksBidAskProto,
@@ -72,34 +74,41 @@ from .protobuf.HistoricalTicksBidAsk_pb2 import (
 from .protobuf.HistoricalTicksLast_pb2 import (
     HistoricalTicksLast as HistoricalTicksLastProto,
 )
-from .protobuf.HistoricalSchedule_pb2 import HistoricalSchedule as HistoricalScheduleProto
-from .protobuf.HistoricalSession_pb2 import HistoricalSession as HistoricalSessionProto
 from .protobuf.ManagedAccounts_pb2 import ManagedAccounts as ManagedAccountsProto
-from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
 from .protobuf.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
+from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
 from .protobuf.NextValidId_pb2 import NextValidId as NextValidIdProto
 from .protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
 from .protobuf.OpenOrdersEnd_pb2 import OpenOrdersEnd as OpenOrderEndProto
 from .protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
+from .protobuf.OrderBound_pb2 import OrderBound as OrderBoundProto
 from .protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
 from .protobuf.Position_pb2 import Position as PositionProto
 from .protobuf.PositionEnd_pb2 import PositionEnd as PositionEndProto
+from .protobuf.PnL_pb2 import PnL as PnLProto
+from .protobuf.PnLSingle_pb2 import PnLSingle as PnLSingleProto
+from .protobuf.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
+from .protobuf.ScannerParameters_pb2 import ScannerParameters as ScannerParametersProto
+from .protobuf.ScannerData_pb2 import ScannerData as ScannerDataProto
 from .protobuf.SecDefOptParameter_pb2 import (
     SecDefOptParameter as SecDefOptParameterProto,
 )
 from .protobuf.SecDefOptParameterEnd_pb2 import (
     SecDefOptParameterEnd as SecDefOptParameterEndProto,
 )
+from .protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
 from .protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
 from .protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
 from .protobuf.TickOptionComputation_pb2 import (
     TickOptionComputation as TickOptionComputationProto,
 )
 from .protobuf.TickPrice_pb2 import TickPrice as TickPriceProto
+from .protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
 from .protobuf.TickSize_pb2 import TickSize as TickSizeProto
 from .protobuf.TickSnapshotEnd_pb2 import TickSnapshotEnd as TickSnapshotEndProto
 from .protobuf.TickString_pb2 import TickString as TickStringProto
-from .protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
+from .protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
+from .protobuf.UserInfo_pb2 import UserInfo as UserInfoProto
 from .protobuf_converters.account_converters import (
     createAccountSummary,
     createAccountValue,
@@ -111,21 +120,24 @@ from .protobuf_converters.contract_converters import (
     createContractDescription,
     createContractDetails,
     createOptionChain,
+    createSmartComponents,
 )
 from .protobuf_converters.historical_data_converters import (
+    createBarData,
     createBarDataList,
     createHistogramDataEntry,
     createHistoricalSchedule,
     createHistoricalTick,
     createHistoricalTickBidAsk,
     createHistoricalTickLast,
+    createRealTimeBarTick,
 )
 from .protobuf_converters.market_data_converters import (
+    createTickGenericData,
     createTickOptionComputation,
     createTickParams,
     createTickPriceData,
     createTickSizeData,
-    createTickGenericData,
     createTickStringData,
 )
 from .protobuf_converters.trade_converter import (
@@ -136,14 +148,18 @@ from .protobuf_converters.trade_converter import (
     createOrderStatus,
     createTradeFromOpenOrder,
 )
-from .util import NO_VALID_ID
+
+from .util import NO_VALID_ID, UNSET_DOUBLE, UNSET_INTEGER
 from .wrapper import Wrapper
 
 
 class Decoder:
-    """Decode IB messages and invoke corresponding wrapper methods."""
+    """Decode IB messages from bytes to proto and to ib-async objects, then invoke
+    corresponding wrapper methods.
+    """
 
-    PROTOBUF_MESSAGE_HANDLERS = {
+    # MessageId.IN -> (DataTypeProto, methodHandler)
+    PROTOBUF_MESSAGE_HANDLERS: dict[MessageId.IN, tuple[type, str]] = {
         # Handles NEXT_VALID_ID message during handshake
         MessageId.IN.NEXT_VALID_ID: (NextValidIdProto, "nextValidIdProto"),
         # Handles incoming contract details for reqContractDetails
@@ -191,24 +207,29 @@ class Decoder:
             AccountUpdateMultiEndProto,
             "accountUpdateMultiEndProto",
         ),
+        # Handles incoming open order updates
         MessageId.IN.OPEN_ORDER: (OpenOrderProto, "openOrderProto"),
         MessageId.IN.OPEN_ORDER_END: (OpenOrderEndProto, "openOrderEndProto"),
+        # Handles incoming execution details
         MessageId.IN.EXECUTION_DATA: (ExecutionDetailsProto, "execDetailsProto"),
         MessageId.IN.EXECUTION_DATA_END: (
             ExecutionDetailsEndProto,
             "execDetailsEndProto",
         ),
+        # Handles account summary
         MessageId.IN.ACCOUNT_SUMMARY: (AccountSummaryProto, "accountSummaryProto"),
         MessageId.IN.ACCOUNT_SUMMARY_END: (
             AccountSummaryEndProto,
             "accountSummaryEndProto",
         ),
+        # Handles order status updates
         MessageId.IN.ORDER_STATUS: (OrderStatusProto, "orderStatusProto"),
         MessageId.IN.COMPLETED_ORDER: (CompletedOrderProto, "completedOrderProto"),
         MessageId.IN.COMPLETED_ORDERS_END: (
             CompletedOrdersEndProto,
             "completedOrdersEndProto",
         ),
+        MessageId.IN.ORDER_BOUND: (OrderBoundProto, "orderBoundProto"),
         MessageId.IN.PORTFOLIO_VALUE: (PortfolioValueProto, "updatePortfolioProto"),
         MessageId.IN.ACCT_UPDATE_TIME: (
             AccountUpdateTimeProto,
@@ -230,6 +251,10 @@ class Decoder:
             HistoricalDataEndProto,
             "historicalDataProtoEnd",
         ),
+        MessageId.IN.HISTORICAL_DATA_UPDATE: (
+            HistoricalDataUpdateProto,
+            "historicalDataUpdateProto",
+        ),
         MessageId.IN.HISTORICAL_TICKS: (HistoricalTicksProto, "historicalTicksProto"),
         MessageId.IN.HISTORICAL_TICKS_BID_ASK: (
             HistoricalTicksBidAskProto,
@@ -244,6 +269,7 @@ class Decoder:
             HistoricalScheduleProto,
             "historicalScheduleProto",
         ),
+        MessageId.IN.REAL_TIME_BARS: (RealTimeBarTickProto, "realTimeBarTickProto"),
         MessageId.IN.TICK_REQ_PARAMS: (TickReqParamsProto, "tickReqParamsProto"),
         MessageId.IN.TICK_PRICE: (TickPriceProto, "tickPriceProto"),
         MessageId.IN.TICK_SIZE: (TickSizeProto, "tickSizeProto"),
@@ -254,6 +280,20 @@ class Decoder:
             "tickOptionComputationProto",
         ),
         MessageId.IN.TICK_SNAPSHOT_END: (TickSnapshotEndProto, "tickSnapshotEndProto"),
+        MessageId.IN.TICK_BY_TICK: (
+            TickByTickDataProto,
+            "tickByTickDataProto",
+        ),
+        MessageId.IN.FUNDAMENTAL_DATA: (FundamentalsDataProto, "fundamentalsDataProto"),
+        MessageId.IN.SCANNER_PARAMETERS: (
+            ScannerParametersProto,
+            "scannerParametersProto",
+        ),
+        MessageId.IN.SCANNER_DATA: (ScannerDataProto, "scannerDataProto"),
+        MessageId.IN.PNL: (PnLProto, "pnlProto"),
+        MessageId.IN.PNL_SINGLE: (PnLSingleProto, "pnlSingleProto"),
+        MessageId.IN.USER_INFO: (UserInfoProto, "userInfoProto"),
+        MessageId.IN.SMART_COMPONENTS: (SmartComponentsProto, "smartComponentsProto"),
     }
 
     def __init__(self, wrapper: Wrapper, serverVersion: int):
@@ -262,22 +302,33 @@ class Decoder:
         self.logger = logging.getLogger("ib_async.Decoder")
 
     def processProtoBuf(self, payload: bytes):
-        """Process a binary Protobuf message payload."""
+        """
+        Process a binary Protobuf message payload by calling the appropriate handler
+        method.
+
+        `wrapper.PROTOBUF_MESSAGE_HANDLERS.get(msgId) -> (DataTypeProto, methodHandler)`
+
+        """
+        msgId_raw = int.from_bytes(payload[:4], "big")
         try:
-            msgId_raw = int.from_bytes(payload[:4], "big")
-            data = payload[4:]
-            msgId = MessageId.from_protobuf(msgId_raw)
+            msgId = MessageId.IN(msgId_raw)
             handler_info = self.PROTOBUF_MESSAGE_HANDLERS.get(msgId)
             if handler_info:
                 proto_class, handler_method_name = handler_info
                 proto_message = proto_class()
-                proto_message.ParseFromString(data)
+                proto_message.ParseFromString(payload[4:])
                 handler_method = getattr(self, handler_method_name)
                 handler_method(proto_message)
             else:
                 self.logger.warning("Unknown Protobuf message id: %s", msgId)
-        except Exception:
-            self.logger.exception("Error processing Protobuf message id: %s", msgId)
+        except ValueError as err:
+            self.logger.warning(
+                "ValueError: Processing protobuf message id: %s, %s", msgId_raw, err
+            )
+        except Exception as err:
+            self.logger.exception(
+                "Error processing Protobuf message id: %s, %s", msgId_raw, err
+            )
 
     def errorMessageProto(self, msg: ErrorMessageProto):
         reqId = msg.id
@@ -319,10 +370,10 @@ class Decoder:
     def secDefOptParameterProto(self, msg: SecDefOptParameterProto):
         reqId = msg.reqId
         optionChain = createOptionChain(msg)
-        self.wrapper.response_bus.emit(reqId, optionChain)
+        self.wrapper.securityDefinitionOptionParameter(reqId, optionChain)
 
     def secDefOptParameterEndProto(self, msg: SecDefOptParameterEndProto):
-        self.wrapper.response_bus.emit(msg.reqId, None)
+        self.wrapper.securityDefinitionOptionParameterEnd(msg.reqId)
 
     def managedAccountsProto(self, msg: ManagedAccountsProto):
         accountsList = msg.accountsList
@@ -364,8 +415,11 @@ class Decoder:
         self.wrapper.nextValidId(msg.orderId)
 
     def openOrderProto(self, msg: OpenOrderProto):
-        trade = createTradeFromOpenOrder(msg)
-        self.wrapper.openOrder(trade)
+        trade, orderState = createTradeFromOpenOrder(msg)
+        if trade:
+            self.wrapper.openOrder(trade, orderState)
+            return
+        self.logger.error("Error processing order, %r", msg)
 
     def openOrderEndProto(self, msg: OpenOrderEndProto):
         self.wrapper.openOrderEnd()
@@ -389,6 +443,12 @@ class Decoder:
 
     def completedOrdersEndProto(self, msg: CompletedOrdersEndProto):
         self.wrapper.completedOrdersEnd()
+
+    def orderBoundProto(self, msg: OrderBoundProto):
+        permId = msg.permId if msg.HasField("permId") else UNSET_INTEGER
+        clientId = msg.clientId if msg.HasField("clientId") else UNSET_INTEGER
+        orderId = msg.orderId if msg.HasField("orderId") else UNSET_INTEGER
+        self.wrapper.orderBound(permId, clientId, orderId)
 
     def updateAccountTimeProto(self, msg: AccountUpdateTimeProto):
         time = msg.timeStamp if msg.HasField("timeStamp") else ""
@@ -458,10 +518,20 @@ class Decoder:
                 histogram.append(histogramEntry)
         self.wrapper.histogramData(msg.reqId, histogram)
 
+    def historicalDataUpdateProto(self, msg: HistoricalDataUpdateProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        bar = createBarData(msg.historicalDataBar)
+        self.wrapper.historicalDataUpdate(reqId, bar)
+
     def historicalScheduleProto(self, msg: HistoricalScheduleProto):
         historicalSchedule = createHistoricalSchedule(msg)
         self.wrapper.historicalSchedule(msg.reqId, historicalSchedule)
-        
+
+    def realTimeBarTickProto(self, msg: RealTimeBarTickProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+
+        realTimeBarTick = createRealTimeBarTick(msg, self.wrapper.defaults.timezone)
+        self.wrapper.realtimeBar(reqId, realTimeBarTick)
 
     def marketDataTypeProto(self, msg: MarketDataTypeProto):
         self.wrapper.marketDataType(msg.reqId, msg.marketDataType)
@@ -490,9 +560,85 @@ class Decoder:
 
     def tickOptionComputationProto(self, msg: TickOptionComputationProto):
         tick_computation = createTickOptionComputation(msg)
-        self.wrapper.tickOptionComputation(
-            tick_computation.reqId, tick_computation
+        self.wrapper.tickOptionComputation(tick_computation.reqId, tick_computation)
+
+    def tickSnapshotEndProto(self, msg: TickSnapshotEndProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        self.wrapper.tickSnapshotEnd(reqId)
+
+    def tickByTickDataProto(self, msg: TickByTickDataProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        tickType = msg.tickType if msg.HasField("tickType") else 0
+
+        if tickType == 0:
+            pass
+        elif tickType == 1 or tickType == 2:
+            # Last or AllLast
+            if msg.HasField("historicalTickLast"):
+                tick_last = createHistoricalTickLast(
+                    msg.historicalTickLast, self.wrapper.defaults.timezone
+                )
+                self.wrapper.tickByTickAllLast(reqId, tick_last)
+        elif tickType == 3:
+            # BidAsk
+            if msg.HasField("historicalTickBidAsk"):
+                tick_bid_ask = createHistoricalTickBidAsk(
+                    msg.historicalTickBidAsk, self.wrapper.defaults.timezone
+                )
+                self.wrapper.tickByTickBidAsk(reqId, tick_bid_ask)
+        elif tickType == 4:
+            # MidPoint
+            if msg.HasField("historicalTickMidPoint"):
+                tick_mid = createHistoricalTick(
+                    msg.historicalTickMidPoint, self.wrapper.defaults.timezone
+                )
+                self.wrapper.tickByTickMidPoint(reqId, tick_mid)
+
+    def fundamentatalDataProto(self, msg: FundamentalsDataProto):
+        self.wrapper.fundamentalData(msg.reqId, msg.fundamentalData)
+
+    def scannerParametersProto(self, msg: ScannerParametersProto):
+        xml = msg.xml if msg.HasField("xml") else ""
+        self.wrapper.scannerParameters(xml)
+
+    def scannerDataProto(self, msg: ScannerDataProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        scanData = createScannerDataList(msg)
+        self.wrapper.scannerData(reqId, scanData)
+
+    def pnlProto(self, msg: PnLProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        dailyPnL = msg.dailyPnL if msg.HasField("dailyPnL") else UNSET_DOUBLE
+        unrealizedPnL = (
+            msg.unrealizedPnL if msg.HasField("unrealizedPnL") else UNSET_DOUBLE
         )
+        realizedPnL = msg.realizedPnL if msg.HasField("realizedPnL") else UNSET_DOUBLE
+
+        self.wrapper.pnl(reqId, dailyPnL, unrealizedPnL, realizedPnL)
+
+    def pnlSingleProto(self, msg: PnLSingleProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        position = int(msg.position) if msg.HasField("position") else UNSET_INTEGER
+        dailyPnL = msg.dailyPnL if msg.HasField("dailyPnL") else UNSET_DOUBLE
+        unrealizedPnL = (
+            msg.unrealizedPnL if msg.HasField("unrealizedPnL") else UNSET_DOUBLE
+        )
+        realizedPnL = msg.realizedPnL if msg.HasField("realizedPnL") else UNSET_DOUBLE
+        value = msg.value if msg.HasField("value") else UNSET_DOUBLE
+
+        self.wrapper.pnlSingle(
+            reqId, position, dailyPnL, unrealizedPnL, realizedPnL, value
+        )
+
+    def userInfoProto(self, msg: UserInfoProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        whiteBrandingId = msg.whiteBrandingId if msg.HasField("whiteBrandingId") else ""
+        self.wrapper.userInfo(reqId, whiteBrandingId)
+
+    def smartComponentsProto(self, msg: SmartComponentsProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        components = createSmartComponents(msg)
+        self.wrapper.smartComponents(reqId, components)
 
     ##################### legacy methods ##########################################
 
@@ -576,58 +722,6 @@ class Decoder:
         self.parse(c)
         self.wrapper.bondContractDetails(int(reqId), cd)
 
-
-    def historicalDataUpdate(self, fields):
-        _, reqId, *fields = fields
-        get = iter(fields).__next__
-
-        bar = BarData(
-            barCount=int(get() or 0),
-            date=get(),
-            open=float(get() or 0),
-            close=float(get() or 0),
-            high=float(get() or 0),
-            low=float(get() or 0),
-            average=float(get() or 0),
-            volume=float(get() or 0),
-        )
-
-        self.wrapper.historicalDataUpdate(int(reqId), bar)
-
-    def scannerData(self, fields):
-        _, _, reqId, n, *fields = fields
-
-        for _ in range(int(n)):
-            cd = ContractDetails()
-            cd.contract = c = Contract()
-            (
-                rank,
-                c.conId,
-                c.symbol,
-                c.secType,
-                c.lastTradeDateOrContractMonth,
-                c.strike,
-                c.right,
-                c.exchange,
-                c.currency,
-                c.localSymbol,
-                cd.marketName,
-                c.tradingClass,
-                distance,
-                benchmark,
-                projection,
-                legsStr,
-                *fields,
-            ) = fields
-
-            self.parse(cd)
-            self.parse(c)
-            self.wrapper.scannerData(
-                int(reqId), int(rank), cd, distance, benchmark, projection, legsStr
-            )
-
-        self.wrapper.scannerDataEnd(int(reqId))
-
     def deltaNeutralValidation(self, fields):
         _, _, reqId, conId, delta, price = fields
 
@@ -692,128 +786,3 @@ class Decoder:
         providers = [NewsProvider(code=get(), name=get()) for _ in range(int(n))]
 
         self.wrapper.newsProviders(providers)
-
-    def histogramData(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        histogram = [
-            HistogramData(price=float(get()), count=int(get())) for _ in range(int(n))
-        ]
-
-        self.wrapper.histogramData(int(reqId), histogram)
-
-    def historicalTicks(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        ticks = []
-        for _ in range(int(n)):
-            time = int(get())
-            get()
-            price = float(get())
-            size = float(get())
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
-            ticks.append(HistoricalTick(dt, price, size))
-
-        done = bool(int(get()))
-        self.wrapper.historicalTicks(int(reqId), ticks, done)
-
-    def historicalTicksBidAsk(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        ticks = []
-        for _ in range(int(n)):
-            time = int(get())
-            mask = int(get())
-            attrib = TickAttribBidAsk(
-                askPastHigh=bool(mask & 1), bidPastLow=bool(mask & 2)
-            )
-            priceBid = float(get())
-            priceAsk = float(get())
-            sizeBid = float(get())
-            sizeAsk = float(get())
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
-            ticks.append(
-                HistoricalTickBidAsk(dt, attrib, priceBid, priceAsk, sizeBid, sizeAsk)
-            )
-
-        done = bool(int(get()))
-        self.wrapper.historicalTicksBidAsk(int(reqId), ticks, done)
-
-    def historicalTicksLast(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        ticks = []
-        for _ in range(int(n)):
-            time = int(get())
-            mask = int(get())
-            attrib = TickAttribLast(pastLimit=bool(mask & 1), unreported=bool(mask & 2))
-            price = float(get())
-            size = float(get())
-            exchange = get()
-            specialConditions = get()
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
-            ticks.append(
-                HistoricalTickLast(dt, attrib, price, size, exchange, specialConditions)
-            )
-
-        done = bool(int(get()))
-        self.wrapper.historicalTicksLast(int(reqId), ticks, done)
-
-    def tickByTick(self, fields):
-        _, reqId, tickType, time, *fields = fields
-        reqId = int(reqId)
-        tickType = int(tickType)
-        time = int(time)
-
-        if tickType in {1, 2}:
-            price, size, mask, exchange, specialConditions = fields
-            mask = int(mask)
-            attrib: Any = TickAttribLast(
-                pastLimit=bool(mask & 1), unreported=bool(mask & 2)
-            )
-
-            self.wrapper.tickByTickAllLast(
-                reqId,
-                tickType,
-                time,
-                float(price),
-                float(size),
-                attrib,
-                exchange,
-                specialConditions,
-            )
-        elif tickType == 3:
-            bidPrice, askPrice, bidSize, askSize, mask = fields
-            mask = int(mask)
-            attrib = TickAttribBidAsk(
-                bidPastLow=bool(mask & 1), askPastHigh=bool(mask & 2)
-            )
-
-            self.wrapper.tickByTickBidAsk(
-                reqId,
-                time,
-                float(bidPrice),
-                float(askPrice),
-                float(bidSize),
-                float(askSize),
-                attrib,
-            )
-        elif tickType == 4:
-            (midPoint,) = fields
-
-            self.wrapper.tickByTickMidPoint(reqId, time, float(midPoint))
-
-    def historicalSchedule(self, fields):
-        (_, reqId, startDateTime, endDateTime, timeZone, count, *fields) = fields
-        get = iter(fields).__next__
-        sessions = [
-            HistoricalSession(startDateTime=get(), endDateTime=get(), refDate=get())
-            for _ in range(int(count))
-        ]
-        self.wrapper.historicalSchedule(
-            int(reqId), startDateTime, endDateTime, timeZone, sessions
-        )

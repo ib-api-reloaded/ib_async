@@ -1,19 +1,20 @@
 """Socket client for communicating with Interactive Brokers."""
 
 import asyncio
-import io
 import logging
 import math
 import struct
 import time
 from collections import deque
-from typing import Any, Callable, Deque, List, Optional
+from typing import Deque, List, Optional
 
 from eventkit import Event
 from google.protobuf.message import Message
 
+from ib_async.contract import Contract
+from ib_async.order import Order, OrderCancel
+
 from .connection import Connection
-from .contract import Contract
 from .decoder import Decoder
 from .message import MessageId
 from .objects import ConnectionStats, WshEventData
@@ -29,18 +30,24 @@ from .protobuf.AutoOpenOrdersRequest_pb2 import (
 from .protobuf.CancelAccountSummary_pb2 import (
     CancelAccountSummary as CancelAccountSummaryProto,
 )
-from .protobuf.CancelOrderRequest_pb2 import (
-    CancelOrderRequest as CancelOrderRequestProto,
+from .protobuf.CancelFundamentalsData_pb2 import (
+    CancelFundamentalsData as CancelFundamentalsDataProto,
 )
-from .protobuf.CancelPositions_pb2 import CancelPositions as CancelPositionsProto
 from .protobuf.CancelHeadTimestamp_pb2 import (
     CancelHeadTimestamp as CancelHeadTimestampProto,
 )
-from .protobuf.CompletedOrdersRequest_pb2 import (
-    CompletedOrdersRequest as CompletedOrdersRequestProto,
-)
 from .protobuf.CancelHistoricalData_pb2 import (
     CancelHistoricalData as CancelHistoricalDataProto,
+)
+from .protobuf.CancelPositions_pb2 import CancelPositions as CancelPositionsProto
+from .protobuf.CancelRealTimeBars_pb2 import (
+    CancelRealTimeBars as CancelRealTimeBarsProto,
+)
+from .protobuf.CancelTickByTick_pb2 import (
+    CancelTickByTick as CancelTickByTickProto,
+)
+from .protobuf.CompletedOrdersRequest_pb2 import (
+    CompletedOrdersRequest as CompletedOrdersRequestProto,
 )
 from .protobuf.ContractDataRequest_pb2 import (
     ContractDataRequest as ContractDataRequestProto,
@@ -56,33 +63,57 @@ from .protobuf.ManagedAccountsRequest_pb2 import (
     ManagedAccountsRequest as ManagedAccountsRequestProto,
 )
 from .protobuf.OpenOrdersRequest_pb2 import OpenOrdersRequest as OpenOrdersRequestProto
-
 from .protobuf.PositionsRequest_pb2 import PositionsRequest as PositionsRequestProto
 from .protobuf.StartApiRequest_pb2 import StartApiRequest as StartApiRequestProto
 from .protobuf_converters.account_converters import (
     createAccountDataRequestProto,
     createAccountMultiRequestProto,
     createCancelAccMultiRequestProto,
+    createUserInfoRequestProto,
 )
 from .protobuf_converters.contract_converters import (
     createContractProto,
     createMarketRuleRequestProto,
     createMatchingSymbolsRequestProto,
     createSecDefOptParamsRequestProto,
+    createSmartComponentsRequestProto,
 )
 from .protobuf_converters.historical_data_converters import (
+    createCancelHistoricalDataProto,
+    createFundamentalsDataRequestProto,
     createHeadTimestampRequestProto,
     createHistogramDataRequestProto,
     createHistoricalDataRequestProto,
     createHistoricalTicksRequestProto,
+    createRealTimeBarsRequestProto,
 )
-from .protobuf_converters.trade_converter import createExecutionRequestProto
 from .protobuf_converters.market_data_converters import (
     cancelMarketDataProto,
+    createCalculateImpliedVolatilityRequestProto,
+    createCalculateOptionPriceRequestProto,
+    createCancelCalculateImpliedVolatilityProto,
+    createCancelCalculateOptionPriceProto,
     createMarketDataRequestProto,
     createMarketDataTypeRequestProto,
+    createTickByTickRequestProto,
 )
-from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
+from .protobuf_converters.subscription_converters import (
+    createCancelPnLProto,
+    createCancelScannerSubscriptionProto,
+    createPnLRequestProto,
+    createPnLSingleRequestProto,
+    createScannerSubscriptionRequestProto,
+    createScannerParametersRequestProto,
+)
+from .protobuf_converters.trade_converter import (
+    createCancelOrderRequestProto,
+    createExecutionRequestProto,
+    createExerciseOptionsRequestProto,
+    createGlobalCancelRequestProto,
+    createPlaceOrderRequestProto,
+)
+from .util import UNSET_DOUBLE, dataclassAsTuple, getLoop, run
+
 
 
 class Client:
@@ -195,7 +226,7 @@ class Client:
         self._numBytesRecv = 0
         self._numMsgRecv = 0
         self._isThrottling = False
-        self._msgQ: Deque[str] = deque()
+        self._msgQ: Deque[bytes] = deque()
         self._timeQ: Deque[float] = deque()
 
     def serverVersion(self) -> int:
@@ -242,6 +273,49 @@ class Client:
     def updateReqId(self, minReqId):
         """Update the next reqId to be at least ``minReqId``."""
         self._reqIdSeq = max(self._reqIdSeq, minReqId)
+
+    def sendProto(self, msgId: int, proto: Message):
+        """Serialize and send the given protobuf message."""
+        if not self.isConnected():
+            raise ConnectionError("Not connected")
+        body = proto.SerializeToString()
+        header = msgId.to_bytes(4, "big")
+        msg = header + body
+        self.sendMsg(msg)
+
+    def sendMsg(self, msg: bytes):
+        loop = getLoop()
+        t = loop.time()
+        times = self._timeQ
+        msgs = self._msgQ
+        while times and t - times[0] > self.RequestsInterval:
+            times.popleft()
+
+        if msg:
+            msgs.append(msg)
+
+        while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
+            msg = msgs.popleft()
+            self.conn.sendMsg(self._prefix(msg))
+            times.append(t)
+            if self._logger.isEnabledFor(logging.DEBUG):
+                self._logger.debug(
+                    ">>> id %s: %s",
+                    MessageId.OUT(int.from_bytes(msg[:4], "big")).name,
+                    msg,
+                )
+
+        if msgs:
+            if not self._isThrottling:
+                self._isThrottling = True
+                self.throttleStart.emit()
+                self._logger.info("Started to throttle requests")
+            loop.call_at(times[0] + self.RequestsInterval, self.sendMsg, None)
+        else:
+            if self._isThrottling:
+                self._isThrottling = False
+                self.throttleEnd.emit()
+                self._logger.info("Stopped to throttle requests")
 
     def getAccounts(self) -> List[str]:
         """Get the list of account names that are under management."""
@@ -343,6 +417,7 @@ class Client:
             self._numMsgRecv += 1
 
             if not self._serverVersion:
+                # connection handshake
                 # First message is always the legacy server version string
                 fields = payload.decode(errors="backslashreplace").split("\0")
                 fields.pop()
@@ -367,12 +442,17 @@ class Client:
                 self.startApi()
                 self._logger.info("Logged on to server version %s", self._serverVersion)
             else:
+                # we are connected
                 if not self._apiReady:
                     if self._hasReqId and self._accounts:
                         self._apiReady = True
                         self.apiStart.emit()
                 if debug:
-                    self._logger.debug("<<< %r", payload)
+                    self._logger.debug(
+                        "<<< id %s: %r",
+                        MessageId.IN(int.from_bytes(payload[:4], "big")).name,
+                        payload,
+                    )
                 # After handshake, all incoming messages are treated as Protobuf
                 # The entire payload (ID + data) is passed to the decoder
                 self.decoder.processProtoBuf(payload)
@@ -422,287 +502,47 @@ class Client:
             regulatorySnapshot,
             mktDataOptions,
         )
-        self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_MKT_DATA), mktDataRequestProto
-        )
+        self.sendProto(MessageId.OUT.REQ_MKT_DATA, mktDataRequestProto)
 
     def cancelMktData(self, reqId):
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.CANCEL_MKT_DATA),
+            MessageId.OUT.CANCEL_MKT_DATA,
             cancelMarketDataProto(reqId),
         )
 
-    def placeOrder(self, orderId, contract, order):
-        version = self.serverVersion()
+    def placeOrder(self,orderId:int, contract: Contract, order: Order):
+        orderRequestProto = createPlaceOrderRequestProto(
+            orderId, contract, order
+        )
+        self.sendProto(MessageId.OUT.PLACE_ORDER, orderRequestProto)
 
-        # IBKR API BUG FIX:
-        # IBKR sometimes back-populates the 'volatility' field into live orders, but then if we try to
-        # modify an order using cached order objects, IBKR rejects modifications because 'volatility'
-        # is not allowed to be set (even though _they_ added it to our previously submitted order).
-        # Solution: if an order is NOT a VOL order, delete the 'volatility' value to prevent this error.
-        if not order.orderType.startswith("VOL"):
-            # ONLY volatility orders can have 'volatility' set when sending API data.
-            order.volatility = None
-
-        # The IBKR API protocol is just a series of in-order arguments denoted by position.
-        # The upstream API parses all fields based on the first value (the message type).
-        fields = [
-            3,  # PLACE_ORDER message type
-            orderId,
-            contract,
-            contract.secIdType,
-            contract.secId,
-            order.action,
-            order.totalQuantity,
-            order.orderType,
-            order.lmtPrice,
-            order.auxPrice,
-            order.tif,
-            order.ocaGroup,
-            order.account,
-            order.openClose,
-            order.origin,
-            order.orderRef,
-            order.transmit,
-            order.parentId,
-            order.blockOrder,
-            order.sweepToFill,
-            order.displaySize,
-            order.triggerMethod,
-            order.outsideRth,
-            order.hidden,
-        ]
-
-        if contract.secType == "BAG":
-            legs = contract.comboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [
-                    leg.conId,
-                    leg.ratio,
-                    leg.action,
-                    leg.exchange,
-                    leg.openClose,
-                    leg.shortSaleSlot,
-                    leg.designatedLocation,
-                    leg.exemptCode,
-                ]
-
-            legs = order.orderComboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [leg.price]
-
-            params = order.smartComboRoutingParams or []
-            fields += [len(params)]
-            for param in params:
-                fields += [param.tag, param.value]
-
-        fields += [
-            "",
-            order.discretionaryAmt,
-            order.goodAfterTime,
-            order.goodTillDate,
-            order.faGroup,
-            order.faMethod,
-            order.faPercentage,
-        ]
-
-        if version < 177:
-            fields += [order.faProfile]
-
-        fields += [
-            order.modelCode,
-            order.shortSaleSlot,
-            order.designatedLocation,
-            order.exemptCode,
-            order.ocaType,
-            order.rule80A,
-            order.settlingFirm,
-            order.allOrNone,
-            order.minQty,
-            order.percentOffset,
-            order.eTradeOnly,  # always False
-            order.firmQuoteOnly,  # always False
-            order.nbboPriceCap,  # always UNSET
-            order.auctionStrategy,
-            order.startingPrice,
-            order.stockRefPrice,
-            order.delta,
-            order.stockRangeLower,
-            order.stockRangeUpper,
-            order.overridePercentageConstraints,
-            order.volatility,
-            order.volatilityType,
-            order.deltaNeutralOrderType,
-            order.deltaNeutralAuxPrice,
-        ]
-
-        if order.deltaNeutralOrderType:
-            fields += [
-                order.deltaNeutralConId,
-                order.deltaNeutralSettlingFirm,
-                order.deltaNeutralClearingAccount,
-                order.deltaNeutralClearingIntent,
-                order.deltaNeutralOpenClose,
-                order.deltaNeutralShortSale,
-                order.deltaNeutralShortSaleSlot,
-                order.deltaNeutralDesignatedLocation,
-            ]
-
-        fields += [
-            order.continuousUpdate,
-            order.referencePriceType,
-            order.trailStopPrice,
-            order.trailingPercent,
-            order.scaleInitLevelSize,
-            order.scaleSubsLevelSize,
-            order.scalePriceIncrement,
-        ]
-
-        if 0 < order.scalePriceIncrement < UNSET_DOUBLE:
-            fields += [
-                order.scalePriceAdjustValue,
-                order.scalePriceAdjustInterval,
-                order.scaleProfitOffset,
-                order.scaleAutoReset,
-                order.scaleInitPosition,
-                order.scaleInitFillQty,
-                order.scaleRandomPercent,
-            ]
-
-        fields += [
-            order.scaleTable,
-            order.activeStartTime,
-            order.activeStopTime,
-            order.hedgeType,
-        ]
-
-        if order.hedgeType:
-            fields += [order.hedgeParam]
-
-        fields += [
-            order.optOutSmartRouting,
-            order.clearingAccount,
-            order.clearingIntent,
-            order.notHeld,
-        ]
-
-        dnc = contract.deltaNeutralContract
-        if dnc:
-            fields += [True, dnc.conId, dnc.delta, dnc.price]
-        else:
-            fields += [False]
-
-        fields += [order.algoStrategy]
-        if order.algoStrategy:
-            params = order.algoParams or []
-            fields += [len(params)]
-            for param in params:
-                fields += [param.tag, param.value]
-
-        fields += [
-            order.algoId,
-            order.whatIf,
-            order.orderMiscOptions,
-            order.solicited,
-            order.randomizeSize,
-            order.randomizePrice,
-        ]
-
-        if order.orderType in {"PEG BENCH", "PEGBENCH"}:
-            fields += [
-                order.referenceContractId,
-                order.isPeggedChangeAmountDecrease,
-                order.peggedChangeAmount,
-                order.referenceChangeAmount,
-                order.referenceExchangeId,
-            ]
-
-        fields += [len(order.conditions)]
-        if order.conditions:
-            for cond in order.conditions:
-                fields += dataclassAsTuple(cond)
-            fields += [order.conditionsIgnoreRth, order.conditionsCancelOrder]
-
-        fields += [
-            order.adjustedOrderType,
-            order.triggerPrice,
-            order.lmtPriceOffset,
-            order.adjustedStopPrice,
-            order.adjustedStopLimitPrice,
-            order.adjustedTrailingAmount,
-            order.adjustableTrailingUnit,
-            order.extOperator,
-            order.softDollarTier.name,
-            order.softDollarTier.val,
-            order.cashQty,
-            order.mifid2DecisionMaker,
-            order.mifid2DecisionAlgo,
-            order.mifid2ExecutionTrader,
-            order.mifid2ExecutionAlgo,
-            order.dontUseAutoPriceForHedge,
-            order.isOmsContainer,
-            order.discretionaryUpToLimitPrice,
-            order.usePriceMgmtAlgo,
-        ]
-
-        if version >= 158:
-            fields += [order.duration]
-
-        if version >= 160:
-            fields += [order.postToAts]
-
-        if version >= 162:
-            fields += [order.autoCancelParent]
-
-        if version >= 166:
-            fields += [order.advancedErrorOverride]
-
-        if version >= 169:
-            fields += [order.manualOrderTime]
-
-        if version >= 170:
-            if contract.exchange == "IBKRATS":
-                fields += [order.minTradeQty]
-            if order.orderType in {"PEG BEST", "PEGBEST"}:
-                fields += [order.minCompeteSize, order.competeAgainstBestOffset]
-                if order.competeAgainstBestOffset == math.inf:
-                    fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
-            elif order.orderType in {"PEG MID", "PEGMID"}:
-                fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
-
-        self.send(*fields)
-
-    def cancelOrder(self, orderId, manualCancelOrderTime=""):
-        fields = [4, 1, orderId]
-        if self.serverVersion() >= 169:
-            fields += [manualCancelOrderTime]
-        self.send(*fields)
+    def cancelOrder(self, orderId: int, orderCancel: OrderCancel):
+        self.sendProto(
+            MessageId.OUT.CANCEL_ORDER,
+            createCancelOrderRequestProto(orderId, orderCancel),
+        )
 
     def reqOpenOrders(self):
         openOrdersRequestProto = OpenOrdersRequestProto()
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_OPEN_ORDERS),
+            MessageId.OUT.REQ_OPEN_ORDERS,
             openOrdersRequestProto,
         )
 
     def reqAccountUpdates(self, subscribe, acctCode):
         proto = createAccountDataRequestProto(subscribe, acctCode)
-        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_ACCT_DATA), proto)
+        self.sendProto(MessageId.OUT.REQ_ACCT_DATA, proto)
 
     def reqExecutions(self, reqId, execFilter):
         executionRequestProto = createExecutionRequestProto(reqId, execFilter)
-        self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_EXECUTIONS), executionRequestProto
-        )
+        self.sendProto(MessageId.OUT.REQ_EXECUTIONS, executionRequestProto)
 
     def reqIds(self, numIds: int):
         """Request a new request ID."""
         self._logger.debug("Calling reqIds (Protobuf)")
         proto = IdsRequestProto()
         proto.numIds = numIds
-        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_IDS), proto)
+        self.sendProto(MessageId.OUT.REQ_IDS, proto)
 
     def reqContractDetails(self, reqId, contract):
         contractDetailsRequestProto = ContractDataRequestProto()
@@ -710,7 +550,7 @@ class Client:
         contractProto = createContractProto(contract, None)
         contractDetailsRequestProto.contract.CopyFrom(contractProto)
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_CONTRACT_DATA),
+            MessageId.OUT.REQ_CONTRACT_DATA,
             contractDetailsRequestProto,
         )
 
@@ -729,128 +569,6 @@ class Client:
             fields += [contract.issuerId]
 
         self.send(*fields)
-
-    def sendProto(self, msgId: int, proto: Message):
-        # TODO implement throtling
-        body = proto.SerializeToString()
-        header = msgId.to_bytes(4, "big")
-        msg = header + body
-        self.conn.sendMsg(self._prefix(msg))
-        if self._logger.isEnabledFor(logging.DEBUG):
-            self._logger.debug(
-                "Sending Protobuf message: msgId=%s, proto=%r, body=%r",
-                msgId,
-                proto,
-                body,
-            )
-
-    def send(self, *fields, makeEmpty=True):
-        """Serialize and send the given fields using the IB socket protocol.
-
-        if 'makeEmpty' is True (default), then the IBKR values representing "no value"
-        become the empty string."""
-        if not self.isConnected():
-            raise ConnectionError("Not connected")
-
-        # fmt: off
-        FORMAT_HANDLERS: dict[Any, Callable[[Any], str]] = {
-            # Contracts are formatted in IBKR null delimiter format
-            Contract: lambda c: "\0".join([
-                str(f)
-                for f in (
-                    c.conId,
-                    c.symbol,
-                    c.secType,
-                    c.lastTradeDateOrContractMonth,
-                    c.strike,
-                    c.right,
-                    c.multiplier,
-                    c.exchange,
-                    c.primaryExchange,
-                    c.currency,
-                    c.localSymbol,
-                    c.tradingClass,
-                )
-            ]),
-
-            # Float conversion has 3 stages:
-            #  - Convert 'IBKR unset' double to empty (if requested)
-            #  - Convert infinity to 'Infinite' string (if appropriate)
-            #  - else, convert float to string normally
-            float: lambda f: ""
-            if (makeEmpty and f == UNSET_DOUBLE)
-            else ("Infinite" if (f == math.inf) else str(f)),
-
-            # Int conversion has 2 stages:
-            #  - Convert 'IBKR unset' to empty (if requested)
-            #  - else, convert int to string normally
-            int: lambda f: "" if makeEmpty and f == UNSET_INTEGER else str(f),
-
-            # None is always just an empty string.
-            # (due to a quirk of Python, 'type(None)' is how you properly generate the NoneType value)
-            type(None): lambda _: "",
-
-            # Strings are always strings
-            str: lambda s: s,
-
-            # Bools become strings "1" or "0"
-            bool: lambda b: "1" if b else "0",
-
-            # Lists of tags become semicolon-appended KV pairs
-            list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
-        }
-        # fmt: on
-
-        # start of new message
-        msg = io.StringIO()
-
-        for field in fields:
-            # Fetch type converter for this field (falls back to 'str(field)' as a default for unmatched types)
-            # (extra `isinstance()` wrapper needed here because Contract subclasses are their own type, but we want
-            #  to only match against the Contract parent class for formatting operations)
-            convert = FORMAT_HANDLERS.get(
-                Contract if isinstance(field, Contract) else type(field), str
-            )
-
-            # Convert field to IBKR protocol string part
-            s = convert(field)
-
-            # Append converted IBKR protocol string to message buffer
-            msg.write(s)
-            msg.write("\0")
-
-        generated = msg.getvalue()
-        self.sendMsg(generated)
-
-    def sendMsg(self, msg: str):
-        loop = getLoop()
-        t = loop.time()
-        times = self._timeQ
-        msgs = self._msgQ
-        while times and t - times[0] > self.RequestsInterval:
-            times.popleft()
-
-        if msg:
-            msgs.append(msg)
-
-        while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
-            msg = msgs.popleft()
-            self.conn.sendMsg(self._prefix(msg.encode()))
-            times.append(t)
-            if self._logger.isEnabledFor(logging.DEBUG):
-                self._logger.debug(">>> %s", msg[:-1].replace("\0", ","))
-
-        if msgs:
-            if not self._isThrottling:
-                self._isThrottling = True
-                self.throttleStart.emit()
-                self._logger.debug("Started to throttle requests")
-            loop.call_at(times[0] + self.RequestsInterval, self.sendMsg, None)
-        else:
-            if self._isThrottling:
-                self._isThrottling = False
-                self.throttleEnd.emit()
-                self._logger.debug("Stopped to throttle requests")
 
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):
         self.send(
@@ -890,21 +608,21 @@ class Client:
         autoOpenOrdersRequestProto = AutoOpenOrdersRequestProto()
         autoOpenOrdersRequestProto.autoBind = bAutoBind
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_AUTO_OPEN_ORDERS),
+            MessageId.OUT.REQ_AUTO_OPEN_ORDERS,
             autoOpenOrdersRequestProto,
         )
 
     def reqAllOpenOrders(self):
         allOpenOrdersRequestProto = AllOpenOrdersRequestProto()
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_ALL_OPEN_ORDERS),
+            MessageId.OUT.REQ_ALL_OPEN_ORDERS,
             allOpenOrdersRequestProto,
         )
 
     def reqManagedAccts(self):
         self._logger.debug("Calling reqManagedAccts (Protobuf)")
         proto = ManagedAccountsRequestProto()
-        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_MANAGED_ACCTS), proto)
+        self.sendProto(MessageId.OUT.REQ_MANAGED_ACCTS, proto)
 
     def requestFA(self, faData):
         self.send(18, 1, faData)
@@ -938,39 +656,21 @@ class Client:
             chartOptions,
         )
 
-        # if contract.secType == "BAG":
-        #     legs = contract.comboLegs or []
-        #     fields += [len(legs)]
-        #     for leg in legs:
-        #         fields += [leg.conId, leg.ratio, leg.action, leg.exchange]
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_HISTORICAL_DATA),
+            MessageId.OUT.REQ_HISTORICAL_DATA,
             historicalDataRequestProto,
         )
 
     def exerciseOptions(
         self, reqId, contract, exerciseAction, exerciseQuantity, account, override
     ):
-        self.send(
-            21,
-            2,
-            reqId,
-            contract.conId,
-            contract.symbol,
-            contract.secType,
-            contract.lastTradeDateOrContractMonth,
-            contract.strike,
-            contract.right,
-            contract.multiplier,
-            contract.exchange,
-            contract.currency,
-            contract.localSymbol,
-            contract.tradingClass,
-            exerciseAction,
-            exerciseQuantity,
-            account,
-            override,
+        self.sendProto(
+            MessageId.OUT.EXERCISE_OPTIONS,
+            createExerciseOptionsRequestProto(
+                reqId,contract, exerciseAction, exerciseQuantity, account, override
+            )
         )
+
 
     def reqScannerSubscription(
         self,
@@ -979,155 +679,139 @@ class Client:
         scannerSubscriptionOptions,
         scannerSubscriptionFilterOptions,
     ):
-        sub = subscription
-        self.send(
-            22,
-            reqId,
-            sub.numberOfRows,
-            sub.instrument,
-            sub.locationCode,
-            sub.scanCode,
-            sub.abovePrice,
-            sub.belowPrice,
-            sub.aboveVolume,
-            sub.marketCapAbove,
-            sub.marketCapBelow,
-            sub.moodyRatingAbove,
-            sub.moodyRatingBelow,
-            sub.spRatingAbove,
-            sub.spRatingBelow,
-            sub.maturityDateAbove,
-            sub.maturityDateBelow,
-            sub.couponRateAbove,
-            sub.couponRateBelow,
-            sub.excludeConvertible,
-            sub.averageOptionVolumeAbove,
-            sub.scannerSettingPairs,
-            sub.stockTypeFilter,
-            scannerSubscriptionFilterOptions,
-            scannerSubscriptionOptions,
+        self.sendProto(
+            MessageId.OUT.REQ_SCANNER_SUBSCRIPTION,
+            createScannerSubscriptionRequestProto(
+                reqId,
+                subscription,
+                scannerSubscriptionOptions,
+                scannerSubscriptionFilterOptions,
+            ),
         )
 
     def cancelScannerSubscription(self, reqId):
-        self.send(23, 1, reqId)
+        self.sendProto(
+            MessageId.OUT.CANCEL_SCANNER_SUBSCRIPTION,
+            createCancelScannerSubscriptionProto(reqId),
+        )
 
     def reqScannerParameters(self):
-        self.send(24, 1)
+        self.sendProto(
+            MessageId.OUT.REQ_SCANNER_PARAMETERS, createScannerParametersRequestProto()
+        )
 
     def cancelHistoricalData(self, reqId):
         cancelRequest = CancelHistoricalDataProto()
         cancelRequest.reqId = reqId
-        self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.CANCEL_HISTORICAL_DATA), cancelRequest
-        )
+        self.sendProto(MessageId.OUT.CANCEL_HISTORICAL_DATA, cancelRequest)
 
     def reqCurrentTime(self):
         currentTimeRequestProto = CurrentTimeRequestProto()
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_CURRENT_TIME),
+            MessageId.OUT.REQ_CURRENT_TIME,
             currentTimeRequestProto,
         )
 
     def reqCurrentTimeMili(self):
         currentTimeMiliRequestProto = CurrentTimeInMillisRequestProto()
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_CURRENT_TIME_IN_MILLIS),
+            MessageId.OUT.REQ_CURRENT_TIME_IN_MILLIS,
             currentTimeMiliRequestProto,
         )
 
     def reqRealTimeBars(
         self, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
     ):
-        self.send(
-            50, 3, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
+        realTimeBarsRequestProto = createRealTimeBarsRequestProto(
+            reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
+        )
+        self.sendProto(
+            MessageId.OUT.REQ_REAL_TIME_BARS,
+            realTimeBarsRequestProto,
         )
 
     def cancelRealTimeBars(self, reqId):
-        self.send(51, 1, reqId)
+        self.sendProto(
+            MessageId.OUT.CANCEL_REAL_TIME_BARS,
+            CancelRealTimeBarsProto(reqId=reqId),
+        )
 
     def reqFundamentalData(self, reqId, contract, reportType, fundamentalDataOptions):
-        options = fundamentalDataOptions or []
-        self.send(
-            52,
-            2,
-            reqId,
-            contract.conId,
-            contract.symbol,
-            contract.secType,
-            contract.exchange,
-            contract.primaryExchange,
-            contract.currency,
-            contract.localSymbol,
-            reportType,
-            len(options),
-            options,
+        fundamentalsDataRequestProto = createFundamentalsDataRequestProto(
+            reqId, contract, reportType, fundamentalDataOptions
+        )
+        self.sendProto(
+            MessageId.OUT.REQ_FUNDAMENTAL_DATA,
+            fundamentalsDataRequestProto,
         )
 
     def cancelFundamentalData(self, reqId):
-        self.send(53, 1, reqId)
+        cancelFundamentalProto = CancelFundamentalsDataProto()
+        cancelFundamentalProto.reqId = reqId
+        self.sendProto(
+            MessageId.OUT.CANCEL_FUNDAMENTAL_DATA,
+            cancelFundamentalProto,
+        )
 
     def calculateImpliedVolatility(
         self, reqId, contract, optionPrice, underPrice, implVolOptions
     ):
-        self.send(
-            54,
-            3,
-            reqId,
-            contract,
-            optionPrice,
-            underPrice,
-            len(implVolOptions),
-            implVolOptions,
+        iv_request = createCalculateImpliedVolatilityRequestProto(
+            reqId, contract, optionPrice, underPrice, implVolOptions
+        )
+        self.sendProto(
+            MessageId.OUT.REQ_CALC_IMPLIED_VOLAT,
+            iv_request,
         )
 
     def calculateOptionPrice(
         self, reqId, contract, volatility, underPrice, optPrcOptions
     ):
-        self.send(
-            55,
-            3,
-            reqId,
-            contract,
-            volatility,
-            underPrice,
-            len(optPrcOptions),
-            optPrcOptions,
+        opt_price = createCalculateOptionPriceRequestProto(
+            reqId, contract, volatility, underPrice, optPrcOptions
         )
+        self.sendProto(MessageId.OUT.REQ_CALC_OPTION_PRICE, opt_price)
 
     def cancelCalculateImpliedVolatility(self, reqId):
-        self.send(56, 1, reqId)
+        self.sendProto(
+            MessageId.OUT.CANCEL_CALC_IMPLIED_VOLAT,
+            createCancelCalculateImpliedVolatilityProto(reqId=reqId),
+        )
 
     def cancelCalculateOptionPrice(self, reqId):
-        self.send(57, 1, reqId)
+        self.sendProto(
+            MessageId.OUT.CANCEL_CALC_OPTION_PRICE,
+            createCancelCalculateOptionPriceProto(reqId=reqId),
+        )
 
-    def reqGlobalCancel(self):
-        self.send(58, 1)
+    def reqGlobalCancel(self, orderCancel: OrderCancel):
+        self.sendProto(
+            MessageId.OUT.REQ_GLOBAL_CANCEL, createGlobalCancelRequestProto(orderCancel)
+        )
 
     def reqMarketDataType(self, marketDataType):
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_MARKET_DATA_TYPE),
+            MessageId.OUT.REQ_MARKET_DATA_TYPE,
             createMarketDataTypeRequestProto(marketDataType=marketDataType),
         )
 
     def reqPositions(self):
-        self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_POSITIONS), PositionsRequestProto()
-        )
+        self.sendProto(MessageId.OUT.REQ_POSITIONS, PositionsRequestProto())
 
     def cancelPositions(self):
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.CANCEL_POSITIONS),
+            MessageId.OUT.CANCEL_POSITIONS,
             CancelPositionsProto(),
         )
 
     def reqAccountSummary(self, reqId, groupName, tags):
         proto = AccountSummaryRequestProto(reqId=reqId, group=groupName, tags=tags)
-        self.sendProto(MessageId.to_protobuf(MessageId.OUT.REQ_ACCOUNT_SUMMARY), proto)
+        self.sendProto(MessageId.OUT.REQ_ACCOUNT_SUMMARY, proto)
 
     def cancelAccountSummary(self, reqId):
         cancelAccountSummaryProto = CancelAccountSummaryProto(reqId=reqId)
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.CANCEL_ACCOUNT_SUMMARY),
+            MessageId.OUT.CANCEL_ACCOUNT_SUMMARY,
             cancelAccountSummaryProto,
         )
 
@@ -1155,9 +839,7 @@ class Client:
             startApiRequestProto.clientId = self.clientId
         if self.optCapab:  # Only set if not an empty string
             startApiRequestProto.optionalCapabilities = self.optCapab
-        self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.START_API), startApiRequestProto
-        )
+        self.sendProto(MessageId.OUT.START_API, startApiRequestProto)
 
     def verifyAndAuthRequest(self, apiName, apiVersion, opaqueIsvKey):
         self.send(72, 1, apiName, apiVersion, opaqueIsvKey)
@@ -1178,13 +860,13 @@ class Client:
             reqId, account, modelCode, ledgerAndNLV
         )
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_ACCOUNT_UPDATES_MULTI),
+            MessageId.OUT.REQ_ACCOUNT_UPDATES_MULTI,
             reqAccUpdatesMultiProto,
         )
 
     def cancelAccountUpdatesMulti(self, reqId):
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.CANCEL_ACCOUNT_UPDATES_MULTI),
+            MessageId.OUT.CANCEL_ACCOUNT_UPDATES_MULTI,
             createCancelAccMultiRequestProto(reqId),
         )
 
@@ -1204,7 +886,7 @@ class Client:
             underlyingConId,
         )
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_SEC_DEF_OPT_PARAMS),
+            MessageId.OUT.REQ_SEC_DEF_OPT_PARAMS,
             secDefOptParamsRequestProto,
         )
 
@@ -1217,7 +899,7 @@ class Client:
     def reqMatchingSymbols(self, reqId, pattern):
         matchingSymbolsRequestProto = createMatchingSymbolsRequestProto(reqId, pattern)
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_MATCHING_SYMBOLS),
+            MessageId.OUT.REQ_MATCHING_SYMBOLS,
             matchingSymbolsRequestProto,
         )
 
@@ -1225,7 +907,10 @@ class Client:
         self.send(82)
 
     def reqSmartComponents(self, reqId, bboExchange):
-        self.send(83, reqId, bboExchange)
+        self.sendProto(
+            MessageId.OUT.REQ_SMART_COMPONENTS,
+            createSmartComponentsRequestProto(reqId, bboExchange),
+        )
 
     def reqNewsArticle(self, reqId, providerCode, articleId, newsArticleOptions):
         self.send(84, reqId, providerCode, articleId, newsArticleOptions)
@@ -1259,7 +944,7 @@ class Client:
             reqId, contract, whatToShow, useRTH != 0, formatDate
         )
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_HEAD_TIMESTAMP),
+            MessageId.OUT.REQ_HEAD_TIMESTAMP,
             headTimestampRequestProto,
         )
 
@@ -1267,36 +952,50 @@ class Client:
         cancelHeadTimestampRequestProto = CancelHeadTimestampProto()
         cancelHeadTimestampRequestProto.reqId = reqId
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.CANCEL_HEAD_TIMESTAMP),
+            MessageId.OUT.CANCEL_HEAD_TIMESTAMP,
             cancelHeadTimestampRequestProto,
         )
 
     def reqHistogramData(self, tickerId, contract, useRTH, timePeriod):
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_HISTOGRAM_DATA),
+            MessageId.OUT.REQ_HISTOGRAM_DATA,
             createHistogramDataRequestProto(tickerId, contract, useRTH, timePeriod),
         )
 
-    def cancelHistogramData(self, tickerId):
-        self.send(89, tickerId)
+    def cancelHistogramData(self, reqId):
+        self.sendProto(
+            MessageId.OUT.CANCEL_HISTOGRAM_DATA,
+            createCancelHistoricalDataProto(reqId),
+        )
 
     def reqMarketRule(self, marketRuleId: int):
         marketRuleRequestProto = createMarketRuleRequestProto(marketRuleId)
-        self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_MARKET_RULE), marketRuleRequestProto
-        )
+        self.sendProto(MessageId.OUT.REQ_MARKET_RULE, marketRuleRequestProto)
 
     def reqPnL(self, reqId, account, modelCode):
-        self.send(92, reqId, account, modelCode)
+        self.sendProto(
+            MessageId.OUT.REQ_PNL,
+            createPnLRequestProto(reqId, account, modelCode)
+        )
+        
 
     def cancelPnL(self, reqId):
-        self.send(93, reqId)
+        self.sendProto(
+            MessageId.OUT.CANCEL_PNL,
+            createCancelPnLProto(reqId)
+        )
 
     def reqPnLSingle(self, reqId, account, modelCode, conid):
-        self.send(94, reqId, account, modelCode, conid)
+        self.sendProto(
+            MessageId.OUT.REQ_PNL_SINGLE,
+            createPnLSingleRequestProto(reqId, account, modelCode, conid)
+        )
 
     def cancelPnLSingle(self, reqId):
-        self.send(95, reqId)
+        self.sendProto(
+            MessageId.OUT.CANCEL_PNL_SINGLE,
+            createCancelPnLProto(reqId)
+        )
 
     def reqHistoricalTicks(
         self,
@@ -1322,21 +1021,30 @@ class Client:
             miscOptions,
         )
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_HISTORICAL_TICKS),
+            MessageId.OUT.REQ_HISTORICAL_TICKS,
             historicalTicksRequestProto,
         )
 
     def reqTickByTickData(self, reqId, contract, tickType, numberOfTicks, ignoreSize):
-        self.send(97, reqId, contract, tickType, numberOfTicks, ignoreSize)
+        tickByTickRequestProto = createTickByTickRequestProto(
+            reqId, contract, tickType, numberOfTicks, ignoreSize
+        )
+        self.sendProto(
+            MessageId.OUT.REQ_TICK_BY_TICK_DATA,
+            tickByTickRequestProto,
+        )
 
     def cancelTickByTickData(self, reqId):
-        self.send(98, reqId)
+        self.sendProto(
+            MessageId.OUT.CANCEL_TICK_BY_TICK_DATA,
+            CancelTickByTickProto(reqId=reqId),
+        )
 
     def reqCompletedOrders(self, apiOnly: bool):
         completedOrdersRequestProto = CompletedOrdersRequestProto()
         completedOrdersRequestProto.apiOnly = apiOnly
         self.sendProto(
-            MessageId.to_protobuf(MessageId.OUT.REQ_COMPLETED_ORDERS),
+            MessageId.OUT.REQ_COMPLETED_ORDERS,
             completedOrdersRequestProto,
         )
 
@@ -1363,4 +1071,8 @@ class Client:
         self.send(103, reqId)
 
     def reqUserInfo(self, reqId):
-        self.send(104, reqId)
+        self.sendProto(
+            MessageId.OUT.REQ_USER_INFO,
+            createUserInfoRequestProto(reqId),
+        )
+

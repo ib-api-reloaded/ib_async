@@ -1,6 +1,10 @@
+import asyncio
+from unittest.mock import Mock, patch
+
 import pytest
 
 import ib_async as ibi
+from ib_async import IB
 
 
 @pytest.fixture(scope="session")
@@ -16,3 +20,12 @@ async def ib():
     await ib.connectAsync()
     yield ib
     ib.disconnect()
+
+@pytest.fixture
+def mock_ib():
+    """Fixture for a mocked IB instance."""
+    ib_instance = IB()
+    ib_instance.client.isConnected = Mock(return_value=True)
+    ib_instance.client.isReady = Mock(return_value=True)
+    ib_instance.client.serverVersion = Mock(return_value=201)
+    return ib_instance
