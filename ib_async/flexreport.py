@@ -1,15 +1,26 @@
 """Access to account statement webservice."""
 
 import logging
+import os
 import time
 import xml.etree.ElementTree as et
 from contextlib import suppress
+from typing import Final
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from ib_async import util
 from ib_async.objects import DynamicObject
 
 _logger = logging.getLogger("ib_async.flexreport")
+
+FLEXREPORT_URL: Final = (
+    "https://ndcdyn.interactivebrokers.com/AccountManagement/"
+    "FlexWebService/SendRequest?"
+)
+"""
+https://www.interactivebrokers.com/campus/ibkr-api-page/flex-web-service/#flex-generate-report
+"""
 
 
 class FlexError(Exception):
@@ -33,6 +44,8 @@ class FlexReport:
         """
         Download a report by giving a valid ``token`` and ``queryId``,
         or load from file by giving a valid ``path``.
+
+        To overwrite default URL, set env variable ``IB_FLEXREPORT_URL``.
         """
         if token and queryId:
             self.download(token, queryId)
@@ -65,13 +78,30 @@ class FlexReport:
         """Same as extract but return the result as a pandas DataFrame."""
         return util.df(self.extract(topic, parseNumbers))
 
+    def get_url(self):
+        """Generate flexreport URL."""
+
+        def is_valid_url(url: str) -> bool:
+            try:
+                result = urlparse(url)
+                # Must have scheme (http/https) and netloc (domain)
+                return all([result.scheme, result.netloc])
+            except Exception:
+                return False
+
+        _url = os.getenv("IB_FLEXREPORT_URL", FLEXREPORT_URL)
+        if is_valid_url(_url):
+            return _url
+        raise FlexError(
+            "Invalid URL, please check that env variable IB_FLEXREPORT_URL is set correctly."
+        )
+
     def download(self, token, queryId):
         """Download report for the given ``token`` and ``queryId``."""
-        url = (
-            "https://gdcdyn.interactivebrokers.com"
-            f"/Universal/servlet/FlexStatementService.SendRequest?"
-            f"t={token}&q={queryId}&v=3"
-        )
+        base_url = self.get_url()
+        query = f"t={token}&q={queryId}&v=3"
+        url = base_url + query
+
         resp = urlopen(url)
         data = resp.read()
 
@@ -94,7 +124,7 @@ class FlexReport:
 
         while True:
             time.sleep(1)
-            url = f"{baseUrl}?q={code}&t={token}"
+            url = f"{baseUrl}?q={code}&t={token}&v=3"
             resp = urlopen(url)
             self.data = resp.read()
             self.root = et.fromstring(self.data)
