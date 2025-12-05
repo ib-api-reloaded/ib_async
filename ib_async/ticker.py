@@ -389,7 +389,7 @@ class TimeBars(Op):
     def _on_timer(self, time):
         if self.bars:
             bar = self.bars[-1]
-            if self.isUnset(bar.close) and len(self.bars) > 1:
+            if isNan(bar.close) and len(self.bars) > 1:
                 bar.open = bar.high = bar.low = bar.close = self.bars[-2].close
 
             self.bars.updateEvent.emit(self.bars, True)
