@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.ib &mdash; ib_async 2.0.1 documentation</title>
+  <title>ib_async.ib &mdash; ib_async 2.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=f5cff4aa"></script>
+        <script src="../../_static/documentation_options.js?v=20623aea"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                2.0
+                2.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -87,8 +87,9 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">auto</span><span class="p">,</span> <span class="n">Flag</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Awaitable</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Awaitable</span><span class="p">,</span> <span class="n">Iterator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Flag</span><span class="p">,</span> <span class="n">auto</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">eventkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
 
@@ -130,7 +131,6 @@
     <span class="n">LimitOrder</span><span class="p">,</span>
     <span class="n">Order</span><span class="p">,</span>
     <span class="n">OrderState</span><span class="p">,</span>
-    <span class="n">OrderStateNumeric</span><span class="p">,</span>
     <span class="n">OrderStatus</span><span class="p">,</span>
     <span class="n">StopOrder</span><span class="p">,</span>
     <span class="n">Trade</span><span class="p">,</span>
@@ -769,7 +769,7 @@
 
 <div class="viewcode-block" id="IB.ticker">
 <a class="viewcode-back" href="../../api.html#ib_async.ib.IB.ticker">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">ticker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Ticker</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ticker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Ticker</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get ticker of the given contract. It must have been requested before</span>
 <span class="sd">        with reqMktData with the same contract object. The ticker may not be</span>
@@ -797,7 +797,7 @@
 
 <div class="viewcode-block" id="IB.realtimeBars">
 <a class="viewcode-back" href="../../api.html#ib_async.ib.IB.realtimeBars">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">realtimeBars</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">BarDataList</span><span class="p">,</span> <span class="n">RealTimeBarList</span><span class="p">]]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">realtimeBars</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">BarDataList</span> <span class="o">|</span> <span class="n">RealTimeBarList</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get a list of all live updated bars. These can be 5 second realtime</span>
 <span class="sd">        bars or live updated historical bars.</span>
@@ -997,7 +997,7 @@
 <a class="viewcode-back" href="../../api.html#ib_async.ib.IB.cancelOrder">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">cancelOrder</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="n">Order</span><span class="p">,</span> <span class="n">manualCancelOrderTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Trade</span><span class="p">]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Trade</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Cancel the order and return the Trade it belongs to.</span>
 
@@ -1169,7 +1169,7 @@
 
 <div class="viewcode-block" id="IB.reqExecutions">
 <a class="viewcode-back" href="../../api.html#ib_async.ib.IB.reqExecutions">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">reqExecutions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">execFilter</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExecutionFilter</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Fill</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reqExecutions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">execFilter</span><span class="p">:</span> <span class="n">ExecutionFilter</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Fill</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        It is recommended to use :meth:`.fills`  or</span>
 <span class="sd">        :meth:`.executions` instead.</span>
@@ -1412,7 +1412,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">reqHistoricalData</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">durationStr</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">barSizeSetting</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">whatToShow</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -1501,7 +1501,7 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
         <span class="n">numDays</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">useRTH</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HistoricalSchedule</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -1529,14 +1529,14 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">reqHistoricalTicks</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
-        <span class="n">startDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
+        <span class="n">startDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
         <span class="n">numberOfTicks</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">whatToShow</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">useRth</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
         <span class="n">ignoreSize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">miscOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="p">[],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Request historical ticks. The time resolution of the ticks</span>
 <span class="sd">        is one second.</span>
@@ -2160,8 +2160,8 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">conId</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">providerCodes</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">startDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
+        <span class="n">startDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
         <span class="n">totalResults</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">historicalNewsOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="p">[],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HistoricalNews</span><span class="p">:</span>
@@ -2388,7 +2388,7 @@
         <span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span>
         <span class="n">port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">7497</span><span class="p">,</span>
         <span class="n">clientId</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-        <span class="n">timeout</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
         <span class="n">readonly</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">account</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">raiseSyncErrors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -2671,7 +2671,7 @@
 <div class="viewcode-block" id="IB.reqExecutionsAsync">
 <a class="viewcode-back" href="../../api.html#ib_async.ib.IB.reqExecutionsAsync">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">reqExecutionsAsync</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">execFilter</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExecutionFilter</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">execFilter</span><span class="p">:</span> <span class="n">ExecutionFilter</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Awaitable</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Fill</span><span class="p">]]:</span>
         <span class="n">execFilter</span> <span class="o">=</span> <span class="n">execFilter</span> <span class="ow">or</span> <span class="n">ExecutionFilter</span><span class="p">()</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
@@ -2703,7 +2703,7 @@
 <a class="viewcode-back" href="../../api.html#ib_async.ib.IB.reqMatchingSymbolsAsync">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reqMatchingSymbolsAsync</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">ContractDescription</span><span class="p">]]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ContractDescription</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
         <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">startReq</span><span class="p">(</span><span class="n">reqId</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">reqMatchingSymbols</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="n">pattern</span><span class="p">)</span>
@@ -2719,7 +2719,7 @@
 <a class="viewcode-back" href="../../api.html#ib_async.ib.IB.reqMarketRuleAsync">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reqMarketRuleAsync</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">marketRuleId</span><span class="p">:</span> <span class="nb">int</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">PriceIncrement</span><span class="p">]]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">PriceIncrement</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">startReq</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;marketRule-</span><span class="si">{</span><span class="n">marketRuleId</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">reqMarketRule</span><span class="p">(</span><span class="n">marketRuleId</span><span class="p">)</span>
@@ -2735,7 +2735,7 @@
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reqHistoricalDataAsync</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">durationStr</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">barSizeSetting</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">whatToShow</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -2790,7 +2790,7 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
         <span class="n">numDays</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">useRTH</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Awaitable</span><span class="p">[</span><span class="n">HistoricalSchedule</span><span class="p">]:</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
@@ -2817,14 +2817,14 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">reqHistoricalTicksAsync</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span>
-        <span class="n">startDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
+        <span class="n">startDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
         <span class="n">numberOfTicks</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">whatToShow</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">useRth</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
         <span class="n">ignoreSize</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">miscOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="p">[],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Awaitable</span><span class="p">[</span><span class="n">List</span><span class="p">]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Awaitable</span><span class="p">[</span><span class="nb">list</span><span class="p">]:</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
         <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">startReq</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="n">contract</span><span class="p">)</span>
         <span class="n">start</span> <span class="o">=</span> <span class="n">util</span><span class="o">.</span><span class="n">formatIBDatetime</span><span class="p">(</span><span class="n">startDateTime</span><span class="p">)</span>
@@ -2942,7 +2942,7 @@
         <span class="n">optionPrice</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">underPrice</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">implVolOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="p">[],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OptionComputation</span><span class="p">]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OptionComputation</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
         <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">startReq</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="n">contract</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">calculateImpliedVolatility</span><span class="p">(</span>
@@ -2966,7 +2966,7 @@
         <span class="n">volatility</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">underPrice</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">optPrcOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="p">[],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OptionComputation</span><span class="p">]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OptionComputation</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
         <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">startReq</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="n">contract</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">calculateOptionPrice</span><span class="p">(</span>
@@ -3026,11 +3026,11 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">conId</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">providerCodes</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">startDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
-        <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">],</span>
+        <span class="n">startDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+        <span class="n">endDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
         <span class="n">totalResults</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">historicalNewsOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span> <span class="o">=</span> <span class="p">[],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">HistoricalNews</span><span class="p">]:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HistoricalNews</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">getReqId</span><span class="p">()</span>
 
         <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">startReq</span><span class="p">(</span><span class="n">reqId</span><span class="p">)</span>

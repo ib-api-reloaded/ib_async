@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async Changelog &mdash; ib_async 2.0.1 documentation</title>
+  <title>ib_async Changelog &mdash; ib_async 2.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
 
@@ -16,7 +16,7 @@
   
         <script src="_static/jquery.js?v=5d32c60e"></script>
         <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="_static/documentation_options.js?v=f5cff4aa"></script>
+        <script src="_static/documentation_options.js?v=20623aea"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -38,7 +38,7 @@
             ib_async
           </a>
               <div class="version">
-                2.0
+                2.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -56,6 +56,7 @@
 <li class="toctree-l1"><a class="reference internal" href="code.html">Source code</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#id1">2.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#version-2-1-0-2025-12-06">Version 2.1.0 (2025-12-06)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-2-0-1-2025-06-22">Version 2.0.1 (2025-06-22)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#version-2-0-0-2025-06-13">Version 2.0.0 (2025-06-13)</a></li>
 </ul>
@@ -224,6 +225,92 @@
 <h1><code class="docutils literal notranslate"><span class="pre">ib_async</span></code> Changelog<a class="headerlink" href="#ib-async-changelog" title="Link to this heading"></a></h1>
 <section id="id1">
 <h2>2.0<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<section id="version-2-1-0-2025-12-06">
+<h3>Version 2.1.0 (2025-12-06)<a class="headerlink" href="#version-2-1-0-2025-12-06" title="Link to this heading"></a></h3>
+<p>This release includes several bug fixes, performance improvements, and new features based on recent development work.</p>
+<p><strong>Added</strong></p>
+<ul class="simple">
+<li><p><strong>New EFP Data Support</strong>: Added Exchange for Physical (EFP) data structures and ticker fields for futures trading</p>
+<ul>
+<li><p>New <code class="docutils literal notranslate"><span class="pre">EfpData</span></code> dataclass with fields for basis points, implied future price, dividend impact, and expiration data</p></li>
+<li><p>New ticker fields: <code class="docutils literal notranslate"><span class="pre">bidEfp</span></code>, <code class="docutils literal notranslate"><span class="pre">askEfp</span></code>, <code class="docutils literal notranslate"><span class="pre">lastEfp</span></code>, <code class="docutils literal notranslate"><span class="pre">openEfp</span></code>, <code class="docutils literal notranslate"><span class="pre">highEfp</span></code>, <code class="docutils literal notranslate"><span class="pre">lowEfp</span></code>, <code class="docutils literal notranslate"><span class="pre">closeEfp</span></code></p></li>
+<li><p>Support for EFP tick types in the wrapper</p></li>
+</ul>
+</li>
+<li><p><strong>Additional Ticker Fields</strong>: New fields for enhanced market data access</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">openInterest</span></code>, <code class="docutils literal notranslate"><span class="pre">lastRthTrade</span></code>, <code class="docutils literal notranslate"><span class="pre">lastRegTime</span></code>, <code class="docutils literal notranslate"><span class="pre">optionBidExch</span></code>, <code class="docutils literal notranslate"><span class="pre">optionAskExch</span></code>, <code class="docutils literal notranslate"><span class="pre">bondFactorMultiplier</span></code>, <code class="docutils literal notranslate"><span class="pre">creditmanMarkPrice</span></code>, <code class="docutils literal notranslate"><span class="pre">creditmanSlowMarkPrice</span></code>, <code class="docutils literal notranslate"><span class="pre">delayedLastTimestamp</span></code>, <code class="docutils literal notranslate"><span class="pre">delayedHalted</span></code>, <code class="docutils literal notranslate"><span class="pre">reutersMutualFunds</span></code>, <code class="docutils literal notranslate"><span class="pre">etfNavClose</span></code>, <code class="docutils literal notranslate"><span class="pre">etfNavPriorClose</span></code>, <code class="docutils literal notranslate"><span class="pre">etfNavBid</span></code>, <code class="docutils literal notranslate"><span class="pre">etfNavAsk</span></code>, <code class="docutils literal notranslate"><span class="pre">etfNavLast</span></code>, <code class="docutils literal notranslate"><span class="pre">etfFrozenNavLast</span></code>, <code class="docutils literal notranslate"><span class="pre">etfNavHigh</span></code>, <code class="docutils literal notranslate"><span class="pre">etfNavLow</span></code>, <code class="docutils literal notranslate"><span class="pre">socialMarketAnalytics</span></code>, <code class="docutils literal notranslate"><span class="pre">estimatedIpoMidpoint</span></code>, <code class="docutils literal notranslate"><span class="pre">finalIpoLast</span></code></p></li>
+<li><p>New <code class="docutils literal notranslate"><span class="pre">custGreeks</span></code> option computation field</p></li>
+<li><p>Enhanced ETF NAV (Net Asset Value) tracking fields</p></li>
+</ul>
+</li>
+<li><p><strong>Environment Variable Configuration</strong>: Added ability to override flexReport URL with environment variable</p>
+<ul>
+<li><p>New <code class="docutils literal notranslate"><span class="pre">IB_FLEXREPORT_URL</span></code> environment variable support</p></li>
+<li><p>URL validation for custom endpoints</p></li>
+<li><p>Updated documentation for flexible endpoint configuration</p></li>
+</ul>
+</li>
+<li><p><strong>Improved Event Loop Handling</strong>: Better event loop retrieval with fallback mechanisms</p>
+<ul>
+<li><p>Non-cached event loop access to avoid stale loop issues</p></li>
+<li><p>Enhanced fallback for synchronous contexts</p></li>
+<li><p>Better handling of closed event loops</p></li>
+</ul>
+</li>
+<li><p><strong>Missing Tick Types</strong>: Implemented various tick types that were missing from the library</p>
+<ul>
+<li><p>Support for tick types 57, 78, 79, 92-102, 22, 60, 90, 53, 38-44, 25, 26, 32, 33, 84, 85, 91, 100, 45, 88, 48, 77</p></li>
+<li><p>Optimized tick processing with lookup maps instead of if/else chains</p></li>
+<li><p>New helper methods for timestamp and RT volume tick processing</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Changed</strong></p>
+<ul class="simple">
+<li><p><strong>Modern Python Syntax</strong>: Updated type annotations to use modern Python 3.10+ syntax</p>
+<ul>
+<li><p>Replaced <code class="docutils literal notranslate"><span class="pre">Optional[Type]</span></code> with <code class="docutils literal notranslate"><span class="pre">Type</span> <span class="pre">|</span> <span class="pre">None</span></code> union syntax</p></li>
+<li><p>Converted <code class="docutils literal notranslate"><span class="pre">Union[TypeA,</span> <span class="pre">TypeB]</span></code> to <code class="docutils literal notranslate"><span class="pre">TypeA</span> <span class="pre">|</span> <span class="pre">TypeB</span></code> syntax</p></li>
+<li><p>Updated imports to use more efficient organization</p></li>
+</ul>
+</li>
+<li><p><strong>Ruff Configuration</strong>: Improved code quality with expanded linter exclusions</p>
+<ul>
+<li><p>Added <code class="docutils literal notranslate"><span class="pre">notebooks/</span></code>, <code class="docutils literal notranslate"><span class="pre">upstream_api_architecture/</span></code>, and <code class="docutils literal notranslate"><span class="pre">examples/</span></code> to exclude list</p></li>
+<li><p>Updated ruff rules for modern Python patterns</p></li>
+</ul>
+</li>
+<li><p><strong>Dependency Management</strong>: Added explicit <code class="docutils literal notranslate"><span class="pre">tzdata</span></code> dependency for timezone support</p>
+<ul>
+<li><p>Removed conditional import guard for <code class="docutils literal notranslate"><span class="pre">zoneinfo</span></code> since Python 3.9+ guarantees availability</p></li>
+<li><p>Ensured timezone functionality works across all platforms</p></li>
+</ul>
+</li>
+<li><p><strong>Performance Improvements</strong>: Optimized tick processing with O(1) dictionary lookups</p>
+<ul>
+<li><p>Replaced sequential if/else chains with lookup maps for tick types</p></li>
+<li><p>Added helper methods for timestamp and RT volume processing</p></li>
+<li><p>More efficient string-to-datetime conversion</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Fixed</strong></p>
+<ul class="simple">
+<li><p><strong>Timebars Typo</strong>: Fixed <code class="docutils literal notranslate"><span class="pre">isUnset</span></code> to <code class="docutils literal notranslate"><span class="pre">isNan</span></code> helper function in TimeBars class (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/197">issue 197</a>)</p></li>
+<li><p><strong>FlexReport URL</strong>: Fixed flexReport URL endpoint and added environment variable override support (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/199">issue 199</a>, <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/172">issue 172</a>)</p></li>
+<li><p><strong>Setuptools Warning</strong>: Fixed deprecation warnings for modern setuptools (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/198">issue 198</a>)</p></li>
+<li><p><strong>Event Loop Caching</strong>: Fixed stale event loop bugs that occurred in complex async contexts (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/160">issue 160</a>, <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/186">issue 186</a>, <a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/159">issue 159</a>)</p></li>
+<li><p><strong>Empty Ticker Fields</strong>: Fixed initialization of additional ticker fields to proper unset values</p></li>
+<li><p><strong>Tick Type Processing</strong>: Improved handling of various tick types with proper validation and processing</p></li>
+<li><p><strong>URL Validation</strong>: Added proper URL validation for flexReport requests</p></li>
+</ul>
+<p><strong>Dependency Updates</strong></p>
+<ul class="simple">
+<li><p>Added explicit <code class="docutils literal notranslate"><span class="pre">tzdata</span></code> dependency to ensure timezone functionality across platforms (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/188">issue 188</a>)</p></li>
+<li><p>Updated pyproject.toml to include license files and remove deprecated classifier (<a class="extlink-issue reference external" href="https://github.com/ib-api-reloaded/ib_async/issues/182">issue 182</a>)</p></li>
+</ul>
+</section>
 <section id="version-2-0-1-2025-06-22">
 <h3>Version 2.0.1 (2025-06-22)<a class="headerlink" href="#version-2-0-1-2025-06-22" title="Link to this heading"></a></h3>
 <p>Minor dependency change to fix pypi package building.</p>

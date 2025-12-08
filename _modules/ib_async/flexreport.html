@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.flexreport &mdash; ib_async 2.0.1 documentation</title>
+  <title>ib_async.flexreport &mdash; ib_async 2.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=f5cff4aa"></script>
+        <script src="../../_static/documentation_options.js?v=20623aea"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                2.0
+                2.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -83,15 +83,26 @@
 <span></span><span class="sd">&quot;&quot;&quot;Access to account statement webservice.&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">xml.etree.ElementTree</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">et</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">suppress</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Final</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlparse</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.request</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlopen</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">ib_async</span><span class="w"> </span><span class="kn">import</span> <span class="n">util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.objects</span><span class="w"> </span><span class="kn">import</span> <span class="n">DynamicObject</span>
 
 <span class="n">_logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;ib_async.flexreport&quot;</span><span class="p">)</span>
+
+<span class="n">FLEXREPORT_URL</span><span class="p">:</span> <span class="n">Final</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;https://ndcdyn.interactivebrokers.com/AccountManagement/&quot;</span>
+    <span class="s2">&quot;FlexWebService/SendRequest?&quot;</span>
+<span class="p">)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">https://www.interactivebrokers.com/campus/ibkr-api-page/flex-web-service/#flex-generate-report</span>
+<span class="sd">&quot;&quot;&quot;</span>
 
 
 <div class="viewcode-block" id="FlexError">
@@ -120,6 +131,8 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Download a report by giving a valid ``token`` and ``queryId``,</span>
 <span class="sd">        or load from file by giving a valid ``path``.</span>
+
+<span class="sd">        To overwrite default URL, set env variable ``IB_FLEXREPORT_URL``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">token</span> <span class="ow">and</span> <span class="n">queryId</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">token</span><span class="p">,</span> <span class="n">queryId</span><span class="p">)</span>
@@ -161,15 +174,35 @@
         <span class="k">return</span> <span class="n">util</span><span class="o">.</span><span class="n">df</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="n">topic</span><span class="p">,</span> <span class="n">parseNumbers</span><span class="p">))</span></div>
 
 
+<div class="viewcode-block" id="FlexReport.get_url">
+<a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.get_url">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_url</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate flexreport URL.&quot;&quot;&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">is_valid_url</span><span class="p">(</span><span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">urlparse</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+                <span class="c1"># Must have scheme (http/https) and netloc (domain)</span>
+                <span class="k">return</span> <span class="nb">all</span><span class="p">([</span><span class="n">result</span><span class="o">.</span><span class="n">scheme</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">netloc</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">_url</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;IB_FLEXREPORT_URL&quot;</span><span class="p">,</span> <span class="n">FLEXREPORT_URL</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_valid_url</span><span class="p">(</span><span class="n">_url</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_url</span>
+        <span class="k">raise</span> <span class="n">FlexError</span><span class="p">(</span>
+            <span class="s2">&quot;Invalid URL, please check that env variable IB_FLEXREPORT_URL is set correctly.&quot;</span>
+        <span class="p">)</span></div>
+
+
 <div class="viewcode-block" id="FlexReport.download">
 <a class="viewcode-back" href="../../api.html#ib_async.flexreport.FlexReport.download">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">download</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">queryId</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Download report for the given ``token`` and ``queryId``.&quot;&quot;&quot;</span>
-        <span class="n">url</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="s2">&quot;https://gdcdyn.interactivebrokers.com&quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;/Universal/servlet/FlexStatementService.SendRequest?&quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;t=</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&amp;q=</span><span class="si">{</span><span class="n">queryId</span><span class="si">}</span><span class="s2">&amp;v=3&quot;</span>
-        <span class="p">)</span>
+        <span class="n">base_url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_url</span><span class="p">()</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;t=</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&amp;q=</span><span class="si">{</span><span class="n">queryId</span><span class="si">}</span><span class="s2">&amp;v=3&quot;</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="n">base_url</span> <span class="o">+</span> <span class="n">query</span>
+
         <span class="n">resp</span> <span class="o">=</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
 
@@ -192,7 +225,7 @@
 
         <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-            <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">baseUrl</span><span class="si">}</span><span class="s2">?q=</span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">&amp;t=</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">baseUrl</span><span class="si">}</span><span class="s2">?q=</span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">&amp;t=</span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&amp;v=3&quot;</span>
             <span class="n">resp</span> <span class="o">=</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">et</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>

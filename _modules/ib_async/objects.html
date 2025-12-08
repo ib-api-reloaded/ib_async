@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.objects &mdash; ib_async 2.0.1 documentation</title>
+  <title>ib_async.objects &mdash; ib_async 2.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=f5cff4aa"></script>
+        <script src="../../_static/documentation_options.js?v=20623aea"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                2.0
+                2.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -85,8 +85,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span> <span class="k">as</span> <span class="n">date_</span><span class="p">,</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span><span class="p">,</span> <span class="n">tzinfo</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">NamedTuple</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span> <span class="k">as</span> <span class="n">date_</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span><span class="p">,</span> <span class="n">tzinfo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">NamedTuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">eventkit</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span>
 
@@ -194,7 +195,7 @@
 <a class="viewcode-back" href="../../api.html#ib_async.objects.BarData">[docs]</a>
 <span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">BarData</span><span class="p">:</span>
-    <span class="n">date</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">date_</span><span class="p">,</span> <span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="n">EPOCH</span>
+    <span class="n">date</span><span class="p">:</span> <span class="n">date_</span> <span class="o">|</span> <span class="n">datetime</span> <span class="o">=</span> <span class="n">EPOCH</span>
     <span class="nb">open</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="n">high</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="n">low</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -334,7 +335,7 @@
     <span class="n">startDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">endDateTime</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">timeZone</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">sessions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">HistoricalSession</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+    <span class="n">sessions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">HistoricalSession</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
 
 
 
@@ -504,6 +505,40 @@
 
 
 
+<div class="viewcode-block" id="EfpData">
+<a class="viewcode-back" href="../../api.html#ib_async.objects.EfpData">[docs]</a>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">EfpData</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Exchange for Physical (EFP) futures data.</span>
+
+<span class="sd">    EFP allows trading a position in a single stock for a position</span>
+<span class="sd">    in the corresponding single stock future.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Annualized basis points (financing rate comparable to broker rates)</span>
+    <span class="n">basisPoints</span><span class="p">:</span> <span class="nb">float</span>
+
+    <span class="c1"># Basis points formatted as percentage string</span>
+    <span class="n">formattedBasisPoints</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="c1"># The implied Futures price</span>
+    <span class="n">impliedFuture</span><span class="p">:</span> <span class="nb">float</span>
+
+    <span class="c1"># Number of days until the future&#39;s last trade date</span>
+    <span class="n">holdDays</span><span class="p">:</span> <span class="nb">int</span>
+
+    <span class="c1"># Expiration date of the single stock future</span>
+    <span class="n">futureLastTradeDate</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="c1"># Dividend impact on the annualized basis points interest rate</span>
+    <span class="n">dividendImpact</span><span class="p">:</span> <span class="nb">float</span>
+
+    <span class="c1"># Expected dividends until future expiration</span>
+    <span class="n">dividendsToLastTradeDate</span><span class="p">:</span> <span class="nb">float</span></div>
+
+
+
 <div class="viewcode-block" id="OptionComputation">
 <a class="viewcode-back" href="../../api.html#ib_async.objects.OptionComputation">[docs]</a>
 <span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -549,7 +584,7 @@
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OptionComputation</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot multiply </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="p">(</span>
@@ -573,8 +608,8 @@
     <span class="n">underlyingConId</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">tradingClass</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">multiplier</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">expirations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
-    <span class="n">strikes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span></div>
+    <span class="n">expirations</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">strikes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span></div>
 
 
 
@@ -582,10 +617,10 @@
 <a class="viewcode-back" href="../../api.html#ib_async.objects.Dividends">[docs]</a>
 <span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Dividends</span><span class="p">:</span>
-    <span class="n">past12Months</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
-    <span class="n">next12Months</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
-    <span class="n">nextDate</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">date_</span><span class="p">]</span>
-    <span class="n">nextAmount</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span></div>
+    <span class="n">past12Months</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">next12Months</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">nextDate</span><span class="p">:</span> <span class="n">date_</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">nextAmount</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span></div>
 
 
 
@@ -666,7 +701,7 @@
 
 <div class="viewcode-block" id="BarDataList">
 <a class="viewcode-back" href="../../api.html#ib_async.objects.BarDataList">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">BarDataList</span><span class="p">(</span><span class="n">List</span><span class="p">[</span><span class="n">BarData</span><span class="p">]):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">BarDataList</span><span class="p">(</span><span class="nb">list</span><span class="p">[</span><span class="n">BarData</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    List of :class:`.BarData` that also stores all request parameters.</span>
 
@@ -678,14 +713,14 @@
 
     <span class="n">reqId</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span>
-    <span class="n">endDateTime</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">datetime</span><span class="p">,</span> <span class="n">date_</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+    <span class="n">endDateTime</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="n">date_</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
     <span class="n">durationStr</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">barSizeSetting</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">whatToShow</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">useRTH</span><span class="p">:</span> <span class="nb">bool</span>
     <span class="n">formatDate</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">keepUpToDate</span><span class="p">:</span> <span class="nb">bool</span>
-    <span class="n">chartOptions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
+    <span class="n">chartOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
@@ -698,7 +733,7 @@
 
 <div class="viewcode-block" id="RealTimeBarList">
 <a class="viewcode-back" href="../../api.html#ib_async.objects.RealTimeBarList">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">RealTimeBarList</span><span class="p">(</span><span class="n">List</span><span class="p">[</span><span class="n">RealTimeBar</span><span class="p">]):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RealTimeBarList</span><span class="p">(</span><span class="nb">list</span><span class="p">[</span><span class="n">RealTimeBar</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    List of :class:`.RealTimeBar` that also stores all request parameters.</span>
 
@@ -713,7 +748,7 @@
     <span class="n">barSize</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">whatToShow</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">useRTH</span><span class="p">:</span> <span class="nb">bool</span>
-    <span class="n">realTimeBarsOptions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
+    <span class="n">realTimeBarsOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
@@ -726,7 +761,7 @@
 
 <div class="viewcode-block" id="ScanDataList">
 <a class="viewcode-back" href="../../api.html#ib_async.objects.ScanDataList">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">ScanDataList</span><span class="p">(</span><span class="n">List</span><span class="p">[</span><span class="n">ScanData</span><span class="p">]):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ScanDataList</span><span class="p">(</span><span class="nb">list</span><span class="p">[</span><span class="n">ScanData</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    List of :class:`.ScanData` that also stores all request parameters.</span>
 
@@ -736,8 +771,8 @@
 
     <span class="n">reqId</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">subscription</span><span class="p">:</span> <span class="n">ScannerSubscription</span>
-    <span class="n">scannerSubscriptionOptions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
-    <span class="n">scannerSubscriptionFilterOptions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
+    <span class="n">scannerSubscriptionOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
+    <span class="n">scannerSubscriptionFilterOptions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TagValue</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>

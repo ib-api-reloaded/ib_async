@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ib_async.wrapper &mdash; ib_async 2.0.1 documentation</title>
+  <title>ib_async.wrapper &mdash; ib_async 2.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
 
@@ -15,7 +15,7 @@
   
         <script src="../../_static/jquery.js?v=5d32c60e"></script>
         <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-        <script src="../../_static/documentation_options.js?v=f5cff4aa"></script>
+        <script src="../../_static/documentation_options.js?v=20623aea"></script>
         <script src="../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -35,7 +35,7 @@
             ib_async
           </a>
               <div class="version">
-                2.0
+                2.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
@@ -85,12 +85,11 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">suppress</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">cast</span><span class="p">,</span> <span class="n">Final</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">TypeAlias</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Final</span><span class="p">,</span> <span class="n">TypeAlias</span><span class="p">,</span> <span class="n">cast</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.contract</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Contract</span><span class="p">,</span>
@@ -107,6 +106,7 @@
     <span class="n">DepthMktDataDescription</span><span class="p">,</span>
     <span class="n">Dividends</span><span class="p">,</span>
     <span class="n">DOMLevel</span><span class="p">,</span>
+    <span class="n">EfpData</span><span class="p">,</span>
     <span class="n">Execution</span><span class="p">,</span>
     <span class="n">FamilyCode</span><span class="p">,</span>
     <span class="n">Fill</span><span class="p">,</span>
@@ -145,13 +145,13 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.order</span><span class="w"> </span><span class="kn">import</span> <span class="n">Order</span><span class="p">,</span> <span class="n">OrderState</span><span class="p">,</span> <span class="n">OrderStatus</span><span class="p">,</span> <span class="n">Trade</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.ticker</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ticker</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ib_async.util</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">UNSET_DOUBLE</span><span class="p">,</span>
+    <span class="n">UNSET_INTEGER</span><span class="p">,</span>
     <span class="n">dataclassAsDict</span><span class="p">,</span>
     <span class="n">dataclassUpdate</span><span class="p">,</span>
     <span class="n">getLoop</span><span class="p">,</span>
     <span class="n">globalErrorEvent</span><span class="p">,</span>
     <span class="n">parseIBDatetime</span><span class="p">,</span>
-    <span class="n">UNSET_DOUBLE</span><span class="p">,</span>
-    <span class="n">UNSET_INTEGER</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -183,6 +183,19 @@
     <span class="mi">51</span><span class="p">:</span> <span class="s2">&quot;askYield&quot;</span><span class="p">,</span>
     <span class="mi">104</span><span class="p">:</span> <span class="s2">&quot;askYield&quot;</span><span class="p">,</span>
     <span class="mi">52</span><span class="p">:</span> <span class="s2">&quot;lastYield&quot;</span><span class="p">,</span>
+    <span class="mi">57</span><span class="p">:</span> <span class="s2">&quot;lastRthTrade&quot;</span><span class="p">,</span>
+    <span class="mi">78</span><span class="p">:</span> <span class="s2">&quot;creditmanMarkPrice&quot;</span><span class="p">,</span>
+    <span class="mi">79</span><span class="p">:</span> <span class="s2">&quot;creditmanSlowMarkPrice&quot;</span><span class="p">,</span>
+    <span class="mi">92</span><span class="p">:</span> <span class="s2">&quot;etfNavClose&quot;</span><span class="p">,</span>
+    <span class="mi">93</span><span class="p">:</span> <span class="s2">&quot;etfNavPriorClose&quot;</span><span class="p">,</span>
+    <span class="mi">94</span><span class="p">:</span> <span class="s2">&quot;etfNavBid&quot;</span><span class="p">,</span>
+    <span class="mi">95</span><span class="p">:</span> <span class="s2">&quot;etfNavAsk&quot;</span><span class="p">,</span>
+    <span class="mi">96</span><span class="p">:</span> <span class="s2">&quot;etfNavLast&quot;</span><span class="p">,</span>
+    <span class="mi">97</span><span class="p">:</span> <span class="s2">&quot;etfFrozenNavLast&quot;</span><span class="p">,</span>
+    <span class="mi">98</span><span class="p">:</span> <span class="s2">&quot;etfNavHigh&quot;</span><span class="p">,</span>
+    <span class="mi">99</span><span class="p">:</span> <span class="s2">&quot;etfNavLow&quot;</span><span class="p">,</span>
+    <span class="mi">101</span><span class="p">:</span> <span class="s2">&quot;estimatedIpoMidpoint&quot;</span><span class="p">,</span>
+    <span class="mi">102</span><span class="p">:</span> <span class="s2">&quot;finalIpoLast&quot;</span><span class="p">,</span>
 <span class="p">}</span>
 
 
@@ -193,6 +206,7 @@
     <span class="mi">64</span><span class="p">:</span> <span class="s2">&quot;volumeRate5Min&quot;</span><span class="p">,</span>
     <span class="mi">65</span><span class="p">:</span> <span class="s2">&quot;volumeRate10Min&quot;</span><span class="p">,</span>
     <span class="mi">21</span><span class="p">:</span> <span class="s2">&quot;avVolume&quot;</span><span class="p">,</span>
+    <span class="mi">22</span><span class="p">:</span> <span class="s2">&quot;openInterest&quot;</span><span class="p">,</span>
     <span class="mi">27</span><span class="p">:</span> <span class="s2">&quot;callOpenInterest&quot;</span><span class="p">,</span>
     <span class="mi">28</span><span class="p">:</span> <span class="s2">&quot;putOpenInterest&quot;</span><span class="p">,</span>
     <span class="mi">29</span><span class="p">:</span> <span class="s2">&quot;callVolume&quot;</span><span class="p">,</span>
@@ -215,6 +229,8 @@
     <span class="mi">55</span><span class="p">:</span> <span class="s2">&quot;tradeRate&quot;</span><span class="p">,</span>
     <span class="mi">56</span><span class="p">:</span> <span class="s2">&quot;volumeRate&quot;</span><span class="p">,</span>
     <span class="mi">58</span><span class="p">:</span> <span class="s2">&quot;rtHistVolatility&quot;</span><span class="p">,</span>
+    <span class="mi">60</span><span class="p">:</span> <span class="s2">&quot;bondFactorMultiplier&quot;</span><span class="p">,</span>
+    <span class="mi">90</span><span class="p">:</span> <span class="s2">&quot;delayedHalted&quot;</span><span class="p">,</span>
 <span class="p">}</span>
 
 <span class="n">GREEKS_TICK_MAP</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">TickDict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
@@ -226,6 +242,38 @@
     <span class="mi">82</span><span class="p">:</span> <span class="s2">&quot;lastGreeks&quot;</span><span class="p">,</span>
     <span class="mi">13</span><span class="p">:</span> <span class="s2">&quot;modelGreeks&quot;</span><span class="p">,</span>
     <span class="mi">83</span><span class="p">:</span> <span class="s2">&quot;modelGreeks&quot;</span><span class="p">,</span>
+    <span class="mi">53</span><span class="p">:</span> <span class="s2">&quot;custGreeks&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">EFP_TICK_MAP</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">TickDict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="mi">38</span><span class="p">:</span> <span class="s2">&quot;bidEfp&quot;</span><span class="p">,</span>
+    <span class="mi">39</span><span class="p">:</span> <span class="s2">&quot;askEfp&quot;</span><span class="p">,</span>
+    <span class="mi">40</span><span class="p">:</span> <span class="s2">&quot;lastEfp&quot;</span><span class="p">,</span>
+    <span class="mi">41</span><span class="p">:</span> <span class="s2">&quot;openEfp&quot;</span><span class="p">,</span>
+    <span class="mi">42</span><span class="p">:</span> <span class="s2">&quot;highEfp&quot;</span><span class="p">,</span>
+    <span class="mi">43</span><span class="p">:</span> <span class="s2">&quot;lowEfp&quot;</span><span class="p">,</span>
+    <span class="mi">44</span><span class="p">:</span> <span class="s2">&quot;closeEfp&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">STRING_TICK_MAP</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">TickDict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="mi">25</span><span class="p">:</span> <span class="s2">&quot;optionBidExch&quot;</span><span class="p">,</span>
+    <span class="mi">26</span><span class="p">:</span> <span class="s2">&quot;optionAskExch&quot;</span><span class="p">,</span>
+    <span class="mi">32</span><span class="p">:</span> <span class="s2">&quot;bidExchange&quot;</span><span class="p">,</span>
+    <span class="mi">33</span><span class="p">:</span> <span class="s2">&quot;askExchange&quot;</span><span class="p">,</span>
+    <span class="mi">84</span><span class="p">:</span> <span class="s2">&quot;lastExchange&quot;</span><span class="p">,</span>
+    <span class="mi">85</span><span class="p">:</span> <span class="s2">&quot;lastRegTime&quot;</span><span class="p">,</span>
+    <span class="mi">91</span><span class="p">:</span> <span class="s2">&quot;reutersMutualFunds&quot;</span><span class="p">,</span>
+    <span class="mi">100</span><span class="p">:</span> <span class="s2">&quot;socialMarketAnalytics&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">TIMESTAMP_TICK_MAP</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">TickDict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="mi">45</span><span class="p">:</span> <span class="s2">&quot;lastTimestamp&quot;</span><span class="p">,</span>
+    <span class="mi">88</span><span class="p">:</span> <span class="s2">&quot;delayedLastTimestamp&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">RT_VOLUME_TICK_MAP</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">TickDict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="mi">48</span><span class="p">:</span> <span class="s2">&quot;rtVolume&quot;</span><span class="p">,</span>
+    <span class="mi">77</span><span class="p">:</span> <span class="s2">&quot;rtTradeVolume&quot;</span><span class="p">,</span>
 <span class="p">}</span>
 
 
@@ -292,7 +340,7 @@
     <span class="n">reqId2Ticker</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Ticker</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot; reqId -&gt; Ticker &quot;&quot;&quot;</span>
 
-    <span class="n">ticker2ReqId</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Ticker</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">ticker2ReqId</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Ticker</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot; tickType -&gt; Ticker -&gt; reqId &quot;&quot;&quot;</span>
 
     <span class="n">reqId2Subscriber</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -435,7 +483,7 @@
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">future</span><span class="o">.</span><span class="n">set_exception</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">startTicker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reqId</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span> <span class="n">tickType</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">startTicker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reqId</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">contract</span><span class="p">:</span> <span class="n">Contract</span><span class="p">,</span> <span class="n">tickType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Start a tick request that has the reqId associated with the contract.</span>
 <span class="sd">        Return the ticker.</span>
@@ -450,7 +498,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">ticker2ReqId</span><span class="p">[</span><span class="n">tickType</span><span class="p">][</span><span class="n">ticker</span><span class="p">]</span> <span class="o">=</span> <span class="n">reqId</span>
         <span class="k">return</span> <span class="n">ticker</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">endTicker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">:</span> <span class="n">Ticker</span><span class="p">,</span> <span class="n">tickType</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">endTicker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">:</span> <span class="n">Ticker</span><span class="p">,</span> <span class="n">tickType</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span><span class="p">):</span>
         <span class="n">reqId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ticker2ReqId</span><span class="p">[</span><span class="n">tickType</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_reqId2Contract</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">reqId</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">reqId</span>
@@ -502,6 +550,50 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Timeout&quot;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">setTimeout</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ib</span><span class="o">.</span><span class="n">timeoutEvent</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span>
+
+    <span class="c1"># Helper methods for tick processing</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_processTimestampTick</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">:</span> <span class="n">Ticker</span><span class="p">,</span> <span class="n">fieldName</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert timestamp string to datetime and set on ticker field.&quot;&quot;&quot;</span>
+        <span class="n">timestamp</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="c1"># Only populate if timestamp isn&#39;t &#39;0&#39; (we don&#39;t want to report &quot;last trade: 20,000 days ago&quot;)</span>
+        <span class="k">if</span> <span class="n">timestamp</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span>
+                <span class="n">ticker</span><span class="p">,</span>
+                <span class="n">fieldName</span><span class="p">,</span>
+                <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">timestamp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaultTimezone</span><span class="p">),</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_processRtVolumeTick</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">:</span> <span class="n">Ticker</span><span class="p">,</span> <span class="n">tickType</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parse RT Volume or RT Trade Volume tick.</span>
+
+<span class="sd">        Format: price;size;ms since epoch;total volume;VWAP;single trade</span>
+<span class="sd">        Example: 701.28;1;1348075471534;67854;701.46918464;true</span>
+
+<span class="sd">        Returns (price, size) tuple if valid, None otherwise.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">priceStr</span><span class="p">,</span> <span class="n">sizeStr</span><span class="p">,</span> <span class="n">rtTime</span><span class="p">,</span> <span class="n">volume</span><span class="p">,</span> <span class="n">vwap</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">volume</span><span class="p">:</span>
+            <span class="c1"># Set volume field based on tick type</span>
+            <span class="n">volumeField</span> <span class="o">=</span> <span class="n">RT_VOLUME_TICK_MAP</span><span class="p">[</span><span class="n">tickType</span><span class="p">]</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="n">volumeField</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">volume</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">vwap</span><span class="p">:</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">vwap</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">vwap</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">rtTime</span><span class="p">:</span>
+            <span class="n">ticker</span><span class="o">.</span><span class="n">rtTime</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">rtTime</span><span class="p">)</span> <span class="o">/</span> <span class="mi">1000</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaultTimezone</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">priceStr</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="k">return</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">priceStr</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">sizeStr</span><span class="p">))</span>
 
     <span class="c1"># wrapper methods</span>
 
@@ -742,7 +834,7 @@
         <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">orderKey</span><span class="p">(</span><span class="n">clientId</span><span class="p">,</span> <span class="n">orderId</span><span class="p">,</span> <span class="n">permId</span><span class="p">)</span>
         <span class="n">trade</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">trades</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">trade</span><span class="p">:</span>
-            <span class="n">msg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+            <span class="n">msg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
             <span class="n">oldStatus</span> <span class="o">=</span> <span class="n">trade</span><span class="o">.</span><span class="n">orderStatus</span><span class="o">.</span><span class="n">status</span>
             <span class="n">new</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
                 <span class="n">status</span><span class="o">=</span><span class="n">status</span><span class="p">,</span>
@@ -1192,20 +1284,12 @@
             <span class="k">return</span>
 
         <span class="k">try</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">32</span><span class="p">:</span>
-                <span class="n">ticker</span><span class="o">.</span><span class="n">bidExchange</span> <span class="o">=</span> <span class="n">value</span>
-            <span class="k">elif</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">33</span><span class="p">:</span>
-                <span class="n">ticker</span><span class="o">.</span><span class="n">askExchange</span> <span class="o">=</span> <span class="n">value</span>
-            <span class="k">elif</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">84</span><span class="p">:</span>
-                <span class="n">ticker</span><span class="o">.</span><span class="n">lastExchange</span> <span class="o">=</span> <span class="n">value</span>
-            <span class="k">elif</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">45</span><span class="p">:</span>
-                <span class="n">timestamp</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-
-                <span class="c1"># only populate if timestamp isn&#39;t &#39;0&#39; (we don&#39;t want to report &quot;last trade: 20,000 days ago&quot;)</span>
-                <span class="k">if</span> <span class="n">timestamp</span><span class="p">:</span>
-                    <span class="n">ticker</span><span class="o">.</span><span class="n">lastTimestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span>
-                        <span class="n">timestamp</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaultTimezone</span>
-                    <span class="p">)</span>
+            <span class="c1"># Simple string assignments (O(1) dict lookup)</span>
+            <span class="k">if</span> <span class="n">tickType</span> <span class="ow">in</span> <span class="n">STRING_TICK_MAP</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="n">STRING_TICK_MAP</span><span class="p">[</span><span class="n">tickType</span><span class="p">],</span> <span class="n">value</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">tickType</span> <span class="ow">in</span> <span class="n">TIMESTAMP_TICK_MAP</span><span class="p">:</span>
+                <span class="c1"># Timestamp conversion (O(1) dict lookup)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_processTimestampTick</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="n">TIMESTAMP_TICK_MAP</span><span class="p">[</span><span class="n">tickType</span><span class="p">],</span> <span class="n">value</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">47</span><span class="p">:</span>
                 <span class="c1"># https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html</span>
                 <span class="n">d</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
@@ -1220,40 +1304,17 @@
                         <span class="n">d</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
                         <span class="n">d</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
                 <span class="n">ticker</span><span class="o">.</span><span class="n">fundamentalRatios</span> <span class="o">=</span> <span class="n">FundamentalRatios</span><span class="p">(</span><span class="o">**</span><span class="n">d</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">tickType</span> <span class="ow">in</span> <span class="p">{</span><span class="mi">48</span><span class="p">,</span> <span class="mi">77</span><span class="p">}:</span>
-                <span class="c1"># RT Volume or RT Trade Volume string format:</span>
-                <span class="c1"># price;size;ms since epoch;total volume;VWAP;single trade</span>
-                <span class="c1"># example:</span>
-                <span class="c1"># 701.28;1;1348075471534;67854;701.46918464;true</span>
-                <span class="n">priceStr</span><span class="p">,</span> <span class="n">sizeStr</span><span class="p">,</span> <span class="n">rtTime</span><span class="p">,</span> <span class="n">volume</span><span class="p">,</span> <span class="n">vwap</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">volume</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">48</span><span class="p">:</span>
-                        <span class="n">ticker</span><span class="o">.</span><span class="n">rtVolume</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">volume</span><span class="p">)</span>
-                    <span class="k">elif</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">77</span><span class="p">:</span>
-                        <span class="n">ticker</span><span class="o">.</span><span class="n">rtTradeVolume</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">volume</span><span class="p">)</span>
-
-                <span class="k">if</span> <span class="n">vwap</span><span class="p">:</span>
-                    <span class="n">ticker</span><span class="o">.</span><span class="n">vwap</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">vwap</span><span class="p">)</span>
-
-                <span class="k">if</span> <span class="n">rtTime</span><span class="p">:</span>
-                    <span class="n">ticker</span><span class="o">.</span><span class="n">rtTime</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span>
-                        <span class="nb">int</span><span class="p">(</span><span class="n">rtTime</span><span class="p">)</span> <span class="o">/</span> <span class="mi">1000</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">defaultTimezone</span>
-                    <span class="p">)</span>
-
-                <span class="k">if</span> <span class="n">priceStr</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
-                    <span class="k">return</span>
-
-                <span class="n">price</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">priceStr</span><span class="p">)</span>
-                <span class="n">size</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">sizeStr</span><span class="p">)</span>
-
-                <span class="n">ticker</span><span class="o">.</span><span class="n">prevLast</span> <span class="o">=</span> <span class="n">ticker</span><span class="o">.</span><span class="n">last</span>
-                <span class="n">ticker</span><span class="o">.</span><span class="n">prevLastSize</span> <span class="o">=</span> <span class="n">ticker</span><span class="o">.</span><span class="n">lastSize</span>
-
-                <span class="n">ticker</span><span class="o">.</span><span class="n">last</span> <span class="o">=</span> <span class="n">price</span>
-                <span class="n">ticker</span><span class="o">.</span><span class="n">lastSize</span> <span class="o">=</span> <span class="n">size</span>
-
-                <span class="n">tick</span> <span class="o">=</span> <span class="n">TickData</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lastTime</span><span class="p">,</span> <span class="n">tickType</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
-                <span class="n">ticker</span><span class="o">.</span><span class="n">ticks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">tickType</span> <span class="ow">in</span> <span class="n">RT_VOLUME_TICK_MAP</span><span class="p">:</span>
+                <span class="c1"># RT Volume or RT Trade Volume (O(1) dict lookup + helper)</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_processRtVolumeTick</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="n">tickType</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="n">price</span><span class="p">,</span> <span class="n">size</span> <span class="o">=</span> <span class="n">result</span>
+                    <span class="n">ticker</span><span class="o">.</span><span class="n">prevLast</span> <span class="o">=</span> <span class="n">ticker</span><span class="o">.</span><span class="n">last</span>
+                    <span class="n">ticker</span><span class="o">.</span><span class="n">prevLastSize</span> <span class="o">=</span> <span class="n">ticker</span><span class="o">.</span><span class="n">lastSize</span>
+                    <span class="n">ticker</span><span class="o">.</span><span class="n">last</span> <span class="o">=</span> <span class="n">price</span>
+                    <span class="n">ticker</span><span class="o">.</span><span class="n">lastSize</span> <span class="o">=</span> <span class="n">size</span>
+                    <span class="n">tick</span> <span class="o">=</span> <span class="n">TickData</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lastTime</span><span class="p">,</span> <span class="n">tickType</span><span class="p">,</span> <span class="n">price</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+                    <span class="n">ticker</span><span class="o">.</span><span class="n">ticks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tick</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">tickType</span> <span class="o">==</span> <span class="mi">59</span><span class="p">:</span>
                 <span class="c1"># Dividend tick:</span>
                 <span class="c1"># https://interactivebrokers.github.io/tws-api/tick_types.html#ib_dividends</span>
@@ -1552,7 +1613,26 @@
         <span class="n">dividendImpact</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">dividendsToLastTradeDate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="k">pass</span>
+        <span class="n">ticker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">reqId2Ticker</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">reqId</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ticker</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Create EFP data object with all available information</span>
+        <span class="c1"># Note: totalDividends parameter is actually the implied future price per IBKR docs</span>
+        <span class="n">efpData</span> <span class="o">=</span> <span class="n">EfpData</span><span class="p">(</span>
+            <span class="n">basisPoints</span><span class="o">=</span><span class="n">basisPoints</span><span class="p">,</span>
+            <span class="n">formattedBasisPoints</span><span class="o">=</span><span class="n">formattedBasisPoints</span><span class="p">,</span>
+            <span class="n">impliedFuture</span><span class="o">=</span><span class="n">totalDividends</span><span class="p">,</span>
+            <span class="n">holdDays</span><span class="o">=</span><span class="n">holdDays</span><span class="p">,</span>
+            <span class="n">futureLastTradeDate</span><span class="o">=</span><span class="n">futureLastTradeDate</span><span class="p">,</span>
+            <span class="n">dividendImpact</span><span class="o">=</span><span class="n">dividendImpact</span><span class="p">,</span>
+            <span class="n">dividendsToLastTradeDate</span><span class="o">=</span><span class="n">dividendsToLastTradeDate</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Store in appropriate field based on tick type (O(1) dict lookup)</span>
+        <span class="k">if</span> <span class="n">tickType</span> <span class="ow">in</span> <span class="n">EFP_TICK_MAP</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="n">EFP_TICK_MAP</span><span class="p">[</span><span class="n">tickType</span><span class="p">],</span> <span class="n">efpData</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pendingTickers</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">ticker</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">historicalSchedule</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>

@@ -4,6 +4,82 @@
 2.0
 ---
 
+Version 2.1.0 (2025-12-06)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This release includes several bug fixes, performance improvements, and new features based on recent development work.
+
+**Added**
+
+* **New EFP Data Support**: Added Exchange for Physical (EFP) data structures and ticker fields for futures trading
+
+  * New ``EfpData`` dataclass with fields for basis points, implied future price, dividend impact, and expiration data
+  * New ticker fields: ``bidEfp``, ``askEfp``, ``lastEfp``, ``openEfp``, ``highEfp``, ``lowEfp``, ``closeEfp``
+  * Support for EFP tick types in the wrapper
+
+* **Additional Ticker Fields**: New fields for enhanced market data access
+
+  * ``openInterest``, ``lastRthTrade``, ``lastRegTime``, ``optionBidExch``, ``optionAskExch``, ``bondFactorMultiplier``, ``creditmanMarkPrice``, ``creditmanSlowMarkPrice``, ``delayedLastTimestamp``, ``delayedHalted``, ``reutersMutualFunds``, ``etfNavClose``, ``etfNavPriorClose``, ``etfNavBid``, ``etfNavAsk``, ``etfNavLast``, ``etfFrozenNavLast``, ``etfNavHigh``, ``etfNavLow``, ``socialMarketAnalytics``, ``estimatedIpoMidpoint``, ``finalIpoLast``
+  * New ``custGreeks`` option computation field
+  * Enhanced ETF NAV (Net Asset Value) tracking fields
+
+* **Environment Variable Configuration**: Added ability to override flexReport URL with environment variable
+
+  * New ``IB_FLEXREPORT_URL`` environment variable support
+  * URL validation for custom endpoints
+  * Updated documentation for flexible endpoint configuration
+
+* **Improved Event Loop Handling**: Better event loop retrieval with fallback mechanisms
+
+  * Non-cached event loop access to avoid stale loop issues
+  * Enhanced fallback for synchronous contexts
+  * Better handling of closed event loops
+
+* **Missing Tick Types**: Implemented various tick types that were missing from the library
+
+  * Support for tick types 57, 78, 79, 92-102, 22, 60, 90, 53, 38-44, 25, 26, 32, 33, 84, 85, 91, 100, 45, 88, 48, 77
+  * Optimized tick processing with lookup maps instead of if/else chains
+  * New helper methods for timestamp and RT volume tick processing
+
+**Changed**
+
+* **Modern Python Syntax**: Updated type annotations to use modern Python 3.10+ syntax
+
+  * Replaced ``Optional[Type]`` with ``Type | None`` union syntax
+  * Converted ``Union[TypeA, TypeB]`` to ``TypeA | TypeB`` syntax
+  * Updated imports to use more efficient organization
+
+* **Ruff Configuration**: Improved code quality with expanded linter exclusions
+
+  * Added ``notebooks/``, ``upstream_api_architecture/``, and ``examples/`` to exclude list
+  * Updated ruff rules for modern Python patterns
+
+* **Dependency Management**: Added explicit ``tzdata`` dependency for timezone support
+
+  * Removed conditional import guard for ``zoneinfo`` since Python 3.9+ guarantees availability
+  * Ensured timezone functionality works across all platforms
+
+* **Performance Improvements**: Optimized tick processing with O(1) dictionary lookups
+
+  * Replaced sequential if/else chains with lookup maps for tick types
+  * Added helper methods for timestamp and RT volume processing
+  * More efficient string-to-datetime conversion
+
+**Fixed**
+
+* **Timebars Typo**: Fixed ``isUnset`` to ``isNan`` helper function in TimeBars class (:issue:`197`)
+* **FlexReport URL**: Fixed flexReport URL endpoint and added environment variable override support (:issue:`199`, :issue:`172`)
+* **Setuptools Warning**: Fixed deprecation warnings for modern setuptools (:issue:`198`)
+* **Event Loop Caching**: Fixed stale event loop bugs that occurred in complex async contexts (:issue:`160`, :issue:`186`, :issue:`159`)
+* **Empty Ticker Fields**: Fixed initialization of additional ticker fields to proper unset values
+* **Tick Type Processing**: Improved handling of various tick types with proper validation and processing
+* **URL Validation**: Added proper URL validation for flexReport requests
+
+**Dependency Updates**
+
+* Added explicit ``tzdata`` dependency to ensure timezone functionality across platforms (:issue:`188`)
+* Updated pyproject.toml to include license files and remove deprecated classifier (:issue:`182`)
+
 Version 2.0.1 (2025-06-22)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
