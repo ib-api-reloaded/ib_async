@@ -106,18 +106,15 @@ class TestMarketDataConverters:
         proto = TickPriceProto(
             reqId=1, tickType=TickType.BID.value, price=1.2, size="100", attrMask=1
         )
-        price_data, size_data = createTickPriceData(proto)
-
-        assert isinstance(price_data, TickPriceData)
-        assert price_data.reqId == 1
-        assert price_data.tickType == TickType.BID
-        assert price_data.price == 1.2
-        assert price_data.size == 100
-        assert price_data.attribs.canAutoExecute is True
-
-        assert isinstance(size_data, TickSizeData)
-        assert size_data.tickType == TickType.BID_SIZE
-        assert size_data.size == 100
+        tick_price_data = createTickPriceData(proto)
+        assert isinstance(tick_price_data, TickPriceData)
+        assert tick_price_data.reqId == 1
+        assert tick_price_data.tickType == TickType.BID
+        assert tick_price_data.price == 1.2
+        assert tick_price_data.size == 100.0
+        assert tick_price_data.attribs.canAutoExecute is True
+        assert tick_price_data.attribs.pastLimit is False
+        assert tick_price_data.attribs.preOpen is False
 
     def test_createTickSizeData(self):
         proto = TickSizeProto(reqId=1, tickType=TickType.ASK_SIZE.value, size="200")

@@ -2,8 +2,6 @@
 
 import logging
 
-from ib_async.protobuf_converters.subscription_converters import createScannerDataList
-
 from .contract import (
     Contract,
     ContractDescription,
@@ -15,14 +13,11 @@ from .objects import (
     DepthMktDataDescription,
     FamilyCode,
     HistogramData,
-    HistoricalTickBidAsk,
-    HistoricalTickLast,
+    HistoricalTickType,
     NewsProvider,
     PriceIncrement,
-    SmartComponent,
     SoftDollarTier,
     TagValue,
-    TickType,
 )
 from .order import OrderStatus
 from .protobuf.AccountDataEnd_pb2 import AccountDataEnd as AccountDataEndProto
@@ -80,16 +75,16 @@ from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
 from .protobuf.NextValidId_pb2 import NextValidId as NextValidIdProto
 from .protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
 from .protobuf.OpenOrdersEnd_pb2 import OpenOrdersEnd as OpenOrderEndProto
-from .protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
 from .protobuf.OrderBound_pb2 import OrderBound as OrderBoundProto
+from .protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
+from .protobuf.PnL_pb2 import PnL as PnLProto
+from .protobuf.PnLSingle_pb2 import PnLSingle as PnLSingleProto
 from .protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
 from .protobuf.Position_pb2 import Position as PositionProto
 from .protobuf.PositionEnd_pb2 import PositionEnd as PositionEndProto
-from .protobuf.PnL_pb2 import PnL as PnLProto
-from .protobuf.PnLSingle_pb2 import PnLSingle as PnLSingleProto
 from .protobuf.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
-from .protobuf.ScannerParameters_pb2 import ScannerParameters as ScannerParametersProto
 from .protobuf.ScannerData_pb2 import ScannerData as ScannerDataProto
+from .protobuf.ScannerParameters_pb2 import ScannerParameters as ScannerParametersProto
 from .protobuf.SecDefOptParameter_pb2 import (
     SecDefOptParameter as SecDefOptParameterProto,
 )
@@ -98,6 +93,7 @@ from .protobuf.SecDefOptParameterEnd_pb2 import (
 )
 from .protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
 from .protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
+from .protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
 from .protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
 from .protobuf.TickOptionComputation_pb2 import (
     TickOptionComputation as TickOptionComputationProto,
@@ -107,7 +103,6 @@ from .protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
 from .protobuf.TickSize_pb2 import TickSize as TickSizeProto
 from .protobuf.TickSnapshotEnd_pb2 import TickSnapshotEnd as TickSnapshotEndProto
 from .protobuf.TickString_pb2 import TickString as TickStringProto
-from .protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
 from .protobuf.UserInfo_pb2 import UserInfo as UserInfoProto
 from .protobuf_converters.account_converters import (
     createAccountSummary,
@@ -123,24 +118,23 @@ from .protobuf_converters.contract_converters import (
     createSmartComponents,
 )
 from .protobuf_converters.historical_data_converters import (
+    HistoricalTicksProtoType,
     createBarData,
     createBarDataList,
     createHistogramDataEntry,
     createHistoricalSchedule,
-    createHistoricalTick,
-    createHistoricalTickBidAsk,
-    createHistoricalTickLast,
+    createHistoricalTickShim,
     createRealTimeBarTick,
+    createTickByTick,
 )
 from .protobuf_converters.market_data_converters import (
-    createTickGenericData,
+    TickDeliveryProto,
+    createTickData,
     createTickOptionComputation,
     createTickParams,
-    createTickPriceData,
-    createTickSizeData,
-    createTickStringData,
 )
-from .protobuf_converters.trade_converter import (
+from .protobuf_converters.subscription_converters import createScannerDataList
+from .protobuf_converters.trade_converters import (
     createCommissionReport,
     createContract,
     createFill,
@@ -148,8 +142,7 @@ from .protobuf_converters.trade_converter import (
     createOrderStatus,
     createTradeFromOpenOrder,
 )
-
-from .util import NO_VALID_ID, UNSET_DOUBLE, UNSET_INTEGER
+from .util import NO_VALID_ID, UNSET_INTEGER
 from .wrapper import Wrapper
 
 
@@ -258,11 +251,11 @@ class Decoder:
         MessageId.IN.HISTORICAL_TICKS: (HistoricalTicksProto, "historicalTicksProto"),
         MessageId.IN.HISTORICAL_TICKS_BID_ASK: (
             HistoricalTicksBidAskProto,
-            "historicalTicksBidAskProto",
+            "historicalTicksProto",
         ),
         MessageId.IN.HISTORICAL_TICKS_LAST: (
             HistoricalTicksLastProto,
-            "historicalTicksLastProto",
+            "historicalTicksProto",
         ),
         MessageId.IN.HISTOGRAM_DATA: (HistogramDataProto, "histogramDataProto"),
         MessageId.IN.HISTORICAL_SCHEDULE: (
@@ -271,10 +264,10 @@ class Decoder:
         ),
         MessageId.IN.REAL_TIME_BARS: (RealTimeBarTickProto, "realTimeBarTickProto"),
         MessageId.IN.TICK_REQ_PARAMS: (TickReqParamsProto, "tickReqParamsProto"),
-        MessageId.IN.TICK_PRICE: (TickPriceProto, "tickPriceProto"),
-        MessageId.IN.TICK_SIZE: (TickSizeProto, "tickSizeProto"),
-        MessageId.IN.TICK_GENERIC: (TickGenericProto, "tickGenericProto"),
-        MessageId.IN.TICK_STRING: (TickStringProto, "tickStringProto"),
+        MessageId.IN.TICK_PRICE: (TickPriceProto, "tickDeliveryProto"),
+        MessageId.IN.TICK_SIZE: (TickSizeProto, "tickDeliveryProto"),
+        MessageId.IN.TICK_GENERIC: (TickGenericProto, "tickDeliveryProto"),
+        MessageId.IN.TICK_STRING: (TickStringProto, "tickDeliveryProto"),
         MessageId.IN.TICK_OPTION_COMPUTATION: (
             TickOptionComputationProto,
             "tickOptionComputationProto",
@@ -416,7 +409,7 @@ class Decoder:
 
     def openOrderProto(self, msg: OpenOrderProto):
         trade, orderState = createTradeFromOpenOrder(msg)
-        if trade:
+        if trade and orderState:
             self.wrapper.openOrder(trade, orderState)
             return
         self.logger.error("Error processing order, %r", msg)
@@ -474,41 +467,13 @@ class Decoder:
     def historicalDataProtoEnd(self, msg: HistoricalDataEndProto):
         self.wrapper.historicalDataEnd(msg.reqId, msg.startDateStr, msg.endDateStr)
 
-    def historicalTicksProto(self, msg: HistoricalTicksProto):
+    def historicalTicksProto(self, msg: HistoricalTicksProtoType):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
         isDone = msg.isDone if msg.HasField("isDone") else False
-        historicalTicks = []
-        if msg.historicalTicks:
-            for historicalTickProto in msg.historicalTicks:
-                historicalTick = createHistoricalTick(
-                    historicalTickProto, self.wrapper.defaults.timezone
-                )
-                historicalTicks.append(historicalTick)
+        historicalTicks: list[HistoricalTickType] = createHistoricalTickShim(
+            msg, self.wrapper.defaults.timezone
+        )
         self.wrapper.historicalTicks(reqId, historicalTicks, isDone)
-
-    def historicalTicksBidAskProto(self, msg: HistoricalTicksBidAskProto):
-        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
-        isDone = msg.isDone if msg.HasField("isDone") else False
-        historicalTicksBidAsk: list[HistoricalTickBidAsk] = []
-        if msg.historicalTicksBidAsk:
-            for historicalTickProto in msg.historicalTicksBidAsk:
-                historicalTickBidAsk = createHistoricalTickBidAsk(
-                    historicalTickProto, self.wrapper.defaults.timezone
-                )
-                historicalTicksBidAsk.append(historicalTickBidAsk)
-        self.wrapper.historicalTicksBidAsk(reqId, historicalTicksBidAsk, isDone)
-
-    def historicalTicksLastProto(self, msg: HistoricalTicksLastProto):
-        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
-        isDone = msg.isDone if msg.HasField("isDone") else False
-        historicalTicksLast: list[HistoricalTickLast] = []
-        if msg.historicalTicksLast:
-            for historicalTickProto in msg.historicalTicksLast:
-                historicalTickLast = createHistoricalTickLast(
-                    historicalTickProto, self.wrapper.defaults.timezone
-                )
-                historicalTicksLast.append(historicalTickLast)
-        self.wrapper.historicalTicksLast(reqId, historicalTicksLast, isDone)
 
     def histogramDataProto(self, msg: HistogramDataProto):
         histogram: list[HistogramData] = []
@@ -529,7 +494,6 @@ class Decoder:
 
     def realTimeBarTickProto(self, msg: RealTimeBarTickProto):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
-
         realTimeBarTick = createRealTimeBarTick(msg, self.wrapper.defaults.timezone)
         self.wrapper.realtimeBar(reqId, realTimeBarTick)
 
@@ -540,23 +504,9 @@ class Decoder:
         tickParams = createTickParams(msg)
         self.wrapper.tickReqParams(tickParams.reqId, tickParams)
 
-    def tickPriceProto(self, msg: TickPriceProto):
-        tickPrice, tickSize = createTickPriceData(msg)
-        self.wrapper.priceSizeTick(tickPrice.reqId, tickPrice)
-        if tickSize.tickType != TickType.NOT_SET:
-            self.wrapper.tickSize(tickSize.reqId, tickSize)
-
-    def tickSizeProto(self, msg: TickSizeProto):
-        tickSize = createTickSizeData(msg)
-        self.wrapper.tickSize(tickSize.reqId, tickSize)
-
-    def tickGenericProto(self, msg: TickGenericProto):
-        tickGeneric = createTickGenericData(msg)
-        self.wrapper.tickGeneric(tickGeneric.reqId, tickGeneric)
-
-    def tickStringProto(self, msg: TickStringProto):
-        tickString = createTickStringData(msg)
-        self.wrapper.tickString(tickString.reqId, tickString)
+    def tickDeliveryProto(self, msg: TickDeliveryProto):
+        tickData = createTickData(msg)
+        self.wrapper.tickerDelivery(msg.reqId, tickData)
 
     def tickOptionComputationProto(self, msg: TickOptionComputationProto):
         tick_computation = createTickOptionComputation(msg)
@@ -568,31 +518,9 @@ class Decoder:
 
     def tickByTickDataProto(self, msg: TickByTickDataProto):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
-        tickType = msg.tickType if msg.HasField("tickType") else 0
-
-        if tickType == 0:
-            pass
-        elif tickType == 1 or tickType == 2:
-            # Last or AllLast
-            if msg.HasField("historicalTickLast"):
-                tick_last = createHistoricalTickLast(
-                    msg.historicalTickLast, self.wrapper.defaults.timezone
-                )
-                self.wrapper.tickByTickAllLast(reqId, tick_last)
-        elif tickType == 3:
-            # BidAsk
-            if msg.HasField("historicalTickBidAsk"):
-                tick_bid_ask = createHistoricalTickBidAsk(
-                    msg.historicalTickBidAsk, self.wrapper.defaults.timezone
-                )
-                self.wrapper.tickByTickBidAsk(reqId, tick_bid_ask)
-        elif tickType == 4:
-            # MidPoint
-            if msg.HasField("historicalTickMidPoint"):
-                tick_mid = createHistoricalTick(
-                    msg.historicalTickMidPoint, self.wrapper.defaults.timezone
-                )
-                self.wrapper.tickByTickMidPoint(reqId, tick_mid)
+        tickByTickData = createTickByTick(msg, self.wrapper.defaults.timezone)
+        if tickByTickData:
+            self.wrapper.tickByTick(reqId, tickByTickData)
 
     def fundamentatalDataProto(self, msg: FundamentalsDataProto):
         self.wrapper.fundamentalData(msg.reqId, msg.fundamentalData)
@@ -608,23 +536,39 @@ class Decoder:
 
     def pnlProto(self, msg: PnLProto):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
-        dailyPnL = msg.dailyPnL if msg.HasField("dailyPnL") else UNSET_DOUBLE
-        unrealizedPnL = (
-            msg.unrealizedPnL if msg.HasField("unrealizedPnL") else UNSET_DOUBLE
+        dailyPnL = (
+            msg.dailyPnL if msg.HasField("dailyPnL") else self.wrapper.defaults.unset
         )
-        realizedPnL = msg.realizedPnL if msg.HasField("realizedPnL") else UNSET_DOUBLE
+        unrealizedPnL = (
+            msg.unrealizedPnL
+            if msg.HasField("unrealizedPnL")
+            else self.wrapper.defaults.unset
+        )
+        realizedPnL = (
+            msg.realizedPnL
+            if msg.HasField("realizedPnL")
+            else self.wrapper.defaults.unset
+        )
 
         self.wrapper.pnl(reqId, dailyPnL, unrealizedPnL, realizedPnL)
 
     def pnlSingleProto(self, msg: PnLSingleProto):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
         position = int(msg.position) if msg.HasField("position") else UNSET_INTEGER
-        dailyPnL = msg.dailyPnL if msg.HasField("dailyPnL") else UNSET_DOUBLE
-        unrealizedPnL = (
-            msg.unrealizedPnL if msg.HasField("unrealizedPnL") else UNSET_DOUBLE
+        dailyPnL = (
+            msg.dailyPnL if msg.HasField("dailyPnL") else self.wrapper.defaults.unset
         )
-        realizedPnL = msg.realizedPnL if msg.HasField("realizedPnL") else UNSET_DOUBLE
-        value = msg.value if msg.HasField("value") else UNSET_DOUBLE
+        unrealizedPnL = (
+            msg.unrealizedPnL
+            if msg.HasField("unrealizedPnL")
+            else self.wrapper.defaults.unset
+        )
+        realizedPnL = (
+            msg.realizedPnL
+            if msg.HasField("realizedPnL")
+            else self.wrapper.defaults.unset
+        )
+        value = msg.value if msg.HasField("value") else self.wrapper.defaults.unset
 
         self.wrapper.pnlSingle(
             reqId, position, dailyPnL, unrealizedPnL, realizedPnL, value
@@ -750,17 +694,6 @@ class Decoder:
         ]
 
         self.wrapper.familyCodes(familyCodes)
-
-    def smartComponents(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        components = [
-            SmartComponent(bitNumber=int(get()), exchange=get(), exchangeLetter=get())
-            for _ in range(int(n))
-        ]
-
-        self.wrapper.smartComponents(int(reqId), components)
 
     def mktDepthExchanges(self, fields):
         _, n, *fields = fields

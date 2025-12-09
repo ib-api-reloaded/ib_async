@@ -42,9 +42,7 @@ from ib_async.objects import (
     HistogramData,
     HistoricalNews,
     HistoricalSchedule,
-    HistoricalTick,
-    HistoricalTickBidAsk,
-    HistoricalTickLast,
+    HistoricalTickType,
     IBDefaults,
     MktDepthData,
     NewsArticle,
@@ -62,16 +60,14 @@ from ib_async.objects import (
     ScanDataList,
     SoftDollarTier,
     TickComputationData,
-    TickGenericData,
+    TickDeliveryType,
     TickParams,
-    TickPriceData,
-    TickSizeData,
-    TickStringData,
     TradeLogEntry,
 )
 from ib_async.order import Order, OrderState, OrderStatus, Trade
 from ib_async.ticker import Ticker
 from ib_async.util import (
+    EPOCH,
     dataclassUpdate,
     getLoop,
     globalErrorEvent,
@@ -404,15 +400,13 @@ class Wrapper:
         self.portfolio = defaultdict(dict)
         self.positions = defaultdict(dict)
         self.trades = BiDict[OrderKeyType, Trade]()
-        self.tickers = BiDict[int, Ticker]()
         self.subscriptions = BiDict[int, SubscriptionType]()
         self._isReady = False
         self.fills = {}
         self.newsTicks = []
         self.msgId2NewsBulletin = {}
-        self.tickers = BiDict[int, Ticker](track_objects_weakly=True)
+        self.tickers = BiDict[int, Ticker]()
         self.pendingTickers = set()
-        self.reqId2Subscriber = {}
         self.Pnl = BiDict[tuple[str, str], PnL]()
         self.pnlSingles = BiDict[tuple[str, str, int], PnLSingle]()
         self.lastTime = datetime.min
@@ -452,7 +446,7 @@ class Wrapper:
     def _endReq(self, reqId: int | str):
         self.response_bus.emit(reqId, None)
 
-    def startTicker(self, reqId: int, contract: Contract, tickType: Union[int, str]):
+    def startTicker(self, reqId: int, contract: Contract):
         """
         Start a tick request that has the reqId associated with the contract.
         Return the ticker.
@@ -461,17 +455,17 @@ class Wrapper:
         if not ticker:
             ticker = Ticker(contract=contract, defaults=self.defaults)
             self.tickers.add(reqId, hash(ticker.contract), ticker)
-            ticker.ticker_bus.takewhile(lambda r, data, t: data is not None).pluck(
-                1, 2
-            ).connect(ticker._on_ticker_data)
+            ticker.ticker_bus.takewhile(lambda data, t: data is not None).connect(
+                ticker._on_ticker_data
+            )
 
         return ticker
 
-    def endTicker(self, ticker: Ticker, tickType: Union[int, str]):
+    def endTicker(self, ticker: Ticker):
         reqId = self.tickers.get_request_id(hash(ticker.contract))
         if reqId:
             self.tickers.remove_by_request_id(reqId)
-            ticker.ticker_bus.emit(reqId, None, None)
+            ticker.ticker_bus.emit(None, None)
         return reqId
 
     def startSubscription(
@@ -486,13 +480,13 @@ class Wrapper:
             # ib.reqScannerSubscription
             self.subscriptions.add(reqId, reqId, subscriber)
         # start subscription
-        subscriber.subscription_bus.takewhile(lambda r, data: data is not None).pluck(
-            1
-        ).map(self.ib._raise_if_error).partial(self.ib).connect(subscriber._on_data)
+        subscriber.subscription_bus.takewhile(lambda data: data is not None).map(
+            self.ib._raise_if_error
+        ).partial(self.ib).connect(subscriber._on_data)
 
     def endSubscription(self, subscriber):
         """Unregister a live subscription."""
-        subscriber.subscription_bus.emit(subscriber.reqId, None)
+        subscriber.subscription_bus.emit(None)
         self.subscriptions.remove_by_request_id(subscriber.reqId)
 
     def setTimeout(self, timeout: float):
@@ -611,14 +605,9 @@ class Wrapper:
         self, reqId: int, dailyPnL: float, unrealizedPnL: float, realizedPnL: float
     ):
         pnl = self.Pnl.get_by_request_id(reqId)
-        if not pnl:
-            self._logger.error("pnl: No pnl found for reqId %s", reqId)
-            return
-
-        pnl.dailyPnL = dailyPnL
-        pnl.unrealizedPnL = unrealizedPnL
-        pnl.realizedPnL = realizedPnL
-        self.ib.pnlEvent.emit(pnl)
+        if pnl:
+            pnl.pnl_bus.emit(dailyPnL, unrealizedPnL, realizedPnL)
+            self.ib.pnlEvent.emit(pnl)
 
     def pnlSingle(
         self,
@@ -630,16 +619,11 @@ class Wrapper:
         value: float,
     ):
         pnlSingle = self.pnlSingles.get_by_request_id(reqId)
-        if not pnlSingle:
-            self._logger.error("pnlSingle: No pnlSingle found for reqId %s", reqId)
-            return
-
-        pnlSingle.position = pos
-        pnlSingle.dailyPnL = dailyPnL
-        pnlSingle.unrealizedPnL = unrealizedPnL
-        pnlSingle.realizedPnL = realizedPnL
-        pnlSingle.value = value
-        self.ib.pnlSingleEvent.emit(pnlSingle)
+        if pnlSingle:
+            pnlSingle.pnl_single_bus.emit(
+                pos, dailyPnL, unrealizedPnL, realizedPnL, value
+            )
+            self.ib.pnlSingleEvent.emit(pnlSingle)
 
     def orderKey(self, clientId: int, orderId: int, permId: int) -> OrderKeyType:
         key: OrderKeyType
@@ -847,7 +831,7 @@ class Wrapper:
         if bar is not None:
             bars_subscription = self.subscriptions.get_by_request_id(reqId)
             if bars_subscription is not None:
-                bars_subscription.subscription_bus.emit(reqId, bar)
+                bars_subscription.subscription_bus.emit(bar)
 
     def historicalData(self, reqId: int, bars: list[BarData]):
         if bars is not None:
@@ -859,7 +843,7 @@ class Wrapper:
     def historicalDataUpdate(self, reqId: int, bar: BarData):
         subscription = self.subscriptions.get_by_request_id(reqId)
         if subscription:
-            subscription.subscription_bus.emit(reqId, bar)
+            subscription.subscription_bus.emit(bar)
 
     def headTimestamp(self, reqId: int, headTimestamp: str):
         try:
@@ -868,51 +852,17 @@ class Wrapper:
         except ValueError as exc:
             self.response_bus.emit(reqId, exc)
 
-    def historicalTicks(self, reqId: int, ticks: list[HistoricalTick], done: bool):
+    def historicalTicks(self, reqId: int, ticks: list[HistoricalTickType], done: bool):
         self.response_bus.emit(reqId, ticks)
         if done:
             self._endReq(reqId)
 
-    def historicalTicksBidAsk(
-        self, reqId: int, ticks: list[HistoricalTickBidAsk], done: bool
-    ):
-        self.response_bus.emit(reqId, ticks)
-        if done:
-            self._endReq(reqId)
-
-    def historicalTicksLast(
-        self, reqId: int, ticks: list[HistoricalTickLast], done: bool
-    ):
-        self.response_bus.emit(reqId, ticks)
-        if done:
-            self._endReq(reqId)
-
-    def priceSizeTick(self, reqId: int, tick_price: TickPriceData):
+    def tickerDelivery(self, reqId: int, tickData: TickDeliveryType):
         ticker = self.tickers.get_by_request_id(reqId)
         if not ticker:
-            self._logger.error(f"priceSizeTick: Unknown reqId: {reqId}")
+            self._logger.error("tickerDelivery: Unknown reqId: %s, %r", reqId, tickData)
             return
-        ticker.ticker_bus.emit(reqId, tick_price, self.lastTime)
-        self.pendingTickers.add(ticker)
-
-    def tickSize(self, reqId: int, tick_size: TickSizeData):
-        ticker = self.tickers.get_by_request_id(reqId)
-        if not ticker:
-            self._logger.error(f"tickSize: Unknown reqId: {reqId}")
-            return
-        ticker.ticker_bus.emit(reqId, tick_size, self.lastTime)
-        self.pendingTickers.add(ticker)
-
-    def tickString(self, reqId: int, tick_string: TickStringData):
-        if not (ticker := self.tickers.get_by_request_id(reqId)):
-            return
-        ticker.ticker_bus.emit(reqId, tick_string, self.lastTime)
-        self.pendingTickers.add(ticker)
-
-    def tickGeneric(self, reqId: int, tick_generic: TickGenericData):
-        if not (ticker := self.tickers.get_by_request_id(reqId)):
-            return
-        ticker.ticker_bus.emit(reqId, tick_generic, self.lastTime)
+        ticker.ticker_bus.emit(tickData, self.lastTime)
         self.pendingTickers.add(ticker)
 
     def tickReqParams(self, reqId: int, tickParams: TickParams):
@@ -925,39 +875,32 @@ class Wrapper:
     def tickSnapshotEnd(self, reqId: int):
         ticker = self.tickers.get_by_request_id(reqId)
         if ticker:
-            self.endTicker(ticker, "")
+            self.endTicker(ticker)
             return
 
         self._logger.error(f"tickSnapshotEnd: Unknown reqId: {reqId}")
 
-    def tickByTickAllLast(self, reqId: int, historicalTickLast: HistoricalTickLast):
+    def tickByTick(self, reqId: int, tickByTick: HistoricalTickType):
         ticker = self.tickers.get_by_request_id(reqId)
         if not ticker:
-            self._logger.error(f"tickByTickBidAsk: Unknown reqId: {reqId}")
+            self._logger.error(f"tickByTick: Unknown reqId: {reqId}")
             return
-        ticker.ticker_bus.emit(reqId, historicalTickLast, None)
+        ticker.ticker_bus.emit(tickByTick, EPOCH)
         self.pendingTickers.add(ticker)
 
-    def tickByTickBidAsk(
-        self,
-        reqId: int,
-        historicalTickBidAsk: HistoricalTickBidAsk,
-    ):
+    def tickOptionComputation(self, reqId: int, tick_computation: TickComputationData):
         ticker = self.tickers.get_by_request_id(reqId)
-        if not ticker:
-            self._logger.error(f"tickByTickBidAsk: Unknown reqId: {reqId}")
-            return
-        ticker.ticker_bus.emit(reqId, historicalTickBidAsk, None)
-        self.pendingTickers.add(ticker)
+        if ticker:
+            # reply from reqMktData
+            # https://interactivebrokers.github.io/tws-api/tick_types.html
 
-    def tickByTickMidPoint(self, reqId: int, historicalTick: HistoricalTick):
-        ticker = self.tickers.get_by_request_id(reqId)
-        if not ticker:
-            self._logger.error(f"tickByTickMidPoint: Unknown reqId: {reqId}")
-            return
-
-        ticker.ticker_bus.emit(reqId, historicalTick, None)
-        self.pendingTickers.add(ticker)
+            ticker.ticker_bus.emit(tick_computation, self.lastTime)
+            self.pendingTickers.add(ticker)
+        elif reqId:
+            # reply from calculateImpliedVolatility or calculateOptionPrice
+            self.response_bus.emit(reqId, tick_computation.computation)
+        else:
+            self._logger.error(f"tickOptionComputation: Unknown reqId: {reqId}")
 
     def smartComponents(self, reqId, components):
         self.response_bus.emit(reqId, components)
@@ -1001,9 +944,9 @@ class Wrapper:
 
         # if you're curious when these operations run and what they do, enable this too:
         # fmt: off
-        # print("BID" if side else "ASK", "OPERATION", operation, "at position", 
+        # print("BID" if side else "ASK", "OPERATION", operation, "at position",
         # position, "for price", price, "at qty", size)
-        # assert list(dom.keys()) == list(range(0, len(dom))), f"Keys aren't 
+        # assert list(dom.keys()) == list(range(0, len(dom))), f"Keys aren't
         # sequential? {dom} :: {ticker}"
         # fmt: on
 
@@ -1043,20 +986,6 @@ class Wrapper:
         ticker.domTicks.append(tick)
         self.pendingTickers.add(ticker)
 
-    def tickOptionComputation(self, reqId: int, tick_computation: TickComputationData):
-        ticker = self.tickers.get_by_request_id(reqId)
-        if ticker:
-            # reply from reqMktData
-            # https://interactivebrokers.github.io/tws-api/tick_types.html
-
-            self.ticker_bus.emit(reqId, tick_computation, self.lastTime)
-            self.pendingTickers.add(ticker)
-        elif reqId:
-            # reply from calculateImpliedVolatility or calculateOptionPrice
-            self.response_bus.emit(reqId, tick_computation.computation)
-        else:
-            self._logger.error(f"tickOptionComputation: Unknown reqId: {reqId}")
-
     def deltaNeutralValidation(self, reqId: int, dnc: DeltaNeutralContract):
         pass
 
@@ -1070,7 +999,7 @@ class Wrapper:
         dataList = self.subscriptions.get_by_request_id(reqId)
 
         if dataList is not None:
-            dataList.subscription_bus.emit(reqId, scanData)
+            dataList.subscription_bus.emit(scanData)
 
     def scannerDataEnd(self, reqId: int):
         dataList = self.subscriptions.get_by_request_id(reqId)
@@ -1301,7 +1230,7 @@ class Wrapper:
 
         if errorCode == 165:
             # for scan data subscription there are no longer matching results
-            dataList = self.reqId2Subscriber.get(reqId)
+            dataList = self.subscriptions.get_by_request_id(reqId)
             if dataList:
                 dataList.clear()
                 dataList.updateEvent.emit(dataList)
@@ -1326,7 +1255,7 @@ class Wrapper:
         elif errorCode == 10225:
             # Bust event occurred, current subscription is deactivated.
             # Please resubscribe real-time bars immediately
-            bars = self.reqId2Subscriber.get(reqId)
+            bars = self.subscriptions.get_by_request_id(reqId)
             if isinstance(bars, RealTimeBarList):
                 self.ib.client.cancelRealTimeBars(reqId)
                 self.ib.client.reqRealTimeBars(

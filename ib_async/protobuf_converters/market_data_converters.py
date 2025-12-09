@@ -2,12 +2,14 @@
 Market data protobuf converters
 """
 
+from typing import Any, Callable, TypeAlias
 from ..objects import (
     Contract,
     OptionComputation,
     TagValue,
     TickAttrib,
     TickComputationData,
+    TickDeliveryType,
     TickGenericData,
     TickParams,
     TickPriceData,
@@ -123,7 +125,7 @@ def createTickParams(msg: TickReqParamsProto) -> TickParams:
     return tickParams
 
 
-def createTickPriceData(msg: TickPriceProto) -> tuple[TickPriceData, TickSizeData]:
+def createTickPriceData(msg: TickPriceProto) -> TickPriceData:
     """Create a TickPriceData object from a TickPriceProto message."""
     if msg.HasField("reqId"):
         reqId = msg.reqId
@@ -147,22 +149,7 @@ def createTickPriceData(msg: TickPriceProto) -> tuple[TickPriceData, TickSizeDat
 
     tickPrice = TickPriceData(reqId, tickType, price, size, attribs)
 
-    sizeTickType = TickType.NOT_SET
-    if TickType.BID == tickType:
-        sizeTickType = TickType.BID_SIZE
-    elif TickType.ASK == tickType:
-        sizeTickType = TickType.ASK_SIZE
-    elif TickType.LAST == tickType:
-        sizeTickType = TickType.LAST_SIZE
-    elif TickType.DELAYED_BID == tickType:
-        sizeTickType = TickType.DELAYED_BID_SIZE
-    elif TickType.DELAYED_ASK == tickType:
-        sizeTickType = TickType.DELAYED_ASK_SIZE
-    elif TickType.DELAYED_LAST == tickType:
-        sizeTickType = TickType.DELAYED_LAST_SIZE
-
-    tickSize = TickSizeData(reqId, sizeTickType, size)
-    return tickPrice, tickSize
+    return tickPrice
 
 
 def createTickSizeData(msg: TickSizeProto) -> TickSizeData:
@@ -199,6 +186,30 @@ def createTickGenericData(msg: TickGenericProto) -> TickGenericData:
         value = msg.value
     tickGeneric = TickGenericData(reqId, tickType, value)
     return tickGeneric
+
+TickDeliveryProto:TypeAlias = (
+    TickPriceProto
+    | TickSizeProto
+    | TickStringProto
+    | TickGenericProto
+)
+
+
+def createTickData(msg: TickDeliveryProto) -> TickDeliveryType:
+    delivery_map: dict[type[TickDeliveryProto], Callable[[Any], TickDeliveryType]] = {
+        TickPriceProto: createTickPriceData,
+        TickSizeProto:  createTickSizeData,
+        TickStringProto: createTickStringData,
+        TickGenericProto: createTickGenericData,
+    }
+
+    create_method = delivery_map.get(type(msg))
+
+    if create_method is None:
+        # runtime error
+        raise ValueError(f"createTickData - no converter found for tick delivery type: {type(msg)}")
+
+    return create_method(msg)
 
 
 def createTickOptionComputation(msg: TickOptionComputationProto) -> TickComputationData:

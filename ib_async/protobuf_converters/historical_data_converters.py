@@ -1,6 +1,7 @@
 """Historical data protobuf converters"""
 
 from datetime import tzinfo
+from typing import TypeAlias
 
 from ..contract import Contract, TagValue
 from ..objects import (
@@ -11,6 +12,7 @@ from ..objects import (
     HistoricalTick,
     HistoricalTickBidAsk,
     HistoricalTickLast,
+    HistoricalTickType,
     IBDefaults,
     RealTimeBar,
     TickAttribBidAsk,
@@ -47,6 +49,13 @@ from ..protobuf.HistoricalTickBidAsk_pb2 import (
 from ..protobuf.HistoricalTickLast_pb2 import (
     HistoricalTickLast as HistoricalTickLastProto,
 )
+from ..protobuf.HistoricalTicks_pb2 import HistoricalTicks as HistoricalTicksProto
+from ..protobuf.HistoricalTicksBidAsk_pb2 import (
+    HistoricalTicksBidAsk as HistoricalTicksBidAskProto,
+)
+from ..protobuf.HistoricalTicksLast_pb2 import (
+    HistoricalTicksLast as HistoricalTicksLastProto,
+)
 from ..protobuf.HistoricalTicksRequest_pb2 import (
     HistoricalTicksRequest as HistoricalTicksRequestProto,
 )
@@ -54,6 +63,7 @@ from ..protobuf.RealTimeBarsRequest_pb2 import (
     RealTimeBarsRequest as RealTimeBarsRequestProto,
 )
 from ..protobuf.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
+from ..protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
 from ..util import (
     EPOCH,
     UNSET_DOUBLE,
@@ -62,6 +72,7 @@ from ..util import (
     parseIBTimeStamp,
 )
 from .contract_converters import createContractProto
+from .base_converters import ClientException, fillTagValueList
 
 
 def createHeadTimestampRequestProto(
@@ -80,12 +91,6 @@ def createHeadTimestampRequestProto(
     if isValidIntValue(formatDate):
         headTimestampRequestProto.formatDate = formatDate
     return headTimestampRequestProto
-
-
-def fillTagValueList(tagValueList: list[TagValue], orderProtoMap: dict):
-    if tagValueList is not None and tagValueList:
-        for tagValue in tagValueList:
-            orderProtoMap[tagValue.tag] = tagValue.value
 
 
 def createHistoricalDataRequestProto(
@@ -278,6 +283,54 @@ def createHistoricalTickLast(
     return historicalTickLast
 
 
+HistoricalTicksProtoType: TypeAlias = (
+    HistoricalTicksProto | HistoricalTicksBidAskProto | HistoricalTicksLastProto
+)
+
+
+def createHistoricalTickShim(
+    historicalTicksProto: HistoricalTicksProtoType, tz: tzinfo
+) -> list[HistoricalTickType]:
+    historicalTicks: list[HistoricalTickType] = []
+    if isinstance(historicalTicksProto, HistoricalTicksProto):
+        for tick_proto in historicalTicksProto.historicalTicks:
+            historicalTicks.append(createHistoricalTick(tick_proto, tz))
+    elif isinstance(historicalTicksProto, HistoricalTicksBidAskProto):
+        for tick_proto in historicalTicksProto.historicalTicksBidAsk:
+            historicalTicks.append(createHistoricalTickBidAsk(tick_proto, tz))
+    elif isinstance(historicalTicksProto, HistoricalTicksLastProto):
+        for tick_proto in historicalTicksProto.historicalTicksLast:
+            historicalTicks.append(createHistoricalTickLast(tick_proto, tz))
+    else:
+        raise ClientException(575, "Unknown historical ticks type", "")
+    return historicalTicks
+
+
+def createTickByTick(
+    tickByTickData: TickByTickDataProto, tz: tzinfo
+) -> HistoricalTickType|None:
+    tickType = tickByTickData.tickType if tickByTickData.HasField("tickType") else 0
+    if tickType == 0:
+        raise ValueError("%s: Invalid tick type: %r",__name__,tickByTickData)
+    elif tickType == 1 or tickType == 2:
+        # Last or AllLast
+        if tickByTickData.HasField("historicalTickLast"):
+            tick_last = createHistoricalTickLast(tickByTickData.historicalTickLast, tz)
+            return tick_last
+    elif tickType == 3:
+        # BidAsk
+        if tickByTickData.HasField("historicalTickBidAsk"):
+            tick_bid_ask = createHistoricalTickBidAsk(
+                tickByTickData.historicalTickBidAsk, tz
+            )
+            return tick_bid_ask
+    elif tickType == 4:
+        # MidPoint
+        if tickByTickData.HasField("historicalTickMidPoint"):
+            tick_mid = createHistoricalTick(tickByTickData.historicalTickMidPoint, tz)
+            return tick_mid
+    return None
+
 def createHistogramDataRequestProto(
     reqId: int, contract: Contract, useRTH: bool, timePeriod: str
 ) -> HistogramDataRequestProto:
@@ -297,12 +350,17 @@ def createHistogramDataRequestProto(
 def createHistogramDataEntry(
     histogramDataEntryProto: HistogramDataEntryProto,
 ) -> HistogramData:
-    histogramData = HistogramData()
-    if histogramDataEntryProto.HasField("price"):
-        histogramData.price = histogramDataEntryProto.price
-    if histogramDataEntryProto.HasField("size"):
-        histogramData.count = int(histogramDataEntryProto.size)
-    return histogramData
+    price = (
+        histogramDataEntryProto.price
+        if histogramDataEntryProto.HasField("price")
+        else 0
+    )
+    count = (
+        int(histogramDataEntryProto.size)
+        if histogramDataEntryProto.HasField("size")
+        else 0
+    )
+    return HistogramData(price, count)
 
 
 def createHistoricalSchedule(

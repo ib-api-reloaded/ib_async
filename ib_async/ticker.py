@@ -1,5 +1,6 @@
 """Access to realtime market information."""
 
+from decimal import Decimal
 import logging
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -56,6 +57,14 @@ PRICE_TICK_MAP: Final[TickDict] = {
     TickType.ASK_YIELD: "askYield",
     TickType.DELAYED_YIELD_ASK: "askYield",
     TickType.LAST_YIELD: "lastYield",
+    TickType.ETF_NAV_CLOSE: "etf_nav_close",
+    TickType.ETF_NAV_PRIOR_CLOSE: "etf_nav_prior_close",
+    TickType.ETF_NAV_BID: "etf_nav_bid",
+    TickType.ETF_NAV_ASK: "etf_nav_ask",
+    TickType.ETF_NAV_LAST: "etf_nav_last",
+    TickType.ETF_FROZEN_NAV_LAST: "etf_frozen_nav_last",
+    TickType.ETF_NAV_HIGH: "etf_nav_high",
+    TickType.ETF_NAV_LOW: "etf_nav_low",
 }
 
 
@@ -84,6 +93,7 @@ GENERIC_TICK_MAP: Final[TickDict] = {
     TickType.INDEX_FUTURE_PREMIUM: "indexFuturePremium",
     TickType.SHORTABLE: "shortable",
     TickType.HALTED: "halted",
+    TickType.DELAYED_HALTED: "halted",
     TickType.TRADE_COUNT: "tradeCount",
     TickType.TRADE_RATE: "tradeRate",
     TickType.VOLUME_RATE: "volumeRate",
@@ -104,7 +114,7 @@ GREEKS_TICK_MAP: Final[TickDict] = {
 _logger = logging.getLogger("ib_async.ticker")
 
 
-@dataclass
+@dataclass(slots=True)
 class Ticker:
     """
     Current market data such as bid, ask, last price, etc. for a contract.
@@ -128,7 +138,6 @@ class Ticker:
     """
 
     events: ClassVar = ("updateEvent",)
-
     contract: Contract | None = None
     time: datetime | None = None
     timestamp: float | None = None
@@ -210,9 +219,19 @@ class Ticker:
     regulatoryImbalance: float = nan
     bboExchange: str = ""
     snapshotPermissions: int = 0
+    etf_nav_close: float | Decimal = nan
+    etf_nav_prior_close: float | Decimal = nan
+    etf_nav_bid: float | Decimal = nan
+    etf_nav_ask: float | Decimal = nan
+    etf_nav_last: float | Decimal = nan
+    etf_frozen_nav_last: float | Decimal = nan
+    etf_nav_high: float | Decimal = nan
+    etf_nav_low: float | Decimal = nan
 
     defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
     created: bool = field(default=False, repr=False)
+    updateEvent: Event = field(repr=False, init=False)
+    ticker_bus: Event = field(repr=False, init=False)
 
     def __post_init__(self):
         # when copying a dataclass, the __post_init__ runs again, so we
@@ -221,6 +240,8 @@ class Ticker:
         if not self.created:
             self.updateEvent = TickerUpdateEvent("updateEvent")
             self.ticker_bus = Event("Ticker bus")
+            """ticker bus event [TickDataType,datetime|None]
+            """
             self.minTick = self.defaults.unset
             self.bid = self.defaults.unset
             self.bidSize = self.defaults.unset
@@ -276,6 +297,14 @@ class Ticker:
             self.auctionPrice = self.defaults.unset
             self.auctionImbalance = self.defaults.unset
             self.regulatoryImbalance = self.defaults.unset
+            self.etf_nav_close = self.defaults.unset
+            self.etf_nav_prior_close = self.defaults.unset
+            self.etf_nav_bid = self.defaults.unset
+            self.etf_nav_ask = self.defaults.unset
+            self.etf_nav_last = self.defaults.unset
+            self.etf_frozen_nav_last = self.defaults.unset
+            self.etf_nav_high = self.defaults.unset
+            self.etf_nav_low = self.defaults.unset
             self.created = True
 
     def __eq__(self, other):
@@ -288,12 +317,7 @@ class Ticker:
     __str__ = dataclassRepr
 
     def _on_ticker_data(self, tick_data: TickDataType, last_time: datetime):
-        # _logger.debug(
-        #     "Ticker %s. Received tick data: %s, %s",
-        #     self.contract.symbol,
-        #     tick_data,
-        #     last_time,
-        # )
+        """get ticker data updates and dispatch to the right handler."""
         if isinstance(tick_data, TickPriceData):
             self._on_price_size_tick(tick_data, last_time)
         elif isinstance(tick_data, TickSizeData):
@@ -319,11 +343,11 @@ class Ticker:
 
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tick_price.tickType in {TickType.BID, TickType.DELAYED_BID}:
-            # Note: Keep these size==0 overrides INSIDE each tickType where it is needed because
-            #       other tickTypes like open/high/low/close are values with size=0 but those
-            #       are still valid prices to receive.
-            # Bid/Ask updates always have a Price+Size delivered at the same time, while the
-            # other properties are mainly price-only delivery methods.
+            # Note: Keep these size==0 overrides INSIDE each tickType where it is
+            # needed because other tickTypes like open/high/low/close are values with
+            # size=0 but those are still valid prices to receive.
+            # Bid/Ask updates always have a Price+Size delivered at the same time,
+            # while the other properties are mainly price-only delivery methods.
             if tick_price.size == 0:
                 price = self.defaults.emptyPrice
                 size = self.defaults.emptySize
@@ -363,16 +387,11 @@ class Ticker:
             # More research: IBKR also shows the bad value in their own app, so there
             # is a data bug in their own server logic somewhere.
 
-            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: BEFORE {ticker=}")
-            # self._logger.error(f"[{tickType=}] SETTING {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
-
             self.prevLast = self.last
             self.prevLastSize = self.lastSize
             self.last = price
             self.lastSize = size
 
-            # self._logger.error(f"[{tickType=}] SET {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
-            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: AFTER {ticker=}")
         else:
             assert tick_price.tickType in PRICE_TICK_MAP, (
                 f"Received tick {tick_price.tickType=} {tick_price.price=} but we don't have an attribute mapping for it? Triggered from {self.contract=}"
@@ -388,10 +407,6 @@ class Ticker:
 
     def _on_size_tick(self, tick_size: TickSizeData, last_time: datetime):
         price = self.defaults.emptyPrice
-
-        # self._logger.error(
-        #     f"tickSize with tickType {tickType}: " f"processing value: {size!r}"
-        # )
 
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tick_size.tickType in {
@@ -453,10 +468,14 @@ class Ticker:
                 self.askExchange = tick_string.value
             elif tick_string.tickType == TickType.LAST_EXCH:
                 self.lastExchange = tick_string.value
-            elif tick_string.tickType == TickType.LAST_TIMESTAMP:
+            elif tick_string.tickType in {
+                TickType.LAST_TIMESTAMP,
+                TickType.DELAYED_LAST_TIMESTAMP,
+            }:
                 timestamp = int(tick_string.value)
 
-                # only populate if timestamp isn't '0' (we don't want to report "last trade: 20,000 days ago")
+                # only populate if timestamp isn't '0' (we don't want to report "last 
+                # trade: 20,000 days ago")
                 if timestamp:
                     self.lastTimestamp = datetime.fromtimestamp(
                         timestamp, self.defaults.timezone

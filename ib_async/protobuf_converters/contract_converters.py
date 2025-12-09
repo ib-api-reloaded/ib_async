@@ -498,9 +498,8 @@ def createComboLegProtoList(
     comboLegProtoList = []
     if comboLegs:
         for i, comboLeg in enumerate(comboLegs):
-            perLegPrice = UNSET_DOUBLE
             if orderComboLegs and i < len(orderComboLegs):
-                perLegPrice: float = orderComboLegs[i].price
+                perLegPrice = float(orderComboLegs[i].price)
                 comboLegProto = createComboLegProto(comboLeg, perLegPrice)
             if comboLegProto is not None:
                 comboLegProtoList.append(comboLegProto)

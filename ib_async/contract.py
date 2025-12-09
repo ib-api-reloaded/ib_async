@@ -3,7 +3,7 @@
 import datetime as dt
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, NamedTuple, Optional
+from typing import List, Optional
 
 import ib_async.util as util
 
@@ -111,7 +111,7 @@ class Contract:
     symbol: str = ""
     secType: str = ""
     lastTradeDateOrContractMonth: str = ""
-    lastTradeDate = ""
+    lastTradeDate: str = ""
     strike: float = 0.0
     right: str = ""
     multiplier: str = ""
@@ -564,13 +564,13 @@ class Crypto(Contract):
             **kwargs,
         )
 
-
-class TagValue(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class TagValue:
     tag: str
     value: str
 
 
-@dataclass
+@dataclass(slots=True)
 class ComboLeg:
     conId: int = 0
     ratio: int = 0
@@ -582,19 +582,19 @@ class ComboLeg:
     exemptCode: int = -1
 
 
-@dataclass
+@dataclass(slots=True)
 class DeltaNeutralContract:
     conId: int = 0
     delta: float = 0.0
     price: float = 0.0
 
-
-class TradingSession(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class TradingSession:
     start: dt.datetime
     end: dt.datetime
 
 
-@dataclass
+@dataclass(slots=True)
 class ContractDetails:
     contract: Optional[Contract] = None
     marketName: str = ""
@@ -642,27 +642,27 @@ class ContractDetails:
     nextOptionPartial: bool = False
     notes: str = ""
     # FUND values
-    fundName = ""
-    fundFamily = ""
-    fundType = ""
-    fundFrontLoad = ""
-    fundBackLoad = ""
-    fundBackLoadTimeInterval = ""
-    fundManagementFee = ""
-    fundClosed = False
-    fundClosedForNewInvestors = False
-    fundClosedForNewMoney = False
-    fundNotifyAmount = ""
-    fundMinimumInitialPurchase = ""
-    fundSubsequentMinimumPurchase = ""
-    fundBlueSkyStates = ""
-    fundBlueSkyTerritories = ""
-    fundDistributionPolicyIndicator = FundDistributionPolicyIndicator.NoneItem
-    fundAssetType = FundAssetType.NoneItem
+    fundName: str = ""
+    fundFamily: str = ""
+    fundType: str = ""
+    fundFrontLoad: str = ""
+    fundBackLoad: str = ""
+    fundBackLoadTimeInterval: str = ""
+    fundManagementFee: str = ""
+    fundClosed: bool = False
+    fundClosedForNewInvestors: bool = False
+    fundClosedForNewMoney: bool = False
+    fundNotifyAmount: str = ""
+    fundMinimumInitialPurchase: str = ""
+    fundSubsequentMinimumPurchase: str = ""
+    fundBlueSkyStates: str = ""
+    fundBlueSkyTerritories: str = ""
+    fundDistributionPolicyIndicator: FundDistributionPolicyIndicator = FundDistributionPolicyIndicator.NoneItem
+    fundAssetType: FundAssetType = FundAssetType.NoneItem
     ineligibilityReasonList: list[IneligibilityReason] = field(default_factory=list)
-    eventContract1 = ""
-    eventContractDescription1 = ""
-    eventContractDescription2 = ""
+    eventContract1: str = ""
+    eventContractDescription1: str = ""
+    eventContractDescription2: str = ""
 
     def tradingSessions(self) -> List[TradingSession]:
         return self._parseSessions(self.tradingHours)
@@ -703,13 +703,13 @@ class ContractDetails:
         return sessions
 
 
-@dataclass
+@dataclass(slots=True)
 class ContractDescription:
     contract: Optional[Contract] = None
     derivativeSecTypes: List[str] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class ScanData:
     rank: int
     contractDetails: ContractDetails

@@ -2,6 +2,7 @@
 Converters for trade-related Protobuf messages.
 """
 
+import datetime as dt
 from decimal import Decimal
 
 from ib_async.contract import Contract
@@ -32,12 +33,12 @@ from ib_async.order import (
     VolumeCondition,
 )
 from ib_async.util import (
-    UNSET_INTEGER,
     UNSET_DOUBLE,
-    decimalMaxString,
+    UNSET_INTEGER,
     getEnumTypeFromString,
     isValidIntValue,
     parseIBDatetime,
+    quantize_decimals
 )
 
 from ..protobuf.CancelOrderRequest_pb2 import (
@@ -65,21 +66,13 @@ from ..protobuf.OrderCancel_pb2 import OrderCancel as OrderCancelProto
 from ..protobuf.OrderCondition_pb2 import OrderCondition as OrderConditionProto
 from ..protobuf.OrderState_pb2 import OrderState as OrderStateProto
 from ..protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
-from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
 from ..protobuf.PlaceOrderRequest_pb2 import PlaceOrderRequest as PlaceOrderRequestProto
-from ..protobuf_converters.contract_converters import (
+from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
+from .base_converters import ClientException, fillTagValueList
+from .contract_converters import (
     createContract,
     createContractProto,
 )
-from ..protobuf_converters.historical_data_converters import fillTagValueList
-
-
-class ClientException(Exception):
-    def __init__(self, code, message, text):
-        super().__init__(f"Client request error: {code}: {message}, {text}")
-        self.code = code
-        self.message = message
-        self.text = text
 
 
 def createPlaceOrderRequestProto(
@@ -108,14 +101,14 @@ def createOrderProto(order: Order) -> OrderProto:
     if order.action:
         orderProto.action = order.action
     if order.totalQuantity != UNSET_DOUBLE:
-        orderProto.totalQuantity = decimalMaxString(order.totalQuantity)
+        orderProto.totalQuantity = str(order.totalQuantity)
     if isValidIntValue(order.displaySize):
         orderProto.displaySize = order.displaySize
     if order.orderType:
         orderProto.orderType = order.orderType
-    if order.lmtPrice != UNSET_DOUBLE:
+    if order.lmtPrice != UNSET_DOUBLE and order.lmtPrice is not None:
         orderProto.lmtPrice = float(order.lmtPrice)
-    if order.auxPrice != UNSET_DOUBLE:
+    if order.auxPrice != UNSET_DOUBLE and order.auxPrice is not None:
         orderProto.auxPrice = float(order.auxPrice)
     if order.tif:
         orderProto.tif = order.tif
@@ -287,18 +280,24 @@ def createOrderProto(order: Order) -> OrderProto:
         orderProto.referenceExchangeId = order.referenceExchangeId
     if order.adjustedOrderType:
         orderProto.adjustedOrderType = order.adjustedOrderType
-    if order.triggerPrice != UNSET_DOUBLE:
-        orderProto.triggerPrice = order.triggerPrice
-    if order.adjustedStopPrice != UNSET_DOUBLE:
-        orderProto.adjustedStopPrice = order.adjustedStopPrice
-    if order.adjustedStopLimitPrice != UNSET_DOUBLE:
-        orderProto.adjustedStopLimitPrice = order.adjustedStopLimitPrice
-    if order.adjustedTrailingAmount != UNSET_DOUBLE:
-        orderProto.adjustedTrailingAmount = order.adjustedTrailingAmount
+    if order.triggerPrice != UNSET_DOUBLE and order.triggerPrice is not None:
+        orderProto.triggerPrice = float(order.triggerPrice)
+    if order.adjustedStopPrice != UNSET_DOUBLE and order.adjustedStopPrice is not None:
+        orderProto.adjustedStopPrice = float(order.adjustedStopPrice)
+    if (
+        order.adjustedStopLimitPrice != UNSET_DOUBLE
+        and order.adjustedStopLimitPrice is not None
+    ):
+        orderProto.adjustedStopLimitPrice = float(order.adjustedStopLimitPrice)  # type: ignore[assignment]
+    if (
+        order.adjustedTrailingAmount != UNSET_DOUBLE
+        and order.adjustedTrailingAmount is not None
+    ):
+        orderProto.adjustedTrailingAmount = float(order.adjustedTrailingAmount)  # type: ignore[assignment]
     if isValidIntValue(order.adjustableTrailingUnit):
         orderProto.adjustableTrailingUnit = order.adjustableTrailingUnit
-    if order.lmtPriceOffset != UNSET_DOUBLE:
-        orderProto.lmtPriceOffset = order.lmtPriceOffset
+    if order.lmtPriceOffset != UNSET_DOUBLE and order.lmtPriceOffset is not None:
+        orderProto.lmtPriceOffset = float(order.lmtPriceOffset)  # type: ignore[assignment]
 
     orderConditionList = createConditionsProto(order)
     if orderConditionList is not None and orderConditionList:
@@ -318,7 +317,7 @@ def createOrderProto(order: Order) -> OrderProto:
         orderProto.softDollarTier.CopyFrom(softDollarTier)
 
     if order.cashQty != UNSET_DOUBLE:
-        orderProto.cashQty = order.cashQty
+        orderProto.cashQty = float(order.cashQty)
     if order.mifid2DecisionMaker:
         orderProto.mifid2DecisionMaker = order.mifid2DecisionMaker
     if order.mifid2DecisionAlgo:
@@ -348,11 +347,11 @@ def createOrderProto(order: Order) -> OrderProto:
     if isValidIntValue(order.minCompeteSize):
         orderProto.minCompeteSize = order.minCompeteSize
     if order.competeAgainstBestOffset != UNSET_DOUBLE:
-        orderProto.competeAgainstBestOffset = order.competeAgainstBestOffset
+        orderProto.competeAgainstBestOffset = float(order.competeAgainstBestOffset)
     if order.midOffsetAtWhole != UNSET_DOUBLE:
-        orderProto.midOffsetAtWhole = order.midOffsetAtWhole
+        orderProto.midOffsetAtWhole = float(order.midOffsetAtWhole)
     if order.midOffsetAtHalf != UNSET_DOUBLE:
-        orderProto.midOffsetAtHalf = order.midOffsetAtHalf
+        orderProto.midOffsetAtHalf = float(order.midOffsetAtHalf)
     if order.customerAccount:
         orderProto.customerAccount = order.customerAccount
     if order.professionalCustomer:
@@ -378,19 +377,18 @@ def createConditionsProto(order: Order) -> list[OrderConditionProto]:
     try:
         if order.conditions is not None and order.conditions:
             for orderCondition in order.conditions:
-                conditionType = getattr(orderCondition, "condType", None)
-
-                if PriceCondition.condType == conditionType:
+                orderConditionProto = None
+                if isinstance(orderCondition, PriceCondition):
                     orderConditionProto = createPriceConditionProto(orderCondition)
-                elif TimeCondition.condType == conditionType:
+                elif isinstance(orderCondition, TimeCondition):
                     orderConditionProto = createTimeConditionProto(orderCondition)
-                elif MarginCondition.condType == conditionType:
+                elif isinstance(orderCondition, MarginCondition):
                     orderConditionProto = createMarginConditionProto(orderCondition)
-                elif ExecutionCondition.condType == conditionType:
+                elif isinstance(orderCondition, ExecutionCondition):
                     orderConditionProto = createExecutionConditionProto(orderCondition)
-                elif VolumeCondition.condType == conditionType:
+                elif isinstance(orderCondition, VolumeCondition):
                     orderConditionProto = createVolumeConditionProto(orderCondition)
-                elif PercentChangeCondition.condType == conditionType:
+                elif isinstance(orderCondition, PercentChangeCondition):
                     orderConditionProto = createPercentChangeConditionProto(
                         orderCondition
                     )
@@ -535,7 +533,7 @@ def createSoftDollarTierProto(order: Order) -> SoftDollarTierProto:
             softDollarTierProto.displayName = tier.displayName
     return softDollarTierProto
 
-
+@quantize_decimals()
 def createOrder(
     orderId: int, contractProto: ContractProto, orderProto: OrderProto
 ) -> Order:
@@ -763,7 +761,7 @@ def createOrder(
     if orderProto.HasField("discretionaryUpToLimitPrice"):
         order.discretionaryUpToLimitPrice = orderProto.discretionaryUpToLimitPrice
     if orderProto.HasField("usePriceMgmtAlgo"):
-        order.usePriceMgmtAlgo = orderProto.usePriceMgmtAlgo
+        order.usePriceMgmtAlgo = bool(orderProto.usePriceMgmtAlgo)
     if orderProto.HasField("duration"):
         order.duration = orderProto.duration
     if orderProto.HasField("postToAts"):
@@ -824,7 +822,7 @@ def createOrderConditions(orderProto: OrderProto) -> list[OrderConditionType]:
                 orderConditionProto.type if orderConditionProto.HasField("type") else 0
             )
 
-            condition: OrderCondition | None = None
+            condition: OrderConditionType | None = None
             if PriceCondition.condType == conditionType:
                 condition = createPriceCondition(orderConditionProto)
             elif TimeCondition.condType == conditionType:
@@ -858,7 +856,17 @@ def setOperatorConditionFields(
 ):
     setConditionFields(orderConditionProto, operatorCondition)
     if orderConditionProto.HasField("isMore"):
-        operatorCondition.isMore = orderConditionProto.isMore
+        if isinstance(
+            operatorCondition,
+            (
+                PriceCondition,
+                TimeCondition,
+                MarginCondition,
+                VolumeCondition,
+                PercentChangeCondition,
+            ),
+        ):
+            operatorCondition.isMore = orderConditionProto.isMore
 
 
 def setContractConditionFields(
@@ -866,9 +874,22 @@ def setContractConditionFields(
 ):
     setOperatorConditionFields(orderConditionProto, contractCondition)
     if orderConditionProto.HasField("conId"):
-        contractCondition.conId = orderConditionProto.conId
+        if isinstance(
+            contractCondition,
+            (PriceCondition, VolumeCondition, PercentChangeCondition),
+        ):
+            contractCondition.conId = orderConditionProto.conId
     if orderConditionProto.HasField("exchange"):
-        contractCondition.exch = orderConditionProto.exchange
+        if isinstance(
+            contractCondition,
+            (
+                PriceCondition,
+                ExecutionCondition,
+                VolumeCondition,
+                PercentChangeCondition,
+            ),
+        ):
+            contractCondition.exch = orderConditionProto.exchange
 
 
 def createPriceCondition(orderConditionProto: OrderConditionProto) -> PriceCondition:
@@ -968,45 +989,41 @@ def createTagValueList(protoMap: dict[str, str]) -> list[TagValue]:
             tagValueList.append(tagValue)
     return tagValueList
 
-
+@quantize_decimals()
 def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     orderState = OrderState()
     if orderStateProto.HasField("status"):
         orderState.status = orderStateProto.status
     if orderStateProto.HasField("initMarginBefore"):
-        orderState.initMarginBefore = str(orderStateProto.initMarginBefore)
+        orderState.initMarginBefore = Decimal(orderStateProto.initMarginBefore)
     if orderStateProto.HasField("maintMarginBefore"):
-        orderState.maintMarginBefore = decimalMaxString(
-            orderStateProto.maintMarginBefore
-        )
+        orderState.maintMarginBefore = Decimal(orderStateProto.maintMarginBefore)
     if orderStateProto.HasField("equityWithLoanBefore"):
-        orderState.equityWithLoanBefore = decimalMaxString(
+        orderState.equityWithLoanBefore = Decimal(
             orderStateProto.equityWithLoanBefore
         )
     if orderStateProto.HasField("initMarginChange"):
-        orderState.initMarginChange = decimalMaxString(orderStateProto.initMarginChange)
+        orderState.initMarginChange = Decimal(orderStateProto.initMarginChange)
     if orderStateProto.HasField("maintMarginChange"):
-        orderState.maintMarginChange = decimalMaxString(
-            orderStateProto.maintMarginChange
-        )
+        orderState.maintMarginChange = Decimal(orderStateProto.maintMarginChange)
     if orderStateProto.HasField("equityWithLoanChange"):
-        orderState.equityWithLoanChange = decimalMaxString(
+        orderState.equityWithLoanChange = Decimal(
             orderStateProto.equityWithLoanChange
         )
     if orderStateProto.HasField("initMarginAfter"):
-        orderState.initMarginAfter = decimalMaxString(orderStateProto.initMarginAfter)
+        orderState.initMarginAfter = Decimal(orderStateProto.initMarginAfter)
     if orderStateProto.HasField("maintMarginAfter"):
-        orderState.maintMarginAfter = decimalMaxString(orderStateProto.maintMarginAfter)
+        orderState.maintMarginAfter = Decimal(orderStateProto.maintMarginAfter)
     if orderStateProto.HasField("equityWithLoanAfter"):
-        orderState.equityWithLoanAfter = decimalMaxString(
+        orderState.equityWithLoanAfter = Decimal(
             orderStateProto.equityWithLoanAfter
         )
     if orderStateProto.HasField("commissionAndFees"):
-        orderState.commission = orderStateProto.commissionAndFees
+        orderState.commission = Decimal(orderStateProto.commissionAndFees)
     if orderStateProto.HasField("minCommissionAndFees"):
-        orderState.minCommission = orderStateProto.minCommissionAndFees
+        orderState.minCommission = Decimal(orderStateProto.minCommissionAndFees)
     if orderStateProto.HasField("maxCommissionAndFees"):
-        orderState.maxCommission = orderStateProto.maxCommissionAndFees
+        orderState.maxCommission = Decimal(orderStateProto.maxCommissionAndFees)
     if orderStateProto.HasField("commissionAndFeesCurrency"):
         orderState.commissionCurrency = orderStateProto.commissionAndFeesCurrency
     if orderStateProto.HasField("warningText"):
@@ -1014,39 +1031,35 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     if orderStateProto.HasField("marginCurrency"):
         orderState.marginCurrency = orderStateProto.marginCurrency
     if orderStateProto.HasField("initMarginBeforeOutsideRTH"):
-        orderState.initMarginBeforeOutsideRTH = (
+        orderState.initMarginBeforeOutsideRTH = Decimal(
             orderStateProto.initMarginBeforeOutsideRTH
         )
     if orderStateProto.HasField("maintMarginBeforeOutsideRTH"):
-        orderState.maintMarginBeforeOutsideRTH = (
+        orderState.maintMarginBeforeOutsideRTH = Decimal(
             orderStateProto.maintMarginBeforeOutsideRTH
         )
     if orderStateProto.HasField("equityWithLoanBeforeOutsideRTH"):
-        orderState.equityWithLoanBeforeOutsideRTH = (
+        orderState.equityWithLoanBeforeOutsideRTH = Decimal(
             orderStateProto.equityWithLoanBeforeOutsideRTH
         )
     if orderStateProto.HasField("initMarginChangeOutsideRTH"):
-        orderState.initMarginChangeOutsideRTH = (
+        orderState.initMarginChangeOutsideRTH = Decimal(
             orderStateProto.initMarginChangeOutsideRTH
         )
     if orderStateProto.HasField("maintMarginChangeOutsideRTH"):
-        orderState.maintMarginChangeOutsideRTH = (
+        orderState.maintMarginChangeOutsideRTH = Decimal(
             orderStateProto.maintMarginChangeOutsideRTH
         )
     if orderStateProto.HasField("equityWithLoanChangeOutsideRTH"):
-        orderState.equityWithLoanChangeOutsideRTH = (
+        orderState.equityWithLoanChangeOutsideRTH = Decimal(
             orderStateProto.equityWithLoanChangeOutsideRTH
         )
     if orderStateProto.HasField("initMarginAfterOutsideRTH"):
-        orderState.initMarginAfterOutsideRTH = orderStateProto.initMarginAfterOutsideRTH
+        orderState.initMarginAfterOutsideRTH = Decimal(orderStateProto.initMarginAfterOutsideRTH)
     if orderStateProto.HasField("maintMarginAfterOutsideRTH"):
-        orderState.maintMarginAfterOutsideRTH = (
-            orderStateProto.maintMarginAfterOutsideRTH
-        )
+        orderState.maintMarginAfterOutsideRTH = Decimal(orderStateProto.maintMarginAfterOutsideRTH)
     if orderStateProto.HasField("equityWithLoanAfterOutsideRTH"):
-        orderState.equityWithLoanAfterOutsideRTH = (
-            orderStateProto.equityWithLoanAfterOutsideRTH
-        )
+        orderState.equityWithLoanAfterOutsideRTH = Decimal(orderStateProto.equityWithLoanAfterOutsideRTH)
     if orderStateProto.HasField("suggestedSize"):
         orderState.suggestedSize = Decimal(orderStateProto.suggestedSize)
     if orderStateProto.HasField("rejectReason"):
@@ -1062,7 +1075,6 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
         orderState.completedStatus = orderStateProto.completedStatus
 
     return orderState
-
 
 def createOrderAllocations(orderStateProto: OrderStateProto) -> list[OrderAllocation]:
     orderAllocations = []
@@ -1106,7 +1118,7 @@ def createContractFromExecutionDetails(
     """
     return createContract(exec_details_proto.contract)
 
-
+@quantize_decimals()
 def createOrderStatus(orderStatusProto: OrderStatusProto) -> OrderStatus:
     orderStatus = OrderStatus()
     if orderStatusProto.HasField("orderId"):
@@ -1118,19 +1130,19 @@ def createOrderStatus(orderStatusProto: OrderStatusProto) -> OrderStatus:
     if orderStatusProto.HasField("remaining"):
         orderStatus.remaining = Decimal(orderStatusProto.remaining)
     if orderStatusProto.HasField("avgFillPrice"):
-        orderStatus.avgFillPrice = orderStatusProto.avgFillPrice
+        orderStatus.avgFillPrice = Decimal(str(orderStatusProto.avgFillPrice))
     if orderStatusProto.HasField("permId"):
         orderStatus.permId = orderStatusProto.permId
     if orderStatusProto.HasField("parentId"):
         orderStatus.parentId = orderStatusProto.parentId
     if orderStatusProto.HasField("lastFillPrice"):
-        orderStatus.lastFillPrice = orderStatusProto.lastFillPrice
+        orderStatus.lastFillPrice = Decimal(str(orderStatusProto.lastFillPrice))
     if orderStatusProto.HasField("clientId"):
         orderStatus.clientId = orderStatusProto.clientId
     if orderStatusProto.HasField("whyHeld"):
         orderStatus.whyHeld = orderStatusProto.whyHeld
     if orderStatusProto.HasField("mktCapPrice"):
-        orderStatus.mktCapPrice = orderStatusProto.mktCapPrice
+        orderStatus.mktCapPrice = Decimal(str(orderStatusProto.mktCapPrice))
     return orderStatus
 
 
@@ -1139,7 +1151,13 @@ def createExecution(executionProto: ExecutionProto) -> Execution:
     if executionProto.HasField("execId"):
         execution.execId = executionProto.execId
     if executionProto.HasField("time"):
-        execution.time = parseIBDatetime(executionProto.time)
+        parsed_time = parseIBDatetime(executionProto.time)
+        if not isinstance(parsed_time, dt.datetime):
+            execution.time = dt.datetime(
+                parsed_time.year, parsed_time.month, parsed_time.day
+            )
+        else:
+            execution.time = parsed_time
     if executionProto.HasField("acctNumber"):
         execution.acctNumber = executionProto.acctNumber
     if executionProto.HasField("exchange"):
@@ -1193,17 +1211,17 @@ def createFill(execDetailsProto: ExecutionDetailsProto) -> Fill:
 
 def createTradeFromOpenOrder(
     openOrderProto: OpenOrderProto,
-) -> tuple[Trade, OrderState] | None:
+) -> tuple[Trade | None, OrderState | None]:
     if not openOrderProto.HasField("contract"):
-        return None
+        return (None, None)
     contract = createContract(openOrderProto.contract)
     if not openOrderProto.HasField("order"):
-        return None
+        return (None, None)
     order = createOrder(
         openOrderProto.order.orderId, openOrderProto.contract, openOrderProto.order
     )
     if not openOrderProto.HasField("orderState"):
-        return None
+        return (None, None)
     orderState = createOrderState(openOrderProto.orderState)
     orderStatus = OrderStatus(orderId=order.orderId, status=orderState.status)
     return Trade(contract, order, orderStatus, [], []), orderState

@@ -13,7 +13,6 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Topic :: Office/Business :: Financial :: Investment",
-    "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -28,6 +27,7 @@ aeventkit = "^2.1.0"
 # aeventkit = { path = "../eventkit", develop = true }
 nest_asyncio = "*"
 protobuf = "*"
+tzdata = "^2025.2"
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/ib-api-reloaded/ib_async/issues"
@@ -44,7 +44,7 @@ pandas = "^2.2.1"
 ruff = "^0.11.13"
 grpcio-tools = "^1.75.1"
 pytest-timeout = "*"
-
+pytest-cov = "^6.2.1"
 
 [tool.poetry.group.docs]
 optional = true
@@ -70,6 +70,18 @@ asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
 timeout = 10
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+extend-select = [
+  # convert legacy python syntax to modern syntax
+  "UP",
+  # isort imports
+  "I",
+]
+ignore = ["E402"] # Ignore Module level import not at top of file
 
 [build-system]
 requires = ["poetry-core"]

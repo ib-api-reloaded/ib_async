@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import dataclasses
-
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import ClassVar, NamedTuple, TypeAlias
+from enum import StrEnum
+from typing import ClassVar, TypeAlias
+from math import nan
 
 from eventkit import Event
 
@@ -15,7 +15,25 @@ from .objects import Fill, SoftDollarTier, TradeLogEntry
 from .util import UNSET_DECIMAL, dataclassNonDefaults, UNSET_DOUBLE, UNSET_INTEGER
 
 
-@dataclass
+class OrderTIF(StrEnum):
+    """order time in force
+    https://www.ibkrguides.com/traderworkstation/order-types.htm
+    https://www.interactivebrokers.com/en/trading/ordertypes.php
+    """
+
+    DAY = "DAY"
+    GTC = "GTC"  # good til cancelled
+    OPG = "OPG"  #
+    GTD = "GTD"  # good til date
+    IOC = "IOC"  # Immediate or Cancel
+    FOK = "FOK"  # fill or kill
+    GAT = "GAT"  # good after time
+    OVERNIGHT = "OVERNIGHT"  # overnight
+    OVERNIGHT_DAY = "OVERNIGHT + DAY"  # overnight & day
+    AUC = "AUC"  # at auction
+
+
+@dataclass(slots=True)
 class Order:
     """
     Order for trading contracts.
@@ -29,7 +47,7 @@ class Order:
     clientId: int = 0
     permId: int = 0
     action: str = ""
-    totalQuantity: float = 0.0
+    totalQuantity: float | Decimal = 0.0
     orderType: str = ""
     lmtPrice: float | Decimal | None = UNSET_DOUBLE
     auxPrice: float | Decimal | None = UNSET_DOUBLE
@@ -243,7 +261,7 @@ class StopLimitOrder(Order):
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class OrderStatus:
     """
     Reference:
@@ -252,18 +270,18 @@ class OrderStatus:
 
     orderId: int = 0
     status: str = ""
-    filled: float = 0.0
-    remaining: float = 0.0
-    avgFillPrice: float = 0.0
+    filled: float | Decimal = 0.0
+    remaining: float | Decimal = 0.0
+    avgFillPrice: float | Decimal = 0.0
     permId: int = 0
     parentId: int = 0
-    lastFillPrice: float = 0.0
+    lastFillPrice: float | Decimal = 0.0
     clientId: int = 0
     whyHeld: str = ""
-    mktCapPrice: float = 0.0
+    mktCapPrice: float | Decimal = 0.0
 
     @property
-    def total(self) -> float:
+    def total(self) -> float|Decimal:
         """Helper property to return the total size of this requested order."""
         return self.filled + self.remaining
 
@@ -296,7 +314,8 @@ class OrderStatus:
         ]
     )
 
-    # order hasn't triggered "live" yet (but it could become live and execute before we receive a notice)
+    # order hasn't triggered "live" yet (but it could become live and execute before we
+    # receive a notice)
     WaitingStates: ClassVar[frozenset[str]] = frozenset(
         [
             "PendingSubmit",
@@ -310,122 +329,57 @@ class OrderStatus:
         [
             "Submitted",
             # ValidationError can happen on submit or modify.
-            # If ValidationError happens on submit, the states go PreSubmitted -> ValidationError -> Submitted (if it can be ignored automatically), so order is still live.
-            # If ValidationError happens on modify, the update is just ValidationError with no new Submitted, so the previous order state remains active.
+            # If ValidationError happens on submit, the states go PreSubmitted ->
+            # ValidationError -> Submitted (if it can be ignored automatically), so
+            # order is still live.
+            # If ValidationError happens on modify, the update is just ValidationError
+            # with no new Submitted, so the previous order state remains active.
             "ValidationError",
             "ApiUpdate",
         ]
     )
 
 
-@dataclass
+@dataclass(slots=True)
 class OrderState:
     status: str = ""
-    initMarginBefore: str = ""
-    maintMarginBefore: str = ""
-    equityWithLoanBefore: str = ""
-    initMarginChange: str = ""
-    maintMarginChange: str = ""
-    equityWithLoanChange: str = ""
-    initMarginAfter: str = ""
-    maintMarginAfter: str = ""
-    equityWithLoanAfter: str = ""
-    commission: float = UNSET_DOUBLE
-    minCommission: float = UNSET_DOUBLE
-    maxCommission: float = UNSET_DOUBLE
+    initMarginBefore: float | Decimal = nan
+    maintMarginBefore: float | Decimal = nan
+    equityWithLoanBefore: float | Decimal = nan
+    initMarginChange: float | Decimal = nan
+    maintMarginChange: float | Decimal = nan
+    equityWithLoanChange: float | Decimal = nan
+    initMarginAfter: float | Decimal = nan
+    maintMarginAfter: float | Decimal = nan
+    equityWithLoanAfter: float | Decimal = nan
+    commission: float | Decimal = nan
+    minCommission: float | Decimal = nan
+    maxCommission: float | Decimal = nan
     commissionCurrency: str = ""
     marginCurrency: str = ""
-    initMarginBeforeOutsideRTH: float = UNSET_DOUBLE  # type: float
-    maintMarginBeforeOutsideRTH: float = UNSET_DOUBLE  # type: float
-    equityWithLoanBeforeOutsideRTH: float = UNSET_DOUBLE  # type: float
-    initMarginChangeOutsideRTH: float = UNSET_DOUBLE  # type: float
-    maintMarginChangeOutsideRTH: float = UNSET_DOUBLE  # type: float
-    equityWithLoanChangeOutsideRTH: float = UNSET_DOUBLE  # type: float
-    initMarginAfterOutsideRTH: float = UNSET_DOUBLE  # type: float
-    maintMarginAfterOutsideRTH: float = UNSET_DOUBLE  # type: float
-    equityWithLoanAfterOutsideRTH: float = UNSET_DOUBLE  # type: float
-    suggestedSize = UNSET_DECIMAL
-    rejectReason = ""
-    orderAllocations = None
+    initMarginBeforeOutsideRTH: float | Decimal = nan
+    maintMarginBeforeOutsideRTH: float | Decimal = nan
+    equityWithLoanBeforeOutsideRTH: float | Decimal = nan
+    initMarginChangeOutsideRTH: float | Decimal = nan
+    maintMarginChangeOutsideRTH: float | Decimal = nan
+    equityWithLoanChangeOutsideRTH: float | Decimal = nan
+    initMarginAfterOutsideRTH: float | Decimal = nan
+    maintMarginAfterOutsideRTH: float | Decimal = nan
+    equityWithLoanAfterOutsideRTH: float | Decimal = nan
+    suggestedSize: float | Decimal = nan
+    rejectReason: str = ""
+    orderAllocations: list["OrderAllocation"] | None = None
     warningText: str = ""
     completedTime: str = ""
     completedStatus: str = ""
 
-    def transform(self, transformer):
-        """Convert the numeric values of this OrderState into a new OrderState transformed by 'using'"""
-        return dataclasses.replace(
-            self,
-            initMarginBefore=transformer(self.initMarginBefore),
-            maintMarginBefore=transformer(self.maintMarginBefore),
-            equityWithLoanBefore=transformer(self.equityWithLoanBefore),
-            initMarginChange=transformer(self.initMarginChange),
-            maintMarginChange=transformer(self.maintMarginChange),
-            equityWithLoanChange=transformer(self.equityWithLoanChange),
-            initMarginAfter=transformer(self.initMarginAfter),
-            maintMarginAfter=transformer(self.maintMarginAfter),
-            equityWithLoanAfter=transformer(self.equityWithLoanAfter),
-            commission=transformer(self.commission),
-            minCommission=transformer(self.minCommission),
-            maxCommission=transformer(self.maxCommission),
-        )
 
-    def numeric(self, digits: int = 2) -> OrderStateNumeric:
-        """Return a new OrderState with the current values values to floats instead of strings as returned from IBKR directly."""
-
-        def floatOrNone(what, precision) -> float | None:
-            """Attempt to convert input to a float, but if we fail (value is just empty string) return None"""
-            try:
-                # convert
-                floated = float(what)
-
-                # if the conversion is IBKR speak for "this value is not set" then give us None
-                if floated == UNSET_DOUBLE:
-                    return None
-
-                # else, round to the requested precision
-                return round(floated, precision)
-            except Exception as _:
-                # initial conversion failed so just return None in its place
-                return None
-
-        return self.transform(lambda x: floatOrNone(x, digits))
-
-    def formatted(self, digits: int = 2):
-        """Return a new OrderState with the current values as formatted strings."""
-        return self.numeric(8).transform(
-            # 300000.21 -> 300,000.21
-            # 0.0 -> 0.00
-            # 431.342000000001 -> 431.34
-            # Note: we need 'is not None' here because 'x=0' is a valid numeric input too
-            lambda x: f"{x:,.{digits}f}" if x is not None else None
-        )
-
-
-@dataclass
-class OrderStateNumeric(OrderState):
-    """Just a type helper for mypy to check against if you convert OrderState to .numeric().
-
-    Usage:
-
-    state_numeric: OrderStateNumeric = state.numeric(digits=2)"""
-
-    initMarginBefore: float = float("nan")  # type: ignore
-    maintMarginBefore: float = float("nan")  # type: ignore
-    equityWithLoanBefore: float = float("nan")  # type: ignore
-    initMarginChange: float = float("nan")  # type: ignore
-    maintMarginChange: float = float("nan")  # type: ignore
-    equityWithLoanChange: float = float("nan")  # type: ignore
-    initMarginAfter: float = float("nan")  # type: ignore
-    maintMarginAfter: float = float("nan")  # type: ignore
-    equityWithLoanAfter: float = float("nan")  # type: ignore
-
-
-@dataclass
+@dataclass(slots=True)
 class OrderComboLeg:
     price: float | Decimal = UNSET_DOUBLE
 
 
-@dataclass
+@dataclass(slots=True)
 class Trade:
     """
     Trade keeps track of an order, its status and all its fills.
@@ -447,6 +401,15 @@ class Trade:
     fills: list[Fill] = field(default_factory=list)
     log: list[TradeLogEntry] = field(default_factory=list)
     advancedError: str = ""
+
+    # instance Events must be declared as fields so they exist in __slots__
+    statusEvent: Event = field(init=False, repr=False, compare=False)
+    modifyEvent: Event = field(init=False, repr=False, compare=False)
+    fillEvent: Event = field(init=False, repr=False, compare=False)
+    commissionReportEvent: Event = field(init=False, repr=False, compare=False)
+    filledEvent: Event = field(init=False, repr=False, compare=False)
+    cancelEvent: Event = field(init=False, repr=False, compare=False)
+    cancelledEvent: Event = field(init=False, repr=False, compare=False)
 
     # TODO: replace these with an enum?
     events: ClassVar = (
@@ -498,14 +461,18 @@ class Trade:
         return float(self.order.totalQuantity) - self.filled()
 
 
-class BracketOrder(NamedTuple):
+@dataclass(slots=True)
+class BracketOrder:
     parent: Order
     takeProfit: Order
     stopLoss: Order
 
 
-@dataclass
+@dataclass(slots=True)
 class OrderCondition:
+    condType: ClassVar[int]
+    conjunction: str = "a"
+
     @staticmethod
     def createClass(condType):
         d = {
@@ -527,10 +494,9 @@ class OrderCondition:
         return self
 
 
-@dataclass
+@dataclass(slots=True)
 class PriceCondition(OrderCondition):
-    condType: int = 1
-    conjunction: str = "a"
+    condType: ClassVar[int] = 1
     isMore: bool = True
     price: float = 0.0
     conId: int = 0
@@ -538,45 +504,40 @@ class PriceCondition(OrderCondition):
     triggerMethod: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class TimeCondition(OrderCondition):
-    condType: int = 3
-    conjunction: str = "a"
+    condType: ClassVar[int] = 3
     isMore: bool = True
     time: str = ""
 
 
-@dataclass
+@dataclass(slots=True)
 class MarginCondition(OrderCondition):
-    condType: int = 4
-    conjunction: str = "a"
+    condType: ClassVar[int] = 4
     isMore: bool = True
     percent: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class ExecutionCondition(OrderCondition):
-    condType: int = 5
-    conjunction: str = "a"
+    condType: ClassVar[int] = 5
     secType: str = ""
     exch: str = ""
     symbol: str = ""
 
 
-@dataclass
+@dataclass(slots=True)
 class VolumeCondition(OrderCondition):
-    condType: int = 6
-    conjunction: str = "a"
+    condType: ClassVar[int] = 6
     isMore: bool = True
     volume: int = 0
     conId: int = 0
     exch: str = ""
 
 
-@dataclass
+@dataclass(slots=True)
 class PercentChangeCondition(OrderCondition):
-    condType: int = 7
-    conjunction: str = "a"
+    condType: ClassVar[int] = 7
     isMore: bool = True
     changePercent: float = 0.0
     conId: int = 0
@@ -593,22 +554,22 @@ OrderConditionType: TypeAlias = (
 )
 
 
-@dataclass
+@dataclass(slots=True)
 class OrderAllocation:
     """
     Reference: https://ibkrcampus.com/campus/ibkr-api-page/twsapi-ref/#order-static-pub-func
     """
 
-    account = ""
-    position: Decimal = UNSET_DECIMAL
-    positionDesired: Decimal = UNSET_DECIMAL
-    positionAfter: Decimal = UNSET_DECIMAL
-    desiredAllocQty: Decimal = UNSET_DECIMAL
-    allowedAllocQty: Decimal = UNSET_DECIMAL
-    isMonetary = False
+    account: str = field(default="")
+    position: Decimal = field(default=UNSET_DECIMAL)
+    positionDesired: Decimal = field(default=UNSET_DECIMAL)
+    positionAfter: Decimal = field(default=UNSET_DECIMAL)
+    desiredAllocQty: Decimal = field(default=UNSET_DECIMAL)
+    allowedAllocQty: Decimal = field(default=UNSET_DECIMAL)
+    isMonetary: bool = field(default=False)
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class OrderCancel:
     """
     Reference https://ibkrcampus.com/campus/ibkr-api-page/twsapi-ref/#orderallocation-ref
@@ -624,6 +585,6 @@ class OrderCancel:
                           signify if an order is manual (1) or automated (0).
     """
 
-    manualOrderCancelTime: str = ""
-    extOperator: str = ""
-    manualOrderIndicator: int = UNSET_INTEGER
+    manualOrderCancelTime: str = field(default="")
+    extOperator: str = field(default="")
+    manualOrderIndicator: int = field(default=UNSET_INTEGER)

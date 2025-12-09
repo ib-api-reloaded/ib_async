@@ -22,6 +22,8 @@ from typing import (
     TypeAlias,
     Union,
 )
+from functools import wraps
+from decimal import ROUND_HALF_UP
 
 import eventkit as ev
 
@@ -608,8 +610,8 @@ def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
         # YYYYmmdd  HH:MM:SS
         # or
         # YYYY-mm-dd HH:MM:SS.0
-        ss = s.replace(" ", "").replace("-", "")[:16]
-        t = dt.datetime.strptime(ss, "%Y%m%d%H:%M:%S")
+        ss = s.replace(" ", "").replace("-", "").replace(":", "")[:14]
+        t = dt.datetime.strptime(ss, "%Y%m%d%H%M%S")
 
     return t
 
@@ -644,3 +646,27 @@ def listOfValues(cls):
 
 def isValidIntValue(val: int) -> bool:
     return val != UNSET_INTEGER
+
+def quantize_decimals(places=2, rounding=ROUND_HALF_UP):
+    """
+    Decorator that finds all Decimal fields in a returned dataclass
+    object and quantizes them to a given number of decimal places.
+    """
+    quantizer = Decimal('0.1') ** places
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Get the dataclass object from the wrapped function
+            result = func(*args, **kwargs)
+
+            # Iterate over its fields and quantize any Decimals
+            if result and is_dataclass(result):
+                for field in fields(result):
+                    value = getattr(result, field.name)
+                    if isinstance(value, Decimal):
+                        quantized_value = value.quantize(quantizer, rounding=rounding)
+                        setattr(result, field.name, quantized_value)
+            return result
+        return wrapper
+    return decorator

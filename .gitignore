@@ -18,3 +18,4 @@ poetry.lock
 proto/*
 **/__pycache__/
 #pythonclient/*
+.coverage

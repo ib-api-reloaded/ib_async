@@ -326,20 +326,20 @@ class TickData:
     size: float
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class TickAttrib:
     canAutoExecute: bool = False
     pastLimit: bool = False
     preOpen: bool = False
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class TickAttribBidAsk:
     bidPastLow: bool = False
     askPastHigh: bool = False
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class TickAttribLast:
     pastLimit: bool = False
     unreported: bool = False
@@ -381,6 +381,11 @@ class TickGenericData:
     reqId: int
     tickType: TickType
     value: float
+
+
+TickDeliveryType: TypeAlias = (
+    TickPriceData | TickSizeData | TickStringData | TickGenericData
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -428,19 +433,41 @@ class TickByTickMidPointData:
     midPoint: float
 
 
-TickDataType: TypeAlias = (
-    TickPriceData
-    | TickSizeData
-    | TickStringData
-    | TickGenericData
-    | TickByTickAllLastData
-    | TickByTickBidAskData
-    | TickByTickMidPointData
-    | TickComputationData
+@dataclass(slots=True, frozen=True)
+class HistoricalTick:
+    time: datetime
+    price: float
+    size: float
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalTickBidAsk:
+    time: datetime
+    tickAttribBidAsk: TickAttribBidAsk
+    priceBid: float
+    priceAsk: float
+    sizeBid: float
+    sizeAsk: float
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalTickLast:
+    time: datetime
+    tickAttribLast: TickAttribLast
+    price: float
+    size: float
+    exchange: str
+    specialConditions: str
+
+
+HistoricalTickType: TypeAlias = (
+    HistoricalTick | HistoricalTickBidAsk | HistoricalTickLast
 )
 
+TickDataType: TypeAlias = TickDeliveryType | HistoricalTickType | TickComputationData
 
-@dataclass(slots=True)
+
+@dataclass(slots=True, frozen=True)
 class HistogramData:
     price: float = 0.0
     count: int = 0
@@ -468,12 +495,21 @@ class PnL:
     dailyPnL: float = nan
     unrealizedPnL: float = nan
     realizedPnL: float = nan
+    pnl_bus: Event = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.pnl_bus = Event("pnl_bus")
 
     def getKey(self):
         """return PnL key
         ie: ib.cancelPnL(pnl.getKey())
         """
         return (self.account, self.modelCode)
+
+    def _on_update(self, dailyPnL: float, unrealizedPnL: float, realizedPnL: float):
+        self.dailyPnL = dailyPnL
+        self.unrealizedPnL = unrealizedPnL
+        self.realizedPnL = realizedPnL
 
 
 @dataclass(slots=True)
@@ -494,12 +530,30 @@ class PnLSingle:
     realizedPnL: float = nan
     position: int = 0
     value: float = nan
+    pnl_single_bus: Event = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.pnl_single_bus = Event("pnl_bus")
 
     def getKey(self):
         """return PnLSingle key
         ie: ib.cancelPnLSingle(pnl_single.getKey())
         """
         return (self.account, self.modelCode, self.conId)
+
+    def _on_update(
+        self,
+        pos: int,
+        dailyPnL: float,
+        unrealizedPnL: float,
+        realizedPnL: float,
+        value: float,
+    ):
+        self.position = pos
+        self.dailyPnL = dailyPnL
+        self.unrealizedPnL = unrealizedPnL
+        self.realizedPnL = realizedPnL
+        self.value = value
 
 
 @dataclass(slots=True, frozen=True)
@@ -529,63 +583,13 @@ class WshEventData:
     totalLimit: int = UNSET_INTEGER
 
 
-class AccountValue(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class AccountValue:
     account: str
     tag: str
     value: str
     currency: str
     modelCode: str
-
-
-@dataclass(slots=True)
-class HistoricalTick:
-    time: datetime
-    price: float
-    size: float
-
-
-@dataclass(slots=True)
-class HistoricalTickBidAsk:
-    time: datetime
-    tickAttribBidAsk: TickAttribBidAsk
-    priceBid: float
-    priceAsk: float
-    sizeBid: float
-    sizeAsk: float
-
-
-@dataclass(slots=True, frozen=True)
-class HistoricalTickLast:
-    time: datetime
-    tickAttribLast: TickAttribLast
-    price: float
-    size: float
-    exchange: str
-    specialConditions: str
-
-
-class TickByTickAllLast(NamedTuple):
-    tickType: int
-    time: datetime
-    price: float
-    size: float
-    tickAttribLast: TickAttribLast
-    exchange: str
-    specialConditions: str
-
-
-class TickByTickBidAsk(NamedTuple):
-    time: datetime
-    bidPrice: float
-    askPrice: float
-    bidSize: float
-    askSize: float
-    tickAttribBidAsk: TickAttribBidAsk
-
-
-class TickByTickMidPoint(NamedTuple):
-    time: datetime
-    midPoint: float
 
 
 class MktDepthData(NamedTuple):
@@ -604,12 +608,14 @@ class DOMLevel(NamedTuple):
     marketMaker: str
 
 
-class PriceIncrement(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class PriceIncrement:
     lowEdge: float
     increment: float
 
 
-class PortfolioItem(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class PortfolioItem:
     contract: Contract
     position: float
     marketPrice: float
@@ -620,7 +626,8 @@ class PortfolioItem(NamedTuple):
     account: str
 
 
-class Position(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class Position:
     account: str
     contract: Contract
     position: float
@@ -807,7 +814,7 @@ class ScanDataList(list[ScanData]):
     def __eq__(self, other):
         return self is other
 
-    def _on_data(self, ib: "IB", data: ScanData):
+    def _on_data(self, ib: "IB", data: list[ScanData]):
         """Called on scanner data."""
         rank = data[0].rank if 0 <= len(data) else None
         if rank == 0:
@@ -836,7 +843,6 @@ class FundamentalRatios(DynamicObject):
     pass
 
 
-@dataclass
 class IBDefaults:
     """A simple way to provide default values when populating API data."""
 

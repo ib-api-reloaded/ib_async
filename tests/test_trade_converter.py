@@ -68,7 +68,7 @@ from ib_async.protobuf.OrderAllocation_pb2 import (
 )
 
 
-from ib_async.protobuf_converters.trade_converter import (
+from ib_async.protobuf_converters.trade_converters import (
     createPlaceOrderRequestProto,
     createOrderProto,
     createOrder,
@@ -87,7 +87,7 @@ from ib_async.protobuf_converters.trade_converter import (
     createGlobalCancelRequestProto,
     createCancelOrderRequestProto,
     createExerciseOptionsRequestProto,
-    createConditionsProto,  # Also need to import these helper functions
+    createConditionsProto,
     createOrderComboLegs,
     createOrderConditionProto,
     createOperatorConditionProto,
@@ -217,7 +217,7 @@ class TestTradeConverters:
         )
         with pytest.MonkeyPatch().context() as mp:
             mp.setattr(
-                "ib_async.protobuf_converters.trade_converter.createContractProto",
+                "ib_async.protobuf_converters.trade_converters.createContractProto",
                 lambda c, o: contract_proto_mock,
             )
             place_order_proto = createPlaceOrderRequestProto(1, contract, order)
@@ -737,8 +737,8 @@ class TestTradeConverters:
         order_state = createOrderState(order_state_proto)
         assert isinstance(order_state, OrderState)
         assert order_state.status == "Filled"
-        assert order_state.initMarginBefore == "1000.0"
-        assert order_state.commission == 10.0
+        assert order_state.initMarginBefore == Decimal("1000.00")
+        assert order_state.commission == 10.00
         assert order_state.completedTime == "20250101 10:00:00"
 
     def test_createOrderAllocations(self):
@@ -844,7 +844,7 @@ class TestTradeConverters:
         open_order_proto = OpenOrderProto()
         # open_order_proto.contract is missing
         result = createTradeFromOpenOrder(open_order_proto)
-        assert result is None
+        assert result == (None, None)
 
     def test_createCommissionReport(self):
         commission_report_proto = CommissionReportProto(

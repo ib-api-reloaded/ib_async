@@ -104,7 +104,7 @@ from .protobuf_converters.subscription_converters import (
     createScannerSubscriptionRequestProto,
     createScannerParametersRequestProto,
 )
-from .protobuf_converters.trade_converter import (
+from .protobuf_converters.trade_converters import (
     createCancelOrderRequestProto,
     createExecutionRequestProto,
     createExerciseOptionsRequestProto,
@@ -658,12 +658,29 @@ class Client:
         )
 
     def exerciseOptions(
-        self, reqId, contract, exerciseAction, exerciseQuantity, account, override
+        self,
+        reqId,
+        contract,
+        exerciseAction,
+        exerciseQuantity,
+        account,
+        override,
+        manualOrderTime,
+        customerAccount,
+        professionalCustomer,
     ):
         self.sendProto(
             MessageId.OUT.EXERCISE_OPTIONS,
             createExerciseOptionsRequestProto(
-                reqId, contract, exerciseAction, exerciseQuantity, account, override
+                reqId,
+                contract,
+                exerciseAction,
+                exerciseQuantity,
+                account,
+                override,
+                manualOrderTime,
+                customerAccount,
+                professionalCustomer,
             ),
         )
 

@@ -671,7 +671,11 @@ class IB:
         Get a list of all live updated bars. These can be 5 second realtime
         bars or live updated historical bars.
         """
-        return list(self.wrapper.reqId2Subscriber.values())
+        return [
+            v
+            for v in self.wrapper.subscriptions.values()
+            if isinstance(v, (BarDataList, RealTimeBarList))
+        ]
 
     def newsTicks(self) -> list[NewsTick]:
         """
@@ -1041,6 +1045,7 @@ class IB:
         pnl = PnL(account, modelCode)
         self.wrapper.Pnl.add(reqId, key, pnl)
         self.client.reqPnL(reqId, account, modelCode)
+        pnl.pnl_bus.connect(pnl._on_update)
 
         return pnl
 
@@ -1055,8 +1060,11 @@ class IB:
         key = (account, modelCode)
         reqId = self.wrapper.Pnl.get_request_id(key)
         if reqId:
-            self.client.cancelPnL(reqId)
+            pnl = self.wrapper.Pnl.get_by_request_id(reqId)
+            if pnl:
+                pnl.pnl_bus.clear()
             self.wrapper.Pnl.remove_by_request_id(reqId)
+            self.client.cancelPnL(reqId)
         else:
             self._logger.error(
                 "cancelPnL: No subscription for "
@@ -1083,6 +1091,7 @@ class IB:
         reqId = self.client.getReqId()
         pnlSingle = PnLSingle(account, modelCode, conId)
         self.wrapper.pnlSingles.add(reqId, key, pnlSingle)
+        pnlSingle.pnl_single_bus.connect(pnlSingle._on_update)
         self.client.reqPnLSingle(reqId, account, modelCode, conId)
 
         return pnlSingle
@@ -1100,6 +1109,9 @@ class IB:
         key = (account, modelCode, conId)
         reqId = self.wrapper.pnlSingles.get_request_id(key)
         if reqId:
+            pnlSingle = self.wrapper.pnlSingles.get_by_request_id(reqId)
+            if pnlSingle:
+                pnlSingle.pnl_single_bus.clear()
             self.client.cancelPnLSingle(reqId)
             self.wrapper.pnlSingles.remove_by_request_id(reqId)
         else:
@@ -1451,7 +1463,7 @@ class IB:
             mktDataOptions: Unknown
         """
         reqId = self.client.getReqId()
-        ticker = self.wrapper.startTicker(reqId, contract, "mktData")
+        ticker = self.wrapper.startTicker(reqId, contract)
         self.client.reqMktData(
             reqId,
             contract,
@@ -1474,7 +1486,7 @@ class IB:
             Returns False if 'contract' was not found.
         """
         ticker = self.ticker(contract)
-        reqId = self.wrapper.endTicker(ticker, "mktData") if ticker else 0
+        reqId = self.wrapper.endTicker(ticker) if ticker else None
 
         if reqId:
             self.client.cancelMktData(reqId)
@@ -1504,7 +1516,7 @@ class IB:
             ignoreSize: Ignore bid/ask ticks that only update the size.
         """
         reqId = self.client.getReqId()
-        ticker = self.wrapper.startTicker(reqId, contract, tickType)
+        ticker = self.wrapper.startTicker(reqId, contract)
 
         self.client.reqTickByTickData(
             reqId, contract, tickType, numberOfTicks, ignoreSize
@@ -1512,7 +1524,7 @@ class IB:
 
         return ticker
 
-    def cancelTickByTickData(self, contract: Contract, tickType: str) -> bool:
+    def cancelTickByTickData(self, contract: Contract) -> bool:
         """
         Unsubscribe from tick-by-tick data
 
@@ -1524,7 +1536,7 @@ class IB:
             Returns False if 'contract' was not found.
         """
         ticker = self.ticker(contract)
-        reqId = self.wrapper.endTicker(ticker, tickType) if ticker else 0
+        reqId = self.wrapper.endTicker(ticker) if ticker else None
 
         if reqId:
             self.client.cancelTickByTickData(reqId)
@@ -1576,7 +1588,7 @@ class IB:
             ``ticker.domTicks``.
         """
         reqId = self.client.getReqId()
-        ticker = self.wrapper.startTicker(reqId, contract, "mktDepth")
+        ticker = self.wrapper.startTicker(reqId, contract)
         ticker.domBids.clear()
         ticker.domAsks.clear()
         ticker.domBidsDict.clear()
@@ -1593,7 +1605,7 @@ class IB:
                 subscribe with.
         """
         ticker = self.ticker(contract)
-        reqId = self.wrapper.endTicker(ticker, "mktDepth") if ticker else 0
+        reqId = self.wrapper.endTicker(ticker) if ticker else None
         if ticker and reqId:
             self.client.cancelMktDepth(reqId, isSmartDepth)
 
@@ -1826,6 +1838,9 @@ class IB:
         exerciseQuantity: int,
         account: str,
         override: int,
+        manualOrderTime: str,
+        customerAccount: str,
+        professionalCustomer: bool,
     ):
         """
         Exercise an options contract.
@@ -1842,10 +1857,21 @@ class IB:
             override:
                 * 0 = no override
                 * 1 = override the system's natural action
+            manualOrderTime:str - manual order time
+            customerAccount:str - customer account
+            professionalCustomer:bool - professional customer
         """
         reqId = self.client.getReqId()
         self.client.exerciseOptions(
-            reqId, contract, exerciseAction, exerciseQuantity, account, override
+            reqId,
+            contract,
+            exerciseAction,
+            exerciseQuantity,
+            account,
+            override,
+            manualOrderTime,
+            customerAccount,
+            professionalCustomer,
         )
 
     def reqNewsProviders(self) -> list[NewsProvider]:
@@ -2189,8 +2215,8 @@ class IB:
             elif len(detailsList) > 1:
                 # BUG FIX:
                 #  - IBKR is returning EC _and_ FOP contracts for only FOP requests,
-                #    which is clearly incorrect, so now if an input request has `secType`
-                #    defined, we only return matching `secType` contracts.
+                #    which is clearly incorrect, so now if an input request has
+                # `secType` defined, we only return matching `secType` contracts.
                 if contract.secType:
                     possibles = [
                         details.contract
@@ -2198,12 +2224,13 @@ class IB:
                         if contract.secType == details.contract.secType  # type: ignore
                     ]
 
-                    # if our match instrument type filter resolved to only _one_ matching
-                    # contract, then we found a single usable result to add.
+                    # if our match instrument type filter resolved to only _one_
+                    # matching contract, then we found a single usable result to add.
                     if len(possibles) == 1:
                         c = possibles[0]
                         if contract.exchange == "SMART":
-                            # Allow contracts to become more generic if SMART requested as input
+                            # Allow contracts to become more generic if SMART requested
+                            # as input
                             c.exchange = contract.exchange  # type: ignore
 
                         util.dataclassUpdate(contract, c)
@@ -2241,7 +2268,7 @@ class IB:
         for contract in contracts:
             reqId = self.client.getReqId()
             reqIds.append(reqId)
-            ticker = self.wrapper.startTicker(reqId, contract, "snapshot")
+            ticker = self.wrapper.startTicker(reqId, contract)
             tickers.append(ticker)
             self.client.reqMktData(reqId, contract, "", True, regulatorySnapshot, [])
 
@@ -2299,6 +2326,7 @@ class IB:
         return (
             self.wrapper.response_bus.filter(lambda key, _: key == "accountValues")
             .take(1)
+            .pluck(1)
             .map(self._raise_if_error)
         )
 
