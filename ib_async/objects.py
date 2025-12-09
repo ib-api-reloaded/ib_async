@@ -1,11 +1,12 @@
 """Object hierarchy."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import date as date_
 from datetime import datetime, timezone, tzinfo
 from enum import Enum
-from typing import TYPE_CHECKING, Any, List, NamedTuple, Optional, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias
 
 if TYPE_CHECKING:
     from ib_async import IB
@@ -118,7 +119,7 @@ class ExecutionFilter:
 
 @dataclass(slots=True, frozen=True)
 class BarData:
-    date: Union[date_, datetime] = EPOCH
+    date: date_ | datetime = EPOCH
     open: float = 0.0
     high: float = 0.0
     low: float = 0.0
@@ -568,7 +569,7 @@ class HistoricalSchedule:
     startDateTime: str = ""
     endDateTime: str = ""
     timeZone: str = ""
-    sessions: List[HistoricalSession] = field(default_factory=list)
+    sessions: list[HistoricalSession] = field(default_factory=list)
 
 
 @dataclass
@@ -648,16 +649,16 @@ class OptionChain:
     underlyingConId: int
     tradingClass: str
     multiplier: str
-    expirations: List[str]
-    strikes: List[float]
+    expirations: list[str]
+    strikes: list[float]
 
 
 @dataclass(slots=True, frozen=True)
 class Dividends:
-    past12Months: Optional[float]
-    next12Months: Optional[float]
-    nextDate: Optional[date_]
-    nextAmount: Optional[float]
+    past12Months: float | None
+    next12Months: float | None
+    nextDate: date_ | None
+    nextAmount: float | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -714,7 +715,7 @@ class ConnectionStats:
     numMsgSent: int
 
 
-class BarDataList(List[BarData]):
+class BarDataList(list[BarData]):
     """
     List of :class:`.BarData` that also stores all request parameters.
 
@@ -726,14 +727,14 @@ class BarDataList(List[BarData]):
 
     reqId: int
     contract: Contract
-    endDateTime: Union[datetime, date_, str, None]
+    endDateTime: datetime | date_ | str | None
     durationStr: str
     barSizeSetting: str
     whatToShow: str
     useRTH: bool
     formatDate: int
     keepUpToDate: bool
-    chartOptions: List[TagValue]
+    chartOptions: list[TagValue]
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -743,7 +744,7 @@ class BarDataList(List[BarData]):
     def __eq__(self, other) -> bool:
         return self is other
 
-    def _on_data(self, ib: "IB", bar: BarData):
+    def _on_data(self, ib: IB, bar: BarData):
         """Called on bar update when keepUpToDate=True."""
 
         lastDate = self[-1].date
@@ -786,7 +787,7 @@ class RealTimeBarList(list[RealTimeBar]):
     def __eq__(self, other) -> bool:
         return self is other
 
-    def _on_data(self, ib: "IB", bar: RealTimeBar):
+    def _on_data(self, ib: IB, bar: RealTimeBar):
         """Called on real time bar update."""
         self.append(bar)
         ib.barUpdateEvent.emit(self, True)
@@ -814,7 +815,7 @@ class ScanDataList(list[ScanData]):
     def __eq__(self, other):
         return self is other
 
-    def _on_data(self, ib: "IB", data: list[ScanData]):
+    def _on_data(self, ib: IB, data: list[ScanData]):
         """Called on scanner data."""
         rank = data[0].rank if 0 <= len(data) else None
         if rank == 0:

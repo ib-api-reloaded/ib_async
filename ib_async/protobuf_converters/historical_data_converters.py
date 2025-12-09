@@ -71,8 +71,8 @@ from ..util import (
     parseIBDatetime,
     parseIBTimeStamp,
 )
-from .contract_converters import createContractProto
 from .base_converters import ClientException, fillTagValueList
+from .contract_converters import createContractProto
 
 
 def createHeadTimestampRequestProto(
@@ -308,10 +308,10 @@ def createHistoricalTickShim(
 
 def createTickByTick(
     tickByTickData: TickByTickDataProto, tz: tzinfo
-) -> HistoricalTickType|None:
+) -> HistoricalTickType | None:
     tickType = tickByTickData.tickType if tickByTickData.HasField("tickType") else 0
     if tickType == 0:
-        raise ValueError("%s: Invalid tick type: %r",__name__,tickByTickData)
+        raise ValueError("%s: Invalid tick type: %r", __name__, tickByTickData)
     elif tickType == 1 or tickType == 2:
         # Last or AllLast
         if tickByTickData.HasField("historicalTickLast"):
@@ -330,6 +330,7 @@ def createTickByTick(
             tick_mid = createHistoricalTick(tickByTickData.historicalTickMidPoint, tz)
             return tick_mid
     return None
+
 
 def createHistogramDataRequestProto(
     reqId: int, contract: Contract, useRTH: bool, timePeriod: str

@@ -6,17 +6,15 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Hashable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
     TYPE_CHECKING,
     Any,
     Generic,
-    Hashable,
-    Optional,
     TypeAlias,
     TypeVar,
-    Union,
     cast,
 )
 from weakref import WeakKeyDictionary
@@ -196,7 +194,7 @@ class BiDict(Generic[K, V]):
         """
         return self._request_by_object_id.get(object_id)
 
-    def get_request_id_by_object(self, obj: V) -> Optional[int]:
+    def get_request_id_by_object(self, obj: V) -> int | None:
         """Get reqquest_od by object.
         Only works if track_objects_weakly=True
 
@@ -311,7 +309,7 @@ class Wrapper:
     """
 
     # reference back to IB so wrapper can access API methods
-    ib: "IB"
+    ib: IB
 
     accountValues: dict[tuple, AccountValue] = field(init=False)
     """ (account, tag, currency, modelCode) -> AccountValue """

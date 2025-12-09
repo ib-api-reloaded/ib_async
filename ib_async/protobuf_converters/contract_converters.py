@@ -32,12 +32,11 @@ from ..protobuf.SecDefOptParameter_pb2 import (
 from ..protobuf.SecDefOptParamsRequest_pb2 import (
     SecDefOptParamsRequest as SecDefOptParamsRequestProto,
 )
+from ..protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
 from ..protobuf.SmartComponentsRequest_pb2 import (
     SmartComponentsRequest as SmartComponentsRequestProto,
 )
-from ..protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
 from ..util import (
-    UNSET_DOUBLE,
     floatMaxString,
     getEnumTypeFromString,
     isValidIntValue,

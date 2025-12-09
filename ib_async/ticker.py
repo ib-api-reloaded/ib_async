@@ -1,10 +1,10 @@
 """Access to realtime market information."""
 
-from decimal import Decimal
 import logging
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import ClassVar, Final, TypeAlias
 
 from eventkit import Event, Op
@@ -14,12 +14,12 @@ from ib_async.objects import (
     Dividends,
     DOMLevel,
     FundamentalRatios,
+    HistoricalTick,
+    HistoricalTickBidAsk,
+    HistoricalTickLast,
     IBDefaults,
     MktDepthData,
     OptionComputation,
-    HistoricalTickLast,
-    HistoricalTickBidAsk,
-    HistoricalTick,
     TickComputationData,
     TickData,
     TickDataType,
@@ -474,7 +474,7 @@ class Ticker:
             }:
                 timestamp = int(tick_string.value)
 
-                # only populate if timestamp isn't '0' (we don't want to report "last 
+                # only populate if timestamp isn't '0' (we don't want to report "last
                 # trade: 20,000 days ago")
                 if timestamp:
                     self.lastTimestamp = datetime.fromtimestamp(

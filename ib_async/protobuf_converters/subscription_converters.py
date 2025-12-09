@@ -1,6 +1,6 @@
+from ib_async.contract import ContractDetails, ScanData
 from ib_async.objects import ScannerSubscription, TagValue
 from ib_async.util import UNSET_DOUBLE, isValidIntValue
-from ib_async.contract import ScanData, ContractDetails
 
 from ..protobuf.CancelPnL_pb2 import CancelPnL as CancelPnLProto
 from ..protobuf.CancelPnLSingle_pb2 import CancelPnLSingle as CancelPnLSingleProto
@@ -9,18 +9,18 @@ from ..protobuf.CancelScannerSubscription_pb2 import (
 )
 from ..protobuf.PnLRequest_pb2 import PnLRequest as PnLRequestProto
 from ..protobuf.PnLSingleRequest_pb2 import PnLSingleRequest as PnLSingleRequestProto
+from ..protobuf.ScannerData_pb2 import ScannerData as ScannerDataProto
 from ..protobuf.ScannerParametersRequest_pb2 import (
     ScannerParametersRequest as ScannerParametersRequestProto,
 )
 from ..protobuf.ScannerSubscription_pb2 import (
     ScannerSubscription as ScannerSubscriptionProto,
 )
-from ..protobuf.ScannerData_pb2 import ScannerData as ScannerDataProto
 from ..protobuf.ScannerSubscriptionRequest_pb2 import (
     ScannerSubscriptionRequest as ScannerSubscriptionRequestProto,
 )
-from .historical_data_converters import fillTagValueList
 from .contract_converters import createContract
+from .historical_data_converters import fillTagValueList
 
 
 def createScannerParametersRequestProto() -> ScannerParametersRequestProto:

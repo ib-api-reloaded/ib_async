@@ -3,7 +3,6 @@
 import datetime as dt
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
 
 import ib_async.util as util
 
@@ -127,7 +126,7 @@ class Contract:
     issuerId: str = ""
     comboLegsDescrip: str = ""
     comboLegs: list["ComboLeg"] = field(default_factory=list)
-    deltaNeutralContract: Optional["DeltaNeutralContract"] = None
+    deltaNeutralContract: "DeltaNeutralContract" | None= None
 
     @staticmethod
     def create(**kwargs) -> "Contract":
@@ -564,6 +563,7 @@ class Crypto(Contract):
             **kwargs,
         )
 
+
 @dataclass(slots=True, frozen=True)
 class TagValue:
     tag: str
@@ -588,6 +588,7 @@ class DeltaNeutralContract:
     delta: float = 0.0
     price: float = 0.0
 
+
 @dataclass(slots=True, frozen=True)
 class TradingSession:
     start: dt.datetime
@@ -596,7 +597,7 @@ class TradingSession:
 
 @dataclass(slots=True)
 class ContractDetails:
-    contract: Optional[Contract] = None
+    contract: Contract | None = None
     marketName: str = ""
     minTick: float = 0.0
     orderTypes: str = ""
@@ -618,7 +619,7 @@ class ContractDetails:
     underSymbol: str = ""
     underSecType: str = ""
     marketRuleIds: str = ""
-    secIdList: List[TagValue] = field(default_factory=list)
+    secIdList: list[TagValue] = field(default_factory=list)
     realExpirationDate: str = ""
     lastTradeTime: str = ""
     stockType: str = ""
@@ -657,20 +658,22 @@ class ContractDetails:
     fundSubsequentMinimumPurchase: str = ""
     fundBlueSkyStates: str = ""
     fundBlueSkyTerritories: str = ""
-    fundDistributionPolicyIndicator: FundDistributionPolicyIndicator = FundDistributionPolicyIndicator.NoneItem
+    fundDistributionPolicyIndicator: FundDistributionPolicyIndicator = (
+        FundDistributionPolicyIndicator.NoneItem
+    )
     fundAssetType: FundAssetType = FundAssetType.NoneItem
     ineligibilityReasonList: list[IneligibilityReason] = field(default_factory=list)
     eventContract1: str = ""
     eventContractDescription1: str = ""
     eventContractDescription2: str = ""
 
-    def tradingSessions(self) -> List[TradingSession]:
+    def tradingSessions(self) -> list[TradingSession]:
         return self._parseSessions(self.tradingHours)
 
-    def liquidSessions(self) -> List[TradingSession]:
+    def liquidSessions(self) -> list[TradingSession]:
         return self._parseSessions(self.liquidHours)
 
-    def _parseSessions(self, s: str) -> List[TradingSession]:
+    def _parseSessions(self, s: str) -> list[TradingSession]:
         """Parse the IBKR session date range text format into native Python objects.
 
         Note: The IBKR date range format looks like:
@@ -705,8 +708,8 @@ class ContractDetails:
 
 @dataclass(slots=True)
 class ContractDescription:
-    contract: Optional[Contract] = None
-    derivativeSecTypes: List[str] = field(default_factory=list)
+    contract: Contract | None = None
+    derivativeSecTypes: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True, frozen=True)

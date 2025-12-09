@@ -3,6 +3,7 @@ Market data protobuf converters
 """
 
 from typing import Any, Callable, TypeAlias
+
 from ..objects import (
     Contract,
     OptionComputation,
@@ -187,18 +188,16 @@ def createTickGenericData(msg: TickGenericProto) -> TickGenericData:
     tickGeneric = TickGenericData(reqId, tickType, value)
     return tickGeneric
 
-TickDeliveryProto:TypeAlias = (
-    TickPriceProto
-    | TickSizeProto
-    | TickStringProto
-    | TickGenericProto
+
+TickDeliveryProto: TypeAlias = (
+    TickPriceProto | TickSizeProto | TickStringProto | TickGenericProto
 )
 
 
 def createTickData(msg: TickDeliveryProto) -> TickDeliveryType:
     delivery_map: dict[type[TickDeliveryProto], Callable[[Any], TickDeliveryType]] = {
         TickPriceProto: createTickPriceData,
-        TickSizeProto:  createTickSizeData,
+        TickSizeProto: createTickSizeData,
         TickStringProto: createTickStringData,
         TickGenericProto: createTickGenericData,
     }
@@ -207,7 +206,9 @@ def createTickData(msg: TickDeliveryProto) -> TickDeliveryType:
 
     if create_method is None:
         # runtime error
-        raise ValueError(f"createTickData - no converter found for tick delivery type: {type(msg)}")
+        raise ValueError(
+            f"createTickData - no converter found for tick delivery type: {type(msg)}"
+        )
 
     return create_method(msg)
 

@@ -5,7 +5,6 @@ import logging
 import struct
 import time
 from collections import deque
-from typing import Deque, List, Optional
 
 from eventkit import Event
 from google.protobuf.message import Message
@@ -101,8 +100,8 @@ from .protobuf_converters.subscription_converters import (
     createCancelScannerSubscriptionProto,
     createPnLRequestProto,
     createPnLSingleRequestProto,
-    createScannerSubscriptionRequestProto,
     createScannerParametersRequestProto,
+    createScannerSubscriptionRequestProto,
 )
 from .protobuf_converters.trade_converters import (
     createCancelOrderRequestProto,
@@ -224,8 +223,8 @@ class Client:
         self._numBytesRecv = 0
         self._numMsgRecv = 0
         self._isThrottling = False
-        self._msgQ: Deque[bytes] = deque()
-        self._timeQ: Deque[float] = deque()
+        self._msgQ: deque[bytes] = deque()
+        self._timeQ: deque[float] = deque()
 
     def serverVersion(self) -> int:
         return self._serverVersion
@@ -315,7 +314,7 @@ class Client:
                 self.throttleEnd.emit()
                 self._logger.info("Stopped to throttle requests")
 
-    def getAccounts(self) -> List[str]:
+    def getAccounts(self) -> list[str]:
         """Get the list of account names that are under management."""
         if not self.isReady():
             raise ConnectionError("Not connected")
@@ -332,7 +331,7 @@ class Client:
         self.connectOptions = connectOptions.encode()
 
     def connect(
-        self, host: str, port: int, clientId: int, timeout: Optional[float] = 2.0
+        self, host: str, port: int, clientId: int, timeout: float|None = 2.0
     ):
         """
         Connect to a running TWS or IB gateway application.

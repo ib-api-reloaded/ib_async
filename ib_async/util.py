@@ -8,22 +8,16 @@ import math
 import signal
 import sys
 import time
+from collections.abc import AsyncIterator, Awaitable, Iterator
 from dataclasses import fields, is_dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
+from functools import wraps
 from typing import (
     Any,
-    AsyncIterator,
-    Awaitable,
     Callable,
     Final,
-    Iterator,
-    List,
-    Optional,
     TypeAlias,
-    Union,
 )
-from functools import wraps
-from decimal import ROUND_HALF_UP
 
 import eventkit as ev
 
@@ -47,7 +41,7 @@ NO_VALID_ID: Final = -1
 Time_t: TypeAlias = dt.time | dt.datetime
 
 
-def df(objs, labels: Optional[List[str]] = None):
+def df(objs, labels: list[str]|None = None):
     """
     Create pandas DataFrame from the sequence of same-type objects.
 
@@ -315,7 +309,7 @@ def formatSI(n: float) -> str:
         log = int(math.floor(math.log10(n)))
         i, j = divmod(log, 3)
         for _try in range(2):
-            templ = "%.{}f".format(2 - j)
+            templ = f"%.{2 - j}f"
             val = templ % (n * 10 ** (-3 * i))
             if val != "1000":
                 break
@@ -341,7 +335,7 @@ class timeit:
         print(self.title + " took " + formatSI(time.time() - self.t0) + "s")
 
 
-def run(*awaitables: Awaitable, timeout: Optional[float] = None):
+def run(*awaitables: Awaitable, timeout: float|None = None):
     """
     By default run the event loop forever.
 
@@ -572,7 +566,7 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
     qt_step()
 
 
-def formatIBDatetime(t: Union[dt.date, dt.datetime, str, None]) -> str:
+def formatIBDatetime(t: dt.date| dt.datetime| str| None) -> str:
     """Format date or datetime to string that IB uses."""
     if not t:
         s = ""
@@ -591,7 +585,7 @@ def formatIBDatetime(t: Union[dt.date, dt.datetime, str, None]) -> str:
     return s
 
 
-def parseIBDatetime(s: str) -> Union[dt.date, dt.datetime]:
+def parseIBDatetime(s: str) -> dt.date| dt.datetime:
     """Parse string in IB date or datetime format to datetime."""
     if len(s) == 8:
         # YYYYmmdd
@@ -647,12 +641,13 @@ def listOfValues(cls):
 def isValidIntValue(val: int) -> bool:
     return val != UNSET_INTEGER
 
+
 def quantize_decimals(places=2, rounding=ROUND_HALF_UP):
     """
     Decorator that finds all Decimal fields in a returned dataclass
     object and quantizes them to a given number of decimal places.
     """
-    quantizer = Decimal('0.1') ** places
+    quantizer = Decimal("0.1") ** places
 
     def decorator(func):
         @wraps(func)
@@ -668,5 +663,7 @@ def quantize_decimals(places=2, rounding=ROUND_HALF_UP):
                         quantized_value = value.quantize(quantizer, rounding=rounding)
                         setattr(result, field.name, quantized_value)
             return result
+
         return wrapper
+
     return decorator

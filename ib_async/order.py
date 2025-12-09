@@ -5,14 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
-from typing import ClassVar, TypeAlias
 from math import nan
+from typing import ClassVar, TypeAlias
 
 from eventkit import Event
 
 from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry
-from .util import UNSET_DECIMAL, dataclassNonDefaults, UNSET_DOUBLE, UNSET_INTEGER
+from .util import UNSET_DECIMAL, UNSET_DOUBLE, UNSET_INTEGER, dataclassNonDefaults
 
 
 class OrderTIF(StrEnum):
@@ -281,7 +281,7 @@ class OrderStatus:
     mktCapPrice: float | Decimal = 0.0
 
     @property
-    def total(self) -> float|Decimal:
+    def total(self) -> float | Decimal:
         """Helper property to return the total size of this requested order."""
         return self.filled + self.remaining
 
@@ -368,7 +368,7 @@ class OrderState:
     equityWithLoanAfterOutsideRTH: float | Decimal = nan
     suggestedSize: float | Decimal = nan
     rejectReason: str = ""
-    orderAllocations: list["OrderAllocation"] | None = None
+    orderAllocations: list[OrderAllocation] | None = None
     warningText: str = ""
     completedTime: str = ""
     completedStatus: str = ""

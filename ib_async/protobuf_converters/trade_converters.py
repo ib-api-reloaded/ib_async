@@ -38,7 +38,7 @@ from ib_async.util import (
     getEnumTypeFromString,
     isValidIntValue,
     parseIBDatetime,
-    quantize_decimals
+    quantize_decimals,
 )
 
 from ..protobuf.CancelOrderRequest_pb2 import (
@@ -533,6 +533,7 @@ def createSoftDollarTierProto(order: Order) -> SoftDollarTierProto:
             softDollarTierProto.displayName = tier.displayName
     return softDollarTierProto
 
+
 @quantize_decimals()
 def createOrder(
     orderId: int, contractProto: ContractProto, orderProto: OrderProto
@@ -989,6 +990,7 @@ def createTagValueList(protoMap: dict[str, str]) -> list[TagValue]:
             tagValueList.append(tagValue)
     return tagValueList
 
+
 @quantize_decimals()
 def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     orderState = OrderState()
@@ -999,25 +1001,19 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     if orderStateProto.HasField("maintMarginBefore"):
         orderState.maintMarginBefore = Decimal(orderStateProto.maintMarginBefore)
     if orderStateProto.HasField("equityWithLoanBefore"):
-        orderState.equityWithLoanBefore = Decimal(
-            orderStateProto.equityWithLoanBefore
-        )
+        orderState.equityWithLoanBefore = Decimal(orderStateProto.equityWithLoanBefore)
     if orderStateProto.HasField("initMarginChange"):
         orderState.initMarginChange = Decimal(orderStateProto.initMarginChange)
     if orderStateProto.HasField("maintMarginChange"):
         orderState.maintMarginChange = Decimal(orderStateProto.maintMarginChange)
     if orderStateProto.HasField("equityWithLoanChange"):
-        orderState.equityWithLoanChange = Decimal(
-            orderStateProto.equityWithLoanChange
-        )
+        orderState.equityWithLoanChange = Decimal(orderStateProto.equityWithLoanChange)
     if orderStateProto.HasField("initMarginAfter"):
         orderState.initMarginAfter = Decimal(orderStateProto.initMarginAfter)
     if orderStateProto.HasField("maintMarginAfter"):
         orderState.maintMarginAfter = Decimal(orderStateProto.maintMarginAfter)
     if orderStateProto.HasField("equityWithLoanAfter"):
-        orderState.equityWithLoanAfter = Decimal(
-            orderStateProto.equityWithLoanAfter
-        )
+        orderState.equityWithLoanAfter = Decimal(orderStateProto.equityWithLoanAfter)
     if orderStateProto.HasField("commissionAndFees"):
         orderState.commission = Decimal(orderStateProto.commissionAndFees)
     if orderStateProto.HasField("minCommissionAndFees"):
@@ -1055,11 +1051,17 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
             orderStateProto.equityWithLoanChangeOutsideRTH
         )
     if orderStateProto.HasField("initMarginAfterOutsideRTH"):
-        orderState.initMarginAfterOutsideRTH = Decimal(orderStateProto.initMarginAfterOutsideRTH)
+        orderState.initMarginAfterOutsideRTH = Decimal(
+            orderStateProto.initMarginAfterOutsideRTH
+        )
     if orderStateProto.HasField("maintMarginAfterOutsideRTH"):
-        orderState.maintMarginAfterOutsideRTH = Decimal(orderStateProto.maintMarginAfterOutsideRTH)
+        orderState.maintMarginAfterOutsideRTH = Decimal(
+            orderStateProto.maintMarginAfterOutsideRTH
+        )
     if orderStateProto.HasField("equityWithLoanAfterOutsideRTH"):
-        orderState.equityWithLoanAfterOutsideRTH = Decimal(orderStateProto.equityWithLoanAfterOutsideRTH)
+        orderState.equityWithLoanAfterOutsideRTH = Decimal(
+            orderStateProto.equityWithLoanAfterOutsideRTH
+        )
     if orderStateProto.HasField("suggestedSize"):
         orderState.suggestedSize = Decimal(orderStateProto.suggestedSize)
     if orderStateProto.HasField("rejectReason"):
@@ -1075,6 +1077,7 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
         orderState.completedStatus = orderStateProto.completedStatus
 
     return orderState
+
 
 def createOrderAllocations(orderStateProto: OrderStateProto) -> list[OrderAllocation]:
     orderAllocations = []
@@ -1117,6 +1120,7 @@ def createContractFromExecutionDetails(
     Create a Contract object from a Protobuf ExecutionDetails message.
     """
     return createContract(exec_details_proto.contract)
+
 
 @quantize_decimals()
 def createOrderStatus(orderStatusProto: OrderStatusProto) -> OrderStatus:
