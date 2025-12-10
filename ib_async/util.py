@@ -18,14 +18,9 @@ from typing import (
     Final,
     TypeAlias,
 )
+from zoneinfo import ZoneInfo
 
 import eventkit as ev
-
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    from backports.zoneinfo import ZoneInfo  # type: ignore
-
 
 globalErrorEvent = ev.Event()
 """
@@ -41,7 +36,7 @@ NO_VALID_ID: Final = -1
 Time_t: TypeAlias = dt.time | dt.datetime
 
 
-def df(objs, labels: list[str]|None = None):
+def df(objs, labels: list[str] | None = None):
     """
     Create pandas DataFrame from the sequence of same-type objects.
 
@@ -335,7 +330,7 @@ class timeit:
         print(self.title + " took " + formatSI(time.time() - self.t0) + "s")
 
 
-def run(*awaitables: Awaitable, timeout: float|None = None):
+def run(*awaitables: Awaitable, timeout: float | None = None):
     """
     By default run the event loop forever.
 
@@ -374,7 +369,8 @@ def run(*awaitables: Awaitable, timeout: float|None = None):
 
         if timeout:
             future = asyncio.wait_for(future, timeout)
-        task = asyncio.ensure_future(future)
+        # Pass loop explicitly to avoid deprecation warnings in Python 3.10+
+        task = asyncio.ensure_future(future, loop=loop)
 
         def onError(_):
             task.cancel()
@@ -505,13 +501,42 @@ def patchAsyncio():
     nest_asyncio.apply()
 
 
-@functools.cache
 def getLoop():
-    """Get asyncio event loop or create one if it doesn't exist."""
+    """
+    Get asyncio event loop with smart fallback handling.
+
+    This function is designed for use in synchronous contexts or when the
+    execution context is unknown. It will:
+    1. Try to get the currently running event loop (if in async context)
+    2. Fall back to getting the current thread's event loop via policy
+    3. Create a new event loop if none exists or if the existing one is closed
+
+    For performance-critical async code paths, prefer using
+    asyncio.get_running_loop() directly instead of this function.
+
+    Note: This function does NOT cache the loop to avoid stale loop bugs
+    when loops are closed and recreated (e.g., in testing, Jupyter notebooks).
+    """
     try:
-        # https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.get_running_loop
+        # Fast path: we're in an async context (coroutine or callback)
         loop = asyncio.get_running_loop()
+        return loop
     except RuntimeError:
+        pass
+
+    # We're in a sync context or no loop is running
+    # Use the event loop policy to get the loop for this thread
+    # This avoids deprecation warnings from get_event_loop() in Python 3.10+
+    try:
+        loop = asyncio.get_event_loop_policy().get_event_loop()
+    except RuntimeError:
+        # No event loop exists for this thread, create one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+    # Check if the loop we got is closed - if so, create a new one
+    if loop.is_closed():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
@@ -566,7 +591,7 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
     qt_step()
 
 
-def formatIBDatetime(t: dt.date| dt.datetime| str| None) -> str:
+def formatIBDatetime(t: dt.date | dt.datetime | str | None) -> str:
     """Format date or datetime to string that IB uses."""
     if not t:
         s = ""
@@ -585,7 +610,7 @@ def formatIBDatetime(t: dt.date| dt.datetime| str| None) -> str:
     return s
 
 
-def parseIBDatetime(s: str) -> dt.date| dt.datetime:
+def parseIBDatetime(s: str) -> dt.date | dt.datetime:
     """Parse string in IB date or datetime format to datetime."""
     if len(s) == 8:
         # YYYYmmdd
