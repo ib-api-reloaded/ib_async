@@ -2054,6 +2054,7 @@ class IB:
             # name -> request
             reqs: dict[str, Awaitable[Any]] = {}
             reqs["positions"] = self.reqPositionsAsync()
+
             if not readonly:
                 if fetchFields & StartupFetch.ORDERS_OPEN:
                     reqs["open orders"] = self.reqOpenOrdersAsync()
@@ -2066,13 +2067,6 @@ class IB:
                 if fetchFields & StartupFetch.ACCOUNT_UPDATES:
                     reqs["account updates"] = self.reqAccountUpdatesAsync(account)
 
-            if len(accounts) <= self.MaxSyncedSubAccounts:
-                if fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES:
-                    for acc in accounts:
-                        reqs[f"account updates for {acc}"] = (
-                            self.reqAccountUpdatesMultiAsync(acc)
-                        )
-
             # run initializing requests concurrently and log if any times out
             tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
             errors = []
@@ -2082,6 +2076,23 @@ class IB:
                     msg = f"{name} request timed out"
                     errors.append(msg)
                     self._logger.error(msg)
+
+            # To get portfolios for multiple accounts we have to subscribe to each
+            # account serially to ensure all data is loaded. We have to do it serially
+            # because IB API sends back a generic accountDownloadEnd signal when it
+            # finishes sending the data for the first account, so we cannot subscribe
+            # to multiple accounts at once.
+            if len(accounts) <= self.MaxSyncedSubAccounts:
+                for acc in accounts:
+                    try:
+                        await asyncio.wait_for(
+                            self.reqAccountUpdatesAsync(acc), timeout
+                        )
+                    except asyncio.TimeoutError:
+                        msg = f"reqAccountUpdatesAsync for {acc} timed out"
+                        errors.append(msg)
+                        self._logger.error(msg)
+                self._logger.info("Finished fetching all portfolio data.")
 
             # the request for executions must come after all orders are in
             if fetchFields & StartupFetch.EXECUTIONS:
@@ -2287,6 +2298,14 @@ class IB:
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
         future = self.wrapper.startReq("positions")
         self.client.reqPositions()
+        return future
+
+    def reqPositionsMultiAsync(
+        self, account: str = "", modelCode: str = ""
+    ) -> Awaitable[None]:
+        reqId = self.client.getReqId()
+        future = self.wrapper.startReq(reqId)
+        self.client.reqPositionsMulti(reqId, account, modelCode)
         return future
 
     def reqContractDetailsAsync(
