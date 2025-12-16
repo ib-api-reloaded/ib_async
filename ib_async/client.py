@@ -841,9 +841,16 @@ class Client:
         self.send(*fields)
 
     def exerciseOptions(
-        self, reqId, contract, exerciseAction, exerciseQuantity, account, override
+        self,
+        reqId,
+        contract,
+        exerciseAction,
+        exerciseQuantity,
+        account,
+        override,
+        manualOrderTime,
     ):
-        self.send(
+        fields = [
             21,
             2,
             reqId,
@@ -862,7 +869,10 @@ class Client:
             exerciseQuantity,
             account,
             override,
-        )
+        ]
+        if self.serverVersion() >= 180:
+            fields += [manualOrderTime]
+        self.send(*fields)
 
     def reqScannerSubscription(
         self,
