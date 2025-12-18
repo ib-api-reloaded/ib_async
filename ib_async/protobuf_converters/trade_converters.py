@@ -38,7 +38,6 @@ from ib_async.util import (
     getEnumTypeFromString,
     isValidIntValue,
     parseIBDatetime,
-    quantize_decimals,
 )
 
 from ..protobuf.CancelOrderRequest_pb2 import (
@@ -534,7 +533,6 @@ def createSoftDollarTierProto(order: Order) -> SoftDollarTierProto:
     return softDollarTierProto
 
 
-@quantize_decimals()
 def createOrder(
     orderId: int, contractProto: ContractProto, orderProto: OrderProto
 ) -> Order:
@@ -991,7 +989,6 @@ def createTagValueList(protoMap: dict[str, str]) -> list[TagValue]:
     return tagValueList
 
 
-@quantize_decimals()
 def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     orderState = OrderState()
     if orderStateProto.HasField("status"):
@@ -1122,7 +1119,6 @@ def createContractFromExecutionDetails(
     return createContract(exec_details_proto.contract)
 
 
-@quantize_decimals()
 def createOrderStatus(orderStatusProto: OrderStatusProto) -> OrderStatus:
     orderStatus = OrderStatus()
     if orderStatusProto.HasField("orderId"):

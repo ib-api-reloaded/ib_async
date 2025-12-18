@@ -32,6 +32,13 @@ class IneligibilityReason:
 
 
 @dataclass(slots=True)
+class DeltaNeutralContract:
+    conId: int = 0
+    delta: float = 0.0
+    price: float = 0.0
+
+
+@dataclass(slots=True)
 class Contract:
     """
     ``Contract(**kwargs)`` can create any contract using keyword
@@ -126,7 +133,7 @@ class Contract:
     issuerId: str = ""
     comboLegsDescrip: str = ""
     comboLegs: list["ComboLeg"] = field(default_factory=list)
-    deltaNeutralContract: "DeltaNeutralContract" | None= None
+    deltaNeutralContract: DeltaNeutralContract | None = None
 
     @staticmethod
     def create(**kwargs) -> "Contract":
@@ -197,7 +204,8 @@ class Contract:
 
         if not self.isHashable():
             raise ValueError(
-                f"Contract {self} can't be hashed because no 'conId' value exists. Qualify contract to populate 'conId'."
+                f"Contract {self} can't be hashed because no 'conId' value exists. "
+                "Qualify contract to populate 'conId'."
             )
 
         if self.secType == "CONTFUT":
@@ -580,13 +588,6 @@ class ComboLeg:
     shortSaleSlot: int = 0
     designatedLocation: str = ""
     exemptCode: int = -1
-
-
-@dataclass(slots=True)
-class DeltaNeutralContract:
-    conId: int = 0
-    delta: float = 0.0
-    price: float = 0.0
 
 
 @dataclass(slots=True, frozen=True)
