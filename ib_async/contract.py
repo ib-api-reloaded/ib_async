@@ -668,9 +668,9 @@ class ContractDetails:
     eventContractDescription1: str = ""
     eventContractDescription2: str = ""
 
-    __repr__ = dataclassRepr
-    __str__ = dataclassRepr
-    
+    __repr__ = util.dataclassRepr
+    __str__ = util.dataclassRepr
+
     def tradingSessions(self) -> list[TradingSession]:
         return self._parseSessions(self.tradingHours)
 
