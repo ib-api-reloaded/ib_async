@@ -1,3 +1,5 @@
+"""Protobuf message ID constants."""
+
 from enum import IntEnum
 
 

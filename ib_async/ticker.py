@@ -9,8 +9,8 @@ from typing import ClassVar, Final, TypeAlias
 
 from eventkit import Event, Op
 
-from ib_async.contract import Contract
-from ib_async.objects import (
+from .contract import Contract
+from .objects import (
     Dividends,
     DOMLevel,
     EfpData,
@@ -30,7 +30,7 @@ from ib_async.objects import (
     TickStringData,
     TickType,
 )
-from ib_async.util import dataclassRepr, isNan, parseIBDatetime
+from .util import dataclassRepr, isNan, parseIBDatetime
 
 nan = float("nan")
 TickDict: TypeAlias = dict[TickType, str]

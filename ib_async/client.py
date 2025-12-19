@@ -9,13 +9,12 @@ from collections import deque
 from eventkit import Event
 from google.protobuf.message import Message
 
-from ib_async.contract import Contract
-from ib_async.order import Order, OrderCancel
-
 from .connection import Connection
+from .contract import Contract
 from .decoder import Decoder
 from .message import MessageId
 from .objects import ConnectionStats, WshEventData
+from .order import Order, OrderCancel
 from .protobuf.AccountSummaryRequest_pb2 import (
     AccountSummaryRequest as AccountSummaryRequestProto,
 )
@@ -97,7 +96,10 @@ from .protobuf_converters.market_data_converters import (
 )
 from .protobuf_converters.news_converters import (
     createCancelNewsBulletinsProto,
+    createHistoricalNewsRequestProto,
+    createNewsArticleRequestProto,
     createNewsBulletinsRequestProto,
+    createNewsProvidersRequestProto,
 )
 from .protobuf_converters.subscription_converters import (
     createCancelPnLProto,
@@ -334,9 +336,7 @@ class Client:
         """
         self.connectOptions = connectOptions.encode()
 
-    def connect(
-        self, host: str, port: int, clientId: int, timeout: float|None = 2.0
-    ):
+    def connect(self, host: str, port: int, clientId: int, timeout: float | None = 2.0):
         """
         Connect to a running TWS or IB gateway application.
 
@@ -934,10 +934,18 @@ class Client:
         )
 
     def reqNewsArticle(self, reqId, providerCode, articleId, newsArticleOptions):
-        self.send(84, reqId, providerCode, articleId, newsArticleOptions)
+        self.sendProto(
+            MessageId.OUT.REQ_NEWS_ARTICLE,
+            createNewsArticleRequestProto(
+                reqId, providerCode, articleId, newsArticleOptions
+            ),
+        )
 
     def reqNewsProviders(self):
-        self.send(85)
+        self.sendProto(
+            MessageId.OUT.REQ_NEWS_PROVIDERS,
+            createNewsProvidersRequestProto(),
+        )
 
     def reqHistoricalNews(
         self,
@@ -949,15 +957,17 @@ class Client:
         totalResults,
         historicalNewsOptions,
     ):
-        self.send(
-            86,
-            reqId,
-            conId,
-            providerCodes,
-            startDateTime,
-            endDateTime,
-            totalResults,
-            historicalNewsOptions,
+        self.sendProto(
+            MessageId.OUT.REQ_HISTORICAL_NEWS,
+            createHistoricalNewsRequestProto(
+                reqId,
+                conId,
+                providerCodes,
+                startDateTime,
+                endDateTime,
+                totalResults,
+                historicalNewsOptions,
+            ),
         )
 
     def reqHeadTimeStamp(self, reqId, contract, whatToShow, useRTH, formatDate):

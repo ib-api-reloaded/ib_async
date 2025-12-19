@@ -283,7 +283,7 @@ class OrderStatus:
     @property
     def total(self) -> float | Decimal:
         """Helper property to return the total size of this requested order."""
-        return self.filled + self.remaining
+        return self.filled + self.remaining # type: ignore
 
     PendingSubmit: ClassVar[str] = "PendingSubmit"
     PendingCancel: ClassVar[str] = "PendingCancel"

@@ -21,14 +21,14 @@ from weakref import WeakKeyDictionary
 
 import eventkit as ev
 
-from ib_async.contract import (
+from .contract import (
     Contract,
     ContractDescription,
     ContractDetails,
     DeltaNeutralContract,
     ScanData,
 )
-from ib_async.objects import (
+from .objects import (
     AccountValue,
     BarData,
     BarDataList,
@@ -62,9 +62,9 @@ from ib_async.objects import (
     TickParams,
     TradeLogEntry,
 )
-from ib_async.order import Order, OrderState, OrderStatus, Trade
-from ib_async.ticker import Ticker
-from ib_async.util import (
+from .order import Order, OrderState, OrderStatus, Trade
+from .ticker import Ticker
+from .util import (
     EPOCH,
     dataclassUpdate,
     getLoop,
@@ -73,7 +73,7 @@ from ib_async.util import (
 )
 
 if TYPE_CHECKING:
-    from ib_async.ib import IB
+    from .ib import IB
 
 
 OrderKeyType: TypeAlias = int | tuple[int, int]
@@ -1015,33 +1015,24 @@ class Wrapper:
         self._endReq(reqId)
 
     def newsProviders(self, newsProviders: list[NewsProvider]):
-        newsProviders = [NewsProvider(code=p.code, name=p.name) for p in newsProviders]
-        self._endReq("newsProviders", newsProviders)
+        self.response_bus.emit("newsProviders", newsProviders)
+        self._endReq("newsProviders")
 
     def tickNews(
         self,
         _reqId: int,
-        timeStamp: int,
-        providerCode: str,
-        articleId: str,
-        headline: str,
-        extraData: str,
+        newsTick: NewsTick,
     ):
-        news = NewsTick(timeStamp, providerCode, articleId, headline, extraData)
-        self.newsTicks.append(news)
-        self.ib.tickNewsEvent.emit(news)
+        self.newsTicks.append(newsTick)
+        self.ib.tickNewsEvent.emit(newsTick)
 
-    def newsArticle(self, reqId: int, articleType: int, articleText: str):
-        article = NewsArticle(articleType, articleText)
-        self._endReq(reqId, article)
+    def newsArticle(self, reqId: int, newsArticle:NewsArticle):
+        self.response_bus.emit(reqId,newsArticle)
 
     def historicalNews(
-        self, reqId: int, time: str, providerCode: str, articleId: str, headline: str
+        self, reqId: int, historicalNews: HistoricalNews
     ):
-        dt = parseIBDatetime(time)
-        dt = cast(datetime, dt)
-        article = HistoricalNews(dt, providerCode, articleId, headline)
-        self._results[reqId].append(article)
+        self.response_bus.emit(reqId, historicalNews)
 
     def historicalNewsEnd(self, reqId, _hasMore: bool):
         self._endReq(reqId)

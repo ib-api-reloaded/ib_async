@@ -14,10 +14,10 @@ from typing import (
 
 from eventkit import Event
 
-import ib_async.util as util
-from ib_async.client import Client
-from ib_async.contract import Contract, ContractDescription, ContractDetails
-from ib_async.objects import (
+from . import util
+from .client import Client
+from .contract import Contract, ContractDescription, ContractDetails
+from .objects import (
     AccountValue,
     BarDataList,
     DepthMktDataDescription,
@@ -47,7 +47,7 @@ from ib_async.objects import (
     TradeLogEntry,
     WshEventData,
 )
-from ib_async.order import (
+from .order import (
     BracketOrder,
     LimitOrder,
     Order,
@@ -57,8 +57,8 @@ from ib_async.order import (
     StopOrder,
     Trade,
 )
-from ib_async.ticker import Ticker
-from ib_async.wrapper import Wrapper
+from .ticker import Ticker
+from .wrapper import Wrapper
 
 _T = TypeVar("_T")
 
@@ -662,7 +662,7 @@ class IB:
         """Get a list of all tickers that have pending ticks or domTicks."""
         return list(self.wrapper.pendingTickers)
 
-    def realtimeBars(self) -> list[BarDataList| RealTimeBarList]:
+    def realtimeBars(self) -> list[BarDataList | RealTimeBarList]:
         """
         Get a list of all live updated bars. These can be 5 second realtime
         bars or live updated historical bars.
@@ -840,7 +840,7 @@ class IB:
 
     def cancelOrder(
         self, order: Order, orderCancel: OrderCancel | None = None
-    ) -> Trade|None:
+    ) -> Trade | None:
         """
         Cancel the order and return the Trade it belongs to.
 
@@ -997,7 +997,7 @@ class IB:
         """
         return self._run(self.reqCompletedOrdersAsync(apiOnly))
 
-    def reqExecutions(self, execFilter: ExecutionFilter| None) -> list[Fill]:
+    def reqExecutions(self, execFilter: ExecutionFilter | None) -> list[Fill]:
         """
         It is recommended to use :meth:`.fills`  or
         :meth:`.executions` instead.
@@ -1213,7 +1213,7 @@ class IB:
     def reqHistoricalData(
         self,
         contract: Contract,
-        endDateTime: datetime.datetime| datetime.date| str| None,
+        endDateTime: datetime.datetime | datetime.date | str | None,
         durationStr: str,
         barSizeSetting: str,
         whatToShow: str,
@@ -1296,7 +1296,7 @@ class IB:
         self,
         contract: Contract,
         numDays: int,
-        endDateTime: datetime.datetime| datetime.date| str| None = "",
+        endDateTime: datetime.datetime | datetime.date | str | None = "",
         useRTH: bool = True,
     ) -> HistoricalSchedule:
         """
@@ -1321,8 +1321,8 @@ class IB:
     def reqHistoricalTicks(
         self,
         contract: Contract,
-        startDateTime: str| datetime.date,
-        endDateTime: str| datetime.date,
+        startDateTime: str | datetime.date,
+        endDateTime: str | datetime.date,
         numberOfTicks: int,
         whatToShow: str,
         useRth: bool,
@@ -1901,11 +1901,11 @@ class IB:
         self,
         conId: int,
         providerCodes: str,
-        startDateTime: str| datetime.date,
-        endDateTime: str| datetime.date,
+        startDateTime: str | datetime.date,
+        endDateTime: str | datetime.date,
         totalResults: int,
         historicalNewsOptions: list[TagValue] = [],
-    ) -> HistoricalNews:
+    ) -> list[HistoricalNews]:
         """
         Get historical news headline.
 
@@ -2093,7 +2093,7 @@ class IB:
         host: str = "127.0.0.1",
         port: int = 7497,
         clientId: int = 1,
-        timeout: float|None = 4,
+        timeout: float | None = 4,
         readonly: bool = False,
         account: str = "",
         raiseSyncErrors: bool = False,
@@ -2509,7 +2509,7 @@ class IB:
     async def reqHistoricalDataAsync(
         self,
         contract: Contract,
-        endDateTime: datetime.datetime| datetime.date| str| None,
+        endDateTime: datetime.datetime | datetime.date | str | None,
         durationStr: str,
         barSizeSetting: str,
         whatToShow: str,
@@ -2570,7 +2570,7 @@ class IB:
         self,
         contract: Contract,
         numDays: int,
-        endDateTime: datetime.datetime| datetime.date| str| None = "",
+        endDateTime: datetime.datetime | datetime.date | str | None = "",
         useRTH: bool = True,
     ) -> Awaitable[HistoricalSchedule]:
         reqId = self.client.getReqId()
@@ -2598,8 +2598,8 @@ class IB:
     def reqHistoricalTicksAsync(
         self,
         contract: Contract,
-        startDateTime: str| datetime.date,
-        endDateTime: str| datetime.date,
+        startDateTime: str | datetime.date,
+        endDateTime: str | datetime.date,
         numberOfTicks: int,
         whatToShow: str,
         useRth: bool,
@@ -2723,7 +2723,7 @@ class IB:
         optionPrice: float,
         underPrice: float,
         implVolOptions: list[TagValue] = [],
-    ) -> OptionComputation|None:
+    ) -> OptionComputation | None:
         reqId = self.client.getReqId()
         self.client.calculateImpliedVolatility(
             reqId, contract, optionPrice, underPrice, implVolOptions
@@ -2749,7 +2749,7 @@ class IB:
         volatility: float,
         underPrice: float,
         optPrcOptions: list[TagValue] = [],
-    ) -> OptionComputation|None:
+    ) -> OptionComputation | None:
         reqId = self.client.getReqId()
         self.client.calculateOptionPrice(
             reqId, contract, volatility, underPrice, optPrcOptions
@@ -2789,7 +2789,12 @@ class IB:
         )
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
-        future = self.wrapper.startReq("newsProviders")
+        future = (
+            self.wrapper.response_bus.filter(lambda name, _: name == "newsProviders")
+            .takewhile(lambda name, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
         self.client.reqNewsProviders()
         return future
 
@@ -2798,7 +2803,13 @@ class IB:
     ) -> Awaitable[NewsArticle]:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId)
+        future = (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
+
         self.client.reqNewsArticle(reqId, providerCode, articleId, newsArticleOptions)
         return future
 
@@ -2806,22 +2817,28 @@ class IB:
         self,
         conId: int,
         providerCodes: str,
-        startDateTime: str| datetime.date,
-        endDateTime: str| datetime.date,
+        startDateTime: str | datetime.date,
+        endDateTime: str | datetime.date,
         totalResults: int,
         historicalNewsOptions: list[TagValue] = [],
-    ) -> HistoricalNews|None:
+    ) -> list[HistoricalNews] | None:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId)
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalNews(
             reqId, conId, providerCodes, start, end, totalResults, historicalNewsOptions
         )
+        future = (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+            .list()
+        )
         try:
-            await asyncio.wait_for(future, 4)
-            return future.result()
+            result = await asyncio.wait_for(future, 4)
+            return result
         except asyncio.TimeoutError:
             self._logger.error("reqHistoricalNewsAsync: Timeout")
             return None

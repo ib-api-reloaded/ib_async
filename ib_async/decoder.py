@@ -2,8 +2,6 @@
 
 import logging
 
-from ib_async.protobuf_converters.news_converters import createNewsBulletin
-
 from .contract import (
     Contract,
     ContractDescription,
@@ -61,6 +59,8 @@ from .protobuf.HistoricalDataEnd_pb2 import HistoricalDataEnd as HistoricalDataE
 from .protobuf.HistoricalDataUpdate_pb2 import (
     HistoricalDataUpdate as HistoricalDataUpdateProto,
 )
+from .protobuf.HistoricalNews_pb2 import HistoricalNews as HistoricalNewsProto
+from .protobuf.HistoricalNewsEnd_pb2 import HistoricalNewsEnd as HistoricalNewsEndProto
 from .protobuf.HistoricalSchedule_pb2 import (
     HistoricalSchedule as HistoricalScheduleProto,
 )
@@ -74,7 +74,9 @@ from .protobuf.HistoricalTicksLast_pb2 import (
 from .protobuf.ManagedAccounts_pb2 import ManagedAccounts as ManagedAccountsProto
 from .protobuf.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
 from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
+from .protobuf.NewsArticle_pb2 import NewsArticle as NewsArticleProto
 from .protobuf.NewsBulletin_pb2 import NewsBulletin as NewsBulletinProto
+from .protobuf.NewsProviders_pb2 import NewsProviders as NewsProvidersProto
 from .protobuf.NextValidId_pb2 import NextValidId as NextValidIdProto
 from .protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
 from .protobuf.OpenOrdersEnd_pb2 import OpenOrdersEnd as OpenOrderEndProto
@@ -98,6 +100,7 @@ from .protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProt
 from .protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
 from .protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
 from .protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
+from .protobuf.TickNews_pb2 import TickNews as TickNewsProto
 from .protobuf.TickOptionComputation_pb2 import (
     TickOptionComputation as TickOptionComputationProto,
 )
@@ -135,6 +138,13 @@ from .protobuf_converters.market_data_converters import (
     createTickData,
     createTickOptionComputation,
     createTickParams,
+)
+from .protobuf_converters.news_converters import (
+    createHistoricalNews,
+    createNewProviders,
+    createNewsArticle,
+    createNewsBulletin,
+    createTickNews,
 )
 from .protobuf_converters.subscription_converters import createScannerDataList
 from .protobuf_converters.trade_converters import (
@@ -218,7 +228,7 @@ class Decoder:
             AccountSummaryEndProto,
             "accountSummaryEndProto",
         ),
-        # Handles order status updates
+        # Handles order updates
         MessageId.IN.ORDER_STATUS: (OrderStatusProto, "orderStatusProto"),
         MessageId.IN.COMPLETED_ORDER: (CompletedOrderProto, "completedOrderProto"),
         MessageId.IN.COMPLETED_ORDERS_END: (
@@ -226,21 +236,26 @@ class Decoder:
             "completedOrdersEndProto",
         ),
         MessageId.IN.ORDER_BOUND: (OrderBoundProto, "orderBoundProto"),
+        # Handles portfolio value updates
         MessageId.IN.PORTFOLIO_VALUE: (PortfolioValueProto, "updatePortfolioProto"),
         MessageId.IN.ACCT_UPDATE_TIME: (
             AccountUpdateTimeProto,
             "updateAccountTimeProto",
         ),
+        # Handles incoming market data types
         MessageId.IN.MARKET_DATA_TYPE: (MarketDataTypeProto, "marketDataTypeProto"),
+        # Handles incoming commission and fees report
         MessageId.IN.COMMISSION_AND_FEES_REPORT: (
             CommissionReportProto,
             "commissionReportProto",
         ),
+        # Handles incoming current time
         MessageId.IN.CURRENT_TIME: (CurrentTimeProto, "currentTimeProto"),
         MessageId.IN.CURRENT_TIME_IN_MILLIS: (
             CurrentTimeInMillisProto,
             "currentTimeMiliProto",
         ),
+        # Handles incoming historical data
         MessageId.IN.HEAD_TIMESTAMP: (HeadTimestampProto, "headTimestampProto"),
         MessageId.IN.HISTORICAL_DATA: (HistoricalDataProto, "historicalDataProto"),
         MessageId.IN.HISTORICAL_DATA_END: (
@@ -265,6 +280,7 @@ class Decoder:
             HistoricalScheduleProto,
             "historicalScheduleProto",
         ),
+        # Handles incoming tick data
         MessageId.IN.REAL_TIME_BARS: (RealTimeBarTickProto, "realTimeBarTickProto"),
         MessageId.IN.TICK_REQ_PARAMS: (TickReqParamsProto, "tickReqParamsProto"),
         MessageId.IN.TICK_PRICE: (TickPriceProto, "tickDeliveryProto"),
@@ -281,16 +297,26 @@ class Decoder:
             "tickByTickDataProto",
         ),
         MessageId.IN.FUNDAMENTAL_DATA: (FundamentalsDataProto, "fundamentalsDataProto"),
+        # handel scanner data
         MessageId.IN.SCANNER_PARAMETERS: (
             ScannerParametersProto,
             "scannerParametersProto",
         ),
         MessageId.IN.SCANNER_DATA: (ScannerDataProto, "scannerDataProto"),
+        # handle pnl
         MessageId.IN.PNL: (PnLProto, "pnlProto"),
         MessageId.IN.PNL_SINGLE: (PnLSingleProto, "pnlSingleProto"),
         MessageId.IN.USER_INFO: (UserInfoProto, "userInfoProto"),
         MessageId.IN.SMART_COMPONENTS: (SmartComponentsProto, "smartComponentsProto"),
-        MessageId.IN.NEWS_BULLETINS: (NewsBulletinProto, "newsBulletinProto")
+        # handle news
+        MessageId.IN.NEWS_BULLETINS: (NewsBulletinProto, "newsBulletinProto"),
+        MessageId.IN.NEWS_PROVIDERS: (NewsProvidersProto, "newsProvidersProto"),
+        MessageId.IN.HISTORICAL_NEWS: (HistoricalNewsProto, "historicalNewsProto"),
+        MessageId.IN.HISTORICAL_NEWS_END: (
+            HistoricalNewsEndProto,
+            "historicalNewsEndProto"),
+        MessageId.IN.NEWS_ARTICLE: (NewsArticleProto, "newsArticleProto"),
+        MessageId.IN.TICK_NEWS: (TickNewsProto, "tickNewsProto"),
     }
 
     def __init__(self, wrapper: Wrapper, serverVersion: int):
@@ -593,7 +619,29 @@ class Decoder:
         newsBulletin = createNewsBulletin(msg)
         self.wrapper.updateNewsBulletin(msgId, newsBulletin)
 
+    def newsProvidersProto(self, msg: NewsProvidersProto):
+        newsProviders = createNewProviders(msg)
+        self.wrapper.newsProviders(newsProviders)
+
+    def historicalNewsProto(self, msg: HistoricalNewsProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        historicalNews = createHistoricalNews(msg)
+        self.wrapper.historicalNews(reqId, historicalNews)
+
+    def historicalNewsEndProto(self, msg: HistoricalNewsEndProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        self.wrapper.historicalNewsEnd(reqId, msg.hasMore)
+
+    def newsArticleProto(self, msg: NewsArticleProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        newsArticle = createNewsArticle(msg)
+        self.wrapper.newsArticle(reqId,newsArticle)
         
+    def tickNewsProto(self, msg: TickNewsProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        tickNews = createTickNews(msg)
+        self.wrapper.tickNews(reqId, tickNews)
+
     ##################### legacy methods ##########################################
 
     def bondContractDetails(self, fields):

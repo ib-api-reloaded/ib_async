@@ -474,12 +474,6 @@ class HistogramData:
     count: int = 0
 
 
-@dataclass(slots=True)
-class NewsProvider:
-    code: str = ""
-    name: str = ""
-
-
 @dataclass
 class DepthMktDataDescription:
     exchange: str = ""
@@ -659,6 +653,12 @@ class Dividends:
     next12Months: float | None
     nextDate: date_ | None
     nextAmount: float | None
+
+
+@dataclass(slots=True, frozen=True)
+class NewsProvider:
+    code: str = ""
+    name: str = ""
 
 
 @dataclass(slots=True, frozen=True)
@@ -851,11 +851,11 @@ class IBDefaults:
     emptyPrice: Any = -1
     emptySize: Any = 0
 
-    # optionally replace ib_async default for all instance variable values before 
+    # optionally replace ib_async default for all instance variable values before
     # popualted from API updates
     unset: Any = nan
 
-    # optionally change the timezone used for log history events in objects (no impact 
+    # optionally change the timezone used for log history events in objects (no impact
     # on orders or data processing)
     timezone: tzinfo = timezone.utc
 
