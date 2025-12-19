@@ -2,6 +2,8 @@
 
 import logging
 
+from ib_async.protobuf_converters.news_converters import createNewsBulletin
+
 from .contract import (
     Contract,
     ContractDescription,
@@ -72,6 +74,7 @@ from .protobuf.HistoricalTicksLast_pb2 import (
 from .protobuf.ManagedAccounts_pb2 import ManagedAccounts as ManagedAccountsProto
 from .protobuf.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
 from .protobuf.MarketRule_pb2 import MarketRule as MarketRuleProto
+from .protobuf.NewsBulletin_pb2 import NewsBulletin as NewsBulletinProto
 from .protobuf.NextValidId_pb2 import NextValidId as NextValidIdProto
 from .protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
 from .protobuf.OpenOrdersEnd_pb2 import OpenOrdersEnd as OpenOrderEndProto
@@ -287,6 +290,7 @@ class Decoder:
         MessageId.IN.PNL_SINGLE: (PnLSingleProto, "pnlSingleProto"),
         MessageId.IN.USER_INFO: (UserInfoProto, "userInfoProto"),
         MessageId.IN.SMART_COMPONENTS: (SmartComponentsProto, "smartComponentsProto"),
+        MessageId.IN.NEWS_BULLETINS: (NewsBulletinProto, "newsBulletinProto")
     }
 
     def __init__(self, wrapper: Wrapper, serverVersion: int):
@@ -584,6 +588,12 @@ class Decoder:
         components = createSmartComponents(msg)
         self.wrapper.smartComponents(reqId, components)
 
+    def newsBulletinProto(self, msg: NewsBulletinProto):
+        msgId = msg.reqId if msg.HasField("msgId") else NO_VALID_ID
+        newsBulletin = createNewsBulletin(msg)
+        self.wrapper.updateNewsBulletin(msgId, newsBulletin)
+
+        
     ##################### legacy methods ##########################################
 
     def bondContractDetails(self, fields):

@@ -95,6 +95,10 @@ from .protobuf_converters.market_data_converters import (
     createMarketDataTypeRequestProto,
     createTickByTickRequestProto,
 )
+from .protobuf_converters.news_converters import (
+    createCancelNewsBulletinsProto,
+    createNewsBulletinsRequestProto,
+)
 from .protobuf_converters.subscription_converters import (
     createCancelPnLProto,
     createCancelScannerSubscriptionProto,
@@ -591,10 +595,16 @@ class Client:
         self.send(11, 1, reqId, isSmartDepth)
 
     def reqNewsBulletins(self, allMsgs):
-        self.send(12, 1, allMsgs)
+        self.sendProto(
+            MessageId.OUT.REQ_NEWS_BULLETINS,
+            createNewsBulletinsRequestProto(allMsgs),
+        )
 
     def cancelNewsBulletins(self):
-        self.send(13, 1)
+        self.sendProto(
+            MessageId.OUT.CANCEL_NEWS_BULLETINS,
+            createCancelNewsBulletinsProto(),
+        )
 
     def setServerLogLevel(self, logLevel):
         self.send(14, 1, logLevel)

@@ -851,8 +851,41 @@ class IBDefaults:
     emptyPrice: Any = -1
     emptySize: Any = 0
 
-    # optionally replace ib_async default for all instance variable values before popualted from API updates
+    # optionally replace ib_async default for all instance variable values before 
+    # popualted from API updates
     unset: Any = nan
 
-    # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
+    # optionally change the timezone used for log history events in objects (no impact 
+    # on orders or data processing)
     timezone: tzinfo = timezone.utc
+
+
+@dataclass(slots=True, frozen=True)
+class EfpData:
+    """
+    Exchange for Physical (EFP) futures data.
+
+    EFP allows trading a position in a single stock for a position
+    in the corresponding single stock future.
+    """
+
+    basisPoints: float
+    """Annualized basis points (financing rate comparable to broker rates)"""
+
+    formattedBasisPoints: str
+    """Basis points formatted as percentage string"""
+
+    impliedFuture: float
+    """ The implied Futures price"""
+
+    holdDays: int
+    """Number of days until the future's last trade date"""
+
+    futureLastTradeDate: str
+    """Expiration date of the single stock future"""
+
+    dividendImpact: float
+    """Dividend impact on the annualized basis points interest rate"""
+
+    dividendsToLastTradeDate: float
+    """Expected dividends until future expiration"""

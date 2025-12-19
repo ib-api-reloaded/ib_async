@@ -682,7 +682,7 @@ class IB:
 
     def newsBulletins(self) -> list[NewsBulletin]:
         """List of IB news bulletins."""
-        return list(self.wrapper.msgId2NewsBulletin.values())
+        return list(self.wrapper.newsBulletins.values())
 
     def reqTickers(
         self, *contracts: Contract, regulatorySnapshot: bool = False

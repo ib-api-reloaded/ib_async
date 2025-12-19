@@ -305,7 +305,8 @@ class RequestError(Exception):
 class Wrapper:
     """Wrapper implementation for use with the IB class.
 
-    Wrapper keeps track of `state`, accounts, accoutn values, positions, etc. and respond to requests, subscriptions and streming data.
+    Wrapper keeps track of `state`, accounts, accoutn values, positions, etc. and 
+    respond to requests, subscriptions and streming data.
     """
 
     # reference back to IB so wrapper can access API methods
@@ -337,7 +338,7 @@ class Wrapper:
 
     newsTicks: list[NewsTick] = field(init=False)
 
-    msgId2NewsBulletin: dict[int, NewsBulletin] = field(init=False)
+    newsBulletins: dict[int, NewsBulletin] = field(init=False)
     """ msgId -> NewsBulletin """
 
     tickers: BiDict[int, Ticker] = field(init=False)
@@ -402,7 +403,7 @@ class Wrapper:
         self._isReady = False
         self.fills = {}
         self.newsTicks = []
-        self.msgId2NewsBulletin = {}
+        self.newsBulletins = {}
         self.tickers = BiDict[int, Ticker]()
         self.pendingTickers = set()
         self.Pnl = BiDict[tuple[str, str], PnL]()
@@ -1046,11 +1047,10 @@ class Wrapper:
         self._endReq(reqId)
 
     def updateNewsBulletin(
-        self, msgId: int, msgType: int, message: str, origExchange: str
+        self, msgId: int, newsBulletin:NewsBulletin
     ):
-        bulletin = NewsBulletin(msgId, msgType, message, origExchange)
-        self.msgId2NewsBulletin[msgId] = bulletin
-        self.ib.newsBulletinEvent.emit(bulletin)
+        self.newsBulletins[msgId] = newsBulletin
+        self.ib.newsBulletinEvent.emit(newsBulletin)
 
     def receiveFA(self, _faDataType: int, faXmlData: str):
         self._endReq("requestFA", faXmlData)

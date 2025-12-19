@@ -13,6 +13,7 @@ from ib_async.contract import Contract
 from ib_async.objects import (
     Dividends,
     DOMLevel,
+    EfpData,
     FundamentalRatios,
     HistoricalTick,
     HistoricalTickBidAsk,
@@ -57,14 +58,17 @@ PRICE_TICK_MAP: Final[TickDict] = {
     TickType.ASK_YIELD: "askYield",
     TickType.DELAYED_YIELD_ASK: "askYield",
     TickType.LAST_YIELD: "lastYield",
-    TickType.ETF_NAV_CLOSE: "etf_nav_close",
-    TickType.ETF_NAV_PRIOR_CLOSE: "etf_nav_prior_close",
-    TickType.ETF_NAV_BID: "etf_nav_bid",
-    TickType.ETF_NAV_ASK: "etf_nav_ask",
-    TickType.ETF_NAV_LAST: "etf_nav_last",
-    TickType.ETF_FROZEN_NAV_LAST: "etf_frozen_nav_last",
-    TickType.ETF_NAV_HIGH: "etf_nav_high",
-    TickType.ETF_NAV_LOW: "etf_nav_low",
+    TickType.LAST_RTH_TRADE: "lastRthTrade",
+    TickType.CREDITMAN_MARK_PRICE: "creditmanMarkPrice",
+    TickType.CREDITMAN_SLOW_MARK_PRICE: "creditmanSlowMarkPrice",
+    TickType.ETF_NAV_CLOSE: "etfNavClose",
+    TickType.ETF_NAV_PRIOR_CLOSE: "etfNavPriorClose",
+    TickType.ETF_NAV_BID: "etfNavBid",
+    TickType.ETF_NAV_ASK: "etfNavAsk",
+    TickType.ETF_NAV_LAST: "etfNavLast",
+    TickType.ETF_FROZEN_NAV_LAST: "etfFrozenNavLast",
+    TickType.ETF_NAV_HIGH: "etfNavHigh",
+    TickType.ETF_NAV_LOW: "etfNavLow",
 }
 
 
@@ -98,6 +102,9 @@ GENERIC_TICK_MAP: Final[TickDict] = {
     TickType.TRADE_RATE: "tradeRate",
     TickType.VOLUME_RATE: "volumeRate",
     TickType.RT_HISTORICAL_VOL: "rtHistVolatility",
+    TickType.BOND_FACTOR_MULTIPLIER: "bondFactorMultiplier",
+    TickType.ESTIMATED_IPO_MIDPOINT: "estimatedIpoMidpoint",
+    TickType.FINAL_IPO_LAST: "finalIpoLast",
 }
 
 GREEKS_TICK_MAP: Final[TickDict] = {
@@ -109,6 +116,16 @@ GREEKS_TICK_MAP: Final[TickDict] = {
     TickType.DELAYED_LAST_OPTION: "lastGreeks",
     TickType.MODEL_OPTION: "modelGreeks",
     TickType.DELAYED_MODEL_OPTION: "modelGreeks",
+    TickType.CUST_OPTION_COMPUTATION: "custGreeks",
+}
+
+TICK_STRING_MAP: Final[TickDict] = {
+    TickType.OPTION_BID_EXCH: "optionBidExch",
+    TickType.OPTION_ASK_EXCH: "optionAskExch",
+    TickType.BID_EXCH: "bidExchange",
+    TickType.ASK_EXCH: "askExchange",
+    TickType.LAST_EXCH: "lastExchange",
+    TickType.LAST_REG_TIME: "lastRegTime",
 }
 
 _logger = logging.getLogger("ib_async.ticker")
@@ -196,6 +213,8 @@ class Ticker:
     putVolume: float = nan
     callVolume: float = nan
     avOptionVolume: float = nan
+    optionBidExch: str = ""
+    optionAskExch: str = ""
     histVolatility: float = nan
     impliedVolatility: float = nan
     dividends: None | Dividends = None
@@ -213,20 +232,35 @@ class Ticker:
     askGreeks: None | OptionComputation = None
     lastGreeks: None | OptionComputation = None
     modelGreeks: None | OptionComputation = None
+    custGreeks: OptionComputation | None = None
+    bidEfp: EfpData | None = None
+    askEfp: EfpData | None = None
+    lastEfp: EfpData | None = None
+    openEfp: EfpData | None = None
+    highEfp: EfpData | None = None
+    lowEfp: EfpData | None = None
+    closeEfp: EfpData | None = None
     auctionVolume: float = nan
     auctionPrice: float = nan
     auctionImbalance: float = nan
     regulatoryImbalance: float = nan
     bboExchange: str = ""
     snapshotPermissions: int = 0
-    etf_nav_close: float | Decimal = nan
-    etf_nav_prior_close: float | Decimal = nan
-    etf_nav_bid: float | Decimal = nan
-    etf_nav_ask: float | Decimal = nan
-    etf_nav_last: float | Decimal = nan
-    etf_frozen_nav_last: float | Decimal = nan
-    etf_nav_high: float | Decimal = nan
-    etf_nav_low: float | Decimal = nan
+    bondFactorMultiplier: float = nan
+    creditmanMarkPrice: float = nan
+    creditmanSlowMarkPrice: float = nan
+    reutersMutualFunds: str = ""
+    etfNavClose: float | Decimal = nan
+    etfNavPriorClose: float | Decimal = nan
+    etfNavBid: float | Decimal = nan
+    etfNavAsk: float | Decimal = nan
+    etfNavLast: float | Decimal = nan
+    etfFrozenNavLast: float | Decimal = nan
+    etfNavHigh: float | Decimal = nan
+    etfNavLow: float | Decimal = nan
+    socialMarketAnalytics: str = ""
+    estimatedIpoMidpoint: float = nan
+    finalIpoLast: float = nan
 
     defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
     created: bool = field(default=False, repr=False)
@@ -297,14 +331,28 @@ class Ticker:
             self.auctionPrice = self.defaults.unset
             self.auctionImbalance = self.defaults.unset
             self.regulatoryImbalance = self.defaults.unset
-            self.etf_nav_close = self.defaults.unset
-            self.etf_nav_prior_close = self.defaults.unset
-            self.etf_nav_bid = self.defaults.unset
-            self.etf_nav_ask = self.defaults.unset
-            self.etf_nav_last = self.defaults.unset
-            self.etf_frozen_nav_last = self.defaults.unset
-            self.etf_nav_high = self.defaults.unset
-            self.etf_nav_low = self.defaults.unset
+            self.etfNavClose = self.defaults.unset
+            self.etfNavPriorClose = self.defaults.unset
+            self.etfNavBid = self.defaults.unset
+            self.etfNavAsk = self.defaults.unset
+            self.etfNavLast = self.defaults.unset
+            self.etfFrozenNavLast = self.defaults.unset
+            self.etfNavHigh = self.defaults.unset
+            self.etfNavLow = self.defaults.unset
+            self.bidExchange = self.defaults.unset
+            self.askExchange = self.defaults.unset
+            self.lastExchange = self.defaults.unset
+            self.optionBidExch = self.defaults.unset
+            self.optionAskExch = self.defaults.unset
+            self.bboExchange = self.defaults.unset
+            self.snapshotPermissions = self.defaults.unset
+            self.bondFactorMultiplier = self.defaults.unset
+            self.creditmanMarkPrice = self.defaults.unset
+            self.creditmanSlowMarkPrice = self.defaults.unset
+            self.reutersMutualFunds = self.defaults.unset
+            self.socialMarketAnalytics = self.defaults.unset
+            self.estimatedIpoMidpoint = self.defaults.unset
+            self.finalIpoLast = self.defaults.unset
             self.created = True
 
     def __eq__(self, other):
@@ -319,7 +367,7 @@ class Ticker:
     def _on_ticker_data(self, tick_data: TickDataType, last_time: datetime):
         """get ticker data updates and dispatch to the right handler."""
         if isinstance(tick_data, TickPriceData):
-            self._on_price_size_tick(tick_data, last_time)
+            self._on_price_tick(tick_data, last_time)
         elif isinstance(tick_data, TickSizeData):
             self._on_size_tick(tick_data, last_time)
         elif isinstance(tick_data, TickStringData):
@@ -337,7 +385,7 @@ class Ticker:
         else:
             _logger.error("Ticker %s. Unknown tick data: %s", self.contract, tick_data)
 
-    def _on_price_size_tick(self, tick_price: TickPriceData, last_time: datetime):
+    def _on_price_tick(self, tick_price: TickPriceData, last_time: datetime):
         price = tick_price.price
         size = tick_price.size
 
@@ -394,7 +442,8 @@ class Ticker:
 
         else:
             assert tick_price.tickType in PRICE_TICK_MAP, (
-                f"Received tick {tick_price.tickType=} {tick_price.price=} but we don't have an attribute mapping for it? Triggered from {self.contract=}"
+                f"Received tick {tick_price.tickType=} {tick_price.price=} but we don't"
+                f" have an attribute mapping for it? Triggered from {self.contract=}"
             )
 
             setattr(self, PRICE_TICK_MAP[tick_price.tickType], tick_price.price)
@@ -451,7 +500,8 @@ class Ticker:
                 self.lastSize = tick_size.size
         else:
             assert tick_size.tickType in SIZE_TICK_MAP, (
-                f"Received tick {tick_size.tickType=} {tick_size.size=} but we don't have an attribute mapping for it? Triggered from {self.contract=}"
+                f"Received tick {tick_size.tickType=} {tick_size.size=} but we don't"
+                f" have an attribute mapping for it? Triggered from {self.contract=}"
             )
 
             setattr(self, SIZE_TICK_MAP[tick_size.tickType], tick_size.size)
@@ -462,12 +512,8 @@ class Ticker:
 
     def _on_tick_string(self, tick_string: TickStringData, last_time: datetime):
         try:
-            if tick_string.tickType == TickType.BID_EXCH:
-                self.bidExchange = tick_string.value
-            elif tick_string.tickType == TickType.ASK_EXCH:
-                self.askExchange = tick_string.value
-            elif tick_string.tickType == TickType.LAST_EXCH:
-                self.lastExchange = tick_string.value
+            if tick_string.tickType in TICK_STRING_MAP:
+                setattr(self, TICK_STRING_MAP[tick_string.tickType], tick_string.value)
             elif tick_string.tickType in {
                 TickType.LAST_TIMESTAMP,
                 TickType.DELAYED_LAST_TIMESTAMP,
