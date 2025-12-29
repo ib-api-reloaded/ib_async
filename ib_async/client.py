@@ -66,8 +66,12 @@ from .protobuf_converters.account_converters import (
     createAccountDataRequestProto,
     createAccountMultiRequestProto,
     createCancelAccMultiRequestProto,
+    createCancelPositionsMultiRequestProto,
+    createFamilyCodesRequestProto,
     createFAReplaceProto,
     createFARequestProto,
+    createPositionsMultiRequestProto,
+    createSoftDollarTiersRequestProto,
     createUserInfoRequestProto,
 )
 from .protobuf_converters.base_converters import createSetServerLogLevelRequestProto
@@ -826,6 +830,18 @@ class Client:
             CancelPositionsProto(),
         )
 
+    def reqPositionsMulti(self, reqId, account, modelCode):
+        self.sendProto(
+            MessageId.OUT.REQ_POSITIONS_MULTI,
+            createPositionsMultiRequestProto(reqId, account, modelCode),
+        )
+
+    def cancelPositionsMulti(self, reqId):
+        self.sendProto(
+            MessageId.OUT.CANCEL_POSITIONS_MULTI,
+            createCancelPositionsMultiRequestProto(reqId),
+        )
+
     def reqAccountSummary(self, reqId, groupName, tags):
         proto = AccountSummaryRequestProto(reqId=reqId, group=groupName, tags=tags)
         self.sendProto(MessageId.OUT.REQ_ACCOUNT_SUMMARY, proto)
@@ -861,11 +877,7 @@ class Client:
     def verifyAndAuthMessage(self, apiData, xyzResponse):
         self.send(73, 1, apiData, xyzResponse)
 
-    def reqPositionsMulti(self, reqId, account, modelCode):
-        self.send(74, 1, reqId, account, modelCode)
 
-    def cancelPositionsMulti(self, reqId):
-        self.send(75, 1, reqId)
 
     def reqAccountUpdatesMulti(
         self, reqId: int, account: str, modelCode: str, ledgerAndNLV: bool
@@ -905,10 +917,16 @@ class Client:
         )
 
     def reqSoftDollarTiers(self, reqId):
-        self.send(79, reqId)
+        self.sendProto(
+            MessageId.OUT.REQ_SOFT_DOLLAR_TIERS,
+            createSoftDollarTiersRequestProto(reqId),
+        )
 
     def reqFamilyCodes(self):
-        self.send(80)
+        self.sendProto(
+            MessageId.OUT.REQ_FAMILY_CODES,
+            createFamilyCodesRequestProto(),
+        )
 
     def reqMatchingSymbols(self, reqId, pattern):
         matchingSymbolsRequestProto = createMatchingSymbolsRequestProto(reqId, pattern)

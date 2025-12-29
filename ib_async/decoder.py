@@ -11,12 +11,10 @@ from .contract import (
 from .message import MessageId
 from .objects import (
     DepthMktDataDescription,
-    FamilyCode,
     HistogramData,
     HistoricalTickType,
     NewsProvider,
     PriceIncrement,
-    SoftDollarTier,
     TagValue,
 )
 from .order import OrderStatus
@@ -51,6 +49,7 @@ from .protobuf.ExecutionDetails_pb2 import ExecutionDetails as ExecutionDetailsP
 from .protobuf.ExecutionDetailsEnd_pb2 import (
     ExecutionDetailsEnd as ExecutionDetailsEndProto,
 )
+from .protobuf.FamilyCodes_pb2 import FamilyCodes as FamilyCodesProto
 from .protobuf.FundamentalsData_pb2 import FundamentalsData as FundamentalsDataProto
 from .protobuf.HeadTimestamp_pb2 import HeadTimestamp as HeadTimestampProto
 from .protobuf.HistogramData_pb2 import HistogramData as HistogramDataProto
@@ -87,6 +86,10 @@ from .protobuf.PnLSingle_pb2 import PnLSingle as PnLSingleProto
 from .protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
 from .protobuf.Position_pb2 import Position as PositionProto
 from .protobuf.PositionEnd_pb2 import PositionEnd as PositionEndProto
+from .protobuf.PositionMulti_pb2 import PositionMulti as PositionMultiProto
+from .protobuf.PositionsMultiRequest_pb2 import (
+    PositionsMultiRequest as PositionMultiEndProto,
+)
 from .protobuf.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
 from .protobuf.ReceiveFA_pb2 import ReceiveFA as ReceiveFAProto
 from .protobuf.ReplaceFAEnd_pb2 import ReplaceFAEnd as ReplaceFAEndProto
@@ -99,6 +102,7 @@ from .protobuf.SecDefOptParameterEnd_pb2 import (
     SecDefOptParameterEnd as SecDefOptParameterEndProto,
 )
 from .protobuf.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
+from .protobuf.SoftDollarTiers_pb2 import SoftDollarTiers as SoftDollarTiersProto
 from .protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
 from .protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
 from .protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
@@ -119,7 +123,9 @@ from .protobuf_converters.account_converters import (
     createFAmsg,
     createPortfolioItem,
     createPosition,
+    createPositionMulti,
     createReplaceFAEnd,
+    createSoftDollarTiers,
 )
 from .protobuf_converters.contract_converters import (
     createContractDescription,
@@ -217,6 +223,13 @@ class Decoder:
             AccountUpdateMultiEndProto,
             "accountUpdateMultiEndProto",
         ),
+        MessageId.IN.POSITION_MULTI: (PositionMultiProto, "positionMultiProto"),
+        MessageId.IN.POSITION_MULTI_END: (
+            PositionMultiEndProto,
+            "positionMultiEndProto",
+        ),
+        MessageId.IN.FAMILY_CODES: (FamilyCodesProto, "familyCodesProto"),
+        MessageId.IN.SOFT_DOLLAR_TIERS: (SoftDollarTiersProto, "softDollarTiersProto"),
         # Handles incoming open order updates
         MessageId.IN.OPEN_ORDER: (OpenOrderProto, "openOrderProto"),
         MessageId.IN.OPEN_ORDER_END: (OpenOrderEndProto, "openOrderEndProto"),
@@ -318,7 +331,8 @@ class Decoder:
         MessageId.IN.HISTORICAL_NEWS: (HistoricalNewsProto, "historicalNewsProto"),
         MessageId.IN.HISTORICAL_NEWS_END: (
             HistoricalNewsEndProto,
-            "historicalNewsEndProto"),
+            "historicalNewsEndProto",
+        ),
         MessageId.IN.NEWS_ARTICLE: (NewsArticleProto, "newsArticleProto"),
         MessageId.IN.TICK_NEWS: (TickNewsProto, "tickNewsProto"),
         # Financial Advisor, FA messages
@@ -433,6 +447,14 @@ class Decoder:
 
     def accountUpdateMultiEndProto(self, msg: AccountUpdateMultiEndProto):
         self.wrapper.accountUpdateMultiEnd(msg.reqId)
+
+    def positionMultiProto(self, msg: PositionMultiProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        positionMulti = createPositionMulti(msg)
+        self.wrapper.positionMulti(reqId, positionMulti)
+
+    def positionMultiEndProto(self, msg: PositionMultiEndProto):
+        self.wrapper.positionMultiEnd(msg.reqId)
 
     def accountSummaryProto(self, msg: AccountSummaryProto):
         accountValue = createAccountSummary(msg)
@@ -642,22 +664,29 @@ class Decoder:
     def newsArticleProto(self, msg: NewsArticleProto):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
         newsArticle = createNewsArticle(msg)
-        self.wrapper.newsArticle(reqId,newsArticle)
-        
+        self.wrapper.newsArticle(reqId, newsArticle)
+
     def tickNewsProto(self, msg: TickNewsProto):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
         tickNews = createTickNews(msg)
         self.wrapper.tickNews(reqId, tickNews)
 
     def receiveFAProto(self, msg: ReceiveFAProto):
-        faDataType,xml = createFAmsg(msg)
+        faDataType, xml = createFAmsg(msg)
         self.wrapper.receiveFA(faDataType, xml)
-        
+
     def replaceFAEndProto(self, msg: ReplaceFAEndProto):
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
         text = createReplaceFAEnd(msg)
-        self.wrapper.replaceFAEnd(reqId,text)
+        self.wrapper.replaceFAEnd(reqId, text)
 
+    def softDollarTiersProto(self, msg: SoftDollarTiersProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        tiers = createSoftDollarTiers(msg)
+        self.wrapper.softDollarTiers(reqId, tiers)
+
+    def familyCodesProto(self, msg: FamilyCodesProto):
+        self.wrapper.familyCodes(msg)
 
     ##################### legacy methods ##########################################
 
@@ -749,26 +778,6 @@ class Decoder:
             DeltaNeutralContract(int(conId), float(delta or 0), float(price or 0)),
         )
 
-    def softDollarTiers(self, fields):
-        _, reqId, n, *fields = fields
-        get = iter(fields).__next__
-
-        tiers = [
-            SoftDollarTier(name=get(), val=get(), displayName=get())
-            for _ in range(int(n))
-        ]
-
-        self.wrapper.softDollarTiers(int(reqId), tiers)
-
-    def familyCodes(self, fields):
-        _, n, *fields = fields
-        get = iter(fields).__next__
-
-        familyCodes = [
-            FamilyCode(accountID=get(), familyCodeStr=get()) for _ in range(int(n))
-        ]
-
-        self.wrapper.familyCodes(familyCodes)
 
     def mktDepthExchanges(self, fields):
         _, n, *fields = fields

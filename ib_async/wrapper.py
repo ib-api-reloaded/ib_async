@@ -15,7 +15,6 @@ from typing import (
     Generic,
     TypeAlias,
     TypeVar,
-    cast,
 )
 from weakref import WeakKeyDictionary
 
@@ -52,6 +51,7 @@ from .objects import (
     PnLSingle,
     PortfolioItem,
     Position,
+    PositionMulti,
     PriceIncrement,
     RealTimeBar,
     RealTimeBarList,
@@ -323,6 +323,9 @@ class Wrapper:
 
     positions: dict[str, dict[int, Position]] = field(init=False)
     """ account -> conId -> Position """
+    
+    positionsMulti: dict[str, dict[int, PositionMulti]] = field(init=False)
+    """ account -> conId -> PositionMulti """
 
     trades: BiDict[OrderKeyType, Trade] = field(init=False)
     """
@@ -398,6 +401,7 @@ class Wrapper:
         self.acctSummary = {}
         self.portfolio = defaultdict(dict)
         self.positions = defaultdict(dict)
+        self.positionsMulti = defaultdict(dict)
         self.trades = BiDict[OrderKeyType, Trade]()
         self.subscriptions = BiDict[int, SubscriptionType]()
         self._isReady = False
@@ -573,10 +577,13 @@ class Wrapper:
             self.ib.updatePortfolioEvent.emit(portfolioItem)
 
     def position(self, position: Position):
-        account_positions = self.positions[position.account]
+        # get/create dict for account
+        account_positions = self.positions[position.account] 
         if position.position == 0:
+            # remove position
             account_positions.pop(position.contract.conId, None)
         else:
+            # add position
             account_positions[position.contract.conId] = position
 
         if self._isReady:
@@ -589,16 +596,21 @@ class Wrapper:
     def positionMulti(
         self,
         reqId: int,
-        account: str,
-        modelCode: str,
-        contract: Contract,
-        pos: float,
-        avgCost: float,
+        postionMulti: PositionMulti
     ):
-        pass
+        account_positionsMulti = self.positionsMulti[postionMulti.account]
+        if postionMulti.position == 0:
+            account_positionsMulti.pop(postionMulti.contract.conId, None)
+        else:
+            account_positionsMulti[postionMulti.contract.conId] = postionMulti
+
+        if self._isReady:
+            self.ib.positionEvent.emit(postionMulti)        
+        self.response_bus.emit(reqId, postionMulti)
 
     def positionMultiEnd(self, reqId: int):
-        pass
+        self._endReq(reqId)
+
 
     def pnl(
         self, reqId: int, dailyPnL: float, unrealizedPnL: float, realizedPnL: float
@@ -1091,10 +1103,10 @@ class Wrapper:
         self.response_bus.emit(reqId, whiteBrandingId)
 
     def softDollarTiers(self, reqId: int, tiers: list[SoftDollarTier]):
-        pass
+        self._logger.info("reqId: %s, softDollarTiers: %s", reqId,tiers)
 
     def familyCodes(self, familyCodes: list[FamilyCode]):
-        pass
+        self._logger.info("familyCodes: %s", familyCodes)
 
     def error(
         self,

@@ -38,6 +38,7 @@ from .objects import (
     PnLSingle,
     PortfolioItem,
     Position,
+    PositionMulti,
     PriceIncrement,
     RealTimeBarList,
     ScanDataList,
@@ -204,6 +205,9 @@ class IB:
 
         * ``positionEvent`` (position: :class:`.Position`):
           A position has changed.
+
+        * ``positionMultiEvent`` (positionMulti: :class:`.PositionMulti`):
+          A positionMulti has changed.
 
         * ``accountValueEvent`` (value: :class:`.AccountValue`):
           An account value has changed.
@@ -570,6 +574,27 @@ class IB:
             return list(self.wrapper.positions[account].values())
 
         return [v for d in self.wrapper.positions.values() for v in d.values()]
+
+    def positionsMulti(self, account: str = "", modelCode="") -> list[PositionMulti]:
+        """
+        List of positions for the given account,
+        or of all accounts if account is left blank.
+
+        Args:
+            account: If specified, filter for this account name.
+        """
+        if account:
+            return list(
+                v
+                for v in self.wrapper.positionsMulti[account].values()
+                if (not modelCode or v.modelCode == modelCode)
+            )
+        return [
+            v
+            for d in self.wrapper.positionsMulti.values()
+            for v in d.values()
+            if (not modelCode or v.modelCode == modelCode)
+        ]
 
     def pnl(self, account="", modelCode="") -> list[PnL]:
         """
@@ -1020,6 +1045,20 @@ class IB:
         This method is blocking.
         """
         return self._run(self.reqPositionsAsync())
+
+    def reqPositionsMulti(
+        self, account: str = "", modelCode: str = ""
+    ) -> list[PositionMulti]:
+        """
+        Requests position subscription for account and/or model Initially all positions are returned, and then updates are returned for any position changes in real time.
+
+        This method is blocking.
+
+        Args:
+            account: If specified, return positions for this account.
+            modelCode: If specified, return positions for this account model.
+        """
+        return self._run(self.reqPositionsMultiAsync(account))
 
     def reqPnL(self, account: str, modelCode: str = "") -> PnL:
         """
@@ -1984,6 +2023,7 @@ class IB:
         """
         reqId = self.client.getReqId()
         self.client.replaceFA(reqId, faDataType, xml)
+        self._logger.info("Replace FA request sent, %s", reqId)
 
     def reqWshMetaData(self):
         """
@@ -2434,6 +2474,19 @@ class IB:
             .map(self._raise_if_error)
         )
 
+    def reqPositionsMultiAsync(
+        self, account: str, modelCode: str = ""
+    ) -> Awaitable[list[Position]]:
+        reqId = self.client.getReqId()
+        self.client.reqPositionsMulti(reqId, account, modelCode)
+        return (
+            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+            .list()
+        )
+
     def reqContractDetailsAsync(
         self, contract: Contract
     ) -> "Awaitable[list[ContractDetails]]":
@@ -2844,11 +2897,16 @@ class IB:
             return None
 
     async def requestFAAsync(self, faDataType: int):
-        future = self.wrapper.startReq("requestFA")
+        future = (
+            self.wrapper.response_bus.filter(lambda name, _: name == "requestFA")
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
         self.client.requestFA(faDataType)
         try:
-            await asyncio.wait_for(future, 4)
-            return future.result()
+            result = await asyncio.wait_for(future, 4)
+            return result
         except asyncio.TimeoutError:
             self._logger.error("requestFAAsync: Timeout")
 

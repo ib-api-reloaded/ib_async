@@ -2,7 +2,6 @@
 
 import asyncio
 import datetime as dt
-import functools
 import logging
 import math
 import signal
@@ -348,10 +347,7 @@ def run(*awaitables: Awaitable, timeout: float | None = None):
 
         loop.run_forever()
         result = None
-        if sys.version_info >= (3, 7):
-            all_tasks = asyncio.all_tasks(loop)  # type: ignore
-        else:
-            all_tasks = asyncio.Task.all_tasks()  # type: ignore
+        all_tasks = asyncio.all_tasks(loop)  # type: ignore
 
         if all_tasks:
             # cancel pending tasks

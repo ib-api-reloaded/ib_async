@@ -2,9 +2,16 @@
 Account data protobuf converters.
 """
 
-from ib_async.util import isValidIntValue
+from ib_async.util import UNSET_DOUBLE, isValidIntValue
 
-from ..objects import AccountValue, PortfolioItem, Position
+from ..objects import (
+    AccountValue,
+    FamilyCode,
+    PortfolioItem,
+    Position,
+    PositionMulti,
+    SoftDollarTier,
+)
 from ..protobuf.AccountDataRequest_pb2 import (
     AccountDataRequest as AccountDataRequestProto,
 )
@@ -19,13 +26,30 @@ from ..protobuf.AccountValue_pb2 import AccountValue as AccountValueProto
 from ..protobuf.CancelAccountUpdatesMulti_pb2 import (
     CancelAccountUpdatesMulti as CancelAccountUpdatesMultiProto,
 )
+from ..protobuf.CancelPositionsMulti_pb2 import (
+    CancelPositionsMulti as CancelPositionsMultiProto,
+)
+from ..protobuf.FamilyCode_pb2 import FamilyCode as FamilyCodeProto
+from ..protobuf.FamilyCodes_pb2 import FamilyCodes as FamilyCodesProto
+from ..protobuf.FamilyCodesRequest_pb2 import (
+    FamilyCodesRequest as FamilyCodesRequestProto,
+)
 from ..protobuf.FAReplace_pb2 import FAReplace as FAReplaceProto
 from ..protobuf.FARequest_pb2 import FARequest as FARequestProto
 from ..protobuf.IdsRequest_pb2 import IdsRequest as IdsRequestProto
 from ..protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
 from ..protobuf.Position_pb2 import Position as PositionProto
+from ..protobuf.PositionMulti_pb2 import PositionMulti as PositionMultiProto
+from ..protobuf.PositionsMultiRequest_pb2 import (
+    PositionsMultiRequest as PositionsMultiRequestProto,
+)
 from ..protobuf.ReceiveFA_pb2 import ReceiveFA as ReceiveFAProto
 from ..protobuf.ReplaceFAEnd_pb2 import ReplaceFAEnd as ReplaceFAEndProto
+from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
+from ..protobuf.SoftDollarTiersRequest_pb2 import (
+    SoftDollarTiersRequest as SoftDollarTiersRequestProto,
+)
+from .base_converters import ClientException
 from .contract_converters import createContract
 
 
@@ -204,14 +228,116 @@ def createFAReplaceProto(reqId: int, faDataType: int, xml: str) -> FAReplaceProt
 
 
 def createFAmsg(msg: ReceiveFAProto) -> tuple[int, str]:
-    faDataType = (
-        msg.faDataType if msg.HasField("faDataType") else 0
-    )
+    faDataType = msg.faDataType if msg.HasField("faDataType") else 0
     xml = msg.xml if msg.HasField("xml") else ""
 
     return faDataType, xml
 
+
 def createReplaceFAEnd(msg: ReplaceFAEndProto) -> str:
-    text = msg.text if msg.HasField('text') else ""
+    text = msg.text if msg.HasField("text") else ""
     return text
-   
+
+
+def createPositionsMultiRequestProto(
+    reqId: int, account: str, modelCode: str
+) -> PositionsMultiRequestProto:
+    positionsMultiRequestProto = PositionsMultiRequestProto()
+    if isValidIntValue(reqId):
+        positionsMultiRequestProto.reqId = reqId
+    if account:
+        positionsMultiRequestProto.account = account
+    if modelCode:
+        positionsMultiRequestProto.modelCode = modelCode
+    return positionsMultiRequestProto
+
+
+def createCancelPositionsMultiRequestProto(reqId: int) -> CancelPositionsMultiProto:
+    cancelPositionsMultiProto = CancelPositionsMultiProto()
+    if isValidIntValue(reqId):
+        cancelPositionsMultiProto.reqId = reqId
+    return cancelPositionsMultiProto
+
+
+def createPositionMulti(positionMultiProto: PositionMultiProto) -> PositionMulti:
+    account = (
+        positionMultiProto.account if positionMultiProto.HasField("account") else ""
+    )
+    modelCode = (
+        positionMultiProto.modelCode if positionMultiProto.HasField("modelCode") else ""
+    )
+
+    # decode contract fields
+    if not positionMultiProto.HasField("contract"):
+        raise ClientException(999, "Invalid postion contract.", "")
+    contract = createContract(positionMultiProto.contract)
+
+    position = (
+        float(positionMultiProto.position)
+        if positionMultiProto.HasField("position")
+        else UNSET_DOUBLE
+    )
+    avgCost = (
+        positionMultiProto.avgCost if positionMultiProto.HasField("avgCost") else 0
+    )
+
+    return PositionMulti(account, contract, position, avgCost, modelCode)
+
+
+def createFamilyCodesRequestProto() -> FamilyCodesRequestProto:
+    familyCodesRequestProto = FamilyCodesRequestProto()
+    return familyCodesRequestProto
+
+
+def createFamilyCode(familyCodeProto: FamilyCodeProto) -> FamilyCode:
+    if familyCodeProto and familyCodeProto.HasField("accountId"):
+        accountID = familyCodeProto.accountId
+    if familyCodeProto and familyCodeProto.HasField("familyCode"):
+        familyCodeStr = familyCodeProto.familyCode
+
+    return FamilyCode(accountID, familyCodeStr)
+
+
+def createFamilyCodes(familyCodesProto: FamilyCodesProto) -> list[FamilyCode]:
+    familyCodes = []
+    if familyCodesProto.familyCodes:
+        for familCodeProto in familyCodesProto.familyCodes:
+            familyCode = createFamilyCode(familCodeProto)
+            familyCodes.append(familyCode)
+    return familyCodes
+
+
+def createSoftDollarTiersRequestProto(reqId: int) -> SoftDollarTiersRequestProto:
+    softDollarTiersRequestProto = SoftDollarTiersRequestProto()
+    if isValidIntValue(reqId):
+        softDollarTiersRequestProto.reqId = reqId
+    return softDollarTiersRequestProto
+
+
+def createSoftDollarTier(softDollarTierProto: SoftDollarTierProto) -> SoftDollarTier:
+    name = ""
+    value = ""
+    displayName = ""
+    softDollarTier = None
+    if softDollarTierProto is not None:
+        if softDollarTierProto.HasField("name"):
+            name = softDollarTierProto.name
+        if softDollarTierProto.HasField("value"):
+            value = softDollarTierProto.value
+        if softDollarTierProto.HasField("displayName"):
+            displayName = softDollarTierProto.displayName
+        softDollarTier = SoftDollarTier(name, value, displayName)
+
+    return softDollarTier
+
+
+def createSoftDollarTiers(
+    softDollarTiersProto: SoftDollarTiersRequestProto,
+) -> list[SoftDollarTier]:
+    tiers = []
+    if softDollarTiersProto.softDollarTiers:
+        for softDollarTierProto in softDollarTiersProto.softDollarTiers:
+            tier = createSoftDollarTier(softDollarTierProto)
+            if tier is not None:
+                tiers.append(tier)
+    return tiers

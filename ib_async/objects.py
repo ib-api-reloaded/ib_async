@@ -629,6 +629,15 @@ class Position:
     avgCost: float
 
 
+@dataclass(slots=True, frozen=True)
+class PositionMulti:
+    account: str
+    contract: Contract
+    position: float
+    avgCost: float
+    modelCode: str
+    
+    
 @dataclass(slots=True)
 class Fill:
     contract: Contract
