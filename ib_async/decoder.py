@@ -88,6 +88,8 @@ from .protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
 from .protobuf.Position_pb2 import Position as PositionProto
 from .protobuf.PositionEnd_pb2 import PositionEnd as PositionEndProto
 from .protobuf.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
+from .protobuf.ReceiveFA_pb2 import ReceiveFA as ReceiveFAProto
+from .protobuf.ReplaceFAEnd_pb2 import ReplaceFAEnd as ReplaceFAEndProto
 from .protobuf.ScannerData_pb2 import ScannerData as ScannerDataProto
 from .protobuf.ScannerParameters_pb2 import ScannerParameters as ScannerParametersProto
 from .protobuf.SecDefOptParameter_pb2 import (
@@ -114,8 +116,10 @@ from .protobuf_converters.account_converters import (
     createAccountSummary,
     createAccountValue,
     createAccountValueFromUpdateMulti,
+    createFAmsg,
     createPortfolioItem,
     createPosition,
+    createReplaceFAEnd,
 )
 from .protobuf_converters.contract_converters import (
     createContractDescription,
@@ -317,6 +321,9 @@ class Decoder:
             "historicalNewsEndProto"),
         MessageId.IN.NEWS_ARTICLE: (NewsArticleProto, "newsArticleProto"),
         MessageId.IN.TICK_NEWS: (TickNewsProto, "tickNewsProto"),
+        # Financial Advisor, FA messages
+        MessageId.IN.RECEIVE_FA: (ReceiveFAProto, "receiveFAProto"),
+        MessageId.IN.REPLACE_FA_END: (ReplaceFAEndProto, "replaceFAEndProto"),
     }
 
     def __init__(self, wrapper: Wrapper, serverVersion: int):
@@ -641,6 +648,16 @@ class Decoder:
         reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
         tickNews = createTickNews(msg)
         self.wrapper.tickNews(reqId, tickNews)
+
+    def receiveFAProto(self, msg: ReceiveFAProto):
+        faDataType,xml = createFAmsg(msg)
+        self.wrapper.receiveFA(faDataType, xml)
+        
+    def replaceFAEndProto(self, msg: ReplaceFAEndProto):
+        reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+        text = createReplaceFAEnd(msg)
+        self.wrapper.replaceFAEnd(reqId,text)
+
 
     ##################### legacy methods ##########################################
 

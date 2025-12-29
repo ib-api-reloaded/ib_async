@@ -66,8 +66,11 @@ from .protobuf_converters.account_converters import (
     createAccountDataRequestProto,
     createAccountMultiRequestProto,
     createCancelAccMultiRequestProto,
+    createFAReplaceProto,
+    createFARequestProto,
     createUserInfoRequestProto,
 )
+from .protobuf_converters.base_converters import createSetServerLogLevelRequestProto
 from .protobuf_converters.contract_converters import (
     createContractProto,
     createMarketRuleRequestProto,
@@ -391,7 +394,7 @@ class Client:
         self.reset()
 
     def _prefix(self, msg):
-        # prefix a message with its length
+        """Prefix a message with its length."""
         return struct.pack(f">I{len(msg)}s", len(msg), msg)
 
     def _onSocketHasData(self, data):
@@ -434,7 +437,8 @@ class Client:
 
                 if self._serverVersion < 201:  # MIN_SERVER_VER_PROTOBUF
                     self._onSocketDisconnected(
-                        f"Server version {self._serverVersion} does not support Protobuf. Disconnecting."
+                        f"Server version {self._serverVersion} does not support"
+                        " Protobuf. Disconnecting."
                     )
                     return
 
@@ -482,6 +486,14 @@ class Client:
 
         if wasReady:
             self.apiEnd.emit()
+
+    def startApi(self):
+        startApiRequestProto = StartApiRequestProto()
+        if self.clientId >= 0:  # Assuming 0 or negative clientId is invalid
+            startApiRequestProto.clientId = self.clientId
+        if self.optCapab:  # Only set if not an empty string
+            startApiRequestProto.optionalCapabilities = self.optCapab
+        self.sendProto(MessageId.OUT.START_API, startApiRequestProto)
 
     # client request methods
     # the message type id is sent first, often followed by a version number
@@ -553,22 +565,6 @@ class Client:
             contractDetailsRequestProto,
         )
 
-    def reqContractDetailsLegacy(self, reqId, contract):
-        fields = [
-            9,
-            8,
-            reqId,
-            contract,
-            contract.includeExpired,
-            contract.secIdType,
-            contract.secId,
-        ]
-
-        if self.serverVersion() >= 176:
-            fields += [contract.issuerId]
-
-        self.send(*fields)
-
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):
         self.send(
             10,
@@ -607,7 +603,10 @@ class Client:
         )
 
     def setServerLogLevel(self, logLevel):
-        self.send(14, 1, logLevel)
+        self.sendProto(
+            MessageId.OUT.SET_SERVER_LOGLEVEL,
+            createSetServerLogLevelRequestProto(logLevel),
+        )
 
     def reqAutoOpenOrders(self, bAutoBind: bool):
         autoOpenOrdersRequestProto = AutoOpenOrdersRequestProto()
@@ -630,10 +629,12 @@ class Client:
         self.sendProto(MessageId.OUT.REQ_MANAGED_ACCTS, proto)
 
     def requestFA(self, faData):
-        self.send(18, 1, faData)
+        faRequestProto = createFARequestProto(faData)
+        self.sendProto(MessageId.OUT.REQ_FA, faRequestProto)
 
     def replaceFA(self, reqId, faData, cxml):
-        self.send(19, 1, faData, cxml, reqId)
+        faReplaceProto = createFAReplaceProto(reqId, faData, cxml)
+        self.sendProto(MessageId.OUT.REPLACE_FA, faReplaceProto)
 
     def reqHistoricalData(
         self,
@@ -853,14 +854,6 @@ class Client:
 
     def unsubscribeFromGroupEvents(self, reqId):
         self.send(70, 1, reqId)
-
-    def startApi(self):
-        startApiRequestProto = StartApiRequestProto()
-        if self.clientId >= 0:  # Assuming 0 or negative clientId is invalid
-            startApiRequestProto.clientId = self.clientId
-        if self.optCapab:  # Only set if not an empty string
-            startApiRequestProto.optionalCapabilities = self.optCapab
-        self.sendProto(MessageId.OUT.START_API, startApiRequestProto)
 
     def verifyAndAuthRequest(self, apiName, apiVersion, opaqueIsvKey):
         self.send(72, 1, apiName, apiVersion, opaqueIsvKey)

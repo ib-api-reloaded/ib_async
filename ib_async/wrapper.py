@@ -1044,8 +1044,12 @@ class Wrapper:
         self.ib.newsBulletinEvent.emit(newsBulletin)
 
     def receiveFA(self, _faDataType: int, faXmlData: str):
-        self._endReq("requestFA", faXmlData)
+        self.response_bus.emit("requestFA", faXmlData)
+        self._endReq("requestFA")
 
+    def replaceFAEnd(self, reqId:int,text:str):
+        self._logger.info("Replace FA Response: %s, %s", reqId, text)
+        
     def currentTime(self, time: int):
         dt = datetime.fromtimestamp(time, self.defaultTimezone)
         self.response_bus.emit("currentTime", dt)

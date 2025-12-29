@@ -19,9 +19,13 @@ from ..protobuf.AccountValue_pb2 import AccountValue as AccountValueProto
 from ..protobuf.CancelAccountUpdatesMulti_pb2 import (
     CancelAccountUpdatesMulti as CancelAccountUpdatesMultiProto,
 )
+from ..protobuf.FAReplace_pb2 import FAReplace as FAReplaceProto
+from ..protobuf.FARequest_pb2 import FARequest as FARequestProto
 from ..protobuf.IdsRequest_pb2 import IdsRequest as IdsRequestProto
 from ..protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
 from ..protobuf.Position_pb2 import Position as PositionProto
+from ..protobuf.ReceiveFA_pb2 import ReceiveFA as ReceiveFAProto
+from ..protobuf.ReplaceFAEnd_pb2 import ReplaceFAEnd as ReplaceFAEndProto
 from .contract_converters import createContract
 
 
@@ -179,3 +183,35 @@ def createUserInfoRequestProto(reqId: int) -> IdsRequestProto:
     if isValidIntValue(reqId):
         idsRequestProto.numIds = reqId
     return idsRequestProto
+
+
+def createFARequestProto(faDataType: int) -> FARequestProto:
+    faRequestProto = FARequestProto()
+    if isValidIntValue(faDataType):
+        faRequestProto.faDataType = faDataType
+    return faRequestProto
+
+
+def createFAReplaceProto(reqId: int, faDataType: int, xml: str) -> FAReplaceProto:
+    faReplaceProto = FAReplaceProto()
+    if isValidIntValue(reqId):
+        faReplaceProto.reqId = reqId
+    if isValidIntValue(faDataType):
+        faReplaceProto.faDataType = faDataType
+    if xml:
+        faReplaceProto.xml = xml
+    return faReplaceProto
+
+
+def createFAmsg(msg: ReceiveFAProto) -> tuple[int, str]:
+    faDataType = (
+        msg.faDataType if msg.HasField("faDataType") else 0
+    )
+    xml = msg.xml if msg.HasField("xml") else ""
+
+    return faDataType, xml
+
+def createReplaceFAEnd(msg: ReplaceFAEndProto) -> str:
+    text = msg.text if msg.HasField('text') else ""
+    return text
+   
