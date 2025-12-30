@@ -25,13 +25,13 @@ class FundDistributionPolicyIndicator(Enum):
     IncomeFund = ("Y", "Income Fund")
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class IneligibilityReason:
     id_: str = field(default_factory=str)
     description: str = field(default_factory=str)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True,frozen=True)
 class DeltaNeutralContract:
     conId: int = 0
     delta: float = 0.0

@@ -181,6 +181,7 @@ def createComboLegs(contractProto: ContractProto) -> list[ComboLeg]:
                 comboLeg.designatedLocation = comboLegProto.designatedLocation
             if comboLegProto.HasField("exemptCode"):
                 comboLeg.exemptCode = comboLegProto.exemptCode
+
             comboLegs.append(comboLeg)
 
     return comboLegs
@@ -189,20 +190,21 @@ def createComboLegs(contractProto: ContractProto) -> list[ComboLeg]:
 def createDeltaNeutralContract(
     contractProto: ContractProto,
 ) -> DeltaNeutralContract | None:
-    deltaNeutralContract = None
+    dn = None
     if contractProto.HasField("deltaNeutralContract"):
         deltaNeutralContractProto = DeltaNeutralContractProto()
         deltaNeutralContractProto.CopyFrom(contractProto.deltaNeutralContract)
         if deltaNeutralContractProto is not None:
-            deltaNeutralContract = DeltaNeutralContract()
             if deltaNeutralContractProto.HasField("conId"):
-                deltaNeutralContract.conId = deltaNeutralContractProto.conId
+                conId = deltaNeutralContractProto.conId
             if deltaNeutralContractProto.HasField("delta"):
-                deltaNeutralContract.delta = deltaNeutralContractProto.delta
+                delta = deltaNeutralContractProto.delta
             if deltaNeutralContractProto.HasField("price"):
-                deltaNeutralContract.price = deltaNeutralContractProto.price
+                price = deltaNeutralContractProto.price
+            if conId is not None and delta is not None and price is not None:
+                dn = DeltaNeutralContract(conId, delta, price)
 
-    return deltaNeutralContract
+    return dn
 
 
 def createIneligibilityReasonList(
@@ -212,12 +214,11 @@ def createIneligibilityReasonList(
     ineligibilityReasonProtoList = contractDetailsProto.ineligibilityReasonList
     if ineligibilityReasonProtoList:
         for ineligibilityReasonProto in ineligibilityReasonProtoList:
-            ineligibilityReason = IneligibilityReason()
             if ineligibilityReasonProto.HasField("id"):
-                ineligibilityReason.id_ = ineligibilityReasonProto.id
+                id_ = ineligibilityReasonProto.id
             if ineligibilityReasonProto.HasField("description"):
-                ineligibilityReason.description = ineligibilityReasonProto.description
-            ineligibilityReasonList.append(ineligibilityReason)
+                description = ineligibilityReasonProto.description
+            ineligibilityReasonList.append(IneligibilityReason(id_, description))
     return ineligibilityReasonList
 
 

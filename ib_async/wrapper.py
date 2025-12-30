@@ -605,7 +605,7 @@ class Wrapper:
             account_positionsMulti[postionMulti.contract.conId] = postionMulti
 
         if self._isReady:
-            self.ib.positionEvent.emit(postionMulti)        
+            self.ib.positionMultiEvent.emit(postionMulti)        
         self.response_bus.emit(reqId, postionMulti)
 
     def positionMultiEnd(self, reqId: int):
@@ -681,6 +681,7 @@ class Wrapper:
         final_trade = existing_trade or trade
         if self._isReady:
             self.ib.openOrderEvent.emit(final_trade)
+
         if final_trade.order.orderId > 0:
             self.ib.client.updateReqId(final_trade.order.orderId + 1)
         self.response_bus.emit("openOrders", final_trade)

@@ -269,6 +269,7 @@ class IB:
         "commissionReportEvent",
         "updatePortfolioEvent",
         "positionEvent",
+        "positionMultiEvent",
         "accountValueEvent",
         "accountSummaryEvent",
         "pnlEvent",
@@ -311,6 +312,7 @@ class IB:
         self.commissionReportEvent = Event("commissionReportEvent")
         self.updatePortfolioEvent = Event("updatePortfolioEvent")
         self.positionEvent = Event("positionEvent")
+        self.positionMultiEvent = Event("positionMultiEvent")
         self.accountValueEvent = Event("accountValueEvent")
         self.accountSummaryEvent = Event("accountSummaryEvent")
         self.pnlEvent = Event("pnlEvent")

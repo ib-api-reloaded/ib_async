@@ -7,13 +7,12 @@ import math
 import signal
 import sys
 import time
-from collections.abc import AsyncIterator, Awaitable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from dataclasses import fields, is_dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from functools import wraps
 from typing import (
     Any,
-    Callable,
     Final,
     TypeAlias,
 )

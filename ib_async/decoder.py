@@ -1,4 +1,4 @@
-"""Deserialize and dispatch messages."""
+"""Deserialize and dispatch protobuf messages."""
 
 import logging
 
@@ -180,6 +180,10 @@ class Decoder:
         MessageId.IN.NEXT_VALID_ID: (NextValidIdProto, "nextValidIdProto"),
         # Handles incoming contract details for reqContractDetails
         MessageId.IN.CONTRACT_DATA: (ContractDataProto, "contractDetailsProto"),
+        MessageId.IN.BOND_CONTRACT_DATA: (
+            ContractDataProto,
+            "bondContractDetailsProto",
+        ),
         # Signals the end of a contract details stream
         MessageId.IN.CONTRACT_DATA_END: (
             ContractDataEndProto,
@@ -688,87 +692,13 @@ class Decoder:
     def familyCodesProto(self, msg: FamilyCodesProto):
         self.wrapper.familyCodes(msg)
 
+
+    def bondContractDetailsProto(self, msg:ContractDataProto):
+        reqId = msg.reqId
+        cd = createContractDetails(msg)
+        self.wrapper.bondContractDetails(reqId, cd)
+
     ##################### legacy methods ##########################################
-
-    def bondContractDetails(self, fields):
-        cd = ContractDetails()
-        cd.contract = c = Contract()
-        if self.serverVersion < 164:
-            fields.pop(0)
-
-        (
-            _,
-            reqId,
-            c.symbol,
-            c.secType,
-            cd.cusip,
-            cd.coupon,
-            lastTimes,
-            cd.issueDate,
-            cd.ratings,
-            cd.bondType,
-            cd.couponType,
-            cd.convertible,
-            cd.callable,
-            cd.putable,
-            cd.descAppend,
-            c.exchange,
-            c.currency,
-            cd.marketName,
-            c.tradingClass,
-            c.conId,
-            cd.minTick,
-            *fields,
-        ) = fields
-
-        if self.serverVersion < 164:
-            fields.pop(0)  # obsolete mdSizeMultiplier
-
-        (
-            cd.orderTypes,
-            cd.validExchanges,
-            cd.nextOptionDate,
-            cd.nextOptionType,
-            cd.nextOptionPartial,
-            cd.notes,
-            cd.longName,
-            cd.evRule,
-            cd.evMultiplier,
-            numSecIds,
-            *fields,
-        ) = fields
-
-        numSecIds = int(numSecIds)
-        if numSecIds > 0:
-            cd.secIdList = []
-            for _ in range(numSecIds):
-                tag, value, *fields = fields
-                cd.secIdList += [TagValue(tag, value)]
-
-        cd.aggGroup, cd.marketRuleIds, *fields = fields
-        if self.serverVersion >= 164:
-            (
-                cd.minSize,
-                cd.sizeIncrement,
-                cd.suggestedSizeIncrement,
-                # cd.minCashQtySize,
-                *fields,
-            ) = fields
-
-        times = lastTimes.split("-" if "-" in lastTimes else None)
-
-        if len(times) > 0:
-            cd.maturity = times[0]
-
-        if len(times) > 1:
-            cd.lastTradeTime = times[1]
-
-        if len(times) > 2:
-            cd.timeZoneId = times[2]
-
-        self.parse(cd)
-        self.parse(c)
-        self.wrapper.bondContractDetails(int(reqId), cd)
 
     def deltaNeutralValidation(self, fields):
         _, _, reqId, conId, delta, price = fields
@@ -777,7 +707,6 @@ class Decoder:
             int(reqId),
             DeltaNeutralContract(int(conId), float(delta or 0), float(price or 0)),
         )
-
 
     def mktDepthExchanges(self, fields):
         _, n, *fields = fields

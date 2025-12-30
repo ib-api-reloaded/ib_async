@@ -2,7 +2,9 @@
 Market data protobuf converters
 """
 
-from typing import Any, Callable, TypeAlias
+from collections.abc import Callable
+from math import nan
+from typing import Any, TypeAlias
 
 from ..objects import (
     Contract,
@@ -128,16 +130,18 @@ def createTickParams(msg: TickReqParamsProto) -> TickParams:
 
 def createTickPriceData(msg: TickPriceProto) -> TickPriceData:
     """Create a TickPriceData object from a TickPriceProto message."""
-    if msg.HasField("reqId"):
-        reqId = msg.reqId
-    if msg.HasField("tickType") and msg.tickType in TickType:
-        tickType = TickType(msg.tickType)
-    if msg.HasField("price"):
-        price = float(
-            msg.price,
-        )
-    if msg.HasField("size"):
-        size = float(msg.size)
+    reqId = msg.reqId if msg.HasField("reqId") else NO_VALID_ID
+
+    tickType = (
+        TickType(msg.tickType)
+        if msg.HasField("tickType") and msg.tickType in TickType
+        else TickType.NOT_SET
+    )
+
+    price = float(msg.price) if msg.HasField("price") else nan
+    size = float(msg.size) if msg.HasField("size") else nan
+
+    attribs = TickAttrib()
     if msg.HasField("attrMask"):
         canAutoExecute = msg.attrMask & 1 != 0
         pastLimit = msg.attrMask & 2 != 0
@@ -155,6 +159,9 @@ def createTickPriceData(msg: TickPriceProto) -> TickPriceData:
 
 def createTickSizeData(msg: TickSizeProto) -> TickSizeData:
     """Create a TickSizeData object from a TickSizeProto message."""
+    reqId = NO_VALID_ID
+    tickType = TickType.NOT_SET
+    size = nan
     if msg.HasField("reqId"):
         reqId = msg.reqId
     if msg.HasField("tickType") and msg.tickType in TickType:
@@ -167,6 +174,10 @@ def createTickSizeData(msg: TickSizeProto) -> TickSizeData:
 
 def createTickStringData(msg: TickStringProto) -> TickStringData:
     """Create a TickStringData object from a TickStringProto message."""
+    reqId = NO_VALID_ID
+    tickType = TickType.NOT_SET
+    value = ""
+    
     if msg.HasField("reqId"):
         reqId = msg.reqId
     if msg.HasField("tickType") and msg.tickType in TickType:
@@ -179,6 +190,9 @@ def createTickStringData(msg: TickStringProto) -> TickStringData:
 
 def createTickGenericData(msg: TickGenericProto) -> TickGenericData:
     """Create a TickGenericData object from a TickGenericProto message."""
+    reqId = NO_VALID_ID
+    tickType = TickType.NOT_SET
+    value = nan
     if msg.HasField("reqId"):
         reqId = msg.reqId
     if msg.HasField("tickType") and msg.tickType in TickType:
