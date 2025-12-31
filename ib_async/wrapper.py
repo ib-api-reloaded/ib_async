@@ -1184,6 +1184,7 @@ class Wrapper:
             # Record warnings into the trade object, but unlike the _error_ case,
             # DO NOT delete the trade object because the order is STILL LIVE at the
             # broker.
+            self._logger.warning(msg)
             if trade:
                 status = trade.orderStatus.status = OrderStatus.ValidationError
                 logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)
@@ -1201,9 +1202,7 @@ class Wrapper:
                         self.response_bus.emit(reqId, error)
                     else:
                         # a None will be interpreted as an empty result
-                        self._logger.error("is request %s, %s", reqId, msg)
                         self.response_bus.emit(reqId, None)
-                self._logger.info(msg)
         else:
             self._logger.error(msg)
             if isRequest:
