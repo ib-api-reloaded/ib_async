@@ -476,9 +476,9 @@ async def waitUntilAsync(t: Time_t) -> bool:
 
 def patchAsyncio():
     """Patch asyncio to allow nested event loops."""
-    import nest_asyncio
+    import nest_asyncio2
 
-    nest_asyncio.apply()
+    nest_asyncio2.apply()
 
 
 def getLoop():
