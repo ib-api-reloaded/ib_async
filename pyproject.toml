@@ -31,7 +31,7 @@ keywords = ["ibapi", "tws", "asyncio", "jupyter", "interactive", "brokers", "asy
 python = ">=3.10"
 aeventkit = "^2.1.0"
 # aeventkit = { path = "../eventkit", develop = true }
-nest_asyncio = "*"
+nest-asyncio2 = "*"
 tzdata = "^2025.2"
 
 [tool.poetry.urls]
