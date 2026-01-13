@@ -31,7 +31,7 @@ class IneligibilityReason:
     description: str = field(default_factory=str)
 
 
-@dataclass(slots=True,frozen=True)
+@dataclass(slots=True, frozen=True)
 class DeltaNeutralContract:
     conId: int = 0
     delta: float = 0.0

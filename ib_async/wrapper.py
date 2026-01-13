@@ -305,7 +305,7 @@ class RequestError(Exception):
 class Wrapper:
     """Wrapper implementation for use with the IB class.
 
-    Wrapper keeps track of `state`, accounts, accoutn values, positions, etc. and 
+    Wrapper keeps track of `state`, accounts, accoutn values, positions, etc. and
     respond to requests, subscriptions and streming data.
     """
 
@@ -323,7 +323,7 @@ class Wrapper:
 
     positions: dict[str, dict[int, Position]] = field(init=False)
     """ account -> conId -> Position """
-    
+
     positionsMulti: dict[str, dict[int, PositionMulti]] = field(init=False)
     """ account -> conId -> PositionMulti """
 
@@ -578,7 +578,7 @@ class Wrapper:
 
     def position(self, position: Position):
         # get/create dict for account
-        account_positions = self.positions[position.account] 
+        account_positions = self.positions[position.account]
         if position.position == 0:
             # remove position
             account_positions.pop(position.contract.conId, None)
@@ -593,11 +593,7 @@ class Wrapper:
     def positionEnd(self):
         self._endReq("position")
 
-    def positionMulti(
-        self,
-        reqId: int,
-        postionMulti: PositionMulti
-    ):
+    def positionMulti(self, reqId: int, postionMulti: PositionMulti):
         account_positionsMulti = self.positionsMulti[postionMulti.account]
         if postionMulti.position == 0:
             account_positionsMulti.pop(postionMulti.contract.conId, None)
@@ -605,12 +601,11 @@ class Wrapper:
             account_positionsMulti[postionMulti.contract.conId] = postionMulti
 
         if self._isReady:
-            self.ib.positionMultiEvent.emit(postionMulti)        
+            self.ib.positionMultiEvent.emit(postionMulti)
         self.response_bus.emit(reqId, postionMulti)
 
     def positionMultiEnd(self, reqId: int):
         self._endReq(reqId)
-
 
     def pnl(
         self, reqId: int, dailyPnL: float, unrealizedPnL: float, realizedPnL: float
@@ -1039,20 +1034,16 @@ class Wrapper:
         self.newsTicks.append(newsTick)
         self.ib.tickNewsEvent.emit(newsTick)
 
-    def newsArticle(self, reqId: int, newsArticle:NewsArticle):
-        self.response_bus.emit(reqId,newsArticle)
+    def newsArticle(self, reqId: int, newsArticle: NewsArticle):
+        self.response_bus.emit(reqId, newsArticle)
 
-    def historicalNews(
-        self, reqId: int, historicalNews: HistoricalNews
-    ):
+    def historicalNews(self, reqId: int, historicalNews: HistoricalNews):
         self.response_bus.emit(reqId, historicalNews)
 
     def historicalNewsEnd(self, reqId, _hasMore: bool):
         self._endReq(reqId)
 
-    def updateNewsBulletin(
-        self, msgId: int, newsBulletin:NewsBulletin
-    ):
+    def updateNewsBulletin(self, msgId: int, newsBulletin: NewsBulletin):
         self.newsBulletins[msgId] = newsBulletin
         self.ib.newsBulletinEvent.emit(newsBulletin)
 
@@ -1060,9 +1051,9 @@ class Wrapper:
         self.response_bus.emit("requestFA", faXmlData)
         self._endReq("requestFA")
 
-    def replaceFAEnd(self, reqId:int,text:str):
+    def replaceFAEnd(self, reqId: int, text: str):
         self._logger.info("Replace FA Response: %s, %s", reqId, text)
-        
+
     def currentTime(self, time: int):
         dt = datetime.fromtimestamp(time, self.defaultTimezone)
         self.response_bus.emit("currentTime", dt)
@@ -1104,7 +1095,7 @@ class Wrapper:
         self.response_bus.emit(reqId, whiteBrandingId)
 
     def softDollarTiers(self, reqId: int, tiers: list[SoftDollarTier]):
-        self._logger.info("reqId: %s, softDollarTiers: %s", reqId,tiers)
+        self._logger.info("reqId: %s, softDollarTiers: %s", reqId, tiers)
 
     def familyCodes(self, familyCodes: list[FamilyCode]):
         self._logger.info("familyCodes: %s", familyCodes)

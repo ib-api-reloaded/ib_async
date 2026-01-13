@@ -3,9 +3,7 @@
 import logging
 
 from .contract import (
-    Contract,
     ContractDescription,
-    ContractDetails,
     DeltaNeutralContract,
 )
 from .message import MessageId
@@ -15,7 +13,6 @@ from .objects import (
     HistoricalTickType,
     NewsProvider,
     PriceIncrement,
-    TagValue,
 )
 from .order import OrderStatus
 from .protobuf.AccountDataEnd_pb2 import AccountDataEnd as AccountDataEndProto
@@ -692,8 +689,7 @@ class Decoder:
     def familyCodesProto(self, msg: FamilyCodesProto):
         self.wrapper.familyCodes(msg)
 
-
-    def bondContractDetailsProto(self, msg:ContractDataProto):
+    def bondContractDetailsProto(self, msg: ContractDataProto):
         reqId = msg.reqId
         cd = createContractDetails(msg)
         self.wrapper.bondContractDetails(reqId, cd)

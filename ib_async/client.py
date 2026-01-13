@@ -877,8 +877,6 @@ class Client:
     def verifyAndAuthMessage(self, apiData, xyzResponse):
         self.send(73, 1, apiData, xyzResponse)
 
-
-
     def reqAccountUpdatesMulti(
         self, reqId: int, account: str, modelCode: str, ledgerAndNLV: bool
     ):
