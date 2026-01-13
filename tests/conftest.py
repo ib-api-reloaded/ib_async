@@ -1,5 +1,4 @@
-import asyncio
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
@@ -26,7 +25,7 @@ async def ib():
 def mock_ib():
     """Fixture for a mocked IB instance."""
     ib_instance = IB()
-    ib_instance.client.isConnected = Mock(return_value=True)
-    ib_instance.client.isReady = Mock(return_value=True)
-    ib_instance.client.serverVersion = Mock(return_value=201)
+    ib_instance.client.isConnected = Mock(return_value=True)  # type: ignore
+    ib_instance.client.isReady = Mock(return_value=True)  # type: ignore
+    ib_instance.client.serverVersion = Mock(return_value=201)  # type: ignore
     return ib_instance

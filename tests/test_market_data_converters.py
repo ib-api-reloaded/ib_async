@@ -1,4 +1,5 @@
 import pytest
+
 from ib_async.contract import Contract
 from ib_async.objects import (
     OptionComputation,
@@ -9,26 +10,6 @@ from ib_async.objects import (
     TickSizeData,
     TickStringData,
     TickType,
-)
-from ib_async.protobuf.MarketDataTypeRequest_pb2 import (
-    MarketDataTypeRequest as MarketDataTypeRequestProto,
-)
-from ib_async.protobuf.MarketDataRequest_pb2 import (
-    MarketDataRequest as MarketDataRequestProto,
-)
-from ib_async.protobuf.CancelMarketData_pb2 import (
-    CancelMarketData as CancelMarketDataProto,
-)
-from ib_async.protobuf.TickByTickRequest_pb2 import (
-    TickByTickRequest as TickByTickRequestProto,
-)
-from ib_async.protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
-from ib_async.protobuf.TickPrice_pb2 import TickPrice as TickPriceProto
-from ib_async.protobuf.TickSize_pb2 import TickSize as TickSizeProto
-from ib_async.protobuf.TickString_pb2 import TickString as TickStringProto
-from ib_async.protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
-from ib_async.protobuf.TickOptionComputation_pb2 import (
-    TickOptionComputation as TickOptionComputationProto,
 )
 from ib_async.protobuf.CalculateImpliedVolatilityRequest_pb2 import (
     CalculateImpliedVolatilityRequest as CalculateImpliedVolatilityRequestProto,
@@ -42,21 +23,42 @@ from ib_async.protobuf.CancelCalculateImpliedVolatility_pb2 import (
 from ib_async.protobuf.CancelCalculateOptionPrice_pb2 import (
     CancelCalculateOptionPrice as CancelCalculateOptionPriceProto,
 )
+from ib_async.protobuf.CancelMarketData_pb2 import (
+    CancelMarketData as CancelMarketDataProto,
+)
+from ib_async.protobuf.MarketDataRequest_pb2 import (
+    MarketDataRequest as MarketDataRequestProto,
+)
+from ib_async.protobuf.MarketDataTypeRequest_pb2 import (
+    MarketDataTypeRequest as MarketDataTypeRequestProto,
+)
+from ib_async.protobuf.TickByTickRequest_pb2 import (
+    TickByTickRequest as TickByTickRequestProto,
+)
+from ib_async.protobuf.TickGeneric_pb2 import TickGeneric as TickGenericProto
+from ib_async.protobuf.TickOptionComputation_pb2 import (
+    TickOptionComputation as TickOptionComputationProto,
+)
+from ib_async.protobuf.TickPrice_pb2 import TickPrice as TickPriceProto
+from ib_async.protobuf.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
+from ib_async.protobuf.TickSize_pb2 import TickSize as TickSizeProto
+from ib_async.protobuf.TickString_pb2 import TickString as TickStringProto
 from ib_async.protobuf_converters.market_data_converters import (
-    createMarketDataTypeRequestProto,
-    createMarketDataRequestProto,
     cancelMarketDataProto,
-    createTickByTickRequestProto,
-    createTickParams,
-    createTickPriceData,
-    createTickSizeData,
-    createTickStringData,
-    createTickGenericData,
-    createTickOptionComputation,
     createCalculateImpliedVolatilityRequestProto,
     createCalculateOptionPriceRequestProto,
     createCancelCalculateImpliedVolatilityProto,
     createCancelCalculateOptionPriceProto,
+    createMarketDataRequestProto,
+    createMarketDataTypeRequestProto,
+    createTickByTickRequestProto,
+    createTickData,
+    createTickGenericData,
+    createTickOptionComputation,
+    createTickParams,
+    createTickPriceData,
+    createTickSizeData,
+    createTickStringData,
 )
 
 
@@ -143,6 +145,35 @@ class TestMarketDataConverters:
         assert generic_data.reqId == 1
         assert generic_data.tickType == TickType.OPTION_IMPLIED_VOL
         assert generic_data.value == 0.5
+
+    def test_createTickData(self):
+        # Test with TickPriceProto
+        price_proto = TickPriceProto(reqId=1, tickType=TickType.BID.value, price=1.2, size="100")
+        price_data = createTickData(price_proto)
+        assert isinstance(price_data, TickPriceData)
+        assert price_data.price == 1.2
+
+        # Test with TickSizeProto
+        size_proto = TickSizeProto(reqId=1, tickType=TickType.ASK_SIZE.value, size="200")
+        size_data = createTickData(size_proto)
+        assert isinstance(size_data, TickSizeData)
+        assert size_data.size == 200
+
+        # Test with TickStringProto
+        string_proto = TickStringProto(reqId=1, tickType=TickType.LAST_TIMESTAMP.value, value="123")
+        string_data = createTickData(string_proto)
+        assert isinstance(string_data, TickStringData)
+        assert string_data.value == "123"
+
+        # Test with TickGenericProto
+        generic_proto = TickGenericProto(reqId=1, tickType=TickType.HIGH.value, value=1.23)
+        generic_data = createTickData(generic_proto)
+        assert isinstance(generic_data, TickGenericData)
+        assert generic_data.value == 1.23
+
+        # Test with an invalid type
+        with pytest.raises(ValueError):
+            createTickData(123) # type: ignore
 
     def test_createTickOptionComputation(self):
         proto = TickOptionComputationProto(

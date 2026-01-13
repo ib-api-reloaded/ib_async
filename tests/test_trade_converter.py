@@ -1,115 +1,104 @@
-import pytest
 from datetime import datetime
 from decimal import Decimal
-from unittest.mock import Mock
 
-from ib_async.contract import Contract, ComboLeg
+import pytest
+
+from ib_async.contract import ComboLeg, Contract
 from ib_async.objects import (
+    CommissionReport,
+    Execution,
+    ExecutionFilter,
+    Fill,
     OptionExerciseType,
     SoftDollarTier,
-    Execution,
-    Fill,
-    CommissionReport,
-    ExecutionFilter,
 )
 from ib_async.order import (
+    ExecutionCondition,
+    MarginCondition,
     Order,
+    OrderCancel,
     OrderComboLeg,
     OrderState,
     OrderStatus,
-    Trade,
+    PercentChangeCondition,
     PriceCondition,
     TimeCondition,
-    MarginCondition,
-    ExecutionCondition,
+    Trade,
     VolumeCondition,
-    PercentChangeCondition,
-    OrderCancel,
-)
-from ib_async.protobuf.Order_pb2 import Order as OrderProto
-from ib_async.protobuf.PlaceOrderRequest_pb2 import (
-    PlaceOrderRequest as PlaceOrderRequestProto,
-)
-from ib_async.protobuf.Contract_pb2 import Contract as ContractProto
-from ib_async.protobuf.DeltaNeutralContract_pb2 import (
-    DeltaNeutralContract as DeltaNeutralContractProto,
-)
-from ib_async.protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
-from ib_async.protobuf.ComboLeg_pb2 import ComboLeg as ComboLegProto
-from ib_async.protobuf.OrderCondition_pb2 import OrderCondition as OrderConditionProto
-from ib_async.protobuf.OrderState_pb2 import OrderState as OrderStateProto
-from ib_async.protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
-from ib_async.protobuf.Execution_pb2 import Execution as ExecutionProto
-from ib_async.protobuf.ExecutionDetails_pb2 import (
-    ExecutionDetails as ExecutionDetailsProto,
-)
-from ib_async.protobuf.CommissionAndFeesReport_pb2 import (
-    CommissionAndFeesReport as CommissionReportProto,
-)
-from ib_async.protobuf.ExecutionFilter_pb2 import (
-    ExecutionFilter as ExecutionFilterProto,
-)
-from ib_async.protobuf.ExecutionRequest_pb2 import (
-    ExecutionRequest as ExecutionRequestProto,
-)
-from ib_async.protobuf.OrderCancel_pb2 import OrderCancel as OrderCancelProto
-from ib_async.protobuf.GlobalCancelRequest_pb2 import (
-    GlobalCancelRequest as GlobalCancelRequestProto,
 )
 from ib_async.protobuf.CancelOrderRequest_pb2 import (
     CancelOrderRequest as CancelOrderRequestProto,
 )
+from ib_async.protobuf.ComboLeg_pb2 import ComboLeg as ComboLegProto
+from ib_async.protobuf.CommissionAndFeesReport_pb2 import (
+    CommissionAndFeesReport as CommissionReportProto,
+)
+from ib_async.protobuf.Contract_pb2 import Contract as ContractProto
+from ib_async.protobuf.Execution_pb2 import Execution as ExecutionProto
+from ib_async.protobuf.ExecutionDetails_pb2 import (
+    ExecutionDetails as ExecutionDetailsProto,
+)
+from ib_async.protobuf.ExecutionRequest_pb2 import (
+    ExecutionRequest as ExecutionRequestProto,
+)
 from ib_async.protobuf.ExerciseOptionsRequest_pb2 import (
     ExerciseOptionsRequest as ExerciseOptionsRequestProto,
 )
-from ib_async.protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
-from ib_async.protobuf.OrderAllocation_pb2 import (
-    OrderAllocation as OrderAllocationProtoProto,
+from ib_async.protobuf.GlobalCancelRequest_pb2 import (
+    GlobalCancelRequest as GlobalCancelRequestProto,
 )
-
-
+from ib_async.protobuf.OpenOrder_pb2 import OpenOrder as OpenOrderProto
+from ib_async.protobuf.Order_pb2 import Order as OrderProto
+from ib_async.protobuf.OrderCancel_pb2 import OrderCancel as OrderCancelProto
+from ib_async.protobuf.OrderCondition_pb2 import OrderCondition as OrderConditionProto
+from ib_async.protobuf.OrderState_pb2 import OrderState as OrderStateProto
+from ib_async.protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
+from ib_async.protobuf.PlaceOrderRequest_pb2 import (
+    PlaceOrderRequest as PlaceOrderRequestProto,
+)
+from ib_async.protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
 from ib_async.protobuf_converters.trade_converters import (
-    createPlaceOrderRequestProto,
-    createOrderProto,
-    createOrder,
-    createSoftDollarTierProto,
-    createTagValueList,
-    createOrderState,
-    createOrderAllocations,
-    createContractFromExecutionDetails,
-    createOrderStatus,
-    createExecution,
-    createFill,
-    createTradeFromOpenOrder,
-    createCommissionReport,
-    createExecutionRequestProto,
-    createOrderCancelProto,
-    createGlobalCancelRequestProto,
     createCancelOrderRequestProto,
-    createExerciseOptionsRequestProto,
+    createCommissionReport,
     createConditionsProto,
+    createContractConditionProto,
+    createContractFromExecutionDetails,
+    createExecution,
+    createExecutionCondition,
+    createExecutionConditionProto,
+    createExecutionRequestProto,
+    createExerciseOptionsRequestProto,
+    createFill,
+    createGlobalCancelRequestProto,
+    createMarginCondition,
+    createMarginConditionProto,
+    createOperatorConditionProto,
+    createOrder,
+    createOrderAllocations,
+    createOrderCancelProto,
     createOrderComboLegs,
     createOrderConditionProto,
-    createOperatorConditionProto,
-    createContractConditionProto,
-    createPriceConditionProto,
-    createTimeConditionProto,
-    createMarginConditionProto,
-    createExecutionConditionProto,
-    createVolumeConditionProto,
-    createPercentChangeConditionProto,
     createOrderConditions,
-    setConditionFields,
-    setOperatorConditionFields,
-    setContractConditionFields,
-    createPriceCondition,
-    createTimeCondition,
-    createMarginCondition,
-    createExecutionCondition,
-    createVolumeCondition,
+    createOrderProto,
+    createOrderState,
+    createOrderStatus,
     createPercentChangeCondition,
-    createSoftDollarTierFromOrder,
+    createPercentChangeConditionProto,
+    createPlaceOrderRequestProto,
+    createPriceCondition,
+    createPriceConditionProto,
     createSoftDollarTier,
+    createSoftDollarTierFromOrder,
+    createSoftDollarTierProto,
+    createTagValueList,
+    createTimeCondition,
+    createTimeConditionProto,
+    createTradeFromOpenOrder,
+    createVolumeCondition,
+    createVolumeConditionProto,
+    setConditionFields,
+    setContractConditionFields,
+    setOperatorConditionFields,
 )
 
 
@@ -907,3 +896,14 @@ class TestTradeConverters:
         assert proto.exerciseQuantity == 100
         assert proto.account == "U123"
         assert proto.override is True
+
+    def test_createSoftDollarTierProto(self):
+        order = Order()
+        order.softDollarTier = SoftDollarTier(
+            name="TestTier", val="TestVal", displayName="Test Display"
+        )
+        proto = createSoftDollarTierProto(order)
+        assert isinstance(proto, SoftDollarTierProto)
+        assert proto.name == "TestTier"
+        assert proto.value == "TestVal"
+        assert proto.displayName == "Test Display"

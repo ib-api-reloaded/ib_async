@@ -1,36 +1,73 @@
-import pytest
-from unittest.mock import Mock
+"""Test for acount protobuf converters."""
 
-from ib_async.objects import AccountValue, Position, PortfolioItem
-from ib_async.contract import Contract
+from ib_async.objects import (
+    AccountValue,
+    FamilyCode,
+    PortfolioItem,
+    Position,
+    PositionMulti,
+    SoftDollarTier,
+)
 from ib_async.protobuf.AccountDataRequest_pb2 import (
     AccountDataRequest as AccountDataRequestProto,
+)
+from ib_async.protobuf.AccountSummary_pb2 import AccountSummary as AccountSummaryProto
+from ib_async.protobuf.AccountUpdateMulti_pb2 import (
+    AccountUpdateMulti as AccountUpdateMultiProto,
 )
 from ib_async.protobuf.AccountUpdatesMultiRequest_pb2 import (
     AccountUpdatesMultiRequest as AccountUpdatesMultiRequestProto,
 )
-from ib_async.protobuf.AccountUpdateMulti_pb2 import (
-    AccountUpdateMulti as AccountUpdateMultiProto,
-)
-from ib_async.protobuf.AccountSummary_pb2 import AccountSummary as AccountSummaryProto
 from ib_async.protobuf.AccountValue_pb2 import AccountValue as AccountValueProto
 from ib_async.protobuf.CancelAccountUpdatesMulti_pb2 import (
     CancelAccountUpdatesMulti as CancelAccountUpdatesMultiProto,
 )
-from ib_async.protobuf.Position_pb2 import Position as PositionProto
-from ib_async.protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
+from ib_async.protobuf.CancelPositionsMulti_pb2 import (
+    CancelPositionsMulti as CancelPositionsMultiProto,
+)
 from ib_async.protobuf.Contract_pb2 import Contract as ContractProto
+from ib_async.protobuf.FamilyCode_pb2 import FamilyCode as FamilyCodeProto
+from ib_async.protobuf.FamilyCodes_pb2 import FamilyCodes as FamilyCodesProto
+from ib_async.protobuf.FamilyCodesRequest_pb2 import (
+    FamilyCodesRequest as FamilyCodesRequestProto,
+)
+from ib_async.protobuf.FAReplace_pb2 import FAReplace as FAReplaceProto
+from ib_async.protobuf.FARequest_pb2 import FARequest as FARequestProto
 from ib_async.protobuf.IdsRequest_pb2 import IdsRequest as IdsRequestProto
-
+from ib_async.protobuf.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
+from ib_async.protobuf.Position_pb2 import Position as PositionProto
+from ib_async.protobuf.PositionMulti_pb2 import PositionMulti as PositionMultiProto
+from ib_async.protobuf.PositionsMultiRequest_pb2 import (
+    PositionsMultiRequest as PositionsMultiRequestProto,
+)
+from ib_async.protobuf.ReceiveFA_pb2 import ReceiveFA as ReceiveFAProto
+from ib_async.protobuf.ReplaceFAEnd_pb2 import ReplaceFAEnd as ReplaceFAEndProto
+from ib_async.protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
+from ib_async.protobuf.SoftDollarTiersRequest_pb2 import (
+    SoftDollarTiersRequest as SoftDollarTiersRequestProto,
+)
 from ib_async.protobuf_converters.account_converters import (
-    createPosition,
     createAccountDataRequestProto,
     createAccountMultiRequestProto,
-    createCancelAccMultiRequestProto,
-    createAccountValueFromUpdateMulti,
-    createAccountValue,
     createAccountSummary,
+    createAccountValue,
+    createAccountValueFromUpdateMulti,
+    createCancelAccMultiRequestProto,
+    createCancelPositionsMultiRequestProto,
+    createFamilyCode,
+    createFamilyCodes,
+    createFamilyCodesRequestProto,
+    createFAmsg,
+    createFAReplaceProto,
+    createFARequestProto,
     createPortfolioItem,
+    createPosition,
+    createPositionMulti,
+    createPositionsMultiRequestProto,
+    createReplaceFAEnd,
+    createSoftDollarTier,
+    createSoftDollarTiers,
+    createSoftDollarTiersRequestProto,
     createUserInfoRequestProto,
 )
 
@@ -186,3 +223,117 @@ class TestAccountConverters:
         proto = createUserInfoRequestProto(10)
         assert isinstance(proto, IdsRequestProto)
         assert proto.numIds == 10
+
+    def test_createFARequestProto(self):
+        proto = createFARequestProto(1)
+        assert isinstance(proto, FARequestProto)
+        assert proto.faDataType == 1
+
+    def test_createFAReplaceProto(self):
+        proto = createFAReplaceProto(2, 1, "<xml>data</xml>")
+        assert isinstance(proto, FAReplaceProto)
+        assert proto.reqId == 2
+        assert proto.faDataType == 1
+        assert proto.xml == "<xml>data</xml>"
+
+    def test_createFAmsg(self):
+        msg = ReceiveFAProto(faDataType=1, xml="<xml>fa data</xml>")
+        fa_data_type, xml = createFAmsg(msg)
+        assert fa_data_type == 1
+        assert xml == "<xml>fa data</xml>"
+
+    def test_createReplaceFAEnd(self):
+        msg = ReplaceFAEndProto(text="FA data replaced")
+        text = createReplaceFAEnd(msg)
+        assert text == "FA data replaced"
+
+    def test_createPositionsMultiRequestProto(self):
+        proto = createPositionsMultiRequestProto(3, "U123", "MyModel")
+        assert isinstance(proto, PositionsMultiRequestProto)
+        assert proto.reqId == 3
+        assert proto.account == "U123"
+        assert proto.modelCode == "MyModel"
+
+    def test_createCancelPositionsMultiRequestProto(self):
+        proto = createCancelPositionsMultiRequestProto(4)
+        assert isinstance(proto, CancelPositionsMultiProto)
+        assert proto.reqId == 4
+
+    def test_createPositionMulti(self):
+        contract_proto = ContractProto(symbol="TSLA", secType="STK")
+        pos_multi_proto = PositionMultiProto(
+            account="U456",
+            modelCode="MyModel",
+            contract=contract_proto,
+            position="200.0",
+            avgCost=300.0,
+        )
+        pos_multi = createPositionMulti(pos_multi_proto)
+        assert isinstance(pos_multi, PositionMulti)
+        assert pos_multi.account == "U456"
+        assert pos_multi.modelCode == "MyModel"
+        assert pos_multi.contract.symbol == "TSLA"
+        assert pos_multi.position == 200.0
+        assert pos_multi.avgCost == 300.0
+
+    def test_createFamilyCodesRequestProto(self):
+        proto = createFamilyCodesRequestProto()
+        assert isinstance(proto, FamilyCodesRequestProto)
+
+    def test_createFamilyCode(self):
+        family_code_proto = FamilyCodeProto(accountId="F123", familyCode="FAM1")
+        family_code = createFamilyCode(family_code_proto)
+        assert isinstance(family_code, FamilyCode)
+        assert family_code.accountID == "F123"
+        assert family_code.familyCodeStr == "FAM1"
+
+    def test_createFamilyCodes(self):
+        family_codes_proto = FamilyCodesProto()
+        fc1 = family_codes_proto.familyCodes.add()
+        fc1.accountId = "F1"
+        fc1.familyCode = "FC1"
+        fc2 = family_codes_proto.familyCodes.add()
+        fc2.accountId = "F2"
+        fc2.familyCode = "FC2"
+
+        family_codes = createFamilyCodes(family_codes_proto)
+        assert len(family_codes) == 2
+        assert family_codes[0].accountID == "F1"
+        assert family_codes[1].familyCodeStr == "FC2"
+
+    def test_createSoftDollarTiersRequestProto(self):
+        proto = createSoftDollarTiersRequestProto(5)
+        assert isinstance(proto, SoftDollarTiersRequestProto)
+        assert proto.reqId == 5
+
+    def test_createSoftDollarTier(self):
+        tier_proto = SoftDollarTierProto(
+            name="TierA", value="ValA", displayName="Display A"
+        )
+        tier = createSoftDollarTier(tier_proto)
+        assert isinstance(tier, SoftDollarTier)
+        assert tier.name == "TierA"
+        assert tier.val == "ValA"
+        assert tier.displayName == "Display A"
+
+    def test_createSoftDollarTiers(self):
+        # The function createSoftDollarTiers seems to have a wrong type hint.
+        # It expects a proto message with a 'softDollarTiers' field.
+        # SoftDollarTiersRequestProto does not have this field.
+        # We use a mock object to simulate the correct response proto.
+        class MockSoftDollarTiersResponseProto:
+            def __init__(self):
+                self.softDollarTiers = []
+
+        tiers_proto = MockSoftDollarTiersResponseProto()
+        tiers_proto.softDollarTiers.append(SoftDollarTierProto(name="T1", value="V1"))
+        tiers_proto.softDollarTiers.append(
+            SoftDollarTierProto(name="T2", displayName="D2")
+        )
+
+        tiers = createSoftDollarTiers(tiers_proto)  # type: ignore
+        assert len(tiers) == 2
+        assert tiers[0].name == "T1"
+        assert tiers[0].val == "V1"
+        assert tiers[1].name == "T2"
+        assert tiers[1].displayName == "D2"

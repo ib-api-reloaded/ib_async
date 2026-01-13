@@ -1,5 +1,5 @@
-import pytest
 from unittest.mock import Mock
+
 from ib_async.contract import (
     ComboLeg,
     Contract,
@@ -34,30 +34,30 @@ from ib_async.protobuf.SecDefOptParameter_pb2 import (
 from ib_async.protobuf.SecDefOptParamsRequest_pb2 import (
     SecDefOptParamsRequest as SecDefOptParamsRequestProto,
 )
-from ib_async.protobuf.SmartComponentsRequest_pb2 import (
-    SmartComponentsRequest as SmartComponentsRequestProto,
-)
 from ib_async.protobuf.SmartComponents_pb2 import (
     SmartComponents as SmartComponentsProto,
 )
+from ib_async.protobuf.SmartComponentsRequest_pb2 import (
+    SmartComponentsRequest as SmartComponentsRequestProto,
+)
 from ib_async.protobuf_converters.contract_converters import (
-    createSecDefOptParamsRequestProto,
-    createOptionChain,
-    createContract,
-    createComboLegs,
-    createDeltaNeutralContract,
-    createIneligibilityReasonList,
-    setLastTradeDate,
-    createContractDetails,
-    createContractDescription,
-    createMatchingSymbolsRequestProto,
-    createMarketRuleRequestProto,
-    createContractProto,
-    createDeltaNeutralContractProto,
-    createComboLegProtoList,
     createComboLegProto,
-    createSmartComponentsRequestProto,
+    createComboLegProtoList,
+    createComboLegs,
+    createContract,
+    createContractDescription,
+    createContractDetails,
+    createContractProto,
+    createDeltaNeutralContract,
+    createDeltaNeutralContractProto,
+    createIneligibilityReasonList,
+    createMarketRuleRequestProto,
+    createMatchingSymbolsRequestProto,
+    createOptionChain,
+    createSecDefOptParamsRequestProto,
     createSmartComponents,
+    createSmartComponentsRequestProto,
+    setLastTradeDate,
 )
 
 
@@ -147,7 +147,7 @@ class TestContractConverters:
     def test_setLastTradeDate(self):
         cd = ContractDetails(contract=Contract())
         setLastTradeDate("20251219", cd, isBond=False)
-        assert cd.contract.lastTradeDateOrContractMonth == "20251219"
+        assert cd.contract.lastTradeDateOrContractMonth == "20251219"  # type: ignore
 
         cd_bond = ContractDetails(contract=Contract())
         setLastTradeDate("20300101", cd_bond, isBond=True)
@@ -160,7 +160,7 @@ class TestContractConverters:
 
         cd = createContractDetails(msg)
         assert isinstance(cd, ContractDetails)
-        assert cd.contract.symbol == "TSLA"
+        assert cd.contract.symbol == "TSLA"  # type: ignore
         assert cd.marketName == "Tesla"
         assert cd.longName == "Tesla Inc."
 
@@ -171,7 +171,7 @@ class TestContractConverters:
 
         desc = createContractDescription(desc_proto)
         assert isinstance(desc, ContractDescription)
-        assert desc.contract.symbol == "GOOG"
+        assert desc.contract.symbol == "GOOG"  # type: ignore
         assert desc.derivativeSecTypes == ["OPT", "FUT"]
 
     def test_createMatchingSymbolsRequestProto(self):

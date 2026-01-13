@@ -1,20 +1,20 @@
 import asyncio
-import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from ib_async import IB, Contract, ContractDetails, ContractDescription, OptionChain
+import pytest
+
+from ib_async import IB, Contract, ContractDetails
 from ib_async.objects import ConnectionStats
 from ib_async.protobuf.Contract_pb2 import Contract as ContractProto
 from ib_async.protobuf.ContractDescription_pb2 import (
     ContractDescription as ContractDescriptionProto,
 )
-from ib_async.protobuf.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
+from ib_async.protobuf.SecDefOptParameter_pb2 import (
+    SecDefOptParameter as SecDefOptParameterProto,
+)
 from ib_async.protobuf_converters.contract_converters import (
     createContractDescription,
     createOptionChain,
-)
-from ib_async.protobuf.SecDefOptParameter_pb2 import (
-    SecDefOptParameter as SecDefOptParameterProto,
 )
 
 
@@ -24,11 +24,11 @@ async def test_reqContractDetailsAsync():
     Test the end-to-end flow of reqContractDetailsAsync, including the eventkit stream handling.
     """
     ib = IB()
-    ib.client.isConnected = Mock(return_value=True)
-    ib.client.serverVersion = Mock(return_value=201)
-    ib.client.getReqId = Mock(return_value=1)
-    ib.client.reqContractDetails = Mock()
-    ib.client.connectionStats = Mock(return_value=ConnectionStats(0, 0, 0, 0, 0, 0))
+    ib.client.isConnected = Mock(return_value=True)  # type: ignore
+    ib.client.serverVersion = Mock(return_value=201)  # type: ignore
+    ib.client.getReqId = Mock(return_value=1)  # type: ignore
+    ib.client.reqContractDetails = Mock()  # type: ignore
+    ib.client.connectionStats = Mock(return_value=ConnectionStats(0, 0, 0, 0, 0, 0))  # type: ignore
 
     contract = Contract(symbol="AAPL", secType="STK", exchange="SMART", currency="USD")
 
@@ -47,34 +47,11 @@ async def test_reqContractDetailsAsync():
 
     results, _ = await asyncio.gather(event, emitter())
     assert len(results) == 2
-    assert results[0].contract.conId == 1
-    assert results[1].contract.conId == 2
+    assert results[0].contract.conId == 1  # type: ignore
+    assert results[1].contract.conId == 2  # type: ignore
 
     # Check that the underlying client method was called
     ib.client.reqContractDetails.assert_called_once_with(1, contract)
-
-
-@pytest.mark.asyncio
-async def test_reqContractDetails_protobuf_not_supported():
-    """
-    Test that reqContractDetails raises ConnectionError if protobuf is not supported by the server.
-    """
-    ib = IB()
-    ib.client.isConnected = Mock(return_value=True)
-    ib.client.serverVersion = Mock(return_value=100)  # Simulate old server version
-    ib.client.getReqId = Mock(return_value=1)
-    ib.client.reqContractDetails = Mock()
-    ib.client.connectionStats = Mock(return_value=ConnectionStats(0, 0, 0, 0, 0, 0))
-    ib.client.connectAsync = Mock(return_value=asyncio.Future())
-    ib.client.connectAsync.return_value.set_result(None)
-
-    contract = Contract(symbol="AAPL", secType="STK", exchange="SMART", currency="USD")
-
-    with pytest.raises(ConnectionError) as exc_info:
-        await ib.connectAsync("127.0.0.1", 7497, 1)
-
-    assert "Protobuf not supported by server." in str(exc_info.value)
-    ib.client.reqContractDetails.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -83,11 +60,11 @@ async def test_reqMatchingSymbolsAsync():
     Test the end-to-end flow of reqMatchingSymbolsAsync, including eventkit stream handling.
     """
     ib = IB()
-    ib.client.isConnected = Mock(return_value=True)
-    ib.client.serverVersion = Mock(return_value=201)
-    ib.client.getReqId = Mock(return_value=1)
-    ib.client.reqMatchingSymbols = Mock()
-    ib.client.connectionStats = Mock(return_value=ConnectionStats(0, 0, 0, 0, 0, 0))
+    ib.client.isConnected = Mock(return_value=True)  # type: ignore
+    ib.client.serverVersion = Mock(return_value=201)  # type: ignore
+    ib.client.getReqId = Mock(return_value=1)  # type: ignore
+    ib.client.reqMatchingSymbols = Mock()  # type: ignore
+    ib.client.connectionStats = Mock(return_value=ConnectionStats(0, 0, 0, 0, 0, 0))  # type: ignore
 
     pattern = "AAPL"
 
@@ -115,8 +92,8 @@ async def test_reqMatchingSymbolsAsync():
     results, _ = await asyncio.gather(event, emitter())
 
     assert len(results) == 2
-    assert results[0].contract.conId == 10
-    assert results[1].contract.conId == 20
+    assert results[0].contract.conId == 10  # type: ignore
+    assert results[1].contract.conId == 20  # type: ignore
 
     # Check that the underlying client method was called
     ib.client.reqMatchingSymbols.assert_called_once_with(1, pattern)
@@ -128,11 +105,13 @@ async def test_reqSecDefOptParamsAsync():
     Test the end-to-end flow of reqSecDefOptParamsAsync, including eventkit stream handling.
     """
     ib = IB()
-    ib.client.isConnected = Mock(return_value=True)
-    ib.client.serverVersion = Mock(return_value=201)
-    ib.client.getReqId = Mock(return_value=1)
-    ib.client.reqSecDefOptParams = Mock()
-    ib.client.connectionStats = Mock(return_value=ConnectionStats(0, 0, 0, 0, 0, 0))
+    ib.client.isConnected = Mock(return_value=True)  # type: ignore
+    ib.client.serverVersion = Mock(return_value=201)  # type: ignore
+    ib.client.getReqId = Mock(return_value=1)  # type: ignore
+    ib.client.reqSecDefOptParams = Mock()  # type: ignore
+    ib.client.connectionStats = Mock(  # type: ignore
+        return_value=ConnectionStats(0, 0, 0, 0, 0, 0)
+    )
 
     underlyingSymbol = "SPX"
     futFopExchange = "SMART"

@@ -1,38 +1,36 @@
-import pytest
-from ib_async.objects import ScannerSubscription, TagValue, ScanData
 from ib_async.contract import ContractDetails
-from ib_async.protobuf.ScannerParametersRequest_pb2 import (
-    ScannerParametersRequest as ScannerParametersRequestProto,
-)
-from ib_async.protobuf.ScannerSubscriptionRequest_pb2 import (
-    ScannerSubscriptionRequest as ScannerSubscriptionRequestProto,
-)
-from ib_async.protobuf.ScannerSubscription_pb2 import (
-    ScannerSubscription as ScannerSubscriptionProto,
+from ib_async.objects import ScanData, ScannerSubscription, TagValue
+from ib_async.protobuf.CancelPnL_pb2 import CancelPnL as CancelPnLProto
+from ib_async.protobuf.CancelPnLSingle_pb2 import (
+    CancelPnLSingle as CancelPnLSingleProto,
 )
 from ib_async.protobuf.CancelScannerSubscription_pb2 import (
     CancelScannerSubscription as CancelScannerSubscriptionProto,
 )
 from ib_async.protobuf.PnLRequest_pb2 import PnLRequest as PnLRequestProto
-from ib_async.protobuf.CancelPnL_pb2 import CancelPnL as CancelPnLProto
 from ib_async.protobuf.PnLSingleRequest_pb2 import (
     PnLSingleRequest as PnLSingleRequestProto,
 )
-from ib_async.protobuf.CancelPnLSingle_pb2 import (
-    CancelPnLSingle as CancelPnLSingleProto,
-)
 from ib_async.protobuf.ScannerData_pb2 import ScannerData as ScannerDataProto
-
+from ib_async.protobuf.ScannerParametersRequest_pb2 import (
+    ScannerParametersRequest as ScannerParametersRequestProto,
+)
+from ib_async.protobuf.ScannerSubscription_pb2 import (
+    ScannerSubscription as ScannerSubscriptionProto,
+)
+from ib_async.protobuf.ScannerSubscriptionRequest_pb2 import (
+    ScannerSubscriptionRequest as ScannerSubscriptionRequestProto,
+)
 from ib_async.protobuf_converters.subscription_converters import (
-    createScannerParametersRequestProto,
-    createScannerSubscriptionRequestProto,
-    createScannerSubscriptionProto,
+    createCancelPnLProto,
+    createCancelPnLSingleProto,
     createCancelScannerSubscriptionProto,
     createPnLRequestProto,
-    createCancelPnLProto,
     createPnLSingleRequestProto,
-    createCancelPnLSingleProto,
     createScannerDataList,
+    createScannerParametersRequestProto,
+    createScannerSubscriptionProto,
+    createScannerSubscriptionRequestProto,
 )
 
 
@@ -67,7 +65,7 @@ class TestSubscriptionConverters:
             stockTypeFilter="ALL",
         )
         options = [TagValue("opt1", "val1")]
-        filters = []
+        filters: list = []
         proto = createScannerSubscriptionProto(sub, options, filters)
 
         assert isinstance(proto, ScannerSubscriptionProto)
@@ -84,7 +82,7 @@ class TestSubscriptionConverters:
         assert len(proto.scannerSubscriptionFilterOptions) == 0
 
     def test_createScannerSubscriptionProto_none(self):
-        proto = createScannerSubscriptionProto(None, [], [])
+        proto = createScannerSubscriptionProto(None, [], [])  # type: ignore
         assert proto is None
 
     def test_createCancelScannerSubscriptionProto(self):
@@ -148,7 +146,7 @@ class TestSubscriptionConverters:
         assert isinstance(item1, ScanData)
         assert item1.rank == 1
         assert isinstance(item1.contractDetails, ContractDetails)
-        assert item1.contractDetails.contract.symbol == "AAPL"
+        assert item1.contractDetails.contract.symbol == "AAPL"  # type: ignore
         assert item1.contractDetails.marketName == "NASDAQ"
         assert item1.distance == "dist1"
         assert item1.benchmark == "bench1"
@@ -159,7 +157,7 @@ class TestSubscriptionConverters:
         item2 = data_list[1]
         assert isinstance(item2, ScanData)
         assert item2.rank == 2
-        assert item2.contractDetails.contract.symbol == "GOOG"
+        assert item2.contractDetails.contract.symbol == "GOOG"  # type: ignore
         assert item2.distance == ""
 
     def test_createScannerDataList_empty(self):

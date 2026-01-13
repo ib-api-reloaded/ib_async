@@ -12,6 +12,9 @@ from ib_async.objects import (
     HistoricalTickLast,
     RealTimeBar,
 )
+from ib_async.protobuf.CancelHistoricalData_pb2 import (
+    CancelHistoricalData as CancelHistoricalDataProto,
+)
 from ib_async.protobuf.FundamentalsDataRequest_pb2 import (
     FundamentalsDataRequest as FundamentalsDataRequestProto,
 )
@@ -43,6 +46,15 @@ from ib_async.protobuf.HistoricalTickBidAsk_pb2 import (
 from ib_async.protobuf.HistoricalTickLast_pb2 import (
     HistoricalTickLast as HistoricalTickLastProto,
 )
+from ib_async.protobuf.HistoricalTicks_pb2 import (
+    HistoricalTicks as HistoricalTicksProto,
+)
+from ib_async.protobuf.HistoricalTicksBidAsk_pb2 import (
+    HistoricalTicksBidAsk as HistoricalTicksBidAskProto,
+)
+from ib_async.protobuf.HistoricalTicksLast_pb2 import (
+    HistoricalTicksLast as HistoricalTicksLastProto,
+)
 from ib_async.protobuf.HistoricalTicksRequest_pb2 import (
     HistoricalTicksRequest as HistoricalTicksRequestProto,
 )
@@ -58,12 +70,11 @@ from ib_async.protobuf.TickAttribBidAsk_pb2 import (
 from ib_async.protobuf.TickAttribLast_pb2 import (
     TickAttribLast as TickAttribLastProto,
 )
-from ib_async.protobuf.CancelHistoricalData_pb2 import (
-    CancelHistoricalData as CancelHistoricalDataProto,
-)
+from ib_async.protobuf.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
 from ib_async.protobuf_converters.historical_data_converters import (
     createBarData,
     createBarDataList,
+    createCancelHistoricalDataProto,
     createFundamentalsDataRequestProto,
     createHeadTimestampRequestProto,
     createHistogramDataEntry,
@@ -73,11 +84,12 @@ from ib_async.protobuf_converters.historical_data_converters import (
     createHistoricalTick,
     createHistoricalTickBidAsk,
     createHistoricalTickLast,
+    createHistoricalTickShim,
     createHistoricalTicksRequestProto,
     createRealTimeBarsRequestProto,
     createRealTimeBarTick,
+    createTickByTick,
     fillTagValueList,
-    createCancelHistoricalDataProto,
 )
 
 
@@ -319,3 +331,70 @@ class TestHistoricalDataConverters:
         proto = createCancelHistoricalDataProto(1)
         assert isinstance(proto, CancelHistoricalDataProto)
         assert proto.reqId == 1
+
+    def test_createHistoricalTickShim_ticks(self):
+        proto = HistoricalTicksProto()
+        tick1 = proto.historicalTicks.add()
+        tick1.time = 1672531200
+        tick1.price = 100.0
+        tick1.size = "10"
+        ticks = createHistoricalTickShim(proto, timezone.utc)
+        assert len(ticks) == 1
+        assert isinstance(ticks[0], HistoricalTick)
+        assert ticks[0].price == 100.0
+
+    def test_createHistoricalTickShim_bidask(self):
+        proto = HistoricalTicksBidAskProto()
+        tick1 = proto.historicalTicksBidAsk.add()
+        tick1.time = 1672531200
+        tick1.priceBid = 99.9
+        tick1.priceAsk = 100.1
+        ticks = createHistoricalTickShim(proto, timezone.utc)
+        assert len(ticks) == 1
+        assert isinstance(ticks[0], HistoricalTickBidAsk)
+        assert ticks[0].priceBid == 99.9
+
+    def test_createHistoricalTickShim_last(self):
+        proto = HistoricalTicksLastProto()
+        tick1 = proto.historicalTicksLast.add()
+        tick1.time = 1672531200
+        tick1.price = 100.0
+        ticks = createHistoricalTickShim(proto, timezone.utc)
+        assert len(ticks) == 1
+        assert isinstance(ticks[0], HistoricalTickLast)
+        assert ticks[0].price == 100.0
+
+    def test_createTickByTick_last(self):
+        tick_last_proto = HistoricalTickLastProto(time=1672531200, price=150.0)
+        proto = TickByTickDataProto(tickType=1, historicalTickLast=tick_last_proto)
+        tick = createTickByTick(proto, timezone.utc)
+        assert isinstance(tick, HistoricalTickLast)
+        assert tick.price == 150.0
+
+    def test_createTickByTick_bidask(self):
+        tick_bidask_proto = HistoricalTickBidAskProto(
+            time=1672531200, priceBid=149.9, priceAsk=150.1
+        )
+        proto = TickByTickDataProto(tickType=3, historicalTickBidAsk=tick_bidask_proto)
+        tick = createTickByTick(proto, timezone.utc)
+        assert isinstance(tick, HistoricalTickBidAsk)
+        assert tick.priceBid == 149.9
+
+    def test_createTickByTick_midpoint(self):
+        tick_midpoint_proto = HistoricalTickProto(time=1672531200, price=149.95)
+        proto = TickByTickDataProto(
+            tickType=4, historicalTickMidPoint=tick_midpoint_proto
+        )
+        tick = createTickByTick(proto, timezone.utc)
+        assert isinstance(tick, HistoricalTick)
+        assert tick.price == 149.95
+
+    def test_createTickByTick_invalid_type(self):
+        proto = TickByTickDataProto(tickType=0)
+        with pytest.raises(ValueError):
+            createTickByTick(proto, timezone.utc)
+
+    def test_createTickByTick_none(self):
+        proto = TickByTickDataProto(tickType=5)  # Unknown type
+        tick = createTickByTick(proto, timezone.utc)
+        assert tick is None
