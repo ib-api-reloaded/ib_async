@@ -290,10 +290,13 @@ def createFamilyCodesRequestProto() -> FamilyCodesRequestProto:
 
 
 def createFamilyCode(familyCodeProto: FamilyCodeProto) -> FamilyCode:
-    if familyCodeProto and familyCodeProto.HasField("accountId"):
-        accountID = familyCodeProto.accountId
-    if familyCodeProto and familyCodeProto.HasField("familyCode"):
-        familyCodeStr = familyCodeProto.familyCode
+    accountID = ""
+    familyCodeStr = ""
+    if familyCodeProto:
+        if familyCodeProto.HasField("accountId"):
+            accountID = familyCodeProto.accountId
+        if familyCodeProto.HasField("familyCode"):
+            familyCodeStr = familyCodeProto.familyCode
 
     return FamilyCode(accountID, familyCodeStr)
 

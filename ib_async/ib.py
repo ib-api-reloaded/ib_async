@@ -58,6 +58,7 @@ from .order import (
     StopOrder,
     Trade,
 )
+from .protobuf_converters.base_converters import set_ib_defaults
 from .ticker import Ticker
 from .wrapper import Wrapper
 
@@ -2144,6 +2145,7 @@ class IB:
         self.wrapper._isReady = False
         clientId = int(clientId)
         self.wrapper.clientId = clientId
+        set_ib_defaults(self.wrapper.defaults)
         timeout = timeout or None
         try:
             # establish API connection

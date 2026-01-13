@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import cast
+
 from ..contract import TagValue
 from ..objects import HistoricalNews, NewsArticle, NewsBulletin, NewsProvider, NewsTick
 from ..protobuf.CancelNewsBulletins_pb2 import (

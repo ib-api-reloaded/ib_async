@@ -87,18 +87,34 @@ def createOptionChain(secDefOptParameterProto: SecDefOptParameterProto) -> Optio
     Returns:
         OptionChain: The created OptionChain object.
     """
-    if secDefOptParameterProto.exchange is not None:
-        exchange = secDefOptParameterProto.exchange
-    if secDefOptParameterProto.underlyingConId is not None:
-        underlyingConId = secDefOptParameterProto.underlyingConId
-    if secDefOptParameterProto.tradingClass is not None:
-        tradingClass = secDefOptParameterProto.tradingClass
-    if secDefOptParameterProto.multiplier is not None:
-        multiplier = secDefOptParameterProto.multiplier
-    if secDefOptParameterProto.expirations is not None:
-        expirations = list(secDefOptParameterProto.expirations)
-    if secDefOptParameterProto.strikes is not None:
-        strikes = list(secDefOptParameterProto.strikes)
+    exchange = (
+        secDefOptParameterProto.exchange
+        if secDefOptParameterProto.HasField("exchange")
+        else ""
+    )
+    underlyingConId = (
+        secDefOptParameterProto.underlyingConId
+        if secDefOptParameterProto.HasField("underlyingConId")
+        else 0
+    )
+    tradingClass = (
+        secDefOptParameterProto.tradingClass
+        if secDefOptParameterProto.HasField("tradingClass")
+        else ""
+    )
+    multiplier = (
+        secDefOptParameterProto.multiplier
+        if secDefOptParameterProto.HasField("multiplier")
+        else ""
+    )
+    expirations = (
+        list(secDefOptParameterProto.expirations)
+        if secDefOptParameterProto.expirations
+        else []
+    )
+    strikes = (
+        list(secDefOptParameterProto.strikes) if secDefOptParameterProto.strikes else []
+    )
     optionChain = OptionChain(
         exchange=exchange,
         underlyingConId=underlyingConId,
@@ -214,10 +230,16 @@ def createIneligibilityReasonList(
     ineligibilityReasonProtoList = contractDetailsProto.ineligibilityReasonList
     if ineligibilityReasonProtoList:
         for ineligibilityReasonProto in ineligibilityReasonProtoList:
-            if ineligibilityReasonProto.HasField("id"):
-                id_ = ineligibilityReasonProto.id
-            if ineligibilityReasonProto.HasField("description"):
-                description = ineligibilityReasonProto.description
+            id_ = (
+                ineligibilityReasonProto.id
+                if ineligibilityReasonProto.HasField("id")
+                else ""
+            )
+            description = (
+                ineligibilityReasonProto.description
+                if ineligibilityReasonProto.HasField("description")
+                else ""
+            )
             ineligibilityReasonList.append(IneligibilityReason(id_, description))
     return ineligibilityReasonList
 

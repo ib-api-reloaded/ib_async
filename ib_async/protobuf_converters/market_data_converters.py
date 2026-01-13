@@ -54,6 +54,7 @@ from ..util import (
     UNSET_INTEGER,
     isValidIntValue,
 )
+from .base_converters import ib_defaults
 from .contract_converters import createContractProto
 from .historical_data_converters import fillTagValueList
 
@@ -138,8 +139,8 @@ def createTickPriceData(msg: TickPriceProto) -> TickPriceData:
         else TickType.NOT_SET
     )
 
-    price = float(msg.price) if msg.HasField("price") else nan
-    size = float(msg.size) if msg.HasField("size") else nan
+    price = float(msg.price) if msg.HasField("price") else ib_defaults.emptyPrice
+    size = float(msg.size) if msg.HasField("size") else ib_defaults.emptySize
 
     attribs = TickAttrib()
     if msg.HasField("attrMask"):
@@ -161,7 +162,7 @@ def createTickSizeData(msg: TickSizeProto) -> TickSizeData:
     """Create a TickSizeData object from a TickSizeProto message."""
     reqId = NO_VALID_ID
     tickType = TickType.NOT_SET
-    size = nan
+    size = ib_defaults.emptySize
     if msg.HasField("reqId"):
         reqId = msg.reqId
     if msg.HasField("tickType") and msg.tickType in TickType:
@@ -176,8 +177,8 @@ def createTickStringData(msg: TickStringProto) -> TickStringData:
     """Create a TickStringData object from a TickStringProto message."""
     reqId = NO_VALID_ID
     tickType = TickType.NOT_SET
-    value = ""
-    
+    value = ib_defaults.unset
+
     if msg.HasField("reqId"):
         reqId = msg.reqId
     if msg.HasField("tickType") and msg.tickType in TickType:
@@ -192,7 +193,7 @@ def createTickGenericData(msg: TickGenericProto) -> TickGenericData:
     """Create a TickGenericData object from a TickGenericProto message."""
     reqId = NO_VALID_ID
     tickType = TickType.NOT_SET
-    value = nan
+    value = ib_defaults.unset
     if msg.HasField("reqId"):
         reqId = msg.reqId
     if msg.HasField("tickType") and msg.tickType in TickType:
@@ -232,41 +233,41 @@ def createTickOptionComputation(msg: TickOptionComputationProto) -> TickComputat
 
     tickType = TickType(msg.tickType) if msg.HasField("tickType") else TickType.NOT_SET
     tickAttrib = msg.tickAttrib if msg.HasField("tickAttrib") else UNSET_INTEGER
-    impliedVol = msg.impliedVol if msg.HasField("impliedVol") else None
+    impliedVol = msg.impliedVol if msg.HasField("impliedVol") else ib_defaults.unset
     if impliedVol and impliedVol < 0:  # -1 is the "not computed" indicator
-        impliedVol = None
-    delta = msg.delta if msg.HasField("delta") else None
+        impliedVol = ib_defaults.unset
+    delta = msg.delta if msg.HasField("delta") else ib_defaults.unset
     if delta == -2:  # -2 is the "not computed" indicator
-        delta = None
-    optPrice = msg.optPrice if msg.HasField("optPrice") else None
+        delta = ib_defaults.unset
+    optPrice = msg.optPrice if msg.HasField("optPrice") else ib_defaults.unset
     if optPrice == -1:  # -1 is the "not computed" indicator
-        optPrice = None
-    pvDividend = msg.pvDividend if msg.HasField("pvDividend") else None
+        optPrice = ib_defaults.unset
+    pvDividend = msg.pvDividend if msg.HasField("pvDividend") else ib_defaults.unset
     if pvDividend == -1:  # -1 is the "not computed" indicator
-        pvDividend = None
-    gamma = msg.gamma if msg.HasField("gamma") else None
+        pvDividend = ib_defaults.unset
+    gamma = msg.gamma if msg.HasField("gamma") else ib_defaults.unset
     if gamma == -2:  # -2 is the "not yet computed" indicator
-        gamma = None
-    vega = msg.vega if msg.HasField("vega") else None
+        gamma = ib_defaults.unset
+    vega = msg.vega if msg.HasField("vega") else ib_defaults.unset
     if vega == -2:  # -2 is the "not yet computed" indicator
-        vega = None
-    theta = msg.theta if msg.HasField("theta") else None
+        vega = ib_defaults.unset
+    theta = msg.theta if msg.HasField("theta") else ib_defaults.unset
     if theta == -2:  # -2 is the "not yet computed" indicator
-        theta = None
-    undPrice = msg.undPrice if msg.HasField("undPrice") else None
+        theta = ib_defaults.unset
+    undPrice = msg.undPrice if msg.HasField("undPrice") else ib_defaults.unset
     if undPrice == -1:  # -1 is the "not computed" indicator
-        undPrice = None
+        undPrice = ib_defaults.unset
 
     comp = OptionComputation(
         tickAttrib,
-        impliedVol if impliedVol != -1 else None,
-        delta if delta != -2 else None,
-        optPrice if optPrice != -1 else None,
-        pvDividend if pvDividend != -1 else None,
-        gamma if gamma != -2 else None,
-        vega if vega != -2 else vega,
-        theta if theta != -2 else theta,
-        undPrice if undPrice != -1 else None,
+        impliedVol if impliedVol != -1 else ib_defaults.unset,
+        delta if delta != -2 else ib_defaults.unset,
+        optPrice if optPrice != -1 else ib_defaults.unset,
+        pvDividend if pvDividend != -1 else ib_defaults.unset,
+        gamma if gamma != -2 else ib_defaults.unset,
+        vega if vega != -2 else ib_defaults.unset,
+        theta if theta != -2 else ib_defaults.unset,
+        undPrice if undPrice != -1 else ib_defaults.unset,
     )
 
     tick_comp = TickComputationData(

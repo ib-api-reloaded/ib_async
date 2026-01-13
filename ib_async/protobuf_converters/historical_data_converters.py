@@ -71,7 +71,7 @@ from ..util import (
     parseIBDatetime,
     parseIBTimeStamp,
 )
-from .base_converters import ClientException, fillTagValueList
+from .base_converters import ClientException, fillTagValueList, ib_defaults
 from .contract_converters import createContractProto
 
 
@@ -173,24 +173,55 @@ def createBarDataList(
 
 
 def createBarData(historicalDataBarProto: HistoricalDataBarProto) -> BarData:
-    if historicalDataBarProto.HasField("date"):
-        date = parseIBDatetime(historicalDataBarProto.date)
-    if historicalDataBarProto.HasField("open"):
-        open_ = historicalDataBarProto.open
-    if historicalDataBarProto.HasField("high"):
-        high = historicalDataBarProto.high
-    if historicalDataBarProto.HasField("low"):
-        low = historicalDataBarProto.low
-    if historicalDataBarProto.HasField("close"):
-        close = historicalDataBarProto.close
-    if historicalDataBarProto.HasField("volume"):
-        volume = float(historicalDataBarProto.volume)
-    if historicalDataBarProto.HasField("WAP"):
-        average = float(historicalDataBarProto.WAP)
-    if historicalDataBarProto.HasField("barCount"):
-        barCount = historicalDataBarProto.barCount
-    bar = BarData(date, open_, high, low, close, volume, average, barCount)
-    return bar
+    """
+    Safely creates a frozen BarData object from a protobuf message,
+    using configurable defaults for missing fields.
+    """
+    # For date, EPOCH is the established sentinel value.
+    date = (
+        parseIBDatetime(historicalDataBarProto.date)
+        if historicalDataBarProto.HasField("date")
+        else EPOCH
+    )
+    # Use the configurable 'unset' value (NaN) for optional float price fields.
+    open_ = (
+        historicalDataBarProto.open
+        if historicalDataBarProto.HasField("open")
+        else ib_defaults.unset
+    )
+    high = (
+        historicalDataBarProto.high
+        if historicalDataBarProto.HasField("high")
+        else ib_defaults.unset
+    )
+    low = (
+        historicalDataBarProto.low
+        if historicalDataBarProto.HasField("low")
+        else ib_defaults.unset
+    )
+    close = (
+        historicalDataBarProto.close
+        if historicalDataBarProto.HasField("close")
+        else ib_defaults.unset
+    )
+    # For volume and count, use the type-safe defaults from the dataclass definition (0).
+    volume = (
+        float(historicalDataBarProto.volume)
+        if historicalDataBarProto.HasField("volume")
+        else 0.0  # Corresponds to BarData(volume=0.0)
+    )
+    average = (
+        float(historicalDataBarProto.WAP)
+        if historicalDataBarProto.HasField("WAP")
+        else ib_defaults.unset
+    )
+    barCount = (
+        historicalDataBarProto.barCount
+        if historicalDataBarProto.HasField("barCount")
+        else 0  # Corresponds to BarData(barCount=0)
+    )
+
+    return BarData(date, open_, high, low, close, volume, average, barCount)
 
 
 def createHistoricalTicksRequestProto(
@@ -252,8 +283,16 @@ def createHistoricalTickBidAsk(
 
     priceBid = historicalTickBidAskProto.priceBid
     priceAsk = historicalTickBidAskProto.priceAsk
-    sizeBid = float(historicalTickBidAskProto.sizeBid)
-    sizeAsk = float(historicalTickBidAskProto.sizeAsk)
+    sizeBid = (
+        float(historicalTickBidAskProto.sizeBid)
+        if historicalTickBidAskProto.sizeBid
+        else IBDefaults.emptySize
+    )
+    sizeAsk = (
+        float(historicalTickBidAskProto.sizeAsk)
+        if historicalTickBidAskProto.sizeAsk
+        else IBDefaults.emptySize
+    )
 
     historicalTickBidAsk = HistoricalTickBidAsk(
         time, tickAttribBidAsk, priceBid, priceAsk, sizeBid, sizeAsk
@@ -272,7 +311,11 @@ def createHistoricalTickLast(
     tickAttribLast = TickAttribLast(pastLimit, unreported)
 
     price = historicalTickLastProto.price
-    size = float(historicalTickLastProto.size)
+    size = (
+        float(historicalTickLastProto.size)
+        if historicalTickLastProto.size
+        else IBDefaults.emptySize
+    )
     exchange = historicalTickLastProto.exchange
     specialConditions = historicalTickLastProto.specialConditions
 

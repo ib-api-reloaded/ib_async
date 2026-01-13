@@ -636,8 +636,8 @@ class PositionMulti:
     position: float
     avgCost: float
     modelCode: str
-    
-    
+
+
 @dataclass(slots=True)
 class Fill:
     contract: Contract
@@ -867,6 +867,13 @@ class IBDefaults:
     # optionally change the timezone used for log history events in objects (no impact
     # on orders or data processing)
     timezone: tzinfo = timezone.utc
+
+    def __repr__(self):
+        clsName = self.__class__.__name__
+        kwargs = ", ".join(
+            f"{k}={getattr(self, k)!r}" for k in self.__dir__() if not k.startswith("_")
+        )
+        return f"{clsName}({kwargs})"
 
 
 @dataclass(slots=True, frozen=True)
