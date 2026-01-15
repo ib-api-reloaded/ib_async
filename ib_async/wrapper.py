@@ -868,6 +868,7 @@ class Wrapper:
         ticker = self.tickers.get_by_request_id(reqId)
         if not ticker:
             self._logger.error("tickerDelivery: Unknown reqId: %s, %r", reqId, tickData)
+            self.ib.client.cancelMktData(reqId)
             return
         ticker.ticker_bus.emit(tickData, self.lastTime)
         self.pendingTickers.add(ticker)
