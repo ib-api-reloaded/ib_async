@@ -1,6 +1,7 @@
 """Test for acount protobuf converters."""
 
 from decimal import Decimal
+
 from ib_async.objects import (
     AccountValue,
     FamilyCode,
@@ -88,7 +89,7 @@ class TestAccountConverters:
         assert position.account == "DU12345"
         assert position.contract.conId == 123
         assert position.contract.symbol == "SPY"
-        assert position.position == 100.0
+        assert position.position == Decimal("100.0")
         assert position.avgCost == 150.0
 
     def test_createAccountDataRequestProto(self):
@@ -274,7 +275,7 @@ class TestAccountConverters:
         assert pos_multi.account == "U456"
         assert pos_multi.modelCode == "MyModel"
         assert pos_multi.contract.symbol == "TSLA"
-        assert pos_multi.position == 200.0
+        assert pos_multi.position == Decimal("200.0")
         assert pos_multi.avgCost == 300.0
 
     def test_createFamilyCodesRequestProto(self):

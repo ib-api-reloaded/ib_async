@@ -30,6 +30,9 @@ UNSET_INTEGER: Final = 2**31 - 1
 UNSET_DOUBLE: Final = sys.float_info.max
 UNSET_DECIMAL: Final = Decimal(2**127 - 1)
 NO_VALID_ID: Final = -1
+DECIMAL_NAN: Final = Decimal("NaN")
+DECIMAL_ZERO = Decimal("0")
+
 
 Time_t: TypeAlias = dt.time | dt.datetime
 

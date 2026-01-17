@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 from eventkit import Event
 
 from .contract import Contract, ScanData, TagValue
-from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER
+from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER, DECIMAL_NAN
 
 nan = float("nan")
 
@@ -626,7 +626,7 @@ class PortfolioItem:
 class Position:
     account: str
     contract: Contract
-    position: float
+    position: Decimal
     avgCost: float
 
 
@@ -634,7 +634,7 @@ class Position:
 class PositionMulti:
     account: str
     contract: Contract
-    position: float
+    position: Decimal
     avgCost: float
     modelCode: str
 
@@ -864,6 +864,7 @@ class IBDefaults:
     # optionally replace ib_async default for all instance variable values before
     # popualted from API updates
     unset: Any = nan
+    unset_decimal: Any = DECIMAL_NAN
 
     # optionally change the timezone used for log history events in objects (no impact
     # on orders or data processing)

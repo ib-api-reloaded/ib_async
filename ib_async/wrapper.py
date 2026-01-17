@@ -66,6 +66,7 @@ from .objects import (
 from .order import Order, OrderState, OrderStatus, Trade
 from .ticker import Ticker
 from .util import (
+    DECIMAL_ZERO,
     EPOCH,
     dataclassUpdate,
     getLoop,
@@ -569,7 +570,7 @@ class Wrapper:
 
     def updatePortfolio(self, portfolioItem: PortfolioItem):
         account_portfolio = self.portfolio[portfolioItem.account]
-        if portfolioItem.position == Decimal(0):
+        if portfolioItem.position == DECIMAL_ZERO:
             account_portfolio.pop(portfolioItem.contract.conId, None)
         else:
             account_portfolio[portfolioItem.contract.conId] = portfolioItem
@@ -580,7 +581,7 @@ class Wrapper:
     def position(self, position: Position):
         # get/create dict for account
         account_positions = self.positions[position.account]
-        if position.position == 0:
+        if position.position == DECIMAL_ZERO:
             # remove position
             account_positions.pop(position.contract.conId, None)
         else:

@@ -49,8 +49,8 @@ from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
 from ..protobuf.SoftDollarTiersRequest_pb2 import (
     SoftDollarTiersRequest as SoftDollarTiersRequestProto,
 )
-from ..util import UNSET_DECIMAL, UNSET_DOUBLE, isValidIntValue
-from .base_converters import ClientException
+from ..util import UNSET_DOUBLE, isValidIntValue
+from .base_converters import ClientException, ib_defaults
 from .contract_converters import createContract
 
 
@@ -62,7 +62,9 @@ def createPosition(positionProto: PositionProto) -> Position:
     position = Position(
         account=positionProto.account,
         contract=contract,
-        position=float(positionProto.position) if positionProto.position else 0.0,
+        position=Decimal(positionProto.position)
+        if positionProto.position
+        else ib_defaults.unset_decimal,
         avgCost=positionProto.avgCost,
     )
     return position
@@ -194,7 +196,7 @@ def createPortfolioItem(portfolioValueProto: PortfolioValueProto) -> PortfolioIt
     position = (
         Decimal(portfolioValueProto.position)
         if portfolioValueProto.HasField("position")
-        else UNSET_DECIMAL
+        else ib_defaults.unset_decimal
     )
     marketPrice = (
         portfolioValueProto.marketPrice
@@ -311,9 +313,9 @@ def createPositionMulti(positionMultiProto: PositionMultiProto) -> PositionMulti
     contract = createContract(positionMultiProto.contract)
 
     position = (
-        float(positionMultiProto.position)
+        Decimal(positionMultiProto.position)
         if positionMultiProto.HasField("position")
-        else UNSET_DOUBLE
+        else ib_defaults.unset_decimal
     )
     avgCost = (
         positionMultiProto.avgCost if positionMultiProto.HasField("avgCost") else 0
