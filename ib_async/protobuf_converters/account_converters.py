@@ -2,7 +2,7 @@
 Account data protobuf converters.
 """
 
-from ib_async.util import UNSET_DOUBLE, isValidIntValue
+from decimal import Decimal
 
 from ..objects import (
     AccountValue,
@@ -49,6 +49,7 @@ from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
 from ..protobuf.SoftDollarTiersRequest_pb2 import (
     SoftDollarTiersRequest as SoftDollarTiersRequestProto,
 )
+from ..util import UNSET_DECIMAL, UNSET_DOUBLE, isValidIntValue
 from .base_converters import ClientException
 from .contract_converters import createContract
 
@@ -188,18 +189,55 @@ def createAccountSummary(accountSummaryProto: AccountSummaryProto) -> AccountVal
 
 
 def createPortfolioItem(portfolioValueProto: PortfolioValueProto) -> PortfolioItem:
-    return PortfolioItem(
-        contract=createContract(portfolioValueProto.contract),
-        position=float(portfolioValueProto.position)
-        if portfolioValueProto.position
-        else 0.0,
-        marketPrice=portfolioValueProto.marketPrice,
-        marketValue=portfolioValueProto.marketValue,
-        averageCost=portfolioValueProto.averageCost,
-        unrealizedPNL=portfolioValueProto.unrealizedPNL,
-        realizedPNL=portfolioValueProto.realizedPNL,
-        account=portfolioValueProto.accountName,
+    contract = createContract(portfolioValueProto.contract)
+
+    position = (
+        Decimal(portfolioValueProto.position)
+        if portfolioValueProto.HasField("position")
+        else UNSET_DECIMAL
     )
+    marketPrice = (
+        portfolioValueProto.marketPrice
+        if portfolioValueProto.HasField("marketPrice")
+        else 0
+    )
+    marketValue = (
+        portfolioValueProto.marketValue
+        if portfolioValueProto.HasField("marketValue")
+        else 0
+    )
+    averageCost = (
+        portfolioValueProto.averageCost
+        if portfolioValueProto.HasField("averageCost")
+        else 0
+    )
+    unrealizedPNL = (
+        portfolioValueProto.unrealizedPNL
+        if portfolioValueProto.HasField("unrealizedPNL")
+        else 0
+    )
+    realizedPNL = (
+        portfolioValueProto.realizedPNL
+        if portfolioValueProto.HasField("realizedPNL")
+        else 0
+    )
+    accountName = (
+        portfolioValueProto.accountName
+        if portfolioValueProto.HasField("accountName")
+        else ""
+    )
+
+    portfolioItem = PortfolioItem(
+        contract=contract,
+        position=position,
+        marketPrice=marketPrice,
+        marketValue=marketValue,
+        averageCost=averageCost,
+        unrealizedPNL=unrealizedPNL,
+        realizedPNL=realizedPNL,
+        account=accountName,
+    )
+    return portfolioItem
 
 
 def createUserInfoRequestProto(reqId: int) -> IdsRequestProto:

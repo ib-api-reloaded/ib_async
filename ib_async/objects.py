@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date as date_
 from datetime import datetime, timezone, tzinfo
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias
 
@@ -612,7 +613,7 @@ class PriceIncrement:
 @dataclass(slots=True, frozen=True)
 class PortfolioItem:
     contract: Contract
-    position: float
+    position: Decimal
     marketPrice: float
     marketValue: float
     averageCost: float

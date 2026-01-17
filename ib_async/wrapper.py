@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal
 import logging
 import time
 from collections import defaultdict
@@ -568,7 +569,7 @@ class Wrapper:
 
     def updatePortfolio(self, portfolioItem: PortfolioItem):
         account_portfolio = self.portfolio[portfolioItem.account]
-        if portfolioItem.position == 0:
+        if portfolioItem.position == Decimal(0):
             account_portfolio.pop(portfolioItem.contract.conId, None)
         else:
             account_portfolio[portfolioItem.contract.conId] = portfolioItem

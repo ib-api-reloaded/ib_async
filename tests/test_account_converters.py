@@ -1,5 +1,6 @@
 """Test for acount protobuf converters."""
 
+from decimal import Decimal
 from ib_async.objects import (
     AccountValue,
     FamilyCode,
@@ -197,7 +198,7 @@ class TestAccountConverters:
         assert isinstance(portfolio_item, PortfolioItem)
         assert portfolio_item.contract.conId == 456
         assert portfolio_item.contract.symbol == "AAPL"
-        assert portfolio_item.position == 50.0
+        assert portfolio_item.position == Decimal("50.0")
         assert portfolio_item.marketPrice == 170.0
         assert portfolio_item.marketValue == 8500.0
         assert portfolio_item.averageCost == 160.0
