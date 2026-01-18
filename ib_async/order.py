@@ -12,7 +12,12 @@ from eventkit import Event
 
 from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry
-from .util import UNSET_DECIMAL, UNSET_DOUBLE, UNSET_INTEGER, dataclassNonDefaults
+from .util import (
+    DECIMAL_NAN,
+    UNSET_DOUBLE,
+    UNSET_INTEGER,
+    dataclassNonDefaults,
+)
 
 
 class OrderTIF(StrEnum):
@@ -561,11 +566,11 @@ class OrderAllocation:
     """
 
     account: str = field(default="")
-    position: Decimal = field(default=UNSET_DECIMAL)
-    positionDesired: Decimal = field(default=UNSET_DECIMAL)
-    positionAfter: Decimal = field(default=UNSET_DECIMAL)
-    desiredAllocQty: Decimal = field(default=UNSET_DECIMAL)
-    allowedAllocQty: Decimal = field(default=UNSET_DECIMAL)
+    position: Decimal = field(default=DECIMAL_NAN)
+    positionDesired: Decimal = field(default=DECIMAL_NAN)
+    positionAfter: Decimal = field(default=DECIMAL_NAN)
+    desiredAllocQty: Decimal = field(default=DECIMAL_NAN)
+    allowedAllocQty: Decimal = field(default=DECIMAL_NAN)
     isMonetary: bool = field(default=False)
 
 

@@ -741,6 +741,8 @@ class TestTradeConverters:
         assert len(allocations) == 1
         assert allocations[0].account == "U1"
         assert allocations[0].position == Decimal("10.0")
+        assert allocations[0].desiredAllocQty == Decimal("5")
+
 
     def test_createContractFromExecutionDetails(self):
         exec_details_proto = ExecutionDetailsProto()
