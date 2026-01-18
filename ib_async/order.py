@@ -371,7 +371,7 @@ class OrderState:
     initMarginAfterOutsideRTH: float | Decimal = nan
     maintMarginAfterOutsideRTH: float | Decimal = nan
     equityWithLoanAfterOutsideRTH: float | Decimal = nan
-    suggestedSize: float | Decimal = nan
+    suggestedSize: Decimal = DECIMAL_NAN
     rejectReason: str = ""
     orderAllocations: list[OrderAllocation] | None = None
     warningText: str = ""

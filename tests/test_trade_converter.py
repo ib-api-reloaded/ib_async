@@ -726,7 +726,7 @@ class TestTradeConverters:
         order_state = createOrderState(order_state_proto)
         assert isinstance(order_state, OrderState)
         assert order_state.status == "Filled"
-        assert order_state.initMarginBefore == Decimal("1000.00")
+        assert order_state.initMarginBefore == 1000.00
         assert order_state.commission == 10.00
         assert order_state.completedTime == "20250101 10:00:00"
 

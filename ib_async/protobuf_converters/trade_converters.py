@@ -994,29 +994,29 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     if orderStateProto.HasField("status"):
         orderState.status = orderStateProto.status
     if orderStateProto.HasField("initMarginBefore"):
-        orderState.initMarginBefore = Decimal(orderStateProto.initMarginBefore)
+        orderState.initMarginBefore = orderStateProto.initMarginBefore
     if orderStateProto.HasField("maintMarginBefore"):
-        orderState.maintMarginBefore = Decimal(orderStateProto.maintMarginBefore)
+        orderState.maintMarginBefore = orderStateProto.maintMarginBefore
     if orderStateProto.HasField("equityWithLoanBefore"):
-        orderState.equityWithLoanBefore = Decimal(orderStateProto.equityWithLoanBefore)
+        orderState.equityWithLoanBefore = orderStateProto.equityWithLoanBefore
     if orderStateProto.HasField("initMarginChange"):
-        orderState.initMarginChange = Decimal(orderStateProto.initMarginChange)
+        orderState.initMarginChange = orderStateProto.initMarginChange
     if orderStateProto.HasField("maintMarginChange"):
-        orderState.maintMarginChange = Decimal(orderStateProto.maintMarginChange)
+        orderState.maintMarginChange = orderStateProto.maintMarginChange
     if orderStateProto.HasField("equityWithLoanChange"):
-        orderState.equityWithLoanChange = Decimal(orderStateProto.equityWithLoanChange)
+        orderState.equityWithLoanChange = orderStateProto.equityWithLoanChange
     if orderStateProto.HasField("initMarginAfter"):
-        orderState.initMarginAfter = Decimal(orderStateProto.initMarginAfter)
+        orderState.initMarginAfter = orderStateProto.initMarginAfter
     if orderStateProto.HasField("maintMarginAfter"):
-        orderState.maintMarginAfter = Decimal(orderStateProto.maintMarginAfter)
+        orderState.maintMarginAfter = orderStateProto.maintMarginAfter
     if orderStateProto.HasField("equityWithLoanAfter"):
-        orderState.equityWithLoanAfter = Decimal(orderStateProto.equityWithLoanAfter)
+        orderState.equityWithLoanAfter = orderStateProto.equityWithLoanAfter
     if orderStateProto.HasField("commissionAndFees"):
-        orderState.commission = Decimal(orderStateProto.commissionAndFees)
+        orderState.commission = orderStateProto.commissionAndFees
     if orderStateProto.HasField("minCommissionAndFees"):
-        orderState.minCommission = Decimal(orderStateProto.minCommissionAndFees)
+        orderState.minCommission = orderStateProto.minCommissionAndFees
     if orderStateProto.HasField("maxCommissionAndFees"):
-        orderState.maxCommission = Decimal(orderStateProto.maxCommissionAndFees)
+        orderState.maxCommission = orderStateProto.maxCommissionAndFees
     if orderStateProto.HasField("commissionAndFeesCurrency"):
         orderState.commissionCurrency = orderStateProto.commissionAndFeesCurrency
     if orderStateProto.HasField("warningText"):
@@ -1024,41 +1024,48 @@ def createOrderState(orderStateProto: OrderStateProto) -> OrderState:
     if orderStateProto.HasField("marginCurrency"):
         orderState.marginCurrency = orderStateProto.marginCurrency
     if orderStateProto.HasField("initMarginBeforeOutsideRTH"):
-        orderState.initMarginBeforeOutsideRTH = Decimal(
+        orderState.initMarginBeforeOutsideRTH = (
             orderStateProto.initMarginBeforeOutsideRTH
         )
+
     if orderStateProto.HasField("maintMarginBeforeOutsideRTH"):
-        orderState.maintMarginBeforeOutsideRTH = Decimal(
+        orderState.maintMarginBeforeOutsideRTH = (
             orderStateProto.maintMarginBeforeOutsideRTH
         )
+
     if orderStateProto.HasField("equityWithLoanBeforeOutsideRTH"):
-        orderState.equityWithLoanBeforeOutsideRTH = Decimal(
+        orderState.equityWithLoanBeforeOutsideRTH = (
             orderStateProto.equityWithLoanBeforeOutsideRTH
         )
+
     if orderStateProto.HasField("initMarginChangeOutsideRTH"):
-        orderState.initMarginChangeOutsideRTH = Decimal(
+        orderState.initMarginChangeOutsideRTH = (
             orderStateProto.initMarginChangeOutsideRTH
         )
+
     if orderStateProto.HasField("maintMarginChangeOutsideRTH"):
-        orderState.maintMarginChangeOutsideRTH = Decimal(
+        orderState.maintMarginChangeOutsideRTH = (
             orderStateProto.maintMarginChangeOutsideRTH
         )
+
     if orderStateProto.HasField("equityWithLoanChangeOutsideRTH"):
-        orderState.equityWithLoanChangeOutsideRTH = Decimal(
+        orderState.equityWithLoanChangeOutsideRTH = (
             orderStateProto.equityWithLoanChangeOutsideRTH
         )
+
     if orderStateProto.HasField("initMarginAfterOutsideRTH"):
-        orderState.initMarginAfterOutsideRTH = Decimal(
-            orderStateProto.initMarginAfterOutsideRTH
-        )
+        orderState.initMarginAfterOutsideRTH = orderStateProto.initMarginAfterOutsideRTH
+
     if orderStateProto.HasField("maintMarginAfterOutsideRTH"):
-        orderState.maintMarginAfterOutsideRTH = Decimal(
+        orderState.maintMarginAfterOutsideRTH = (
             orderStateProto.maintMarginAfterOutsideRTH
         )
+
     if orderStateProto.HasField("equityWithLoanAfterOutsideRTH"):
-        orderState.equityWithLoanAfterOutsideRTH = Decimal(
+        orderState.equityWithLoanAfterOutsideRTH = (
             orderStateProto.equityWithLoanAfterOutsideRTH
         )
+
     if orderStateProto.HasField("suggestedSize"):
         orderState.suggestedSize = Decimal(orderStateProto.suggestedSize)
     if orderStateProto.HasField("rejectReason"):
