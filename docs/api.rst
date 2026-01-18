@@ -63,4 +63,3 @@ IBC
 Watchdog
 --------
 .. autoclass:: ib_async.ibcontroller.Watchdog
-

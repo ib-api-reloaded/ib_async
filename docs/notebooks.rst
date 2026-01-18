@@ -18,5 +18,3 @@ Here are some recipe notebooks:
    Market depth <https://nbviewer.jupyter.org/github/ib-api-reloaded/ib_async/tree/main/notebooks/market_depth.ipynb>
    Ordering <https://nbviewer.jupyter.org/github/ib-api-reloaded/ib_async/tree/main/notebooks/ordering.ipynb>
    Scanners <https://nbviewer.jupyter.org/github/ib-api-reloaded/ib_async/tree/main/notebooks/scanners.ipynb>
-
-
