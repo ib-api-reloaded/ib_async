@@ -115,7 +115,7 @@ class TestTradeConverters:
         assert proto.orderId == 1
         assert proto.contract.conId == 123
         assert proto.order.action == "BUY"
-        assert float(proto.order.totalQuantity) == 100
+        assert proto.order.totalQuantity == "100"
         assert proto.order.orderType == "LMT"
         assert proto.order.lmtPrice == 400.0
 
@@ -504,7 +504,7 @@ class TestTradeConverters:
         assert isinstance(order, Order)
         assert order.orderId == 1
         assert order.action == "BUY"
-        assert order.totalQuantity == 100.0
+        assert order.totalQuantity == Decimal("100.0")
         assert order.orderType == "LMT"
         assert order.lmtPrice == 400.0
         assert order.tif == "DAY"

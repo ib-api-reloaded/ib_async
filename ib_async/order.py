@@ -14,6 +14,7 @@ from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry
 from .util import (
     DECIMAL_NAN,
+    DECIMAL_ZERO,
     UNSET_DOUBLE,
     UNSET_INTEGER,
     dataclassNonDefaults,
@@ -52,7 +53,7 @@ class Order:
     clientId: int = 0
     permId: int = 0
     action: str = ""
-    totalQuantity: float | Decimal = 0.0
+    totalQuantity: float | Decimal = DECIMAL_ZERO
     orderType: str = ""
     lmtPrice: float | Decimal | None = UNSET_DOUBLE
     auxPrice: float | Decimal | None = UNSET_DOUBLE
@@ -170,7 +171,7 @@ class Order:
     isOmsContainer: bool = False
     discretionaryUpToLimitPrice: bool = False
     autoCancelDate: str = ""
-    filledQuantity: float | Decimal = UNSET_DOUBLE
+    filledQuantity: float | Decimal = DECIMAL_ZERO
     refFuturesConId: int = 0
     autoCancelParent: bool = False
     shareholder: str = ""

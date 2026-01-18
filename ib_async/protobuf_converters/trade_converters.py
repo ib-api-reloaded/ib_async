@@ -544,7 +544,7 @@ def createOrder(
     if orderProto.HasField("action"):
         order.action = orderProto.action
     if orderProto.HasField("totalQuantity"):
-        order.totalQuantity = float(orderProto.totalQuantity)
+        order.totalQuantity = Decimal(orderProto.totalQuantity)
     if orderProto.HasField("orderType"):
         order.orderType = orderProto.orderType
     if orderProto.HasField("lmtPrice"):
