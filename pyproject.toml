@@ -7,19 +7,29 @@ maintainers = ["Matt Stancliff <matt@matt.sh>"]
 license = "BSD"
 readme = "README.md"
 repository = "https://github.com/ib-api-reloaded/ib_async"
-packages = [{include = "ib_async"}]
+packages = [{ include = "ib_async" }]
 include = ["ib_async/py.typed"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Developers",
-    "Topic :: Office/Business :: Financial :: Investment",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3 :: Only",
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3 :: Only",
 ]
-keywords = ["ibapi", "tws", "asyncio", "jupyter", "interactive", "brokers", "async", "ib_async", "ib_insync"]
+keywords = [
+  "ibapi",
+  "tws",
+  "asyncio",
+  "jupyter",
+  "interactive",
+  "brokers",
+  "async",
+  "ib_async",
+  "ib_insync",
+]
 
 [tool.poetry.dependencies]
 python = ">=3.10"
@@ -45,6 +55,7 @@ ruff = "^0.11.13"
 grpcio-tools = "^1.75.1"
 pytest-timeout = "*"
 pytest-cov = "^6.2.1"
+pre-commit = "^3.5.0"
 
 [tool.poetry.group.docs]
 optional = true
@@ -58,6 +69,8 @@ myst-parser = "^2.0.0"
 [tool.mypy]
 ignore_missing_imports = true
 check_untyped_defs = true
+exclude = ["^ib_async/protobuf/"]
+follow_imports = "silent"
 
 
 [tool.pytest.ini_options]
@@ -73,6 +86,8 @@ timeout = 10
 
 [tool.ruff]
 line-length = 88
+fix = true
+exclude = ["ib_async/protobuf/*", "examples/", "notebooks/"]
 
 [tool.ruff.lint]
 extend-select = [
@@ -80,8 +95,10 @@ extend-select = [
   "UP",
   # isort imports
   "I",
+  "F",
+  "E",
 ]
-ignore = ["E402"] # Ignore Module level import not at top of file
+ignore = ["E402", "E501"] # Ignore Module level import not at top of file
 
 [build-system]
 requires = ["poetry-core"]
