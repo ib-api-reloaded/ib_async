@@ -801,7 +801,7 @@ class TestTradeConverters:
         assert isinstance(execution, Execution)
         assert execution.execId == "0001"
         assert execution.time == datetime(2025, 1, 1, 10, 0, 0)
-        assert execution.shares == 100.0
+        assert execution.shares == Decimal("100.0")
         assert execution.optExerciseOrLapseType == OptionExerciseType.NoneItem
 
     def test_createFill(self):

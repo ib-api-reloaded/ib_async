@@ -1172,7 +1172,7 @@ def createExecution(executionProto: ExecutionProto) -> Execution:
     if executionProto.HasField("side"):
         execution.side = executionProto.side
     if executionProto.HasField("shares"):
-        execution.shares = float(executionProto.shares)
+        execution.shares = Decimal(executionProto.shares)
     if executionProto.HasField("price"):
         execution.price = executionProto.price
     if executionProto.HasField("permId"):
@@ -1184,7 +1184,7 @@ def createExecution(executionProto: ExecutionProto) -> Execution:
     if executionProto.HasField("isLiquidation"):
         execution.liquidation = 1 if executionProto.isLiquidation else 0
     if executionProto.HasField("cumQty"):
-        execution.cumQty = float(executionProto.cumQty)
+        execution.cumQty = Decimal(executionProto.cumQty)
     if executionProto.HasField("avgPrice"):
         execution.avgPrice = executionProto.avgPrice
     if executionProto.HasField("orderRef"):

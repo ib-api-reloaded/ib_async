@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 from eventkit import Event
 
 from .contract import Contract, ScanData, TagValue
-from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER, DECIMAL_NAN
+from .util import DECIMAL_NAN, DECIMAL_ZERO, EPOCH, UNSET_DOUBLE, UNSET_INTEGER
 
 nan = float("nan")
 
@@ -75,13 +75,13 @@ class Execution:
     acctNumber: str = ""
     exchange: str = ""
     side: str = ""
-    shares: float = 0.0
+    shares: Decimal = DECIMAL_ZERO
     price: float = 0.0
     permId: int = 0
     clientId: int = 0
     orderId: int = 0
     liquidation: int = 0
-    cumQty: float = 0.0
+    cumQty: Decimal = DECIMAL_ZERO
     avgPrice: float = 0.0
     orderRef: str = ""
     evRule: str = ""
