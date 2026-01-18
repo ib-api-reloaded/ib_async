@@ -16,8 +16,9 @@ Python package. This script converts them into relative imports by prepending
 This ensures that the generated modules can correctly import their dependencies
 within the same package.
 """
-import os
+
 import glob
+import os
 
 
 def fix_imports(directory: str):
@@ -30,19 +31,19 @@ def fix_imports(directory: str):
                    `*_pb2.py` files.
     """
     for filepath in glob.glob(os.path.join(directory, "*_pb2.py")):
-        with open(filepath, 'r+') as f:
+        with open(filepath, "r+") as f:
             lines = f.readlines()
             f.seek(0)
             new_lines = []
             for line in lines:
-                if line.startswith('import') and '_pb2' in line:
-                    new_lines.append('from . ' + line)
+                if line.startswith("import") and "_pb2" in line:
+                    new_lines.append("from . " + line)
                 else:
                     new_lines.append(line)
             f.writelines(new_lines)
             f.truncate()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # The target directory where the generated protobuf files are located.
-    fix_imports('ib_async/protobuf')
+    fix_imports("ib_async/protobuf")

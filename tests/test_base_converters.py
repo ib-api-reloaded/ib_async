@@ -50,7 +50,7 @@ class TestBaseConverters:
 
     def test_fillTagValueList(self):
         """
-        Tests that fillTagValueList correctly populates a dictionary from a list of 
+        Tests that fillTagValueList correctly populates a dictionary from a list of
         TagValue objects.
         """
         tag_value_list = [

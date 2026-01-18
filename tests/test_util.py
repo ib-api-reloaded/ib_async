@@ -1,4 +1,3 @@
-import asyncio
 import datetime as dt
 import enum
 from dataclasses import dataclass, field
@@ -33,9 +32,7 @@ from ib_async.util import (
     parseIBTimeStamp,
     patchAsyncio,
     quantize_decimals,
-    run,
     schedule,
-    sleep,
     timeit,
     timeRange,
     timeRangeAsync,
@@ -114,7 +111,7 @@ def test_dataclassAsDict():
 
 def test_dataclassAsTuple():
     obj = TestDataClass(a=1, b="test")
-    expected = (1, "test", 1.0, Decimal("1.23"), [], {})
+    expected = (1, "test", 1.0, Decimal("1.23"), [], {})  # type: ignore
     assert dataclassAsTuple(obj) == expected
 
     with pytest.raises(TypeError):
@@ -373,7 +370,7 @@ def test_floatMaxString():
     assert floatMaxString(123.000000) == "123"
     assert floatMaxString(UNSET_DOUBLE) == ""
     assert floatMaxString(0.0) == "0"
-    assert floatMaxString(None) == ""
+    assert floatMaxString(None) == ""  # type: ignore
 
 
 def test_getEnumTypeFromString():

@@ -148,32 +148,40 @@ class TestMarketDataConverters:
 
     def test_createTickData(self):
         # Test with TickPriceProto
-        price_proto = TickPriceProto(reqId=1, tickType=TickType.BID.value, price=1.2, size="100")
+        price_proto = TickPriceProto(
+            reqId=1, tickType=TickType.BID.value, price=1.2, size="100"
+        )
         price_data = createTickData(price_proto)
         assert isinstance(price_data, TickPriceData)
         assert price_data.price == 1.2
 
         # Test with TickSizeProto
-        size_proto = TickSizeProto(reqId=1, tickType=TickType.ASK_SIZE.value, size="200")
+        size_proto = TickSizeProto(
+            reqId=1, tickType=TickType.ASK_SIZE.value, size="200"
+        )
         size_data = createTickData(size_proto)
         assert isinstance(size_data, TickSizeData)
         assert size_data.size == 200
 
         # Test with TickStringProto
-        string_proto = TickStringProto(reqId=1, tickType=TickType.LAST_TIMESTAMP.value, value="123")
+        string_proto = TickStringProto(
+            reqId=1, tickType=TickType.LAST_TIMESTAMP.value, value="123"
+        )
         string_data = createTickData(string_proto)
         assert isinstance(string_data, TickStringData)
         assert string_data.value == "123"
 
         # Test with TickGenericProto
-        generic_proto = TickGenericProto(reqId=1, tickType=TickType.HIGH.value, value=1.23)
+        generic_proto = TickGenericProto(
+            reqId=1, tickType=TickType.HIGH.value, value=1.23
+        )
         generic_data = createTickData(generic_proto)
         assert isinstance(generic_data, TickGenericData)
         assert generic_data.value == 1.23
 
         # Test with an invalid type
         with pytest.raises(ValueError):
-            createTickData(123) # type: ignore
+            createTickData(123)  # type: ignore
 
     def test_createTickOptionComputation(self):
         proto = TickOptionComputationProto(

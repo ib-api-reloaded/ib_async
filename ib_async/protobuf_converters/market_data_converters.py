@@ -3,7 +3,6 @@ Market data protobuf converters
 """
 
 from collections.abc import Callable
-from math import nan
 from typing import Any, TypeAlias
 
 from ..objects import (
