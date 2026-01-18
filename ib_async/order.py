@@ -453,18 +453,18 @@ class Trade:
         """True if completely filled or cancelled, false otherwise."""
         return self.orderStatus.status in OrderStatus.DoneStates
 
-    def filled(self) -> float:
+    def filled(self) -> Decimal:
         """Number of shares filled."""
         fills = self.fills
         if self.contract.secType == "BAG":
             # don't count fills for the leg contracts
             fills = [f for f in fills if f.contract.secType == "BAG"]
 
-        return sum([f.execution.shares for f in fills])
+        return sum((f.execution.shares for f in fills), DECIMAL_ZERO)
 
-    def remaining(self) -> float:
+    def remaining(self) -> Decimal:
         """Number of shares remaining to be filled."""
-        return float(self.order.totalQuantity) - self.filled()
+        return Decimal(self.order.totalQuantity) - self.filled()
 
 
 @dataclass(slots=True)
