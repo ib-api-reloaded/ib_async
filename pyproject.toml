@@ -98,7 +98,10 @@ extend-select = [
   "F",
   "E",
 ]
-ignore = ["E402", "E501"] # Ignore Module level import not at top of file
+ignore = [
+  "E402", # Ignore Module level import not at top of file
+  "E501", # Ingnore long lines, specially in comments and docstrings
+]
 
 [build-system]
 requires = ["poetry-core"]

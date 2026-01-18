@@ -504,7 +504,7 @@ Copy `*.proto` files from `twsapi` into `ib_async/proto`, then run:
 
 ```bash
 poetry run python -m grpc_tools.protoc -I=proto --python_out=ib_async/protobuf --pyi_out=ib_async/protobuf proto/*.proto
-# 
+#
 poetry run python scripts/fix_proto_imports.py
 ```
 
