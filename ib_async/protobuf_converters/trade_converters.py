@@ -5,8 +5,8 @@ Converters for trade-related Protobuf messages.
 import datetime as dt
 from decimal import Decimal
 
-from ib_async.contract import Contract
-from ib_async.objects import (
+from ..contract import Contract
+from ..objects import (
     CommissionReport,
     Execution,
     ExecutionFilter,
@@ -15,7 +15,7 @@ from ib_async.objects import (
     SoftDollarTier,
     TagValue,
 )
-from ib_async.order import (
+from ..order import (
     ExecutionCondition,
     MarginCondition,
     Order,
@@ -32,14 +32,6 @@ from ib_async.order import (
     Trade,
     VolumeCondition,
 )
-from ib_async.util import (
-    UNSET_DOUBLE,
-    UNSET_INTEGER,
-    getEnumTypeFromString,
-    isValidIntValue,
-    parseIBDatetime,
-)
-
 from ..protobuf.CancelOrderRequest_pb2 import (
     CancelOrderRequest as CancelOrderRequestProto,
 )
@@ -67,6 +59,14 @@ from ..protobuf.OrderState_pb2 import OrderState as OrderStateProto
 from ..protobuf.OrderStatus_pb2 import OrderStatus as OrderStatusProto
 from ..protobuf.PlaceOrderRequest_pb2 import PlaceOrderRequest as PlaceOrderRequestProto
 from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
+from ..util import (
+    DECIMAL_ZERO,
+    UNSET_DOUBLE,
+    UNSET_INTEGER,
+    getEnumTypeFromString,
+    isValidIntValue,
+    parseIBDatetime,
+)
 from .base_converters import ClientException, fillTagValueList
 from .contract_converters import (
     createContract,
@@ -99,7 +99,7 @@ def createOrderProto(order: Order) -> OrderProto:
         orderProto.parentId = order.parentId
     if order.action:
         orderProto.action = order.action
-    if order.totalQuantity != UNSET_DOUBLE:
+    if order.totalQuantity != DECIMAL_ZERO:
         orderProto.totalQuantity = str(order.totalQuantity)
     if isValidIntValue(order.displaySize):
         orderProto.displaySize = order.displaySize
