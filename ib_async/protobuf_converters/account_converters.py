@@ -49,7 +49,7 @@ from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
 from ..protobuf.SoftDollarTiersRequest_pb2 import (
     SoftDollarTiersRequest as SoftDollarTiersRequestProto,
 )
-from ..util import UNSET_DOUBLE, isValidIntValue
+from ..util import isValidIntValue
 from .base_converters import ClientException, ib_defaults
 from .contract_converters import createContract
 

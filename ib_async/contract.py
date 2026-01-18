@@ -2,9 +2,11 @@
 
 import datetime as dt
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import Enum
 
-import ib_async.util as util
+from . import util
+from .util import DECIMAL_ZERO
 
 
 class FundAssetType(Enum):
@@ -624,9 +626,9 @@ class ContractDetails:
     realExpirationDate: str = ""
     lastTradeTime: str = ""
     stockType: str = ""
-    minSize: float = 0.0
-    sizeIncrement: float = 0.0
-    suggestedSizeIncrement: float = 0.0
+    minSize: Decimal = DECIMAL_ZERO
+    sizeIncrement: Decimal = DECIMAL_ZERO
+    suggestedSizeIncrement: Decimal = DECIMAL_ZERO
     # minCashQtySize: float = 0.0
     cusip: str = ""
     ratings: str = ""

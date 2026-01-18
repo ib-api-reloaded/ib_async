@@ -1,5 +1,7 @@
 """Contract converters"""
 
+from decimal import Decimal
+
 from ..contract import (
     ComboLeg,
     Contract,
@@ -37,6 +39,7 @@ from ..protobuf.SmartComponentsRequest_pb2 import (
     SmartComponentsRequest as SmartComponentsRequestProto,
 )
 from ..util import (
+    DECIMAL_ZERO,
     UNSET_DOUBLE,
     floatMaxString,
     getEnumTypeFromString,
@@ -304,12 +307,16 @@ def createContractDetails(
     contractDetails.marketRuleIds = details.marketRuleIds
     contractDetails.realExpirationDate = details.realExpirationDate
     contractDetails.stockType = details.stockType
-    contractDetails.minSize = float(details.minSize) if details.minSize else 0.0
+    contractDetails.minSize = (
+        Decimal(details.minSize) if details.minSize else DECIMAL_ZERO
+    )
     contractDetails.sizeIncrement = (
-        float(details.sizeIncrement) if details.sizeIncrement else 0.0
+        Decimal(details.sizeIncrement) if details.sizeIncrement else DECIMAL_ZERO
     )
     contractDetails.suggestedSizeIncrement = (
-        float(details.suggestedSizeIncrement) if details.suggestedSizeIncrement else 0.0
+        Decimal(details.suggestedSizeIncrement)
+        if details.suggestedSizeIncrement
+        else DECIMAL_ZERO
     )
     contractDetails.cusip = details.cusip
     contractDetails.ratings = details.ratings
