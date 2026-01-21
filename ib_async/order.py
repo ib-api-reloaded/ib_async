@@ -57,7 +57,7 @@ class Order:
     orderType: str = ""
     lmtPrice: float | Decimal | None = UNSET_DOUBLE
     auxPrice: float | Decimal | None = UNSET_DOUBLE
-    tif: str = ""
+    tif: str = OrderTIF.DAY
     activeStartTime: str = ""
     activeStopTime: str = ""
     ocaGroup: str = ""
