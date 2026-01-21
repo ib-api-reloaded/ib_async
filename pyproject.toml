@@ -103,6 +103,10 @@ ignore = [
   "E501", # Ingnore long lines, specially in comments and docstrings
 ]
 
+[tool.coverage.run]
+# Omit specific directories and files
+omit = ["ib_async/protobuf/*", "examples/", "notebooks/"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
