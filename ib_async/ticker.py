@@ -4,7 +4,6 @@ import logging
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal
 from typing import ClassVar, Final, TypeAlias
 
 from eventkit import Event, Op
@@ -154,8 +153,7 @@ class Ticker:
         * ``updateEvent`` (ticker: :class:`.Ticker`)
     """
 
-    events: ClassVar = ("updateEvent",)
-    contract: Contract | None = None
+    contract: Contract
     time: datetime | None = None
     timestamp: float | None = None
     marketDataType: int = 1
@@ -250,20 +248,21 @@ class Ticker:
     creditmanMarkPrice: float = nan
     creditmanSlowMarkPrice: float = nan
     reutersMutualFunds: str = ""
-    etfNavClose: float | Decimal = nan
-    etfNavPriorClose: float | Decimal = nan
-    etfNavBid: float | Decimal = nan
-    etfNavAsk: float | Decimal = nan
-    etfNavLast: float | Decimal = nan
-    etfFrozenNavLast: float | Decimal = nan
-    etfNavHigh: float | Decimal = nan
-    etfNavLow: float | Decimal = nan
+    etfNavClose: float = nan
+    etfNavPriorClose: float = nan
+    etfNavBid: float = nan
+    etfNavAsk: float = nan
+    etfNavLast: float = nan
+    etfFrozenNavLast: float = nan
+    etfNavHigh: float = nan
+    etfNavLow: float = nan
     socialMarketAnalytics: str = ""
     estimatedIpoMidpoint: float = nan
     finalIpoLast: float = nan
 
     defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
     created: bool = field(default=False, repr=False)
+    events: ClassVar = ("updateEvent",)
     updateEvent: Event = field(repr=False, init=False)
     ticker_bus: Event = field(repr=False, init=False)
 
