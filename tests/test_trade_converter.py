@@ -504,6 +504,7 @@ class TestTradeConverters:
         assert isinstance(order, Order)
         assert order.orderId == 1
         assert order.action == "BUY"
+        assert order.filledQuantity == Decimal("0.0")
         assert order.totalQuantity == Decimal("100.0")
         assert order.orderType == "LMT"
         assert order.lmtPrice == 400.0
@@ -771,6 +772,14 @@ class TestTradeConverters:
         assert order_status.orderId == 1
         assert order_status.status == "Submitted"
         assert order_status.filled == Decimal("50.0")
+        assert order_status.remaining == Decimal("50.0")
+        assert order_status.avgFillPrice == 150.0
+        assert order_status.permId == 1001
+        assert order_status.parentId == 0
+        assert order_status.lastFillPrice == 150.5
+        assert order_status.clientId == 10
+        assert order_status.whyHeld == ""
+        assert order_status.mktCapPrice == 0.0
 
     def test_createExecution(self):
         exec_proto = ExecutionProto(

@@ -1137,19 +1137,19 @@ def createOrderStatus(orderStatusProto: OrderStatusProto) -> OrderStatus:
     if orderStatusProto.HasField("remaining"):
         orderStatus.remaining = Decimal(orderStatusProto.remaining)
     if orderStatusProto.HasField("avgFillPrice"):
-        orderStatus.avgFillPrice = Decimal(str(orderStatusProto.avgFillPrice))
+        orderStatus.avgFillPrice = orderStatusProto.avgFillPrice
     if orderStatusProto.HasField("permId"):
         orderStatus.permId = orderStatusProto.permId
     if orderStatusProto.HasField("parentId"):
         orderStatus.parentId = orderStatusProto.parentId
     if orderStatusProto.HasField("lastFillPrice"):
-        orderStatus.lastFillPrice = Decimal(str(orderStatusProto.lastFillPrice))
+        orderStatus.lastFillPrice = orderStatusProto.lastFillPrice
     if orderStatusProto.HasField("clientId"):
         orderStatus.clientId = orderStatusProto.clientId
     if orderStatusProto.HasField("whyHeld"):
         orderStatus.whyHeld = orderStatusProto.whyHeld
     if orderStatusProto.HasField("mktCapPrice"):
-        orderStatus.mktCapPrice = Decimal(str(orderStatusProto.mktCapPrice))
+        orderStatus.mktCapPrice = orderStatusProto.mktCapPrice
     return orderStatus
 
 

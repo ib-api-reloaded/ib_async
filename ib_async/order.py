@@ -276,15 +276,15 @@ class OrderStatus:
 
     orderId: int = 0
     status: str = ""
-    filled: float | Decimal = 0.0
-    remaining: float | Decimal = 0.0
-    avgFillPrice: float | Decimal = 0.0
+    filled: Decimal = DECIMAL_ZERO
+    remaining: Decimal = DECIMAL_ZERO
+    avgFillPrice: float = 0.0
     permId: int = 0
     parentId: int = 0
-    lastFillPrice: float | Decimal = 0.0
+    lastFillPrice: float = 0.0
     clientId: int = 0
     whyHeld: str = ""
-    mktCapPrice: float | Decimal = 0.0
+    mktCapPrice: float = 0.0
 
     @property
     def total(self) -> float | Decimal:
