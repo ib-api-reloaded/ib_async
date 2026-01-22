@@ -2306,6 +2306,9 @@ class IB:
         tickers = []
         reqIds = []
         for contract in contracts:
+            if contract is None or contract.conId:
+                self._logger.warning("Invalid contract: %s", contract)
+                continue
             reqId = self.client.getReqId()
             reqIds.append(reqId)
             ticker = self.wrapper.startTicker(reqId, contract)
@@ -2314,6 +2317,9 @@ class IB:
 
         awaitables = [t.ticker_bus for t in tickers]
         await asyncio.gather(*awaitables)
+
+        for ticker in tickers:
+            self.wrapper.endTicker(ticker)
 
         return tickers
 
