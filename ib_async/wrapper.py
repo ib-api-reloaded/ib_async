@@ -455,8 +455,10 @@ class Wrapper:
         Start a tick request that has the reqId associated with the contract.
         Return the ticker.
         """
-        ticker = self.tickers.get_by_request_id(reqId)
+        # get existing tickers first.
+        ticker = self.tickers.get_by_object_id(hash(contract))
         if not ticker:
+            # create new ticker
             ticker = Ticker(contract=contract, defaults=self.defaults)
             self.tickers.add(reqId, hash(ticker.contract), ticker)
             ticker.ticker_bus.takewhile(lambda data, t: data is not None).connect(
