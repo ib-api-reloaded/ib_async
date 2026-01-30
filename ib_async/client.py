@@ -320,7 +320,7 @@ class Client:
                 self._isThrottling = True
                 self.throttleStart.emit()
                 self._logger.info("Started to throttle requests")
-            loop.call_at(times[0] + self.RequestsInterval, self.sendMsg, None)
+            loop.call_at(times[0] + self.RequestsInterval, self.sendMsg)
         else:
             if self._isThrottling:
                 self._isThrottling = False
