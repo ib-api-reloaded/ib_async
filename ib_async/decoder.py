@@ -1,6 +1,8 @@
 """Deserialize and dispatch protobuf messages."""
 
 import logging
+from collections.abc import Iterable
+from typing import cast
 
 from .contract import (
     ContractDescription,
@@ -583,7 +585,7 @@ class Decoder:
             self.wrapper.tickByTick(reqId, tickByTickData)
 
     def fundamentatalDataProto(self, msg: FundamentalsDataProto):
-        self.wrapper.fundamentalData(msg.reqId, msg.fundamentalData)
+        self.wrapper.fundamentalData(msg.reqId, msg.data)
 
     def scannerParametersProto(self, msg: ScannerParametersProto):
         xml = msg.xml if msg.HasField("xml") else ""
@@ -645,7 +647,7 @@ class Decoder:
         self.wrapper.smartComponents(reqId, components)
 
     def newsBulletinProto(self, msg: NewsBulletinProto):
-        msgId = msg.reqId if msg.HasField("msgId") else NO_VALID_ID
+        msgId = msg.newsMsgId if msg.HasField("newsMsgId") else NO_VALID_ID
         newsBulletin = createNewsBulletin(msg)
         self.wrapper.updateNewsBulletin(msgId, newsBulletin)
 
@@ -687,7 +689,7 @@ class Decoder:
         self.wrapper.softDollarTiers(reqId, tiers)
 
     def familyCodesProto(self, msg: FamilyCodesProto):
-        self.wrapper.familyCodes(msg)
+        self.wrapper.familyCodes(cast(Iterable, msg))
 
     def bondContractDetailsProto(self, msg: ContractDataProto):
         reqId = msg.reqId

@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
-from collections.abc import Hashable
+from collections.abc import Hashable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
@@ -1101,7 +1101,7 @@ class Wrapper:
     def softDollarTiers(self, reqId: int, tiers: list[SoftDollarTier]):
         self._logger.info("reqId: %s, softDollarTiers: %s", reqId, tiers)
 
-    def familyCodes(self, familyCodes: list[FamilyCode]):
+    def familyCodes(self, familyCodes: Iterable[FamilyCode]):
         self._logger.info("familyCodes: %s", familyCodes)
 
     def error(
