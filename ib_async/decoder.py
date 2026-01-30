@@ -523,7 +523,7 @@ class Decoder:
         self.wrapper.headTimestamp(msg.reqId, msg.headTimestamp)
 
     def historicalDataProto(self, msg: HistoricalDataProto):
-        bar_data = createBarDataList(msg.historicalDataBars)
+        bar_data = createBarDataList(cast(list, msg.historicalDataBars))
         self.wrapper.historicalData(msg.reqId, bar_data)
 
     def historicalDataProtoEnd(self, msg: HistoricalDataEndProto):

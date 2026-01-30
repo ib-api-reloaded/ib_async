@@ -46,6 +46,7 @@ from ..protobuf.PositionsMultiRequest_pb2 import (
 from ..protobuf.ReceiveFA_pb2 import ReceiveFA as ReceiveFAProto
 from ..protobuf.ReplaceFAEnd_pb2 import ReplaceFAEnd as ReplaceFAEndProto
 from ..protobuf.SoftDollarTier_pb2 import SoftDollarTier as SoftDollarTierProto
+from ..protobuf.SoftDollarTiers_pb2 import SoftDollarTiers as SoftDollarTiersProto
 from ..protobuf.SoftDollarTiersRequest_pb2 import (
     SoftDollarTiersRequest as SoftDollarTiersRequestProto,
 )
@@ -357,7 +358,9 @@ def createSoftDollarTiersRequestProto(reqId: int) -> SoftDollarTiersRequestProto
     return softDollarTiersRequestProto
 
 
-def createSoftDollarTier(softDollarTierProto: SoftDollarTierProto) -> SoftDollarTier:
+def createSoftDollarTier(
+    softDollarTierProto: SoftDollarTierProto,
+) -> SoftDollarTier | None:
     name = ""
     value = ""
     displayName = ""
@@ -375,7 +378,7 @@ def createSoftDollarTier(softDollarTierProto: SoftDollarTierProto) -> SoftDollar
 
 
 def createSoftDollarTiers(
-    softDollarTiersProto: SoftDollarTiersRequestProto,
+    softDollarTiersProto: SoftDollarTiersProto,
 ) -> list[SoftDollarTier]:
     tiers = []
     if softDollarTiersProto.softDollarTiers:
