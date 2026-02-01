@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from math import nan
 from typing import ClassVar, TypeAlias
 
@@ -500,6 +500,32 @@ class OrderCondition:
         return self
 
 
+class TriggerMethod(IntEnum):
+    """
+    Trigger Method.
+
+    see https://interactivebrokers.github.io/tws-api/trigger_method_limit.html
+
+
+    0 - The default method for instrument
+    1 - "Double bid/ask" function, where stop orders are triggered based on two
+        consecutive bid or ask prices.
+    2 - "Last" function, where stop orders are triggered based on the last price
+    3 - "Double last" function
+    4 - Bid/ask function
+    7 - Last or bid/ask function
+    8 - Mid-point function
+    """
+
+    Default = 0
+    DoubleBidAsk = 1
+    Last = 2
+    DoubleLast = 3
+    BidAsk = 4
+    LastBidAsk = 7
+    MidPoint = 8
+
+
 @dataclass(slots=True)
 class PriceCondition(OrderCondition):
     condType: ClassVar[int] = 1
@@ -507,7 +533,7 @@ class PriceCondition(OrderCondition):
     price: float = 0.0
     conId: int = 0
     exch: str = ""
-    triggerMethod: int = 0
+    triggerMethod: int = TriggerMethod.Default
 
 
 @dataclass(slots=True)
