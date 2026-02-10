@@ -521,8 +521,9 @@ class IB:
         """
         self.wrapper.setTimeout(timeout)
 
-    async def _response_single(self, bus: Event, reqId: int | str) -> Any:
-        """Build reactive pipeline for single value"""
+    async def _response_single(self, reqId: int | str) -> Any:
+        """Build reactive pipeline for single value."""
+        bus = self.wrapper.response_bus
         notifier = Event(f"notifier_{reqId}")
         pipeline = await (
             bus.takeuntil(notifier)
@@ -535,8 +536,9 @@ class IB:
 
         return pipeline
 
-    async def _response_multi(self, bus: Event, reqId: int | str) -> Any:
-        """Build reactive pipeline for single value"""
+    async def _response_multi(self, reqId: int | str) -> Any:
+        """Build reactive pipeline for list."""
+        bus = self.wrapper.response_bus
         notifier = Event(f"notifier_{reqId}")
         pipeline = await (
             bus.takeuntil(notifier)
@@ -2359,30 +2361,15 @@ class IB:
         whatIfOrder.whatIf = True
         whatIfOrder.orderId = reqId
         self.client.placeOrder(reqId, contract, whatIfOrder)
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
         self.client.reqCurrentTime()
-        return (
-            self.wrapper.response_bus.filter(lambda key, _: key == "currentTime")
-            .pluck(1)
-            .take(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single("currentTime")
 
     def reqCurrentTimeMiliAsync(self) -> Awaitable[datetime.datetime]:
         self.client.reqCurrentTimeMili()
-        return (
-            self.wrapper.response_bus.filter(lambda key, _: key == "currentTimeMili")
-            .pluck(1)
-            .take(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single("currentTimeMili")
 
     def reqAccountUpdatesAsync(self, account: str = "") -> Awaitable[None]:
         """
@@ -2397,14 +2384,14 @@ class IB:
         """
         acctCode = account or self.wrapper.accounts[0]
         self.client.reqAccountUpdates(True, acctCode)
-        return self._response_single(self.wrapper.response_bus, "accountValues")
+        return self._response_single("accountValues")
 
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
     ) -> Awaitable[list[AccountValue]]:
         reqId = self.client.getReqId()
         self.client.reqAccountUpdatesMulti(reqId, account, modelCode, False)
-        return self._response_multi(self.wrapper.response_bus, reqId)
+        return self._response_multi(reqId)
 
     async def accountSummaryAsync(self, account: str = "") -> list[AccountValue]:
         if not self.wrapper.acctSummary:
@@ -2439,24 +2426,19 @@ class IB:
             )
         reqId = self.client.getReqId()
         self.client.reqAccountSummary(reqId, group, tags)
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         self.client.reqOpenOrders()
-        return self._response_multi(self.wrapper.response_bus, "openOrders")
+        return self._response_multi("openOrders")
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         self.client.reqAllOpenOrders()
-        return self._response_multi(self.wrapper.response_bus, "openOrders")
+        return self._response_multi("openOrders")
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
         self.client.reqCompletedOrders(apiOnly)
-        return self._response_multi(self.wrapper.response_bus, "completedOrders")
+        return self._response_multi("completedOrders")
 
     def reqExecutionsAsync(
         self, execFilter: ExecutionFilter | None = None
@@ -2464,20 +2446,20 @@ class IB:
         """Request a list of fills."""
         reqId = self.client.getReqId()
         self.client.reqExecutions(reqId, execFilter or ExecutionFilter())
-        fills = self._response_multi(self.wrapper.response_bus, reqId)
+        fills = self._response_multi(reqId)
         return fills
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
         """Request a list of positions."""
         self.client.reqPositions()
-        return self._response_single(self.wrapper.response_bus, "position")
+        return self._response_single("position")
 
     def reqPositionsMultiAsync(
         self, account: str, modelCode: str = ""
     ) -> Awaitable[list[Position]]:
         reqId = self.client.getReqId()
         self.client.reqPositionsMulti(reqId, account, modelCode)
-        return self._response_multi(self.wrapper.response_bus, reqId)
+        return self._response_multi(reqId)
 
     def reqContractDetailsAsync(
         self, contract: Contract
@@ -2490,16 +2472,7 @@ class IB:
         """
         reqId = self.client.getReqId()
         self.client.reqContractDetails(reqId, contract)
-        # This is a streaming response; contract details are sent one by one,
-        # followed by a final "end" event. The .list() operator gathers all
-        # individual results into a single list.
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        return self._response_multi(reqId)
 
     def reqMatchingSymbolsAsync(
         self, pattern: str
@@ -2518,15 +2491,7 @@ class IB:
         """
         reqId = self.client.getReqId()
         self.client.reqMatchingSymbols(reqId, pattern)
-        # This is a single-shot response; the API sends the entire list
-        # of results in one event. .take(1).pluck(1) is used to grab the
-        # payload (which is the list) from that single event.
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     def reqMarketRuleAsync(self, marketRuleId: int) -> Awaitable[list[PriceIncrement]]:
         """
@@ -2542,14 +2507,7 @@ class IB:
                 which contains a comma separated string of market rule IDs.
         """
         self.client.reqMarketRule(marketRuleId)
-        return (
-            self.wrapper.response_bus.filter(
-                lambda rId, _: rId == f"marketRule-{marketRuleId}"
-            )
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(f"marketRule-{marketRuleId}")
 
     async def reqHistoricalDataAsync(
         self,
@@ -2591,13 +2549,9 @@ class IB:
             keepUpToDate,
             chartOptions,
         )
-        awaitable = (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        awaitable = self._response_single(reqId)
         task = asyncio.wait_for(awaitable, timeout) if timeout else awaitable
+        result = []
         try:
             result = await task
         except asyncio.TimeoutError:
@@ -2632,12 +2586,7 @@ class IB:
             False,
             None,
         )
-        awaitable = (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        awaitable = self._response_single(reqId)
         return awaitable
 
     def reqHistoricalTicksAsync(
@@ -2665,12 +2614,7 @@ class IB:
             ignoreSize,
             miscOptions,
         )
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     async def reqHeadTimeStampAsync(
         self, contract: Contract, whatToShow: str, useRTH: bool, formatDate: int = 1
@@ -2679,26 +2623,15 @@ class IB:
 
         self.client.reqHeadTimeStamp(reqId, contract, whatToShow, useRTH, formatDate)
 
-        result = (
-            await self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        result = await self._response_single(reqId)
         self.client.cancelHeadTimeStamp(reqId)
-
         return result
 
     def reqSmartComponentsAsync(self, bboExchange) -> Awaitable[list[SmartComponent]]:
         reqId = self.client.getReqId()
 
         self.client.reqSmartComponents(reqId, bboExchange)
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     def reqMktDepthExchangesAsync(self) -> Awaitable[list[DepthMktDataDescription]]:
         future = self.wrapper.startReq("mktDepthExchanges")
@@ -2710,12 +2643,7 @@ class IB:
     ) -> Awaitable[list[HistogramData]]:
         reqId = self.client.getReqId()
         self.client.reqHistogramData(reqId, contract, useRTH, period)
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     def reqFundamentalDataAsync(
         self,
@@ -2727,12 +2655,7 @@ class IB:
         self.client.reqFundamentalData(
             reqId, contract, reportType, fundamentalDataOptions
         )
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     async def reqScannerDataAsync(
         self,
@@ -2755,12 +2678,7 @@ class IB:
     def reqScannerParametersAsync(self) -> Awaitable[str]:
         reqId = "scannerParams"
         self.client.reqScannerParameters()
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
     async def calculateImpliedVolatilityAsync(
         self,
@@ -2774,12 +2692,7 @@ class IB:
             reqId, contract, optionPrice, underPrice, implVolOptions
         )
         try:
-            awaitable = (
-                self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-                .take(1)
-                .pluck(1)
-                .map(self._raise_if_error)
-            )
+            awaitable = self._response_single(reqId)
             result = await asyncio.wait_for(awaitable, 4)
             return result
         except asyncio.TimeoutError:
@@ -2800,12 +2713,7 @@ class IB:
             reqId, contract, volatility, underPrice, optPrcOptions
         )
         try:
-            awaitable = (
-                self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-                .take(1)
-                .pluck(1)
-                .map(self._raise_if_error)
-            )
+            awaitable = self._response_single(reqId)
             result = await asyncio.wait_for(awaitable, 4)
             return result
         except asyncio.TimeoutError:
@@ -2825,21 +2733,10 @@ class IB:
         self.client.reqSecDefOptParams(
             reqId, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
         )
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        return self._response_multi(reqId)
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
-        future = (
-            self.wrapper.response_bus.filter(lambda name, _: name == "newsProviders")
-            .takewhile(lambda name, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        future = self._response_single("newsProviders")
         self.client.reqNewsProviders()
         return future
 
@@ -2847,14 +2744,7 @@ class IB:
         self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] = []
     ) -> Awaitable[NewsArticle]:
         reqId = self.client.getReqId()
-
-        future = (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
-
+        future = self._response_single(reqId)
         self.client.reqNewsArticle(reqId, providerCode, articleId, newsArticleOptions)
         return future
 
@@ -2874,13 +2764,7 @@ class IB:
         self.client.reqHistoricalNews(
             reqId, conId, providerCodes, start, end, totalResults, historicalNewsOptions
         )
-        future = (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        future = self._response_multi(reqId)
         try:
             result = await asyncio.wait_for(future, 4)
             return result
@@ -2889,12 +2773,7 @@ class IB:
             return None
 
     async def requestFAAsync(self, faDataType: int):
-        future = (
-            self.wrapper.response_bus.filter(lambda name, _: name == "requestFA")
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        future = self._response_single("requestFA")
         self.client.requestFA(faDataType)
         try:
             result = await asyncio.wait_for(future, 4)
@@ -2926,12 +2805,7 @@ class IB:
     def reqUserInfoAsync(self) -> Awaitable[str]:
         reqId = self.client.getReqId()
         self.client.reqUserInfo(reqId)
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(reqId)
 
 
 if __name__ == "__main__":
