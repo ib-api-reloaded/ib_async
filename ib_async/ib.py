@@ -521,6 +521,34 @@ class IB:
         """
         self.wrapper.setTimeout(timeout)
 
+    async def _response_single(self, bus: Event, reqId: int | str) -> Any:
+        """Build reactive pipeline for single value"""
+        notifier = Event(f"notifier_{reqId}")
+        pipeline = await (
+            bus.takeuntil(notifier)
+            .filter(lambda rId, data: rId == reqId)
+            .take(1)
+            .pluck(1)
+            .map(self._raise_if_error)
+        )
+        notifier.emit("stop")
+
+        return pipeline
+
+    async def _response_multi(self, bus: Event, reqId: int | str) -> Any:
+        """Build reactive pipeline for single value"""
+        notifier = Event(f"notifier_{reqId}")
+        pipeline = await (
+            bus.takeuntil(notifier)
+            .filter(lambda rId, data: rId == reqId)
+            .takewhile(lambda rId, data: data is not None)
+            .pluck(1)
+            .map(self._raise_if_error)
+            .list()
+        )
+        notifier.emit("stop")
+        return pipeline
+
     def managedAccounts(self) -> list[str]:
         """List of account names."""
         return list(self.wrapper.accounts)
@@ -2369,25 +2397,14 @@ class IB:
         """
         acctCode = account or self.wrapper.accounts[0]
         self.client.reqAccountUpdates(True, acctCode)
-        return (
-            self.wrapper.response_bus.filter(lambda key, _: key == "accountValues")
-            .take(1)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(self.wrapper.response_bus, "accountValues")
 
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
     ) -> Awaitable[list[AccountValue]]:
         reqId = self.client.getReqId()
         self.client.reqAccountUpdatesMulti(reqId, account, modelCode, False)
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        return self._response_multi(self.wrapper.response_bus, reqId)
 
     async def accountSummaryAsync(self, account: str = "") -> list[AccountValue]:
         if not self.wrapper.acctSummary:
@@ -2431,33 +2448,15 @@ class IB:
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         self.client.reqOpenOrders()
-        return (
-            self.wrapper.response_bus.filter(lambda key, _: key == "openOrders")
-            .takewhile(lambda key, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        return self._response_multi(self.wrapper.response_bus, "openOrders")
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         self.client.reqAllOpenOrders()
-        return (
-            self.wrapper.response_bus.filter(lambda key, _: key == "openOrders")
-            .takewhile(lambda key, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        return self._response_multi(self.wrapper.response_bus, "openOrders")
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
         self.client.reqCompletedOrders(apiOnly)
-        return (
-            self.wrapper.response_bus.filter(lambda key, _: key == "completedOrders")
-            .takewhile(lambda key, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        return self._response_multi(self.wrapper.response_bus, "completedOrders")
 
     def reqExecutionsAsync(
         self, execFilter: ExecutionFilter | None = None
@@ -2465,37 +2464,20 @@ class IB:
         """Request a list of fills."""
         reqId = self.client.getReqId()
         self.client.reqExecutions(reqId, execFilter or ExecutionFilter())
-        fills = (
-            self.wrapper.response_bus.filter(lambda rId, e: rId == reqId)
-            .takewhile(lambda r, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        fills = self._response_multi(self.wrapper.response_bus, reqId)
         return fills
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
         """Request a list of positions."""
         self.client.reqPositions()
-        return (
-            self.wrapper.response_bus.filter(lambda name, _: name == "position")
-            .takewhile(lambda name, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-        )
+        return self._response_single(self.wrapper.response_bus, "position")
 
     def reqPositionsMultiAsync(
         self, account: str, modelCode: str = ""
     ) -> Awaitable[list[Position]]:
         reqId = self.client.getReqId()
         self.client.reqPositionsMulti(reqId, account, modelCode)
-        return (
-            self.wrapper.response_bus.filter(lambda rId, _: rId == reqId)
-            .takewhile(lambda rId, data: data is not None)
-            .pluck(1)
-            .map(self._raise_if_error)
-            .list()
-        )
+        return self._response_multi(self.wrapper.response_bus, reqId)
 
     def reqContractDetailsAsync(
         self, contract: Contract
