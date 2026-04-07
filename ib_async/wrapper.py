@@ -846,10 +846,10 @@ class Wrapper:
 
     def commissionReport(self, commissionReport: CommissionReport):
         if commissionReport.yield_ == UNSET_DOUBLE:
-            commissionReport.yield_ = 0.0
+            commissionReport.yield_ = self.defaults.unset
 
         if commissionReport.realizedPNL == UNSET_DOUBLE:
-            commissionReport.realizedPNL = 0.0
+            commissionReport.realizedPNL = self.defaults.unset
 
         fill = self.fills.get(commissionReport.execId)
         if fill:
