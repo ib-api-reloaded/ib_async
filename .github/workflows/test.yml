@@ -27,6 +27,7 @@ jobs:
           poetry install --with=dev
 
       - name: MyPy static code analysis
+        if: ${{ !startsWith(matrix.python-version, 'pypy') }}
         run: |
           poetry run mypy --pretty ib_async
 
