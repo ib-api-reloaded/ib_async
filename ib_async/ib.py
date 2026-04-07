@@ -1850,7 +1850,7 @@ class IB:
         endDateTime: str | datetime.date,
         totalResults: int,
         historicalNewsOptions: list[TagValue] = [],
-    ) -> HistoricalNews:
+    ) -> list[HistoricalNews] | None:
         """
         Get historical news headline.
 
@@ -2584,7 +2584,7 @@ class IB:
         endDateTime: str | datetime.date,
         totalResults: int,
         historicalNewsOptions: list[TagValue] = [],
-    ) -> HistoricalNews | None:
+    ) -> list[HistoricalNews] | None:
         reqId = self.client.getReqId()
 
         future = self.wrapper.startReq(reqId)
