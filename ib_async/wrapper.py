@@ -8,6 +8,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Final, TypeAlias, cast
+from zoneinfo import ZoneInfo
 
 from ib_async.contract import (
     Contract,
@@ -366,6 +367,17 @@ class Wrapper:
 
         globalErrorEvent.emit(error)
         self.reset()
+
+    def _normalizeDatetime(self, value: datetime | Any) -> datetime | Any:
+        """Convert datetime values to the configured default timezone."""
+        if not isinstance(value, datetime):
+            return value
+
+        if value.tzinfo is None:
+            tz = ZoneInfo(str(self.ib.TimezoneTWS)) if self.ib.TimezoneTWS else None
+            value = value.replace(tzinfo=tz or self.defaultTimezone)
+
+        return value.astimezone(self.defaultTimezone)
 
     def startReq(self, key, contract=None, container=None):
         """
@@ -914,7 +926,7 @@ class Wrapper:
     def historicalData(self, reqId: int, bar: BarData):
         results = self._results.get(reqId)
         if results is not None:
-            bar.date = parseIBDatetime(bar.date)  # type: ignore
+            bar.date = self._normalizeDatetime(parseIBDatetime(bar.date))  # type: ignore[arg-type]
             results.append(bar)
 
     def historicalDataEnd(self, reqId, _start: str, _end: str):
@@ -925,7 +937,7 @@ class Wrapper:
         if not bars:
             return
 
-        bar.date = parseIBDatetime(bar.date)  # type: ignore
+        bar.date = self._normalizeDatetime(parseIBDatetime(bar.date))  # type: ignore[arg-type]
         lastDate = bars[-1].date
         if bar.date < lastDate:
             return
@@ -943,7 +955,7 @@ class Wrapper:
 
     def headTimestamp(self, reqId: int, headTimestamp: str):
         try:
-            dt = parseIBDatetime(headTimestamp)
+            dt = self._normalizeDatetime(parseIBDatetime(headTimestamp))
             self._endReq(reqId, dt)
         except ValueError as exc:
             self._endReq(reqId, exc, False)
