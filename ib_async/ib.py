@@ -400,7 +400,6 @@ class IB:
 
         self._logger.info(status)
         self.client.disconnect()
-        self.disconnectedEvent.emit()
 
         # clear ALL internal state from this connection
         self.wrapper.reset()
