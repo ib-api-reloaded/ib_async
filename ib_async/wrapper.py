@@ -1516,6 +1516,12 @@ class Wrapper:
         dt = datetime.fromtimestamp(time, self.defaultTimezone)
         self._endReq("currentTime", dt)
 
+    def rerouteMktDataReq(self, reqId: int, conId: int, exchange: str):
+        self.ib.rerouteMktDataReqEvent.emit(reqId, conId, exchange)
+
+    def rerouteMktDepthReq(self, reqId: int, conId: int, exchange: str):
+        self.ib.rerouteMktDepthReqEvent.emit(reqId, conId, exchange)
+
     def tickEFP(
         self,
         reqId: int,

@@ -214,6 +214,12 @@ class IB:
         * ``newsBulletinEvent`` (bulletin: :class:`.NewsBulletin`):
           Emit a new news bulletin.
 
+        * ``rerouteMktDataReqEvent`` (reqId: int, conId: int, exchange: str):
+          Emits when IBKR reroutes a market data request to another contract.
+
+        * ``rerouteMktDepthReqEvent`` (reqId: int, conId: int, exchange: str):
+          Emits when IBKR reroutes a market depth request to another contract.
+
         * ``scannerDataEvent`` (data: :class:`.ScanDataList`):
           Emit data from a scanner subscription.
 
@@ -262,6 +268,8 @@ class IB:
         "scannerDataEvent",
         "tickNewsEvent",
         "newsBulletinEvent",
+        "rerouteMktDataReqEvent",
+        "rerouteMktDepthReqEvent",
         "wshMetaEvent",
         "wshEvent",
         "errorEvent",
@@ -303,6 +311,8 @@ class IB:
         self.scannerDataEvent = Event("scannerDataEvent")
         self.tickNewsEvent = Event("tickNewsEvent")
         self.newsBulletinEvent = Event("newsBulletinEvent")
+        self.rerouteMktDataReqEvent = Event("rerouteMktDataReqEvent")
+        self.rerouteMktDepthReqEvent = Event("rerouteMktDepthReqEvent")
         self.wshMetaEvent = Event("wshMetaEvent")
         self.wshEvent = Event("wshEvent")
         self.errorEvent = Event("errorEvent")
