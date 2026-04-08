@@ -9,30 +9,46 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-docs:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - uses: actions/setup-python@v5
-      with:
-        python-version: 3.12
-    - uses: abatilo/actions-poetry@v2
-    - name: install
-      run: poetry install --with=docs
-    - name: Build documentation
-      run: |
-        mkdir html
-        touch html/.nojekyll
-        poetry run sphinx-build -b html docs html
-    - name: Deploy documentation
-      if: ${{ github.event_name == 'push' }}
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        branch: gh-pages
-        folder: html
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.12
+
+      - name: Install Poetry
+        run: |
+          pip install pip poetry setuptools wheel -U
+
+      - name: Install dependencies
+        run: |
+          poetry install --with=docs
+
+      - name: Build documentation
+        run: |
+          mkdir html
+          touch html/.nojekyll
+          poetry run sphinx-build -b html docs html
+
+      - name: Upload documentation artifact
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: html
+
+      - name: Deploy documentation
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/deploy-pages@v4

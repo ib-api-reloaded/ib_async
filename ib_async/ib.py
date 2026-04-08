@@ -457,7 +457,7 @@ class IB:
         if timeout:
             try:
                 util.run(asyncio.wait_for(self.updateEvent, timeout))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return False
         else:
             util.run(self.updateEvent)
@@ -2096,7 +2096,7 @@ class IB:
             if fetchFields & StartupFetch.EXECUTIONS:
                 try:
                     await asyncio.wait_for(self.reqExecutionsAsync(), timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     msg = "executions request timed out"
                     errors.append(msg)
                     self._logger.error(msg)
@@ -2315,7 +2315,7 @@ class IB:
         try:
             await asyncio.wait_for(future, 4)
             return future.result()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.error("reqMatchingSymbolsAsync: Timeout")
             return None
 
@@ -2327,7 +2327,7 @@ class IB:
             self.client.reqMarketRule(marketRuleId)
             await asyncio.wait_for(future, 1)
             return future.result()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.error("reqMarketRuleAsync: Timeout")
             return None
 
@@ -2375,7 +2375,7 @@ class IB:
         task = asyncio.wait_for(future, timeout) if timeout else future
         try:
             await task
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.client.cancelHistoricalData(reqId)
             self._logger.warning(f"reqHistoricalData: Timeout for {contract}")
             bars.clear()
@@ -2520,7 +2520,7 @@ class IB:
         try:
             await asyncio.wait_for(future, 4)
             return future.result()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.error("calculateImpliedVolatilityAsync: Timeout")
             return None
         finally:
@@ -2541,7 +2541,7 @@ class IB:
         try:
             await asyncio.wait_for(future, 4)
             return future.result()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.error("calculateOptionPriceAsync: Timeout")
             return None
         finally:
@@ -2596,7 +2596,7 @@ class IB:
         try:
             await asyncio.wait_for(future, 4)
             return future.result()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.error("reqHistoricalNewsAsync: Timeout")
             return None
 
@@ -2606,7 +2606,7 @@ class IB:
         try:
             await asyncio.wait_for(future, 4)
             return future.result()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.error("requestFAAsync: Timeout")
 
     async def getWshMetaDataAsync(self) -> str:

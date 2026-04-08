@@ -1,28 +1,29 @@
 name: ib_async
 
-on: [ push, pull_request ]
+on: [push, pull_request]
 
 jobs:
-  build:
-    # https://github.com/actions/runner-images
+  build-poetry:
+    name: poetry (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [ "3.10", "3.11", "3.12", "3.13", "3.14", "pypy3.10", "pypy3.11" ]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "pypy3.11"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies of dependencies
+      - name: Install Poetry toolchain
         run: |
-          pip install pip poetry uv setuptools wheel -U
+          pip install pip poetry setuptools wheel -U
 
-      - name: Install dependencies
+      - name: Install dependencies with Poetry
         run: |
           poetry install --with=dev
 
@@ -34,3 +35,36 @@ jobs:
       - name: Ruff check
         run: |
           poetry run ruff check
+
+  build-uv:
+    name: uv (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14", "pypy3.11"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv toolchain
+        run: |
+          pip install pip uv setuptools wheel -U
+
+      - name: Install dependencies with uv
+        run: |
+          uv sync --group dev
+
+      - name: MyPy static code analysis
+        if: ${{ !startsWith(matrix.python-version, 'pypy') }}
+        run: |
+          uv run mypy --pretty ib_async
+
+      - name: Ruff check
+        run: |
+          uv run ruff check

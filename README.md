@@ -1,4 +1,4 @@
-[![Build](https://github.com/ib-api-reloaded/ib_async/actions/workflows/test.yml/badge.svg?branch=next)](https://github.com/ib-api-reloaded/ib_async/actions) [![PyVersion](https://img.shields.io/badge/python-3.10+-blue.svg)](#) <!-- [![Status](https://img.shields.io/badge/status-beta-green.svg)](#) --> [![PyPiVersion](https://img.shields.io/pypi/v/ib_async.svg)](https://pypi.python.org/pypi/ib_async) [![License](https://img.shields.io/badge/license-BSD-blue.svg)](#) <!-- [![Downloads](https://static.pepy.tech/badge/ib-insync)](https://pepy.tech/project/ib-insync) --> [![Docs](https://img.shields.io/badge/Documentation-green.svg)](https://ib-api-reloaded.github.io/ib_async/)
+[![Build](https://github.com/ib-api-reloaded/ib_async/actions/workflows/test.yml/badge.svg?branch=next)](https://github.com/ib-api-reloaded/ib_async/actions) [![PyVersion](https://img.shields.io/badge/python-3.11+-blue.svg)](#) <!-- [![Status](https://img.shields.io/badge/status-beta-green.svg)](#) --> [![PyPiVersion](https://img.shields.io/pypi/v/ib_async.svg)](https://pypi.python.org/pypi/ib_async) [![License](https://img.shields.io/badge/license-BSD-blue.svg)](#) <!-- [![Downloads](https://static.pepy.tech/badge/ib-insync)](https://pepy.tech/project/ib-insync) --> [![Docs](https://img.shields.io/badge/Documentation-green.svg)](https://ib-api-reloaded.github.io/ib_async/)
 
 # ib_async
 
@@ -32,13 +32,29 @@ and the [API docs](https://ib-api-reloaded.github.io/ib_async/api.html).
 
 ## Installation
 
+`ib_async` now targets Python 3.11+ and publishes standard PEP 621 metadata, so the project installs cleanly with `pip`, `uv`, and `poetry`.
+
+### Install with pip
+
 ```
 pip install ib_async
 ```
 
+### Install with uv
+
+```
+uv add ib_async
+```
+
+### Install with poetry
+
+```
+poetry add ib_async
+```
+
 Requirements:
 
-- Python 3.10 or higher
+- Python 3.11 or higher
   - We plan to support Python releases [2 years back](https://devguide.python.org/versions/) which allows us to continue adding newer features and performance improvements over time.
 - A running IB Gateway application (or TWS with API mode enabled)
     - [stable gateway](https://www.interactivebrokers.com/en/trading/ibgateway-stable.php) — updated every few months
@@ -50,41 +66,59 @@ The ibapi package from IB is not needed. `ib_async` implements the full IBKR API
 
 ## Build Manually
 
-First, install poetry:
+First, install your preferred environment manager:
 
 ```
 pip install poetry -U
 ```
 
-### Installing Only Library
+or:
+
+```
+pip install uv -U
+```
+
+### Install the project with poetry
 
 ```
 poetry install
 ```
 
-### Install Everything (enable docs + dev testing)
+### Install the project with uv
 
 ```
+uv sync
+```
+
+### Install everything for development and docs
+
+```bash
 poetry install --with=docs,dev
+uv sync --group dev --group docs
 ```
 
 ## Generate Docs
 
-```
+```bash
 poetry install --with=docs
 poetry run sphinx-build -b html docs html
+
+uv sync --group docs
+uv run sphinx-build -b html docs html
 ```
 
 ## Check Types
 
-```
+```bash
 poetry run mypy ib_async
+uv run mypy ib_async
 ```
 
 ## Build Package
 
-```
+```bash
 poetry build
+python -m build
 ```
 
 ## Upload Package (if maintaining)
@@ -481,12 +515,16 @@ The complete [API documentation](https://ib-api-reloaded.github.io/ib_async/api.
 ```bash
 poetry install --with=dev
 poetry run pytest
+
+uv sync --group dev
+uv run pytest
 ```
 
 ### Type Checking
 
 ```bash
 poetry run mypy ib_async
+uv run mypy ib_async
 ```
 
 ### Code Formatting
@@ -494,6 +532,9 @@ poetry run mypy ib_async
 ```bash
 poetry run ruff format
 poetry run ruff check --fix
+
+uv run ruff format
+uv run ruff check --fix
 ```
 
 ### Local Development
@@ -507,6 +548,7 @@ cd ib_async
 2. Install dependencies:
 ```bash
 poetry install --with=dev,docs
+uv sync --group dev --group docs
 ```
 
 3. Make your changes and run tests:
