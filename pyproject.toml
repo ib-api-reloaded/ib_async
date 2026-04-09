@@ -32,7 +32,7 @@ python = ">=3.10"
 aeventkit = "^2.1.0"
 # aeventkit = { path = "../eventkit", develop = true }
 nest_asyncio = "*"
-tzdata = "^2025.2"
+tzdata = "*"
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/ib-api-reloaded/ib_async/issues"
