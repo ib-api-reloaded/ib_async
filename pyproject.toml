@@ -22,7 +22,7 @@ classifiers = [
 dependencies = [
     "aeventkit>=2.1.0,<3.0.0",
     "nest_asyncio",
-    "tzdata>=2025.2,<2026.0",
+    "tzdata>=2025.2"
 ]
 
 [project.urls]
@@ -51,7 +51,7 @@ python = ">=3.11"
 aeventkit = "^2.1.0"
 # aeventkit = { path = "../eventkit", develop = true }
 nest_asyncio = "*"
-tzdata = "^2025.2"
+tzdata = ">=2025.2"
 
 [tool.poetry.group.dev]
 optional = true
