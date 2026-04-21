@@ -440,6 +440,21 @@ class Wrapper:
                 else:
                     future.set_exception(result)
 
+    def _snapshotContractForReqId(self, reqId: int) -> Contract | None:
+        """
+        Return a stable contract snapshot for a market-data request id.
+
+        Prefer the live ticker mapping because that is the primary owner of
+        market-data request identity. Fall back to the generic request
+        contract map when no ticker is registered for the reqId.
+        """
+        ticker = self.reqId2Ticker.get(reqId)
+        if ticker:
+            return Contract.recreate(ticker.contract)
+
+        contract = self._reqId2Contract.get(reqId)
+        return Contract.recreate(contract) if contract else None
+
     def startTicker(self, reqId: int, contract: Contract, tickType: int | str):
         """
         Start a tick request that has the reqId associated with the contract.
@@ -1514,14 +1529,21 @@ class Wrapper:
 
     def tickNews(
         self,
-        _reqId: int,
+        reqId: int,
         timeStamp: int,
         providerCode: str,
         articleId: str,
         headline: str,
         extraData: str,
     ):
-        news = NewsTick(timeStamp, providerCode, articleId, headline, extraData)
+        news = NewsTick(
+            timeStamp,
+            providerCode,
+            articleId,
+            headline,
+            extraData,
+            contract=self._snapshotContractForReqId(reqId),
+        )
         self.newsTicks.append(news)
         self.ib.tickNewsEvent.emit(news)
 

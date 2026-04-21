@@ -209,7 +209,8 @@ class IB:
           A profit- and loss entry for a single position is updated.
 
         * ``tickNewsEvent`` (news: :class:`.NewsTick`):
-          Emit a new news headline.
+          Emit a new news headline with the associated contract when
+          available.
 
         * ``newsBulletinEvent`` (bulletin: :class:`.NewsBulletin`):
           Emit a new news bulletin.
