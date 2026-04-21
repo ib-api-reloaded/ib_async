@@ -452,6 +452,7 @@ class NewsTick:
     articleId: str
     headline: str
     extraData: str
+    contract: Contract | None = None
 
 
 @dataclass(slots=True, frozen=True)
