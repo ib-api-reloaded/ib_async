@@ -1618,13 +1618,16 @@ class Wrapper:
         # 434 -	The order size cannot be zero.
         # 492 - ? not listed
         # 10167 ? not listed
+        # 10349 - Warning about "Order TIF was set to DAY based on order preset" but does NOT cancel active order
         # Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
         # TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
 
         # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
         # 202 - Order cancelled - Reason:
 
-        warningCodes = frozenset({105, 110, 165, 321, 329, 399, 404, 434, 492, 10167})
+        warningCodes = frozenset(
+            {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167, 10349}
+        )
         isWarning = errorCode in warningCodes or 2100 <= errorCode < 2200
 
         if errorCode == 110 and isRequest:
