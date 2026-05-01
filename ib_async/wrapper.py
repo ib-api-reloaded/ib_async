@@ -215,6 +215,36 @@ class RequestError(Exception):
         self.message = message
 
 
+# Order fields that TWS may legitimately update at runtime via openOrder
+# callbacks for an order we already track. Why a whitelist instead of a full
+# merge: TWS sometimes returns placeholder/default values for fields the user
+# set locally at placement time, so a blanket copy would clobber user intent.
+# (See git history of wrapper.openOrder — this list has grown each time a
+# specific live-mutable field was found to be silently dropped.)
+MUTABLE_ORDER_FIELDS: Final[tuple[str, ...]] = (
+    "permId",
+    "totalQuantity",
+    "lmtPrice",
+    "auxPrice",
+    "orderType",
+    "orderRef",
+    # Trailing-stop runtime state (issue #102): IBKR ratchets trailStopPrice
+    # as the market moves, and users can edit it (or lmtPriceOffset on a
+    # TRAIL LIMIT) directly in TWS. Both arrive on every openOrder update.
+    "trailStopPrice",
+    "trailingPercent",
+    "lmtPriceOffset",
+    # Adjustable-stop runtime state — same shape as trailing-stop fields:
+    # TWS owns these once the order is live and pushes updates via openOrder.
+    "adjustedOrderType",
+    "triggerPrice",
+    "adjustedStopPrice",
+    "adjustedStopLimitPrice",
+    "adjustedTrailingAmount",
+    "adjustableTrailingUnit",
+)
+
+
 @dataclass
 class Wrapper:
     """Wrapper implementation for use with the IB class."""
@@ -697,12 +727,8 @@ class Wrapper:
             key = self.orderKey(order.clientId, order.orderId, order.permId)
             trade = self.trades.get(key)
             if trade:
-                trade.order.permId = order.permId
-                trade.order.totalQuantity = order.totalQuantity
-                trade.order.lmtPrice = order.lmtPrice
-                trade.order.auxPrice = order.auxPrice
-                trade.order.orderType = order.orderType
-                trade.order.orderRef = order.orderRef
+                for fieldName in MUTABLE_ORDER_FIELDS:
+                    setattr(trade.order, fieldName, getattr(order, fieldName))
             else:
                 # ignore '?' values in the order
                 order = Order(
