@@ -347,7 +347,7 @@ class IB:
         account: str = "",
         raiseSyncErrors: bool = False,
         fetchFields: StartupFetch = StartupFetchALL,
-    ):
+    ) -> 'IB':
         """
         Connect to a running TWS or IB gateway application.
         After the connection is made the client is fully synchronized
@@ -2044,7 +2044,7 @@ class IB:
         account: str = "",
         raiseSyncErrors: bool = False,
         fetchFields: StartupFetch = StartupFetchALL,
-    ):
+    ) -> 'IB':
         clientId = int(clientId)
         self.wrapper.clientId = clientId
         timeout = timeout or None
