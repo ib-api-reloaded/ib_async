@@ -1,0 +1,359 @@
+"""Protobuf converters for scanner, fundamentals, and PnL.
+
+Pure functions: every converter takes only proto inputs (or domain
+inputs on the send side). No reads from module-level state, no
+dependencies on ``Wrapper``. ``HasField`` guards every optional read so
+malformed / partially-populated wire messages decode to safe defaults
+instead of raising into the decoder's exception path.
+
+Wire-shape notes:
+
+* ``ScannerData`` carries a ``repeated ScannerDataElement``; each
+  element produces an independent ``Wrapper.scannerData`` invocation.
+  The wire ``Contract`` sub-message is wrapped as a domain
+  ``ContractDetails(contract=..., marketName=...)`` since the wrapper
+  takes ``ContractDetails``. The wire ``comboKey`` field maps to the
+  wrapper's ``legsStr`` argument.
+* ``PnLSingle.position`` is wire ``string`` (Decimal precision) but the
+  wrapper expects ``pos: int``. Coercion is via
+  ``int(safe_decimal(...) or 0)`` — fractional / nan / empty values
+  collapse to ``0`` rather than raise.
+* ``ScannerSubscription`` send-side mirrors the full ~21-field domain
+  dataclass; the two map fields (``scannerSubscriptionFilterOptions``
+  and ``scannerSubscriptionOptions``) are intentionally left empty —
+  the binary path passes empty TagValue lists today.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .._pb import (
+    CancelFundamentalsData_pb2,
+    CancelPnL_pb2,
+    CancelPnLSingle_pb2,
+    CancelScannerSubscription_pb2,
+    FundamentalsData_pb2,
+    FundamentalsDataRequest_pb2,
+    PnL_pb2,
+    PnLRequest_pb2,
+    PnLSingle_pb2,
+    PnLSingleRequest_pb2,
+    ScannerData_pb2,
+    ScannerDataElement_pb2,
+    ScannerParameters_pb2,
+    ScannerParametersRequest_pb2,
+    ScannerSubscription_pb2,
+    ScannerSubscriptionRequest_pb2,
+)
+from ..contract import Contract, ContractDetails
+from ..objects import ScannerSubscription
+from .contracts import createContract, createContractProto
+from .safe import safe_decimal
+
+# ---------------------------------------------------------------------------
+# Args dataclasses (slotted, frozen — operator-mandated, not tuples)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True, frozen=True)
+class ScannerDataElementArgs:
+    """Args for ``Wrapper.scannerData(reqId, rank, contractDetails, distance, benchmark, projection, legsStr)``."""
+
+    reqId: int
+    rank: int
+    contractDetails: ContractDetails
+    distance: str
+    benchmark: str
+    projection: str
+    legsStr: str
+
+
+@dataclass(slots=True, frozen=True)
+class ScannerDataArgs:
+    """Batch decode of ``ScannerData`` proto: reqId + per-element args list.
+
+    The decoder is expected to iterate ``elements`` and dispatch each
+    via ``Wrapper.scannerData(...)``, then call ``Wrapper.scannerDataEnd(reqId)``.
+    """
+
+    reqId: int
+    elements: list[ScannerDataElementArgs]
+
+
+@dataclass(slots=True, frozen=True)
+class FundamentalDataArgs:
+    """Args for ``Wrapper.fundamentalData(reqId, data)``."""
+
+    reqId: int
+    data: str
+
+
+@dataclass(slots=True, frozen=True)
+class PnLArgs:
+    """Args for ``Wrapper.pnl(reqId, dailyPnL, unrealizedPnL, realizedPnL)``."""
+
+    reqId: int
+    dailyPnL: float
+    unrealizedPnL: float
+    realizedPnL: float
+
+
+@dataclass(slots=True, frozen=True)
+class PnLSingleArgs:
+    """Args for ``Wrapper.pnlSingle(reqId, pos, dailyPnL, unrealizedPnL, realizedPnL, value)``."""
+
+    reqId: int
+    pos: int
+    dailyPnL: float
+    unrealizedPnL: float
+    realizedPnL: float
+    value: float
+
+
+# ---------------------------------------------------------------------------
+# ScannerData (msgId 20 receive)
+# ---------------------------------------------------------------------------
+
+
+def createScannerDataElementArgs(
+    reqId: int, proto: ScannerDataElement_pb2.ScannerDataElement
+) -> ScannerDataElementArgs:
+    """Decode a single ``ScannerDataElement`` to wrapper args.
+
+    ``reqId`` is carried separately because the wire's repeated
+    element message itself doesn't carry one — it lives on the
+    enclosing ``ScannerData``. The wire ``contract`` sub-message is
+    wrapped into a ``ContractDetails(contract=..., marketName=...)``
+    because the wrapper's ``scannerData`` signature takes
+    ``ContractDetails`` not ``Contract``. Wire ``comboKey`` maps to
+    ``legsStr``.
+    """
+    rank = proto.rank if proto.HasField("rank") else 0
+    contract = (
+        createContract(proto.contract) if proto.HasField("contract") else Contract()
+    )
+    marketName = proto.marketName if proto.HasField("marketName") else ""
+    details = ContractDetails(contract=contract, marketName=marketName)
+    distance = proto.distance if proto.HasField("distance") else ""
+    benchmark = proto.benchmark if proto.HasField("benchmark") else ""
+    projection = proto.projection if proto.HasField("projection") else ""
+    legsStr = proto.comboKey if proto.HasField("comboKey") else ""
+    return ScannerDataElementArgs(
+        reqId=reqId,
+        rank=rank,
+        contractDetails=details,
+        distance=distance,
+        benchmark=benchmark,
+        projection=projection,
+        legsStr=legsStr,
+    )
+
+
+def iterScannerData(proto: ScannerData_pb2.ScannerData) -> ScannerDataArgs:
+    """Decode the whole ``ScannerData`` batch in one shot.
+
+    Returns a ``ScannerDataArgs`` carrying ``reqId`` plus a list of
+    per-element args. Decoder iterates ``elements`` and calls
+    ``Wrapper.scannerData(...)`` per entry.
+    """
+    reqId = proto.reqId if proto.HasField("reqId") else 0
+    elements = [
+        createScannerDataElementArgs(reqId, e) for e in proto.scannerDataElement
+    ]
+    return ScannerDataArgs(reqId=reqId, elements=elements)
+
+
+# ---------------------------------------------------------------------------
+# ScannerParameters (msgId 19 receive)
+# ---------------------------------------------------------------------------
+
+
+def createScannerParametersXml(proto: ScannerParameters_pb2.ScannerParameters) -> str:
+    """Decode ``ScannerParameters`` to its single ``xml`` payload."""
+    return proto.xml if proto.HasField("xml") else ""
+
+
+# ---------------------------------------------------------------------------
+# FundamentalsData (msgId 51 receive) + request / cancel
+# ---------------------------------------------------------------------------
+
+
+def createFundamentalDataArgs(
+    proto: FundamentalsData_pb2.FundamentalsData,
+) -> FundamentalDataArgs:
+    """``Wrapper.fundamentalData(reqId, data)`` args."""
+    reqId = proto.reqId if proto.HasField("reqId") else 0
+    data = proto.data if proto.HasField("data") else ""
+    return FundamentalDataArgs(reqId=reqId, data=data)
+
+
+def createFundamentalsDataRequestProto(
+    reqId: int, contract: Contract, reportType: str
+) -> FundamentalsDataRequest_pb2.FundamentalsDataRequest:
+    proto = FundamentalsDataRequest_pb2.FundamentalsDataRequest()
+    proto.reqId = reqId
+    proto.contract.CopyFrom(createContractProto(contract))
+    proto.reportType = reportType
+    return proto
+
+
+def createCancelFundamentalsDataProto(
+    reqId: int,
+) -> CancelFundamentalsData_pb2.CancelFundamentalsData:
+    proto = CancelFundamentalsData_pb2.CancelFundamentalsData()
+    proto.reqId = reqId
+    return proto
+
+
+# ---------------------------------------------------------------------------
+# PnL (msgId 94 receive) + request / cancel
+# ---------------------------------------------------------------------------
+
+
+def createPnLArgs(proto: PnL_pb2.PnL) -> PnLArgs:
+    """``Wrapper.pnl(reqId, dailyPnL, unrealizedPnL, realizedPnL)`` args.
+
+    All three numeric fields are wire ``double`` and stay ``float`` —
+    the wrapper's signature takes ``float`` and downstream
+    ``PnL`` domain dataclass stores floats today.
+    """
+    reqId = proto.reqId if proto.HasField("reqId") else 0
+    dailyPnL = proto.dailyPnL if proto.HasField("dailyPnL") else 0.0
+    unrealizedPnL = proto.unrealizedPnL if proto.HasField("unrealizedPnL") else 0.0
+    realizedPnL = proto.realizedPnL if proto.HasField("realizedPnL") else 0.0
+    return PnLArgs(
+        reqId=reqId,
+        dailyPnL=dailyPnL,
+        unrealizedPnL=unrealizedPnL,
+        realizedPnL=realizedPnL,
+    )
+
+
+def createPnLRequestProto(
+    reqId: int, account: str, modelCode: str
+) -> PnLRequest_pb2.PnLRequest:
+    proto = PnLRequest_pb2.PnLRequest()
+    proto.reqId = reqId
+    proto.account = account
+    proto.modelCode = modelCode
+    return proto
+
+
+def createCancelPnLProto(reqId: int) -> CancelPnL_pb2.CancelPnL:
+    proto = CancelPnL_pb2.CancelPnL()
+    proto.reqId = reqId
+    return proto
+
+
+# ---------------------------------------------------------------------------
+# PnLSingle (msgId 95 receive) + request / cancel
+# ---------------------------------------------------------------------------
+
+
+def createPnLSingleArgs(proto: PnLSingle_pb2.PnLSingle) -> PnLSingleArgs:
+    """``Wrapper.pnlSingle(reqId, pos, dailyPnL, unrealizedPnL, realizedPnL, value)`` args.
+
+    ``position`` is wire ``string`` (Decimal precision); the wrapper
+    takes ``pos: int``. We coerce via ``int(safe_decimal(...) or 0)``
+    so empty / nan / non-finite / non-numeric strings collapse to
+    ``0`` instead of raising. Fractional positions truncate (the
+    wrapper only ever stores into ``PnLSingle.position`` which is
+    ``int`` typed today).
+    """
+    reqId = proto.reqId if proto.HasField("reqId") else 0
+    rawPos = proto.position if proto.HasField("position") else ""
+    pos = int(safe_decimal(rawPos) or 0)
+    dailyPnL = proto.dailyPnL if proto.HasField("dailyPnL") else 0.0
+    unrealizedPnL = proto.unrealizedPnL if proto.HasField("unrealizedPnL") else 0.0
+    realizedPnL = proto.realizedPnL if proto.HasField("realizedPnL") else 0.0
+    value = proto.value if proto.HasField("value") else 0.0
+    return PnLSingleArgs(
+        reqId=reqId,
+        pos=pos,
+        dailyPnL=dailyPnL,
+        unrealizedPnL=unrealizedPnL,
+        realizedPnL=realizedPnL,
+        value=value,
+    )
+
+
+def createPnLSingleRequestProto(
+    reqId: int, account: str, modelCode: str, conId: int
+) -> PnLSingleRequest_pb2.PnLSingleRequest:
+    proto = PnLSingleRequest_pb2.PnLSingleRequest()
+    proto.reqId = reqId
+    proto.account = account
+    proto.modelCode = modelCode
+    proto.conId = conId
+    return proto
+
+
+def createCancelPnLSingleProto(reqId: int) -> CancelPnLSingle_pb2.CancelPnLSingle:
+    proto = CancelPnLSingle_pb2.CancelPnLSingle()
+    proto.reqId = reqId
+    return proto
+
+
+# ---------------------------------------------------------------------------
+# ScannerSubscriptionRequest send-side
+# ---------------------------------------------------------------------------
+
+
+def createScannerSubscriptionProto(
+    sub: ScannerSubscription,
+) -> ScannerSubscription_pb2.ScannerSubscription:
+    """Translate the ~21-field domain ``ScannerSubscription`` to its proto.
+
+    Every domain field is wired through. The two map fields
+    (``scannerSubscriptionFilterOptions`` and
+    ``scannerSubscriptionOptions``) stay empty for now — the binary
+    path also passes empty TagValue lists today.
+    """
+    proto = ScannerSubscription_pb2.ScannerSubscription()
+    proto.numberOfRows = sub.numberOfRows
+    proto.instrument = sub.instrument
+    proto.locationCode = sub.locationCode
+    proto.scanCode = sub.scanCode
+    proto.abovePrice = sub.abovePrice
+    proto.belowPrice = sub.belowPrice
+    proto.aboveVolume = sub.aboveVolume
+    proto.marketCapAbove = sub.marketCapAbove
+    proto.marketCapBelow = sub.marketCapBelow
+    proto.moodyRatingAbove = sub.moodyRatingAbove
+    proto.moodyRatingBelow = sub.moodyRatingBelow
+    proto.spRatingAbove = sub.spRatingAbove
+    proto.spRatingBelow = sub.spRatingBelow
+    proto.maturityDateAbove = sub.maturityDateAbove
+    proto.maturityDateBelow = sub.maturityDateBelow
+    proto.couponRateAbove = sub.couponRateAbove
+    proto.couponRateBelow = sub.couponRateBelow
+    proto.excludeConvertible = sub.excludeConvertible
+    proto.averageOptionVolumeAbove = sub.averageOptionVolumeAbove
+    proto.scannerSettingPairs = sub.scannerSettingPairs
+    proto.stockTypeFilter = sub.stockTypeFilter
+    return proto
+
+
+def createScannerSubscriptionRequestProto(
+    reqId: int, sub: ScannerSubscription
+) -> ScannerSubscriptionRequest_pb2.ScannerSubscriptionRequest:
+    """Build the full ``ScannerSubscriptionRequest`` envelope (reqId + nested sub)."""
+    proto = ScannerSubscriptionRequest_pb2.ScannerSubscriptionRequest()
+    proto.reqId = reqId
+    proto.scannerSubscription.CopyFrom(createScannerSubscriptionProto(sub))
+    return proto
+
+
+def createCancelScannerSubscriptionProto(
+    reqId: int,
+) -> CancelScannerSubscription_pb2.CancelScannerSubscription:
+    proto = CancelScannerSubscription_pb2.CancelScannerSubscription()
+    proto.reqId = reqId
+    return proto
+
+
+def createScannerParametersRequestProto() -> (
+    ScannerParametersRequest_pb2.ScannerParametersRequest
+):
+    return ScannerParametersRequest_pb2.ScannerParametersRequest()
