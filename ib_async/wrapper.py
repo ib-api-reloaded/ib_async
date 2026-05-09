@@ -637,12 +637,12 @@ class Wrapper:
     def updatePortfolio(
         self,
         contract: Contract,
-        posSize: float,
-        marketPrice: float,
-        marketValue: float,
-        averageCost: float,
-        unrealizedPNL: float,
-        realizedPNL: float,
+        posSize: Decimal | None,
+        marketPrice: Decimal | None,
+        marketValue: Decimal | None,
+        averageCost: Decimal | None,
+        unrealizedPNL: Decimal | None,
+        realizedPNL: Decimal | None,
         account: str,
     ):
         contract = Contract.recreate(contract)
@@ -658,7 +658,10 @@ class Wrapper:
         )
         portfolioItems = self.portfolio[account]
 
-        if posSize == 0:
+        # ``not posSize`` covers ``None`` (no value on the wire) and
+        # ``Decimal('0')`` (closed position) — both mean we should drop
+        # the cached entry rather than store a zero-row.
+        if not posSize:
             portfolioItems.pop(contract.conId, None)
         else:
             portfolioItems[contract.conId] = portfItem
@@ -667,14 +670,19 @@ class Wrapper:
         self.ib.updatePortfolioEvent.emit(portfItem)
 
     def position(
-        self, account: str, contract: Contract, posSize: float, avgCost: float
+        self,
+        account: str,
+        contract: Contract,
+        posSize: Decimal | None,
+        avgCost: Decimal | None,
     ):
         contract = Contract.recreate(contract)
         position = Position(account, contract, posSize, avgCost)
         positions = self.positions[account]
 
-        # if this updates position to 0 quantity, remove the position
-        if posSize == 0:
+        # ``not posSize`` covers ``None`` (no value on the wire) and
+        # ``Decimal('0')`` (closed position) — both drop the cached entry.
+        if not posSize:
             positions.pop(contract.conId, None)
         else:
             # else, add or replace the position in-place
@@ -697,8 +705,8 @@ class Wrapper:
         account: str,
         modelCode: str,
         contract: Contract,
-        pos: float,
-        avgCost: float,
+        pos: Decimal | None,
+        avgCost: Decimal | None,
     ):
         pass
 
@@ -930,10 +938,10 @@ class Wrapper:
         self.requests.set_result(ReqIdKey(reqId))
 
     def commissionReport(self, commissionReport: CommissionReport):
-        if commissionReport.yield_ == UNSET_DOUBLE:
+        if commissionReport.yield_ is None:
             commissionReport.yield_ = self.defaults.unset
 
-        if commissionReport.realizedPNL == UNSET_DOUBLE:
+        if commissionReport.realizedPNL is None:
             commissionReport.realizedPNL = self.defaults.unset
 
         fill = self.fills.get(commissionReport.execId)

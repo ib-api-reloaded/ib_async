@@ -309,11 +309,11 @@ def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
     # Wire ``commissionAndFees`` carries a single combined number;
     # domain ``commission`` historically meant the same thing.
     if proto.HasField("commissionAndFees"):
-        state.commission = proto.commissionAndFees
+        state.commission = safe_decimal(str(proto.commissionAndFees))
     if proto.HasField("minCommissionAndFees"):
-        state.minCommission = proto.minCommissionAndFees
+        state.minCommission = safe_decimal(str(proto.minCommissionAndFees))
     if proto.HasField("maxCommissionAndFees"):
-        state.maxCommission = proto.maxCommissionAndFees
+        state.maxCommission = safe_decimal(str(proto.maxCommissionAndFees))
     if proto.HasField("commissionAndFeesCurrency"):
         state.commissionCurrency = proto.commissionAndFeesCurrency
     if proto.HasField("warningText"):

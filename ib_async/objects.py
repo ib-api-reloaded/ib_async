@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, NamedTuple
 
 from eventkit import Event
@@ -220,12 +220,162 @@ class WshEventData:
     totalLimit: int = UNSET_INTEGER
 
 
-class AccountValue(NamedTuple):
+# IBKR streams every account-update tag through a single
+# ``optional string value`` field on the wire. Some tags carry monetary
+# numbers (``NetLiquidation``, ``AvailableFunds``), others carry strings
+# (``AccountType``, ``Currency``). Callers reaching for the typed
+# Decimal view via ``AccountValue.decimalValue`` get back ``None`` when
+# the tag isn't on this list, so user code can never accidentally
+# coerce ``"USD"`` into a Decimal.
+MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
+    {
+        "AccruedCash",
+        "AccruedCash-C",
+        "AccruedCash-S",
+        "AccruedDividend",
+        "AccruedDividend-C",
+        "AccruedDividend-S",
+        "AvailableFunds",
+        "AvailableFunds-C",
+        "AvailableFunds-S",
+        "BillableSize",
+        "Billable",
+        "Billable-C",
+        "Billable-S",
+        "BuyingPower",
+        "CashBalance",
+        "ColumnPrio-C",
+        "ColumnPrio-S",
+        "CorporateBondValue",
+        "Cushion",
+        "DayTradesRemaining",
+        "DayTradesRemainingT+1",
+        "DayTradesRemainingT+2",
+        "DayTradesRemainingT+3",
+        "DayTradesRemainingT+4",
+        "EquityWithLoanValue",
+        "EquityWithLoanValue-C",
+        "EquityWithLoanValue-S",
+        "ExcessLiquidity",
+        "ExcessLiquidity-C",
+        "ExcessLiquidity-S",
+        "ExchangeRate",
+        "FullAvailableFunds",
+        "FullAvailableFunds-C",
+        "FullAvailableFunds-S",
+        "FullExcessLiquidity",
+        "FullExcessLiquidity-C",
+        "FullExcessLiquidity-S",
+        "FullInitMarginReq",
+        "FullInitMarginReq-C",
+        "FullInitMarginReq-S",
+        "FullMaintMarginReq",
+        "FullMaintMarginReq-C",
+        "FullMaintMarginReq-S",
+        "FundValue",
+        "FutureOptionValue",
+        "FuturesPNL",
+        "GrossPositionValue",
+        "GrossPositionValue-S",
+        "Guarantee",
+        "Guarantee-C",
+        "Guarantee-S",
+        "IndianStockHaircut",
+        "IndianStockHaircut-C",
+        "IndianStockHaircut-S",
+        "InitMarginReq",
+        "InitMarginReq-C",
+        "InitMarginReq-S",
+        "IssuerOptionValue",
+        "Leverage-S",
+        "LookAheadAvailableFunds",
+        "LookAheadAvailableFunds-C",
+        "LookAheadAvailableFunds-S",
+        "LookAheadExcessLiquidity",
+        "LookAheadExcessLiquidity-C",
+        "LookAheadExcessLiquidity-S",
+        "LookAheadInitMarginReq",
+        "LookAheadInitMarginReq-C",
+        "LookAheadInitMarginReq-S",
+        "LookAheadMaintMarginReq",
+        "LookAheadMaintMarginReq-C",
+        "LookAheadMaintMarginReq-S",
+        "MaintMarginReq",
+        "MaintMarginReq-C",
+        "MaintMarginReq-S",
+        "MoneyMarketFundValue",
+        "MutualFundValue",
+        "NetDividend",
+        "NetLiquidation",
+        "NetLiquidation-C",
+        "NetLiquidation-S",
+        "NetLiquidationByCurrency",
+        "NetLiquidationUncertainty",
+        "OptionMarketValue",
+        "PASharesValue",
+        "PASharesValue-C",
+        "PASharesValue-S",
+        "PhysicalCertificateValue",
+        "PhysicalCertificateValue-C",
+        "PhysicalCertificateValue-S",
+        "PostExpirationExcess",
+        "PostExpirationExcess-C",
+        "PostExpirationExcess-S",
+        "PostExpirationMargin",
+        "PostExpirationMargin-C",
+        "PostExpirationMargin-S",
+        "PreviousDayEquityWithLoanValue",
+        "PreviousDayEquityWithLoanValue-S",
+        "RealizedPnL",
+        "RegTEquity",
+        "RegTEquity-S",
+        "RegTMargin",
+        "RegTMargin-S",
+        "SMA",
+        "SMA-S",
+        "SegmentTitle-C",
+        "SegmentTitle-S",
+        "StockMarketValue",
+        "TBondValue",
+        "TBillValue",
+        "TotalCashBalance",
+        "TotalCashValue",
+        "TotalCashValue-C",
+        "TotalCashValue-S",
+        "TotalDebitCardPendingCharges",
+        "TotalDebitCardPendingCharges-C",
+        "TotalDebitCardPendingCharges-S",
+        "UnrealizedPnL",
+        "WarrantValue",
+    }
+)
+
+
+@dataclass(slots=True, frozen=True)
+class AccountValue:
     account: str
     tag: str
     value: str
     currency: str
     modelCode: str
+
+    @property
+    def decimalValue(self) -> Decimal | None:
+        """Typed view of ``value`` for monetary tags.
+
+        Returns ``None`` for non-monetary tags (e.g. ``AccountType``,
+        ``Currency``) and for monetary tags whose wire value can't be
+        parsed. Never raises.
+        """
+        if self.tag not in MONETARY_ACCOUNT_VALUE_TAGS:
+            return None
+        try:
+            result = Decimal(self.value)
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+        if result.is_nan() or result.is_infinite():
+            return None
+        return result
 
 
 class TickData(NamedTuple):
@@ -304,25 +454,28 @@ class PriceIncrement(NamedTuple):
     increment: float
 
 
-class PortfolioItem(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class PortfolioItem:
     contract: Contract
-    position: float
-    marketPrice: float
-    marketValue: float
-    averageCost: float
-    unrealizedPNL: float
-    realizedPNL: float
-    account: str
+    position: Decimal | None = None
+    marketPrice: Decimal | None = None
+    marketValue: Decimal | None = None
+    averageCost: Decimal | None = None
+    unrealizedPNL: Decimal | None = None
+    realizedPNL: Decimal | None = None
+    account: str = ""
 
 
-class Position(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class Position:
     account: str
     contract: Contract
-    position: float
-    avgCost: float
+    position: Decimal | None = None
+    avgCost: Decimal | None = None
 
 
-class Fill(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class Fill:
     contract: Contract
     execution: Execution
     commissionReport: CommissionReport

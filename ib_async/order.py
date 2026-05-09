@@ -391,9 +391,11 @@ class OrderState:
     initMarginAfter: str = ""
     maintMarginAfter: str = ""
     equityWithLoanAfter: str = ""
-    commission: float = UNSET_DOUBLE
-    minCommission: float = UNSET_DOUBLE
-    maxCommission: float = UNSET_DOUBLE
+    # Monetary fields are ``Decimal | None`` end-to-end so user code
+    # treats unset as falsy without the ``Decimal('NaN')`` truthy trap.
+    commission: Decimal | None = None
+    minCommission: Decimal | None = None
+    maxCommission: Decimal | None = None
     commissionCurrency: str = ""
     warningText: str = ""
     completedTime: str = ""
@@ -466,6 +468,9 @@ class OrderStateNumeric(OrderState):
     initMarginAfter: float = float("nan")  # type: ignore
     maintMarginAfter: float = float("nan")  # type: ignore
     equityWithLoanAfter: float = float("nan")  # type: ignore
+    commission: float | None = None  # type: ignore[assignment]
+    minCommission: float | None = None  # type: ignore[assignment]
+    maxCommission: float | None = None  # type: ignore[assignment]
 
 
 @dataclass

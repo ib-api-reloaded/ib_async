@@ -536,12 +536,12 @@ class Decoder:
         self.parse(c)
         self.wrapper.updatePortfolio(
             c,
-            float(position),
-            float(marketPrice),
-            float(marketValue),
-            float(averageCost),
-            float(unrealizedPNL),
-            float(realizedPNL),
+            safe_decimal(position),
+            safe_decimal(marketPrice),
+            safe_decimal(marketValue),
+            safe_decimal(averageCost),
+            safe_decimal(unrealizedPNL),
+            safe_decimal(realizedPNL),
             accountName,
         )
 
@@ -914,7 +914,7 @@ class Decoder:
         ) = fields
 
         self.parse(c)
-        self.wrapper.position(account, c, float(position or 0), float(avgCost or 0))
+        self.wrapper.position(account, c, safe_decimal(position), safe_decimal(avgCost))
 
     def positionMulti(self, fields):
         c = Contract()
@@ -941,7 +941,12 @@ class Decoder:
 
         self.parse(c)
         self.wrapper.positionMulti(
-            int(reqId), account, modelCode, c, float(position or 0), float(avgCost or 0)
+            int(reqId),
+            account,
+            modelCode,
+            c,
+            safe_decimal(position),
+            safe_decimal(avgCost),
         )
 
     def securityDefinitionOptionParameter(self, fields):
