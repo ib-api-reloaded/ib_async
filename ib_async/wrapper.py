@@ -423,6 +423,26 @@ class Wrapper:
 
         return future
 
+    def startReqOrAttach(self, key, contract=None, container=None):
+        """
+        Single-flight variant of :meth:`.startReq`. If a request for ``key``
+        is already in flight, return its existing future and ``isNew=False``
+        so the caller can skip re-sending the underlying API request and
+        attach to the in-flight result instead. Otherwise behaves like
+        :meth:`.startReq` and returns ``isNew=True``.
+
+        Why: globally-keyed requests (e.g. ``"openOrders"``,
+        ``"completedOrders"``, ``"positions"``) use a fixed string key in
+        ``_futures``. A naked overwrite would orphan the first caller's
+        future and hang it forever once the (single) end-of-stream callback
+        fires.
+        """
+        existing = self._futures.get(key)
+        if existing is not None and not existing.done():
+            return existing, False
+
+        return self.startReq(key, contract, container), True
+
     def _endReq(self, key, result=None, success=True):
         """
         Finish the future of corresponding key with the given result.

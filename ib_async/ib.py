@@ -2222,13 +2222,15 @@ class IB:
         return future
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
-        future = self.wrapper.startReq("currentTime")
-        self.client.reqCurrentTime()
+        future, isNew = self.wrapper.startReqOrAttach("currentTime")
+        if isNew:
+            self.client.reqCurrentTime()
         return future
 
     def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
-        future = self.wrapper.startReq("accountValues")
-        self.client.reqAccountUpdates(True, account)
+        future, isNew = self.wrapper.startReqOrAttach("accountValues")
+        if isNew:
+            self.client.reqAccountUpdates(True, account)
         return future
 
     def reqAccountUpdatesMultiAsync(
@@ -2271,18 +2273,21 @@ class IB:
         return future
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
-        future = self.wrapper.startReq("openOrders")
-        self.client.reqOpenOrders()
+        future, isNew = self.wrapper.startReqOrAttach("openOrders")
+        if isNew:
+            self.client.reqOpenOrders()
         return future
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
-        future = self.wrapper.startReq("openOrders")
-        self.client.reqAllOpenOrders()
+        future, isNew = self.wrapper.startReqOrAttach("openOrders")
+        if isNew:
+            self.client.reqAllOpenOrders()
         return future
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
-        future = self.wrapper.startReq("completedOrders")
-        self.client.reqCompletedOrders(apiOnly)
+        future, isNew = self.wrapper.startReqOrAttach("completedOrders")
+        if isNew:
+            self.client.reqCompletedOrders(apiOnly)
         return future
 
     def reqExecutionsAsync(
@@ -2295,8 +2300,9 @@ class IB:
         return future
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
-        future = self.wrapper.startReq("positions")
-        self.client.reqPositions()
+        future, isNew = self.wrapper.startReqOrAttach("positions")
+        if isNew:
+            self.client.reqPositions()
         return future
 
     def reqContractDetailsAsync(
@@ -2323,9 +2329,10 @@ class IB:
     async def reqMarketRuleAsync(
         self, marketRuleId: int
     ) -> list[PriceIncrement] | None:
-        future = self.wrapper.startReq(f"marketRule-{marketRuleId}")
+        future, isNew = self.wrapper.startReqOrAttach(f"marketRule-{marketRuleId}")
         try:
-            self.client.reqMarketRule(marketRuleId)
+            if isNew:
+                self.client.reqMarketRule(marketRuleId)
             await asyncio.wait_for(future, 1)
             return future.result()
         except TimeoutError:
@@ -2456,8 +2463,9 @@ class IB:
         return future
 
     def reqMktDepthExchangesAsync(self) -> Awaitable[list[DepthMktDataDescription]]:
-        future = self.wrapper.startReq("mktDepthExchanges")
-        self.client.reqMktDepthExchanges()
+        future, isNew = self.wrapper.startReqOrAttach("mktDepthExchanges")
+        if isNew:
+            self.client.reqMktDepthExchanges()
         return future
 
     def reqHistogramDataAsync(
@@ -2502,8 +2510,9 @@ class IB:
         return future.result()
 
     def reqScannerParametersAsync(self) -> Awaitable[str]:
-        future = self.wrapper.startReq("scannerParams")
-        self.client.reqScannerParameters()
+        future, isNew = self.wrapper.startReqOrAttach("scannerParams")
+        if isNew:
+            self.client.reqScannerParameters()
         return future
 
     async def calculateImpliedVolatilityAsync(
@@ -2564,8 +2573,9 @@ class IB:
         return future
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
-        future = self.wrapper.startReq("newsProviders")
-        self.client.reqNewsProviders()
+        future, isNew = self.wrapper.startReqOrAttach("newsProviders")
+        if isNew:
+            self.client.reqNewsProviders()
         return future
 
     def reqNewsArticleAsync(
@@ -2602,8 +2612,9 @@ class IB:
             return None
 
     async def requestFAAsync(self, faDataType: int):
-        future = self.wrapper.startReq("requestFA")
-        self.client.requestFA(faDataType)
+        future, isNew = self.wrapper.startReqOrAttach("requestFA")
+        if isNew:
+            self.client.requestFA(faDataType)
         try:
             await asyncio.wait_for(future, 4)
             return future.result()
