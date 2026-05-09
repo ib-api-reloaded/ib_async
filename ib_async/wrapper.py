@@ -493,6 +493,10 @@ class Wrapper:
     def endTicker(self, ticker: Ticker, tickType: int | str):
         reqId = self.ticker2ReqId[tickType].pop(ticker, 0)
         self._reqId2Contract.pop(reqId, None)
+        # Without this, every cancel leaks one reqId2Ticker entry for the
+        # life of the connection, and a late tick arriving for the cancelled
+        # reqId would still mutate the (logically unsubscribed) Ticker.
+        self.reqId2Ticker.pop(reqId, None)
         return reqId
 
     def startSubscription(self, reqId, subscriber, contract=None):
