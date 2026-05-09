@@ -532,6 +532,16 @@ class Client:
         regulatorySnapshot,
         mktDataOptions,
     ):
+        if self.useProtoBuf(_M.REQ_MKT_DATA):
+            from ._proto.market_data import createMarketDataRequestProto
+
+            self.sendProto(
+                _M.REQ_MKT_DATA,
+                createMarketDataRequestProto(
+                    reqId, contract, genericTickList, snapshot, regulatorySnapshot
+                ).SerializeToString(),
+            )
+            return
         fields = [1, 11, reqId, contract]
 
         if contract.secType == "BAG":
@@ -550,6 +560,14 @@ class Client:
         self.send(*fields)
 
     def cancelMktData(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_MKT_DATA):
+            from ._proto.market_data import createCancelMarketDataProto
+
+            self.sendProto(
+                _M.CANCEL_MKT_DATA,
+                createCancelMarketDataProto(reqId).SerializeToString(),
+            )
+            return
         self.send(2, 2, reqId)
 
     def placeOrder(self, orderId, contract, order):
@@ -888,6 +906,16 @@ class Client:
         self.send(*fields)
 
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):
+        if self.useProtoBuf(_M.REQ_MKT_DEPTH):
+            from ._proto.market_data import createMarketDepthRequestProto
+
+            self.sendProto(
+                _M.REQ_MKT_DEPTH,
+                createMarketDepthRequestProto(
+                    reqId, contract, numRows, isSmartDepth
+                ).SerializeToString(),
+            )
+            return
         self.send(
             10,
             5,
@@ -910,6 +938,14 @@ class Client:
         )
 
     def cancelMktDepth(self, reqId, isSmartDepth):
+        if self.useProtoBuf(_M.CANCEL_MKT_DEPTH):
+            from ._proto.market_data import createCancelMarketDepthProto
+
+            self.sendProto(
+                _M.CANCEL_MKT_DEPTH,
+                createCancelMarketDepthProto(reqId, isSmartDepth).SerializeToString(),
+            )
+            return
         self.send(11, 1, reqId, isSmartDepth)
 
     def reqNewsBulletins(self, allMsgs):
@@ -973,6 +1009,24 @@ class Client:
         keepUpToDate,
         chartOptions,
     ):
+        if self.useProtoBuf(_M.REQ_HISTORICAL_DATA):
+            from ._proto.historical import createHistoricalDataRequestProto
+
+            self.sendProto(
+                _M.REQ_HISTORICAL_DATA,
+                createHistoricalDataRequestProto(
+                    reqId,
+                    contract,
+                    endDateTime,
+                    durationStr,
+                    barSizeSetting,
+                    whatToShow,
+                    useRTH,
+                    formatDate,
+                    keepUpToDate,
+                ).SerializeToString(),
+            )
+            return
         fields = [
             20,
             reqId,
@@ -1062,6 +1116,14 @@ class Client:
         self.send(24, 1)
 
     def cancelHistoricalData(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_HISTORICAL_DATA):
+            from ._proto.historical import createCancelHistoricalDataProto
+
+            self.sendProto(
+                _M.CANCEL_HISTORICAL_DATA,
+                createCancelHistoricalDataProto(reqId).SerializeToString(),
+            )
+            return
         self.send(25, 1, reqId)
 
     def reqCurrentTime(self):
@@ -1070,11 +1132,29 @@ class Client:
     def reqRealTimeBars(
         self, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
     ):
+        if self.useProtoBuf(_M.REQ_REAL_TIME_BARS):
+            from ._proto.historical import createRealTimeBarsRequestProto
+
+            self.sendProto(
+                _M.REQ_REAL_TIME_BARS,
+                createRealTimeBarsRequestProto(
+                    reqId, contract, barSize, whatToShow, useRTH
+                ).SerializeToString(),
+            )
+            return
         self.send(
             50, 3, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
         )
 
     def cancelRealTimeBars(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_REAL_TIME_BARS):
+            from ._proto.historical import createCancelRealTimeBarsProto
+
+            self.sendProto(
+                _M.CANCEL_REAL_TIME_BARS,
+                createCancelRealTimeBarsProto(reqId).SerializeToString(),
+            )
+            return
         self.send(51, 1, reqId)
 
     def reqFundamentalData(self, reqId, contract, reportType, fundamentalDataOptions):
@@ -1144,6 +1224,14 @@ class Client:
         self.send(58, 1)
 
     def reqMarketDataType(self, marketDataType):
+        if self.useProtoBuf(_M.REQ_MARKET_DATA_TYPE):
+            from ._proto.market_data import createMarketDataTypeRequestProto
+
+            self.sendProto(
+                _M.REQ_MARKET_DATA_TYPE,
+                createMarketDataTypeRequestProto(marketDataType).SerializeToString(),
+            )
+            return
         self.send(59, 1, marketDataType)
 
     def reqPositions(self):
@@ -1293,6 +1381,14 @@ class Client:
         self.send(81, reqId, pattern)
 
     def reqMktDepthExchanges(self):
+        if self.useProtoBuf(_M.REQ_MKT_DEPTH_EXCHANGES):
+            from ._proto.market_data import createMarketDepthExchangesRequestProto
+
+            self.sendProto(
+                _M.REQ_MKT_DEPTH_EXCHANGES,
+                createMarketDepthExchangesRequestProto().SerializeToString(),
+            )
+            return
         self.send(82)
 
     def reqSmartComponents(self, reqId, bboExchange):
@@ -1326,17 +1422,53 @@ class Client:
         )
 
     def reqHeadTimeStamp(self, reqId, contract, whatToShow, useRTH, formatDate):
+        if self.useProtoBuf(_M.REQ_HEAD_TIMESTAMP):
+            from ._proto.historical import createHeadTimestampRequestProto
+
+            self.sendProto(
+                _M.REQ_HEAD_TIMESTAMP,
+                createHeadTimestampRequestProto(
+                    reqId, contract, useRTH, whatToShow, formatDate
+                ).SerializeToString(),
+            )
+            return
         self.send(
             87, reqId, contract, contract.includeExpired, useRTH, whatToShow, formatDate
         )
 
     def reqHistogramData(self, tickerId, contract, useRTH, timePeriod):
+        if self.useProtoBuf(_M.REQ_HISTOGRAM_DATA):
+            from ._proto.historical import createHistogramDataRequestProto
+
+            self.sendProto(
+                _M.REQ_HISTOGRAM_DATA,
+                createHistogramDataRequestProto(
+                    tickerId, contract, bool(useRTH), timePeriod
+                ).SerializeToString(),
+            )
+            return
         self.send(88, tickerId, contract, contract.includeExpired, useRTH, timePeriod)
 
     def cancelHistogramData(self, tickerId):
+        if self.useProtoBuf(_M.CANCEL_HISTOGRAM_DATA):
+            from ._proto.historical import createCancelHistogramDataProto
+
+            self.sendProto(
+                _M.CANCEL_HISTOGRAM_DATA,
+                createCancelHistogramDataProto(tickerId).SerializeToString(),
+            )
+            return
         self.send(89, tickerId)
 
     def cancelHeadTimeStamp(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_HEAD_TIMESTAMP):
+            from ._proto.historical import createCancelHeadTimestampProto
+
+            self.sendProto(
+                _M.CANCEL_HEAD_TIMESTAMP,
+                createCancelHeadTimestampProto(reqId).SerializeToString(),
+            )
+            return
         self.send(90, reqId)
 
     def reqMarketRule(self, marketRuleId):
@@ -1366,6 +1498,23 @@ class Client:
         ignoreSize,
         miscOptions,
     ):
+        if self.useProtoBuf(_M.REQ_HISTORICAL_TICKS):
+            from ._proto.historical import createHistoricalTicksRequestProto
+
+            self.sendProto(
+                _M.REQ_HISTORICAL_TICKS,
+                createHistoricalTicksRequestProto(
+                    reqId,
+                    contract,
+                    startDateTime,
+                    endDateTime,
+                    numberOfTicks,
+                    whatToShow,
+                    useRth,
+                    ignoreSize,
+                ).SerializeToString(),
+            )
+            return
         self.send(
             96,
             reqId,
@@ -1381,9 +1530,27 @@ class Client:
         )
 
     def reqTickByTickData(self, reqId, contract, tickType, numberOfTicks, ignoreSize):
+        if self.useProtoBuf(_M.REQ_TICK_BY_TICK_DATA):
+            from ._proto.market_data import createTickByTickRequestProto
+
+            self.sendProto(
+                _M.REQ_TICK_BY_TICK_DATA,
+                createTickByTickRequestProto(
+                    reqId, contract, tickType, numberOfTicks, ignoreSize
+                ).SerializeToString(),
+            )
+            return
         self.send(97, reqId, contract, tickType, numberOfTicks, ignoreSize)
 
     def cancelTickByTickData(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_TICK_BY_TICK_DATA):
+            from ._proto.market_data import createCancelTickByTickProto
+
+            self.sendProto(
+                _M.CANCEL_TICK_BY_TICK_DATA,
+                createCancelTickByTickProto(reqId).SerializeToString(),
+            )
+            return
         self.send(98, reqId)
 
     def reqCompletedOrders(self, apiOnly):

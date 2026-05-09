@@ -34,6 +34,8 @@ otherwise silently swallow a ``True``.
 
 from __future__ import annotations
 
+from typing import Literal, TypeAlias
+
 from .._pb import (
     CancelMarketData_pb2,
     CancelMarketDepth_pb2,
@@ -67,6 +69,65 @@ from ..objects import DepthMktDataDescription, TickAttribBidAsk, TickAttribLast
 from .contracts import createContractProto
 from .safe import safe_decimal
 
+# Module-level type aliases for converter return shapes. Each one names the
+# wrapper method whose positional arguments it carries. (This is a
+# transitional shape — a follow-up commit converts these to slotted-frozen
+# dataclasses with named fields for clearer call sites.)
+
+# ``Wrapper.priceSizeTick(reqId, tickType, price, size)``
+PriceSizeTickArgs: TypeAlias = tuple[int, int, float, float]
+
+# ``Wrapper.tickSize(reqId, tickType, size)`` / ``tickGeneric(reqId, tickType, value)``
+TickSizeArgs: TypeAlias = tuple[int, int, float]
+TickGenericArgs: TypeAlias = tuple[int, int, float]
+
+# ``Wrapper.tickString(reqId, tickType, value)``
+TickStringArgs: TypeAlias = tuple[int, int, str]
+
+# ``Wrapper.tickReqParams(reqId, minTick, bboExchange, snapshotPermissions)``
+TickReqParamsArgs: TypeAlias = tuple[int, float, str, int]
+
+# ``Wrapper.tickOptionComputation`` (11 positional args, all numeric).
+TickOptionComputationArgs: TypeAlias = tuple[
+    int, int, int, float, float, float, float, float, float, float, float
+]
+
+# ``Wrapper.marketDataType(reqId, marketDataType)``
+MarketDataTypeArgs: TypeAlias = tuple[int, int]
+
+# ``Wrapper.updateMktDepth(reqId, position, operation, side, price, size)``
+UpdateMktDepthArgs: TypeAlias = tuple[int, int, int, int, float, float]
+
+# ``Wrapper.updateMktDepthL2(reqId, position, marketMaker, operation, side,
+# price, size, isSmartDepth)``
+UpdateMktDepthL2Args: TypeAlias = tuple[int, int, str, int, int, float, float, bool]
+
+# ``Wrapper.rerouteMktDataReq`` / ``rerouteMktDepthReq(reqId, conId, exchange)``
+RerouteMktReqArgs: TypeAlias = tuple[int, int, str]
+
+# ``Wrapper.tickByTickAllLast`` args (reqId, tickType, time, price, size,
+# tickAttribLast, exchange, specialConditions)
+TickByTickAllLastArgs: TypeAlias = tuple[
+    int, int, int, float, float, TickAttribLast, str, str
+]
+# ``Wrapper.tickByTickBidAsk`` args (reqId, time, bidPrice, askPrice, bidSize,
+# askSize, tickAttribBidAsk)
+TickByTickBidAskArgs: TypeAlias = tuple[
+    int, int, float, float, float, float, TickAttribBidAsk
+]
+# ``Wrapper.tickByTickMidPoint`` args (reqId, time, midPoint)
+TickByTickMidPointArgs: TypeAlias = tuple[int, int, float]
+
+# ``dispatchTickByTick`` returns one of these discriminated pairs based on
+# which oneof variant the proto carried. The empty-kind case is returned
+# when no oneof variant was set.
+TickByTickDispatch: TypeAlias = (
+    tuple[Literal["allLast"], TickByTickAllLastArgs]
+    | tuple[Literal["bidAsk"], TickByTickBidAskArgs]
+    | tuple[Literal["midPoint"], TickByTickMidPointArgs]
+    | tuple[Literal[""], tuple[()]]
+)
+
 
 def _wireSizeToFloat(s: str) -> float:
     """Coerce a wire-string size to ``float`` for wrapper signatures.
@@ -86,7 +147,7 @@ def _wireSizeToFloat(s: str) -> float:
 
 def createPriceSizeTickArgs(
     proto: TickPrice_pb2.TickPrice,
-) -> tuple[int, int, float, float]:
+) -> PriceSizeTickArgs:
     """``Wrapper.priceSizeTick(reqId, tickType, price, size)`` args.
 
     The wire ``attrMask`` (canAutoExecute / pastLimit / preOpen) is
@@ -106,7 +167,7 @@ def createPriceSizeTickArgs(
 # ---------------------------------------------------------------------------
 
 
-def createTickSizeArgs(proto: TickSize_pb2.TickSize) -> tuple[int, int, float]:
+def createTickSizeArgs(proto: TickSize_pb2.TickSize) -> TickSizeArgs:
     """``Wrapper.tickSize(reqId, tickType, size)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
@@ -116,7 +177,7 @@ def createTickSizeArgs(proto: TickSize_pb2.TickSize) -> tuple[int, int, float]:
 
 def createTickGenericArgs(
     proto: TickGeneric_pb2.TickGeneric,
-) -> tuple[int, int, float]:
+) -> TickGenericArgs:
     """``Wrapper.tickGeneric(reqId, tickType, value)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
@@ -124,7 +185,7 @@ def createTickGenericArgs(
     return reqId, tickType, value
 
 
-def createTickStringArgs(proto: TickString_pb2.TickString) -> tuple[int, int, str]:
+def createTickStringArgs(proto: TickString_pb2.TickString) -> TickStringArgs:
     """``Wrapper.tickString(reqId, tickType, value)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
@@ -139,7 +200,7 @@ def createTickStringArgs(proto: TickString_pb2.TickString) -> tuple[int, int, st
 
 def createTickReqParamsArgs(
     proto: TickReqParams_pb2.TickReqParams,
-) -> tuple[int, float, str, int]:
+) -> TickReqParamsArgs:
     """``Wrapper.tickReqParams(reqId, minTick, bboExchange, snapshotPermissions)`` args.
 
     Wire ``minTick`` is a string (Decimal precision); we coerce to
@@ -167,7 +228,7 @@ def createTickSnapshotEndReqId(proto: TickSnapshotEnd_pb2.TickSnapshotEnd) -> in
 
 def createTickOptionComputationArgs(
     proto: TickOptionComputation_pb2.TickOptionComputation,
-) -> tuple[int, int, int, float, float, float, float, float, float, float, float]:
+) -> TickOptionComputationArgs:
     """``Wrapper.tickOptionComputation(reqId, tickType, tickAttrib, impliedVol,
     delta, optPrice, pvDividend, gamma, vega, theta, undPrice)`` args.
 
@@ -224,7 +285,7 @@ def createTickAttribLast(proto: TickAttribLast_pb2.TickAttribLast) -> TickAttrib
     )
 
 
-def dispatchTickByTick(proto: TickByTickData_pb2.TickByTickData) -> tuple[str, tuple]:
+def dispatchTickByTick(proto: TickByTickData_pb2.TickByTickData) -> TickByTickDispatch:
     """Decode a TickByTickData into a (kind, args) pair the decoder
     can dispatch through. ``kind`` is one of:
 
@@ -284,7 +345,7 @@ def dispatchTickByTick(proto: TickByTickData_pb2.TickByTickData) -> tuple[str, t
 
 def createMarketDataTypeArgs(
     proto: MarketDataType_pb2.MarketDataType,
-) -> tuple[int, int]:
+) -> MarketDataTypeArgs:
     """``Wrapper.marketDataType(reqId, marketDataType)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     marketDataType = proto.marketDataType if proto.HasField("marketDataType") else 0
@@ -296,9 +357,12 @@ def createMarketDataTypeArgs(
 # ---------------------------------------------------------------------------
 
 
+_DepthDataInner: TypeAlias = tuple[int, int, int, float, float, str, bool]
+
+
 def _depthDataArgs(
     data: MarketDepthData_pb2.MarketDepthData,
-) -> tuple[int, int, int, float, float, str, bool]:
+) -> _DepthDataInner:
     """Common decode for the inner MarketDepthData payload."""
     position = data.position if data.HasField("position") else 0
     operation = data.operation if data.HasField("operation") else 0
@@ -312,7 +376,7 @@ def _depthDataArgs(
 
 def createUpdateMktDepthArgs(
     proto: MarketDepth_pb2.MarketDepth,
-) -> tuple[int, int, int, int, float, float]:
+) -> UpdateMktDepthArgs:
     """``Wrapper.updateMktDepth(reqId, position, operation, side, price, size)`` args.
 
     ``MarketDepth`` does not carry the ``marketMaker`` slot (that's
@@ -328,7 +392,7 @@ def createUpdateMktDepthArgs(
 
 def createUpdateMktDepthL2Args(
     proto: MarketDepthL2_pb2.MarketDepthL2,
-) -> tuple[int, int, str, int, int, float, float, bool]:
+) -> UpdateMktDepthL2Args:
     """``Wrapper.updateMktDepthL2(reqId, position, marketMaker, operation,
     side, price, size, isSmartDepth)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
@@ -373,7 +437,7 @@ def createMarketDepthExchangesList(
 
 def createRerouteMktDataReqArgs(
     proto: RerouteMarketDataRequest_pb2.RerouteMarketDataRequest,
-) -> tuple[int, int, str]:
+) -> RerouteMktReqArgs:
     """``Wrapper.rerouteMktDataReq(reqId, conId, exchange)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     conId = proto.conId if proto.HasField("conId") else 0
@@ -383,7 +447,7 @@ def createRerouteMktDataReqArgs(
 
 def createRerouteMktDepthReqArgs(
     proto: RerouteMarketDepthRequest_pb2.RerouteMarketDepthRequest,
-) -> tuple[int, int, str]:
+) -> RerouteMktReqArgs:
     """``Wrapper.rerouteMktDepthReq(reqId, conId, exchange)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     conId = proto.conId if proto.HasField("conId") else 0

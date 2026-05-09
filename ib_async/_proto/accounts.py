@@ -27,6 +27,7 @@ Wire-shape notes:
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import TypeAlias
 
 from .._pb import (
     AccountDataRequest_pb2,
@@ -59,6 +60,46 @@ from ..objects import AccountValue, FamilyCode, PortfolioItem, Position
 from .contracts import createContract
 from .safe import safe_decimal
 
+# Module-level type aliases for converter return shapes. Each one names the
+# wrapper method whose positional arguments it carries — call sites read as
+# ``self.wrapper.X(*args)`` without losing the type story.
+
+# ``Wrapper.updateAccountValue(tag, val, currency, account)``
+UpdateAccountValueArgs: TypeAlias = tuple[str, str, str, str]
+
+# ``Wrapper.accountSummary(reqId, account, tag, value, currency)``
+AccountSummaryArgs: TypeAlias = tuple[int, str, str, str, str]
+
+# ``Wrapper.accountUpdateMulti(reqId, account, modelCode, tag, val, currency)``
+AccountUpdateMultiArgs: TypeAlias = tuple[int, str, str, str, str, str]
+
+# ``Wrapper.position(account, contract, posSize, avgCost)``
+PositionArgs: TypeAlias = tuple[str, Contract, Decimal | None, Decimal | None]
+
+# ``Wrapper.positionMulti(reqId, account, modelCode, contract, pos, avgCost)``
+PositionMultiArgs: TypeAlias = tuple[
+    int, str, str, Contract, Decimal | None, Decimal | None
+]
+
+# ``Wrapper.updatePortfolio(contract, posSize, marketPrice, marketValue,
+# averageCost, unrealizedPNL, realizedPNL, account)``
+UpdatePortfolioArgs: TypeAlias = tuple[
+    Contract,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    str,
+]
+
+# ``Wrapper.receiveFA(faDataType, xml)``
+ReceiveFAArgs: TypeAlias = tuple[int, str]
+
+# ``Wrapper.replaceFAEnd(reqId, text)``
+ReplaceFAEndArgs: TypeAlias = tuple[int, str]
+
 # ---------------------------------------------------------------------------
 # AccountValue / updateAccountValue (msgId 6 receive)
 # ---------------------------------------------------------------------------
@@ -66,7 +107,7 @@ from .safe import safe_decimal
 
 def createUpdateAccountValueArgs(
     proto: AccountValue_pb2.AccountValue,
-) -> tuple[str, str, str, str]:
+) -> UpdateAccountValueArgs:
     """Decode an ``AccountValue`` proto to the positional args
     ``Wrapper.updateAccountValue(tag, val, currency, account)`` expects.
 
@@ -100,7 +141,7 @@ def createAccountValue(proto: AccountValue_pb2.AccountValue) -> AccountValue:
 
 def createAccountSummaryArgs(
     proto: AccountSummary_pb2.AccountSummary,
-) -> tuple[int, str, str, str, str]:
+) -> AccountSummaryArgs:
     """``Wrapper.accountSummary(reqId, account, tag, value, currency)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     account = proto.account if proto.HasField("account") else ""
@@ -135,7 +176,7 @@ def createCancelAccountSummaryProto(
 
 def createAccountUpdateMultiArgs(
     proto: AccountUpdateMulti_pb2.AccountUpdateMulti,
-) -> tuple[int, str, str, str, str, str]:
+) -> AccountUpdateMultiArgs:
     """``Wrapper.accountUpdateMulti(reqId, account, modelCode, tag, val, currency)`` args.
 
     Note the wire field is named ``key`` but the domain (and binary
@@ -210,7 +251,7 @@ def createPosition(proto: Position_pb2.Position) -> Position:
 
 def createPositionArgs(
     proto: Position_pb2.Position,
-) -> tuple[str, Contract, Decimal | None, Decimal | None]:
+) -> PositionArgs:
     """``Wrapper.position(account, contract, posSize, avgCost)`` args."""
     pos = createPosition(proto)
     return pos.account, pos.contract, pos.position, pos.avgCost
@@ -231,7 +272,7 @@ def createCancelPositionsProto() -> CancelPositions_pb2.CancelPositions:
 
 def createPositionMultiArgs(
     proto: PositionMulti_pb2.PositionMulti,
-) -> tuple[int, str, str, Contract, Decimal | None, Decimal | None]:
+) -> PositionMultiArgs:
     """``Wrapper.positionMulti(reqId, account, modelCode, contract, pos, avgCost)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     account = proto.account if proto.HasField("account") else ""
@@ -309,16 +350,7 @@ def createPortfolioItem(proto: PortfolioValue_pb2.PortfolioValue) -> PortfolioIt
 
 def createUpdatePortfolioArgs(
     proto: PortfolioValue_pb2.PortfolioValue,
-) -> tuple[
-    Contract,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    str,
-]:
+) -> UpdatePortfolioArgs:
     """``Wrapper.updatePortfolio(contract, posSize, marketPrice, marketValue,
     averageCost, unrealizedPNL, realizedPNL, account)`` args."""
     item = createPortfolioItem(proto)
@@ -392,14 +424,14 @@ def createFAReplaceProto(
     return proto
 
 
-def createReceiveFAArgs(proto: ReceiveFA_pb2.ReceiveFA) -> tuple[int, str]:
+def createReceiveFAArgs(proto: ReceiveFA_pb2.ReceiveFA) -> ReceiveFAArgs:
     """``Wrapper.receiveFA(faDataType, xml)`` args."""
     faDataType = proto.faDataType if proto.HasField("faDataType") else 0
     xml = proto.xml if proto.HasField("xml") else ""
     return faDataType, xml
 
 
-def createReplaceFAEndArgs(proto: ReplaceFAEnd_pb2.ReplaceFAEnd) -> tuple[int, str]:
+def createReplaceFAEndArgs(proto: ReplaceFAEnd_pb2.ReplaceFAEnd) -> ReplaceFAEndArgs:
     """``Wrapper.replaceFAEnd(reqId, text)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     text = proto.text if proto.HasField("text") else ""

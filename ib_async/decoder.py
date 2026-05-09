@@ -103,7 +103,20 @@ def _initProtoMsgHandlers() -> None:
         ContractDataEnd_pb2,
         ExecutionDetails_pb2,
         ExecutionDetailsEnd_pb2,
+        HeadTimestamp_pb2,
+        HistogramData_pb2,
+        HistoricalData_pb2,
+        HistoricalDataEnd_pb2,
+        HistoricalDataUpdate_pb2,
+        HistoricalSchedule_pb2,
+        HistoricalTicks_pb2,
+        HistoricalTicksBidAsk_pb2,
+        HistoricalTicksLast_pb2,
         ManagedAccounts_pb2,
+        MarketDataType_pb2,
+        MarketDepth_pb2,
+        MarketDepthExchanges_pb2,
+        MarketDepthL2_pb2,
         OpenOrder_pb2,
         OpenOrdersEnd_pb2,
         OrderBound_pb2,
@@ -113,6 +126,17 @@ def _initProtoMsgHandlers() -> None:
         PositionEnd_pb2,
         PositionMulti_pb2,
         PositionMultiEnd_pb2,
+        RealTimeBarTick_pb2,
+        RerouteMarketDataRequest_pb2,
+        RerouteMarketDepthRequest_pb2,
+        TickByTickData_pb2,
+        TickGeneric_pb2,
+        TickOptionComputation_pb2,
+        TickPrice_pb2,
+        TickReqParams_pb2,
+        TickSize_pb2,
+        TickSnapshotEnd_pb2,
+        TickString_pb2,
     )
 
     # Canonical IBKR ``IN`` msgIds (see ``ibapi/message.py``).
@@ -160,6 +184,58 @@ def _initProtoMsgHandlers() -> None:
             102: (
                 CompletedOrdersEnd_pb2.CompletedOrdersEnd,
                 "_protoCompletedOrdersEnd",
+            ),
+            # --- market data + historical (gates 206 / 208) ---
+            1: (TickPrice_pb2.TickPrice, "_protoPriceSizeTick"),
+            2: (TickSize_pb2.TickSize, "_protoTickSize"),
+            12: (MarketDepth_pb2.MarketDepth, "_protoUpdateMktDepth"),
+            13: (MarketDepthL2_pb2.MarketDepthL2, "_protoUpdateMktDepthL2"),
+            17: (HistoricalData_pb2.HistoricalData, "_protoHistoricalData"),
+            21: (
+                TickOptionComputation_pb2.TickOptionComputation,
+                "_protoTickOptionComputation",
+            ),
+            45: (TickGeneric_pb2.TickGeneric, "_protoTickGeneric"),
+            46: (TickString_pb2.TickString, "_protoTickString"),
+            50: (RealTimeBarTick_pb2.RealTimeBarTick, "_protoRealtimeBar"),
+            57: (TickSnapshotEnd_pb2.TickSnapshotEnd, "_protoTickSnapshotEnd"),
+            58: (MarketDataType_pb2.MarketDataType, "_protoMarketDataType"),
+            80: (
+                MarketDepthExchanges_pb2.MarketDepthExchanges,
+                "_protoMktDepthExchanges",
+            ),
+            81: (TickReqParams_pb2.TickReqParams, "_protoTickReqParams"),
+            88: (HeadTimestamp_pb2.HeadTimestamp, "_protoHeadTimestamp"),
+            89: (HistogramData_pb2.HistogramData, "_protoHistogramData"),
+            90: (
+                HistoricalDataUpdate_pb2.HistoricalDataUpdate,
+                "_protoHistoricalDataUpdate",
+            ),
+            91: (
+                RerouteMarketDataRequest_pb2.RerouteMarketDataRequest,
+                "_protoRerouteMktDataReq",
+            ),
+            92: (
+                RerouteMarketDepthRequest_pb2.RerouteMarketDepthRequest,
+                "_protoRerouteMktDepthReq",
+            ),
+            96: (HistoricalTicks_pb2.HistoricalTicks, "_protoHistoricalTicks"),
+            97: (
+                HistoricalTicksBidAsk_pb2.HistoricalTicksBidAsk,
+                "_protoHistoricalTicksBidAsk",
+            ),
+            98: (
+                HistoricalTicksLast_pb2.HistoricalTicksLast,
+                "_protoHistoricalTicksLast",
+            ),
+            99: (TickByTickData_pb2.TickByTickData, "_protoTickByTick"),
+            106: (
+                HistoricalSchedule_pb2.HistoricalSchedule,
+                "_protoHistoricalSchedule",
+            ),
+            108: (
+                HistoricalDataEnd_pb2.HistoricalDataEnd,
+                "_protoHistoricalDataEnd",
             ),
         }
     )
@@ -547,6 +623,139 @@ class Decoder:
     def _protoAccountUpdateMultiEnd(self, proto: Any) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
         self.wrapper.accountUpdateMultiEnd(reqId)
+
+    # --- market data handlers ---------------------------------------------
+
+    def _protoPriceSizeTick(self, proto: Any) -> None:
+        from ._proto.market_data import createPriceSizeTickArgs
+
+        self.wrapper.priceSizeTick(*createPriceSizeTickArgs(proto))
+
+    def _protoTickSize(self, proto: Any) -> None:
+        from ._proto.market_data import createTickSizeArgs
+
+        self.wrapper.tickSize(*createTickSizeArgs(proto))
+
+    def _protoTickGeneric(self, proto: Any) -> None:
+        from ._proto.market_data import createTickGenericArgs
+
+        self.wrapper.tickGeneric(*createTickGenericArgs(proto))
+
+    def _protoTickString(self, proto: Any) -> None:
+        from ._proto.market_data import createTickStringArgs
+
+        self.wrapper.tickString(*createTickStringArgs(proto))
+
+    def _protoTickReqParams(self, proto: Any) -> None:
+        from ._proto.market_data import createTickReqParamsArgs
+
+        self.wrapper.tickReqParams(*createTickReqParamsArgs(proto))
+
+    def _protoTickSnapshotEnd(self, proto: Any) -> None:
+        from ._proto.market_data import createTickSnapshotEndReqId
+
+        self.wrapper.tickSnapshotEnd(createTickSnapshotEndReqId(proto))
+
+    def _protoTickOptionComputation(self, proto: Any) -> None:
+        from ._proto.market_data import createTickOptionComputationArgs
+
+        self.wrapper.tickOptionComputation(*createTickOptionComputationArgs(proto))
+
+    def _protoTickByTick(self, proto: Any) -> None:
+        from ._proto.market_data import dispatchTickByTick
+
+        kind, args = dispatchTickByTick(proto)
+        if kind == "allLast":
+            self.wrapper.tickByTickAllLast(*args)
+        elif kind == "bidAsk":
+            self.wrapper.tickByTickBidAsk(*args)
+        elif kind == "midPoint":
+            self.wrapper.tickByTickMidPoint(*args)
+        # else: oneof not set — drop, matches binary path
+
+    def _protoMarketDataType(self, proto: Any) -> None:
+        from ._proto.market_data import createMarketDataTypeArgs
+
+        self.wrapper.marketDataType(*createMarketDataTypeArgs(proto))
+
+    def _protoUpdateMktDepth(self, proto: Any) -> None:
+        from ._proto.market_data import createUpdateMktDepthArgs
+
+        self.wrapper.updateMktDepth(*createUpdateMktDepthArgs(proto))
+
+    def _protoUpdateMktDepthL2(self, proto: Any) -> None:
+        from ._proto.market_data import createUpdateMktDepthL2Args
+
+        self.wrapper.updateMktDepthL2(*createUpdateMktDepthL2Args(proto))
+
+    def _protoMktDepthExchanges(self, proto: Any) -> None:
+        from ._proto.market_data import createMarketDepthExchangesList
+
+        self.wrapper.mktDepthExchanges(createMarketDepthExchangesList(proto))
+
+    def _protoRerouteMktDataReq(self, proto: Any) -> None:
+        from ._proto.market_data import createRerouteMktDataReqArgs
+
+        self.wrapper.rerouteMktDataReq(*createRerouteMktDataReqArgs(proto))
+
+    def _protoRerouteMktDepthReq(self, proto: Any) -> None:
+        from ._proto.market_data import createRerouteMktDepthReqArgs
+
+        self.wrapper.rerouteMktDepthReq(*createRerouteMktDepthReqArgs(proto))
+
+    # --- historical-data handlers -----------------------------------------
+
+    def _protoHistoricalData(self, proto: Any) -> None:
+        from ._proto.historical import iterHistoricalDataBars
+
+        reqId, bars = iterHistoricalDataBars(proto)
+        for bar in bars:
+            self.wrapper.historicalData(reqId, bar)
+
+    def _protoHistoricalDataEnd(self, proto: Any) -> None:
+        from ._proto.historical import createHistoricalDataEndArgs
+
+        self.wrapper.historicalDataEnd(*createHistoricalDataEndArgs(proto))
+
+    def _protoHistoricalDataUpdate(self, proto: Any) -> None:
+        from ._proto.historical import createHistoricalDataUpdateArgs
+
+        self.wrapper.historicalDataUpdate(*createHistoricalDataUpdateArgs(proto))
+
+    def _protoRealtimeBar(self, proto: Any) -> None:
+        from ._proto.historical import createRealtimeBarArgs
+
+        self.wrapper.realtimeBar(*createRealtimeBarArgs(proto))
+
+    def _protoHeadTimestamp(self, proto: Any) -> None:
+        from ._proto.historical import createHeadTimestampArgs
+
+        self.wrapper.headTimestamp(*createHeadTimestampArgs(proto))
+
+    def _protoHistogramData(self, proto: Any) -> None:
+        from ._proto.historical import createHistogramDataArgs
+
+        self.wrapper.histogramData(*createHistogramDataArgs(proto))
+
+    def _protoHistoricalSchedule(self, proto: Any) -> None:
+        from ._proto.historical import createHistoricalScheduleArgs
+
+        self.wrapper.historicalSchedule(*createHistoricalScheduleArgs(proto))
+
+    def _protoHistoricalTicks(self, proto: Any) -> None:
+        from ._proto.historical import createHistoricalTicksArgs
+
+        self.wrapper.historicalTicks(*createHistoricalTicksArgs(proto))
+
+    def _protoHistoricalTicksBidAsk(self, proto: Any) -> None:
+        from ._proto.historical import createHistoricalTicksBidAskArgs
+
+        self.wrapper.historicalTicksBidAsk(*createHistoricalTicksBidAskArgs(proto))
+
+    def _protoHistoricalTicksLast(self, proto: Any) -> None:
+        from ._proto.historical import createHistoricalTicksLastArgs
+
+        self.wrapper.historicalTicksLast(*createHistoricalTicksLastArgs(proto))
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""

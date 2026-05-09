@@ -33,6 +33,9 @@ proto.
 
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import TypeAlias
+
 from .._pb import (
     CancelHeadTimestamp_pb2,
     CancelHistogramData_pb2,
@@ -65,7 +68,6 @@ from ..contract import Contract
 from ..objects import (
     BarData,
     HistogramData,
-    HistoricalSchedule,
     HistoricalSession,
     HistoricalTick,
     HistoricalTickBidAsk,
@@ -74,6 +76,26 @@ from ..objects import (
 from .contracts import createContractProto
 from .market_data import createTickAttribBidAsk, createTickAttribLast
 from .safe import safe_decimal
+
+# Module-level type aliases for converter return shapes. Each one names the
+# wrapper method whose positional arguments it carries so call sites read as
+# ``self.wrapper.X(*args)`` without losing the type story.
+
+# ``Wrapper.realtimeBar(reqId, time, open_, high, low, close, volume, wap, count)``
+RealtimeBarArgs: TypeAlias = tuple[
+    int,
+    int,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    int,
+]
+
+# ``Wrapper.historicalSchedule(reqId, start, end, timeZone, sessions)``
+HistoricalScheduleArgs: TypeAlias = tuple[int, str, str, str, list["HistoricalSession"]]
 
 # ---------------------------------------------------------------------------
 # HistoricalDataBar — building block for HistoricalData / Update
@@ -152,7 +174,7 @@ def createHistoricalDataUpdateArgs(
 
 def createRealtimeBarArgs(
     proto: RealTimeBarTick_pb2.RealTimeBarTick,
-) -> tuple[int, int, object, object, object, object, object, object, int]:
+) -> RealtimeBarArgs:
     """``Wrapper.realtimeBar(reqId, time, open_, high, low, close, volume, wap, count)`` args.
 
     OHLC fields route through ``safe_decimal(str(...))`` to match the
@@ -234,16 +256,16 @@ def createHistoricalSession(
 
 def createHistoricalScheduleArgs(
     proto: HistoricalSchedule_pb2.HistoricalSchedule,
-) -> tuple[int, HistoricalSchedule]:
-    """``Wrapper.historicalSchedule(reqId, schedule)`` args."""
+) -> HistoricalScheduleArgs:
+    """``Wrapper.historicalSchedule(reqId, startDateTime, endDateTime,
+    timeZone, sessions)`` args. The wrapper builds the
+    ``HistoricalSchedule`` dataclass from these primitives itself."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
-    schedule = HistoricalSchedule(
-        startDateTime=proto.startDateTime if proto.HasField("startDateTime") else "",
-        endDateTime=proto.endDateTime if proto.HasField("endDateTime") else "",
-        timeZone=proto.timeZone if proto.HasField("timeZone") else "",
-        sessions=[createHistoricalSession(s) for s in proto.historicalSessions],
-    )
-    return reqId, schedule
+    startDateTime = proto.startDateTime if proto.HasField("startDateTime") else ""
+    endDateTime = proto.endDateTime if proto.HasField("endDateTime") else ""
+    timeZone = proto.timeZone if proto.HasField("timeZone") else ""
+    sessions = [createHistoricalSession(s) for s in proto.historicalSessions]
+    return reqId, startDateTime, endDateTime, timeZone, sessions
 
 
 # ---------------------------------------------------------------------------

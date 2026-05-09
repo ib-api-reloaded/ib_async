@@ -259,12 +259,11 @@ def test_histogram_data_garbage_size_yields_zero_count():
 
 
 def test_historical_schedule_empty_proto():
-    reqId, schedule = createHistoricalScheduleArgs(
-        HistoricalSchedule_pb2.HistoricalSchedule()
-    )
+    args = createHistoricalScheduleArgs(HistoricalSchedule_pb2.HistoricalSchedule())
+    reqId, start, end, tz, sessions = args
     assert reqId == -1
-    assert schedule.startDateTime == ""
-    assert schedule.sessions == []
+    assert (start, end, tz) == ("", "", "")
+    assert sessions == []
 
 
 def test_historical_schedule_full_round_trip():
@@ -278,11 +277,12 @@ def test_historical_schedule_full_round_trip():
     s.startDateTime, s.endDateTime, s.refDate = "09:30:00", "12:00:00", "20260509"
     s2 = proto.historicalSessions.add()
     s2.startDateTime, s2.endDateTime, s2.refDate = "13:00:00", "16:00:00", "20260509"
-    reqId, schedule = createHistoricalScheduleArgs(proto)
+    args = createHistoricalScheduleArgs(proto)
+    reqId, start, end, tz, sessions = args
     assert reqId == 7
-    assert schedule.timeZone == "US/Eastern"
-    assert len(schedule.sessions) == 2
-    assert schedule.sessions[0].refDate == "20260509"
+    assert tz == "US/Eastern"
+    assert len(sessions) == 2
+    assert sessions[0].refDate == "20260509"
 
 
 # ---------------------------------------------------------------------------
