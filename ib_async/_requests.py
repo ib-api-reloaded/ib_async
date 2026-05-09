@@ -23,9 +23,8 @@ loop.
 from __future__ import annotations
 
 import asyncio
-import time
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from ib_async.util import getLoop
@@ -120,7 +119,6 @@ class Request:
     future: asyncio.Future
     container: Any = None
     contract: Any = None
-    started_monotonic: float = field(default_factory=time.monotonic)
     refcount: int = 1
     settled: bool = False
 

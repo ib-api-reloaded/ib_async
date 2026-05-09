@@ -227,12 +227,42 @@ class RequestError(Exception):
         self.message = message
 
 
+# Warnings are currently:
+# 105 - Order being modified does not match the original order. (?)
+# 110 - The price does not conform to the minimum price variation for this contract.
+# 165 - Historical market Data Service query message.
+# 321 - Server error when validating an API client request.
+# 329 - Order modify failed. Cannot change to the new order type.
+# 399 - Order message error
+# 404 -	Shares for this order are not immediately available for short sale. The order will be held while we attempt to locate the shares.
+# 434 -	The order size cannot be zero.
+# 492 - ? not listed
+# 10167 ? not listed
+# 10349 - Warning about "Order TIF was set to DAY based on order preset" but does NOT cancel active order
+# Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
+# TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
+
+# Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
+# 202 - Order cancelled - Reason:
+
+_WARNING_CODES: Final[frozenset[int]] = frozenset(
+    {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167, 10349}
+)
+
+
 # Order fields that TWS may legitimately update at runtime via openOrder
 # callbacks for an order we already track. Why a whitelist instead of a full
 # merge: TWS sometimes returns placeholder/default values for fields the user
 # set locally at placement time, so a blanket copy would clobber user intent.
 # (See git history of wrapper.openOrder — this list has grown each time a
 # specific live-mutable field was found to be silently dropped.)
+#
+# Allowlist over denylist by design: the failure mode of a denylist is that a
+# TWS placeholder value silently overwrites a user-set field — catastrophic
+# for live trading. The failure mode of the allowlist is that a TWS-managed
+# runtime field (e.g. a new trailing-stop variant) doesn't auto-propagate to
+# ``Trade.order`` until added here — annoying but recoverable, and callers
+# can read ``Trade.serverOrder`` for the raw TWS view in the meantime.
 MUTABLE_ORDER_FIELDS: Final[tuple[str, ...]] = (
     "permId",
     "totalQuantity",
@@ -302,8 +332,13 @@ class Wrapper:
 
     accounts: list[str] = field(init=False)
     clientId: int = field(init=False)
-    wshMetaReqId: int = field(init=False)
-    wshEventReqId: int = field(init=False)
+    # Active reqId for the (singleton) Wall Street Horizon meta /
+    # event subscriptions. ``IB.reqWshMetaData`` /
+    # ``IB.reqWshEventData`` and their cancel siblings coordinate
+    # through these per-connection slots; they are reset to 0 in
+    # :meth:`reset` so a watchdog reconnect starts fresh.
+    _wshMetaReqId: int = field(init=False)
+    _wshEventReqId: int = field(init=False)
     _timeout: float = field(init=False)
 
     requests: RequestRegistry = field(init=False)
@@ -347,11 +382,17 @@ class Wrapper:
         self.time = -1
         self.accounts = []
         self.clientId = -1
-        self.wshMetaReqId = 0
-        self.wshEventReqId = 0
+        self._wshMetaReqId = 0
+        self._wshEventReqId = 0
         self._timeout = 0
         self.requests = RequestRegistry()
         self.subscriptions = SubscriptionRegistry(self)
+        # Cache the bound method on the hot per-tick path so each tick
+        # handler does ``self._get_ticker(reqId)`` (one C-level dict.get
+        # via the bound-method's __self__) instead of
+        # ``self.subscriptions.get_ticker(reqId)`` which allocates a
+        # fresh bound-method object per call.
+        self._get_ticker = self.subscriptions.get_ticker
         self.setTimeout(0)
 
     def connectionClosed(self):
@@ -393,7 +434,11 @@ class Wrapper:
             ticker.updateEvent.set_done()
 
         now = datetime.now(self.defaultTimezone)
-        for trade in self.trades.values():
+        # Snapshot the trades dict because ``trade.statusEvent.emit`` and
+        # ``self.ib.orderStatusEvent.emit`` below run user callbacks; a
+        # callback that calls ``IB.placeOrder`` would mutate
+        # ``self.trades`` mid-iteration and raise RuntimeError.
+        for trade in list(self.trades.values()):
             if not trade.isDone():
                 trade.orderStatus.status = OrderStatus.Inactive
                 trade.log.append(
@@ -928,7 +973,7 @@ class Wrapper:
         )
 
     def marketDataType(self, reqId: int, marketDataId: int):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if ticker:
             ticker.marketDataType = marketDataId
 
@@ -1015,7 +1060,7 @@ class Wrapper:
 
     # additional wrapper method provided by Client
     def priceSizeTick(self, reqId: int, tickType: int, price: float, size: float):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             self._logger.error(f"priceSizeTick: Unknown reqId: {reqId}")
             return
@@ -1086,7 +1131,7 @@ class Wrapper:
         self.pendingTickers.add(ticker)
 
     def tickSize(self, reqId: int, tickType: int, size: float):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             self._logger.error(f"tickSize: Unknown reqId: {reqId}")
             return
@@ -1156,7 +1201,7 @@ class Wrapper:
         exchange,
         specialConditions,
     ):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             self._logger.error(f"tickByTickAllLast: Unknown reqId: {reqId}")
             return
@@ -1193,7 +1238,7 @@ class Wrapper:
         askSize: float,
         tickAttribBidAsk: TickAttribBidAsk,
     ):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             self._logger.error(f"tickByTickBidAsk: Unknown reqId: {reqId}")
             return
@@ -1222,7 +1267,7 @@ class Wrapper:
         self.pendingTickers.add(ticker)
 
     def tickByTickMidPoint(self, reqId: int, time: int, midPoint: float):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             self._logger.error(f"tickByTickMidPoint: Unknown reqId: {reqId}")
             return
@@ -1232,7 +1277,7 @@ class Wrapper:
         self.pendingTickers.add(ticker)
 
     def tickString(self, reqId: int, tickType: int, value: str):
-        if not (ticker := self.subscriptions.get_ticker(reqId)):
+        if not (ticker := self._get_ticker(reqId)):
             return
 
         try:
@@ -1290,7 +1335,7 @@ class Wrapper:
             )
 
     def tickGeneric(self, reqId: int, tickType: int, value: float):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             return
 
@@ -1316,7 +1361,7 @@ class Wrapper:
     def tickReqParams(
         self, reqId: int, minTick: float, bboExchange: str, snapshotPermissions: int
     ):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             return
 
@@ -1358,7 +1403,7 @@ class Wrapper:
     ):
         # operation: 0 = insert, 1 = update, 2 = delete
         # side: 0 = ask, 1 = bid
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if ticker is None:
             return
 
@@ -1432,7 +1477,7 @@ class Wrapper:
             theta if theta != -2 else theta,
             undPrice if undPrice != -1 else None,
         )
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if ticker:
             # reply from reqMktData
             # https://interactivebrokers.github.io/tws-api/tick_types.html
@@ -1596,7 +1641,7 @@ class Wrapper:
         dividendImpact: float,
         dividendsToLastTradeDate: float,
     ):
-        ticker = self.subscriptions.get_ticker(reqId)
+        ticker = self._get_ticker(reqId)
         if not ticker:
             return
 
@@ -1650,47 +1695,29 @@ class Wrapper:
     ):
         # https://interactivebrokers.github.io/tws-api/message_codes.html
         # https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#api-error-codes
-        # The wire delivers a raw integer reqId; the registry may have the
-        # request under either ReqIdKey or WhatIfKey, so resolve via the
-        # numeric helper that checks both.
-        inflightRequest = self.requests.find_by_reqid(reqId)
-        isRequest = inflightRequest is not None
+        # reqId == -1 is the IBKR convention for a system-level error
+        # with no associated request or order — short-circuit both
+        # registry and trade lookups (skipping the two RequestKey
+        # allocations ``find_by_reqid`` would do) for the common case.
+        inflightRequest = None
         trade = None
-
-        # reqId is a local orderId, but is delivered as -1 if this is a non-order-related error
         if reqId != -1:
+            # The wire delivers a raw integer reqId; the registry may
+            # have the request under either ReqIdKey or WhatIfKey, so
+            # resolve via the numeric helper that checks both.
+            inflightRequest = self.requests.find_by_reqid(reqId)
             trade = self.trades.get((self.clientId, reqId))
-            # Trades are never evicted from `self.trades`, so a late or
-            # replayed error for an already-finished order would otherwise
-            # corrupt its status (warning branch sets ValidationError) or
-            # set `advancedError` (error branch) on a completed trade.
-            # Treat done trades as absent here so the rest of the function
-            # only acts on live orders.
+            # Trades are never evicted from ``self.trades``, so a late
+            # or replayed error for an already-finished order would
+            # otherwise corrupt its status (warning branch sets
+            # ValidationError) or set ``advancedError`` (error branch)
+            # on a completed trade. Treat done trades as absent here so
+            # the rest of the function only acts on live orders.
             if trade and trade.isDone():
                 trade = None
+        isRequest = inflightRequest is not None
 
-        # Warnings are currently:
-        # 105 - Order being modified does not match the original order. (?)
-        # 110 - The price does not conform to the minimum price variation for this contract.
-        # 165 - Historical market Data Service query message.
-        # 321 - Server error when validating an API client request.
-        # 329 - Order modify failed. Cannot change to the new order type.
-        # 399 - Order message error
-        # 404 -	Shares for this order are not immediately available for short sale. The order will be held while we attempt to locate the shares.
-        # 434 -	The order size cannot be zero.
-        # 492 - ? not listed
-        # 10167 ? not listed
-        # 10349 - Warning about "Order TIF was set to DAY based on order preset" but does NOT cancel active order
-        # Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
-        # TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
-
-        # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
-        # 202 - Order cancelled - Reason:
-
-        warningCodes = frozenset(
-            {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167, 10349}
-        )
-        isWarning = errorCode in warningCodes or 2100 <= errorCode < 2200
+        isWarning = errorCode in _WARNING_CODES or 2100 <= errorCode < 2200
 
         if errorCode == 110 and isRequest:
             # whatIf request failed
@@ -1760,7 +1787,7 @@ class Wrapper:
                 sub.dataList.updateEvent.emit(sub.dataList)
         elif errorCode == 317:
             # Market depth data has been RESET
-            ticker = self.subscriptions.get_ticker(reqId)
+            ticker = self._get_ticker(reqId)
             if ticker:
                 # clear all DOM levels
                 ticker.domTicks += [
@@ -1817,7 +1844,8 @@ class Wrapper:
             ticker.tickByTicks = []
             ticker.domTicks = []
 
-        self.pendingTickers = set()
+        # In-place clear avoids allocating a fresh set per TCP packet.
+        self.pendingTickers.clear()
 
     def tcpDataProcessed(self):
         self.ib.updateEvent.emit()

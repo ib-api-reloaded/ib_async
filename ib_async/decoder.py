@@ -2,8 +2,9 @@
 
 import dataclasses
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Final
 
 from .contract import (
     ComboLeg,
@@ -34,6 +35,37 @@ from .objects import (
 from .order import Order, OrderComboLeg, OrderCondition, OrderState
 from .util import UNSET_DOUBLE, ZoneInfo, parseIBDatetime
 from .wrapper import Wrapper
+
+# Per-type wire-string-to-typed-value converters. The empty-string-to-default
+# behaviour (``field or 0``) is preserved verbatim from the original inline
+# ternary in Decoder.wrap(); hoisting lets that wrap() resolve the converter
+# list once at construction time instead of branching per field per dispatch.
+_CONV: Final[dict[type, Callable[[str], Any]]] = {
+    str: lambda f: f,
+    int: lambda f: int(f or 0),
+    float: lambda f: float(f or 0),
+    bool: lambda f: bool(int(f or 0)),
+}
+
+# Cache of dataclass-field coercion plans keyed by class. Each entry is a tuple
+# of ``(field_name, target_type, default_value)`` for the int/float/bool fields
+# that Decoder.parse() needs to coerce; str fields are skipped entirely. The
+# cache populates lazily on first parse() of each class so we pay the
+# dataclasses.fields() introspection once per class instead of per call.
+_PARSE_FIELDS: dict[type, tuple[tuple[str, type, Any], ...]] = {}
+
+# tickByTick subtypes 1 and 2 share the same payload shape; both are
+# "all-last" trades (1 = trades, 2 = all trades including odd lots).
+_TICK_BY_TICK_LAST_TYPES: Final[frozenset[int]] = frozenset({1, 2})
+
+# Order types where the wire payload includes a pegged-benchmark trailer.
+_PEG_BENCH_ORDER_TYPES: Final[frozenset[str]] = frozenset({"PEG BENCH", "PEGBENCH"})
+
+
+def _noopHandler(fields: list[str]) -> None:
+    """Returned by Decoder.wrap() when the wrapper has no method for a msgId,
+    so the dispatch table never contains None and hot-path lookup can call
+    unconditionally."""
 
 
 class Decoder:
@@ -145,31 +177,24 @@ class Decoder:
         Create a message handler that invokes a wrapper method
         with the in-order message fields as parameters, skipping over
         the first ``skip`` fields, and parsed according to the ``types`` list.
+
+        The wrapper method and the per-type converter list are resolved once
+        at construction time so per-dispatch overhead is one zip + one call
+        per field, not a four-way ``is``-comparison chain plus a getattr.
         """
+        method = getattr(self.wrapper, methodName, None)
+        if method is None:
+            return _noopHandler
+
+        converters = [_CONV[t] for t in types]
+        logger = self.logger
 
         def handler(fields):
-            method = getattr(self.wrapper, methodName, None)
-            if method:
-                try:
-                    args = [
-                        (
-                            field
-                            if typ is str
-                            else (
-                                int(field or 0)
-                                if typ is int
-                                else (
-                                    float(field or 0)
-                                    if typ is float
-                                    else bool(int(field or 0))
-                                )
-                            )
-                        )
-                        for (typ, field) in zip(types, fields[skip:])
-                    ]
-                    method(*args)
-                except Exception:
-                    self.logger.exception(f"Error for {methodName}({args}):")
+            try:
+                args = [conv(f) for conv, f in zip(converters, fields[skip:])]
+                method(*args)
+            except Exception:
+                logger.exception("Error for %s with fields=%r", methodName, fields)
 
         return handler
 
@@ -184,18 +209,30 @@ class Decoder:
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""
-        for field in dataclasses.fields(obj):
-            typ = type(field.default)
-            if typ is str:
-                continue
-            v = getattr(obj, field.name)
+        cls = type(obj)
+        entries = _PARSE_FIELDS.get(cls)
+        if entries is None:
+            # Cache miss: walk the dataclass once to record every int/float/bool
+            # field and its default. Subsequent parse() calls of this class skip
+            # straight to the coercion loop.
+            plan: list[tuple[str, type, Any]] = []
+            for field in dataclasses.fields(obj):
+                typ = type(field.default)
+                if typ in (int, float, bool):
+                    plan.append((field.name, typ, field.default))
+            entries = tuple(plan)
+            _PARSE_FIELDS[cls] = entries
 
-            if typ is int:
-                setattr(obj, field.name, int(v) if v else field.default)
+        for name, typ, default in entries:
+            v = getattr(obj, name)
+            if not v:
+                setattr(obj, name, default)
+            elif typ is int:
+                setattr(obj, name, int(v))
             elif typ is float:
-                setattr(obj, field.name, float(v) if v else field.default)
-            elif typ is bool:
-                setattr(obj, field.name, bool(int(v)) if v else field.default)
+                setattr(obj, name, float(v))
+            else:  # bool
+                setattr(obj, name, bool(int(v)))
 
     def priceSizeTick(self, fields):
         _, _, reqId, tickType, price, size, _ = fields
@@ -465,7 +502,13 @@ class Decoder:
 
         self.parse(c)
         self.parse(ex)
-        time = cast(datetime, parseIBDatetime(timeStr))
+        parsed = parseIBDatetime(timeStr)
+        if isinstance(parsed, datetime):
+            time = parsed
+        else:
+            # 8-char "YYYYmmdd" wire value lacks a time-of-day; combine with
+            # midnight so downstream tz operations have a usable datetime.
+            time = datetime.combine(parsed, datetime.min.time())
         if not time.tzinfo:
             tz = self.wrapper.ib.TimezoneTWS
             if tz:
@@ -664,7 +707,7 @@ class Decoder:
         self.wrapper.securityDefinitionOptionParameter(
             int(reqId),
             exchange,
-            underlyingConId,
+            int(underlyingConId),
             tradingClass,
             multiplier,
             expirations,
@@ -778,6 +821,7 @@ class Decoder:
     def historicalTicks(self, fields):
         _, reqId, n, *fields = fields
         get = iter(fields).__next__
+        tz = self.wrapper.defaultTimezone
 
         ticks = []
         for _ in range(int(n)):
@@ -785,7 +829,7 @@ class Decoder:
             get()
             price = float(get())
             size = float(get())
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
+            dt = datetime.fromtimestamp(time, tz)
             ticks.append(HistoricalTick(dt, price, size))
 
         done = bool(int(get()))
@@ -794,19 +838,20 @@ class Decoder:
     def historicalTicksBidAsk(self, fields):
         _, reqId, n, *fields = fields
         get = iter(fields).__next__
+        tz = self.wrapper.defaultTimezone
 
         ticks = []
         for _ in range(int(n)):
             time = int(get())
             mask = int(get())
             attrib = TickAttribBidAsk(
-                askPastHigh=bool(mask & 1), bidPastLow=bool(mask & 2)
+                bidPastLow=bool(mask & 1), askPastHigh=bool(mask & 2)
             )
             priceBid = float(get())
             priceAsk = float(get())
             sizeBid = float(get())
             sizeAsk = float(get())
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
+            dt = datetime.fromtimestamp(time, tz)
             ticks.append(
                 HistoricalTickBidAsk(dt, attrib, priceBid, priceAsk, sizeBid, sizeAsk)
             )
@@ -817,6 +862,7 @@ class Decoder:
     def historicalTicksLast(self, fields):
         _, reqId, n, *fields = fields
         get = iter(fields).__next__
+        tz = self.wrapper.defaultTimezone
 
         ticks = []
         for _ in range(int(n)):
@@ -827,7 +873,7 @@ class Decoder:
             size = float(get())
             exchange = get()
             specialConditions = get()
-            dt = datetime.fromtimestamp(time, self.wrapper.defaultTimezone)
+            dt = datetime.fromtimestamp(time, tz)
             ticks.append(
                 HistoricalTickLast(dt, attrib, price, size, exchange, specialConditions)
             )
@@ -841,7 +887,7 @@ class Decoder:
         tickType = int(tickType)
         time = int(time)
 
-        if tickType in {1, 2}:
+        if tickType in _TICK_BY_TICK_LAST_TYPES:
             price, size, mask, exchange, specialConditions = fields
             mask = int(mask)
             attrib: Any = TickAttribLast(
@@ -1080,7 +1126,7 @@ class Decoder:
             *fields,
         ) = fields
 
-        if o.orderType in {"PEG BENCH", "PEGBENCH"}:
+        if o.orderType in _PEG_BENCH_ORDER_TYPES:
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,
@@ -1302,7 +1348,7 @@ class Decoder:
                     o.algoParams.append(TagValue(tag, value))
         (o.solicited, st.status, o.randomizeSize, o.randomizePrice, *fields) = fields
 
-        if o.orderType in {"PEG BENCH", "PEGBENCH"}:
+        if o.orderType in _PEG_BENCH_ORDER_TYPES:
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,

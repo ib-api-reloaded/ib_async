@@ -398,6 +398,11 @@ class OrderComboLeg:
     price: float | Decimal = UNSET_DOUBLE
 
 
+# Trade is deliberately not @dataclass(slots=True). __post_init__ assigns
+# seven Event attributes that would first need to become declared fields
+# with a ``created`` guard (see ``Ticker`` for the pattern), and slot
+# enforcement would break user code that attaches arbitrary attributes to
+# Trade instances for application-side bookkeeping.
 @dataclass
 class Trade:
     """
@@ -455,7 +460,8 @@ class Trade:
         return self.orderStatus.status in OrderStatus.WaitingStates
 
     def isWorking(self) -> bool:
-        """True if sent to IBKR but not "Submitted" for live execution yet."""
+        """True if the order is live and "working" at the broker against
+        public exchanges (e.g. Submitted)."""
         return self.orderStatus.status in OrderStatus.WorkingStates
 
     def isActive(self) -> bool:

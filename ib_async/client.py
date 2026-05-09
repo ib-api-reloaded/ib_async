@@ -8,7 +8,7 @@ import struct
 import time
 from collections import deque
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Final
 
 from eventkit import Event
 
@@ -17,6 +17,73 @@ from .contract import Contract
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
 from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
+
+
+def _make_format_handlers(makeEmpty: bool) -> dict[Any, Callable[[Any], str]]:
+    """Build the IBKR-protocol field-format handler table.
+
+    The two module-level dict instances below
+    (``_FORMAT_HANDLERS_EMPTY`` / ``_FORMAT_HANDLERS_KEEP``) are
+    constructed once at import time; ``Client.send`` selects between
+    them by the ``makeEmpty`` flag instead of rebuilding the dict
+    (and its closures) on every outbound message.
+    """
+    # fmt: off
+    return {
+        # Contracts are formatted in IBKR null delimiter format
+        Contract: lambda c: "\0".join([
+            str(f)
+            for f in (
+                c.conId,
+                c.symbol,
+                c.secType,
+                c.lastTradeDateOrContractMonth,
+                c.strike,
+                c.right,
+                c.multiplier,
+                c.exchange,
+                c.primaryExchange,
+                c.currency,
+                c.localSymbol,
+                c.tradingClass,
+            )
+        ]),
+
+        # Float conversion has 3 stages:
+        #  - Convert 'IBKR unset' double to empty (if requested)
+        #  - Convert infinity to 'Infinite' string (if appropriate)
+        #  - else, convert float to string normally
+        float: lambda f: ""
+        if (makeEmpty and f == UNSET_DOUBLE)
+        else ("Infinite" if (f == math.inf) else str(f)),
+
+        # Int conversion has 2 stages:
+        #  - Convert 'IBKR unset' to empty (if requested)
+        #  - else, convert int to string normally
+        int: lambda f: "" if makeEmpty and f == UNSET_INTEGER else str(f),
+
+        # None is always just an empty string.
+        # (due to a quirk of Python, 'type(None)' is how you properly generate the NoneType value)
+        type(None): lambda _: "",
+
+        # Strings are always strings
+        str: lambda s: s,
+
+        # Bools become strings "1" or "0"
+        bool: lambda b: "1" if b else "0",
+
+        # Lists of tags become semicolon-appended KV pairs
+        list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
+    }
+    # fmt: on
+
+
+_FORMAT_HANDLERS_EMPTY: Final[dict[Any, Callable[[Any], str]]] = (
+    _make_format_handlers(makeEmpty=True)
+)
+_FORMAT_HANDLERS_KEEP: Final[dict[Any, Callable[[Any], str]]] = (
+    _make_format_handlers(makeEmpty=False)
+)
 
 
 class Client:
@@ -250,54 +317,10 @@ class Client:
         if not self.isConnected():
             raise ConnectionError("Not connected")
 
-        # fmt: off
-        FORMAT_HANDLERS: dict[Any, Callable[[Any], str]] = {
-            # Contracts are formatted in IBKR null delimiter format
-            Contract: lambda c: "\0".join([
-                str(f)
-                for f in (
-                    c.conId,
-                    c.symbol,
-                    c.secType,
-                    c.lastTradeDateOrContractMonth,
-                    c.strike,
-                    c.right,
-                    c.multiplier,
-                    c.exchange,
-                    c.primaryExchange,
-                    c.currency,
-                    c.localSymbol,
-                    c.tradingClass,
-                )
-            ]),
-
-            # Float conversion has 3 stages:
-            #  - Convert 'IBKR unset' double to empty (if requested)
-            #  - Convert infinity to 'Infinite' string (if appropriate)
-            #  - else, convert float to string normally
-            float: lambda f: ""
-            if (makeEmpty and f == UNSET_DOUBLE)
-            else ("Infinite" if (f == math.inf) else str(f)),
-
-            # Int conversion has 2 stages:
-            #  - Convert 'IBKR unset' to empty (if requested)
-            #  - else, convert int to string normally
-            int: lambda f: "" if makeEmpty and f == UNSET_INTEGER else str(f),
-
-            # None is always just an empty string.
-            # (due to a quirk of Python, 'type(None)' is how you properly generate the NoneType value)
-            type(None): lambda _: "",
-
-            # Strings are always strings
-            str: lambda s: s,
-
-            # Bools become strings "1" or "0"
-            bool: lambda b: "1" if b else "0",
-
-            # Lists of tags become semicolon-appended KV pairs
-            list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
-        }
-        # fmt: on
+        # The two handler dicts are built once at module import — see
+        # ``_make_format_handlers`` above for the full table including
+        # the per-type lambdas and their inline rationales.
+        FORMAT_HANDLERS = _FORMAT_HANDLERS_EMPTY if makeEmpty else _FORMAT_HANDLERS_KEEP
 
         # start of new message
         msg = io.StringIO()

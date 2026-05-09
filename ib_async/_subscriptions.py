@@ -372,7 +372,14 @@ class SubscriptionRegistry:
         key = hash(contract)
         ticker = self._tickers.get(key)
         if ticker is None:
-            assert self._wrapper is not None, "registry must be wrapper-bound"
+            # Hard runtime check — an ``assert`` would silently vanish
+            # under ``python -O`` and the next access of ``self._wrapper.defaults``
+            # would crash with a less-specific ``AttributeError``.
+            if self._wrapper is None:
+                raise RuntimeError(
+                    "SubscriptionRegistry must be wrapper-bound to "
+                    "allocate Tickers"
+                )
             ticker = _Ticker(contract=contract, defaults=self._wrapper.defaults)
             self._tickers[key] = ticker
         return ticker
@@ -401,12 +408,38 @@ class SubscriptionRegistry:
         return self._by_market_data_key.get((conId, kind))
 
     def get_pnl(self, account: str, modelCode: str) -> PnLSub | None:
+        """Return the :class:`PnLSub` for ``(account, modelCode)`` or ``None``."""
+
         return self._by_pnl_key.get((account, modelCode))
 
     def get_pnl_single(
         self, account: str, modelCode: str, conId: int
     ) -> PnLSingleSub | None:
+        """Return the :class:`PnLSingleSub` for ``(account, modelCode, conId)``
+        or ``None``."""
+
         return self._by_pnl_single_key.get((account, modelCode, conId))
+
+    def pnl_subs(self) -> Iterator[PnLSub]:
+        """Iterate every live :class:`PnLSub` via the typed PnL index.
+
+        Faster than :meth:`subs_of_type(PnLSub)` because it skips the
+        full-registry scan and the isinstance check. Iterates over a
+        snapshot so concurrent close in a callback can't trip
+        ``RuntimeError: dictionary changed size during iteration``.
+        """
+
+        return iter(list(self._by_pnl_key.values()))
+
+    def pnl_single_subs(self) -> Iterator[PnLSingleSub]:
+        """Iterate every live :class:`PnLSingleSub` via the typed PnL index.
+
+        Faster than :meth:`subs_of_type(PnLSingleSub)` because it skips
+        the full-registry scan and the isinstance check. Iterates over
+        a snapshot for the same safety reason as :meth:`pnl_subs`.
+        """
+
+        return iter(list(self._by_pnl_single_key.values()))
 
     def subs_of_type(self, sub_class: type[_S]) -> Iterator[_S]:
         """Iterate every live subscription that is an instance of ``sub_class``.

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from eventkit import Event, Op
 
@@ -25,7 +25,7 @@ from ib_async.util import dataclassRepr, isNan
 nan = float("nan")
 
 
-@dataclass
+@dataclass(slots=True)
 class Ticker:
     """
     Current market data such as bid, ask, last price, etc. for a contract.
@@ -164,6 +164,11 @@ class Ticker:
 
     defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
     created: bool = False
+    # Per-Ticker update event. Assigned in __post_init__ — declared as
+    # a field (typed Any to avoid a forward reference to
+    # ``TickerUpdateEvent`` which is defined further down) so that
+    # ``slots=True`` reserves a slot for it.
+    updateEvent: Any = field(default=None, repr=False)
 
     def __post_init__(self):
         # when copying a dataclass, the __post_init__ runs again, so we
