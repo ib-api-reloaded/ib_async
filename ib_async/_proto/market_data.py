@@ -34,7 +34,8 @@ otherwise silently swallow a ``True``.
 
 from __future__ import annotations
 
-from typing import Literal, TypeAlias
+from dataclasses import dataclass
+from typing import TypeAlias
 
 from .._pb import (
     CancelMarketData_pb2,
@@ -69,63 +70,163 @@ from ..objects import DepthMktDataDescription, TickAttribBidAsk, TickAttribLast
 from .contracts import createContractProto
 from .safe import safe_decimal
 
-# Module-level type aliases for converter return shapes. Each one names the
-# wrapper method whose positional arguments it carries. (This is a
-# transitional shape — a follow-up commit converts these to slotted-frozen
-# dataclasses with named fields for clearer call sites.)
+# Slotted-frozen dataclass return shapes for converters. Each one names
+# the wrapper method whose positional arguments it carries and exposes
+# named fields at call sites.
 
-# ``Wrapper.priceSizeTick(reqId, tickType, price, size)``
-PriceSizeTickArgs: TypeAlias = tuple[int, int, float, float]
 
-# ``Wrapper.tickSize(reqId, tickType, size)`` / ``tickGeneric(reqId, tickType, value)``
-TickSizeArgs: TypeAlias = tuple[int, int, float]
-TickGenericArgs: TypeAlias = tuple[int, int, float]
+@dataclass(slots=True, frozen=True)
+class PriceSizeTickArgs:
+    """``Wrapper.priceSizeTick(reqId, tickType, price, size)`` args."""
 
-# ``Wrapper.tickString(reqId, tickType, value)``
-TickStringArgs: TypeAlias = tuple[int, int, str]
+    reqId: int
+    tickType: int
+    price: float
+    size: float
 
-# ``Wrapper.tickReqParams(reqId, minTick, bboExchange, snapshotPermissions)``
-TickReqParamsArgs: TypeAlias = tuple[int, float, str, int]
 
-# ``Wrapper.tickOptionComputation`` (11 positional args, all numeric).
-TickOptionComputationArgs: TypeAlias = tuple[
-    int, int, int, float, float, float, float, float, float, float, float
-]
+@dataclass(slots=True, frozen=True)
+class TickSizeArgs:
+    """``Wrapper.tickSize(reqId, tickType, size)`` args."""
 
-# ``Wrapper.marketDataType(reqId, marketDataType)``
-MarketDataTypeArgs: TypeAlias = tuple[int, int]
+    reqId: int
+    tickType: int
+    size: float
 
-# ``Wrapper.updateMktDepth(reqId, position, operation, side, price, size)``
-UpdateMktDepthArgs: TypeAlias = tuple[int, int, int, int, float, float]
 
-# ``Wrapper.updateMktDepthL2(reqId, position, marketMaker, operation, side,
-# price, size, isSmartDepth)``
-UpdateMktDepthL2Args: TypeAlias = tuple[int, int, str, int, int, float, float, bool]
+@dataclass(slots=True, frozen=True)
+class TickGenericArgs:
+    """``Wrapper.tickGeneric(reqId, tickType, value)`` args."""
 
-# ``Wrapper.rerouteMktDataReq`` / ``rerouteMktDepthReq(reqId, conId, exchange)``
-RerouteMktReqArgs: TypeAlias = tuple[int, int, str]
+    reqId: int
+    tickType: int
+    value: float
 
-# ``Wrapper.tickByTickAllLast`` args (reqId, tickType, time, price, size,
-# tickAttribLast, exchange, specialConditions)
-TickByTickAllLastArgs: TypeAlias = tuple[
-    int, int, int, float, float, TickAttribLast, str, str
-]
-# ``Wrapper.tickByTickBidAsk`` args (reqId, time, bidPrice, askPrice, bidSize,
-# askSize, tickAttribBidAsk)
-TickByTickBidAskArgs: TypeAlias = tuple[
-    int, int, float, float, float, float, TickAttribBidAsk
-]
-# ``Wrapper.tickByTickMidPoint`` args (reqId, time, midPoint)
-TickByTickMidPointArgs: TypeAlias = tuple[int, int, float]
 
-# ``dispatchTickByTick`` returns one of these discriminated pairs based on
-# which oneof variant the proto carried. The empty-kind case is returned
-# when no oneof variant was set.
+@dataclass(slots=True, frozen=True)
+class TickStringArgs:
+    """``Wrapper.tickString(reqId, tickType, value)`` args."""
+
+    reqId: int
+    tickType: int
+    value: str
+
+
+@dataclass(slots=True, frozen=True)
+class TickReqParamsArgs:
+    """``Wrapper.tickReqParams(reqId, minTick, bboExchange, snapshotPermissions)`` args."""
+
+    reqId: int
+    minTick: float
+    bboExchange: str
+    snapshotPermissions: int
+
+
+@dataclass(slots=True, frozen=True)
+class TickOptionComputationArgs:
+    """``Wrapper.tickOptionComputation(reqId, tickType, tickAttrib, impliedVol,
+    delta, optPrice, pvDividend, gamma, vega, theta, undPrice)`` args."""
+
+    reqId: int
+    tickType: int
+    tickAttrib: int
+    impliedVol: float
+    delta: float
+    optPrice: float
+    pvDividend: float
+    gamma: float
+    vega: float
+    theta: float
+    undPrice: float
+
+
+@dataclass(slots=True, frozen=True)
+class MarketDataTypeArgs:
+    """``Wrapper.marketDataType(reqId, marketDataType)`` args."""
+
+    reqId: int
+    marketDataType: int
+
+
+@dataclass(slots=True, frozen=True)
+class UpdateMktDepthArgs:
+    """``Wrapper.updateMktDepth(reqId, position, operation, side, price, size)`` args."""
+
+    reqId: int
+    position: int
+    operation: int
+    side: int
+    price: float
+    size: float
+
+
+@dataclass(slots=True, frozen=True)
+class UpdateMktDepthL2Args:
+    """``Wrapper.updateMktDepthL2(reqId, position, marketMaker, operation, side,
+    price, size, isSmartDepth)`` args."""
+
+    reqId: int
+    position: int
+    marketMaker: str
+    operation: int
+    side: int
+    price: float
+    size: float
+    isSmartDepth: bool
+
+
+@dataclass(slots=True, frozen=True)
+class RerouteMktReqArgs:
+    """``Wrapper.rerouteMktDataReq`` / ``rerouteMktDepthReq(reqId, conId, exchange)`` args."""
+
+    reqId: int
+    conId: int
+    exchange: str
+
+
+@dataclass(slots=True, frozen=True)
+class TickByTickAllLastArgs:
+    """``Wrapper.tickByTickAllLast(reqId, tickType, time, price, size,
+    tickAttribLast, exchange, specialConditions)`` args."""
+
+    reqId: int
+    tickType: int
+    time: int
+    price: float
+    size: float
+    tickAttribLast: TickAttribLast
+    exchange: str
+    specialConditions: str
+
+
+@dataclass(slots=True, frozen=True)
+class TickByTickBidAskArgs:
+    """``Wrapper.tickByTickBidAsk(reqId, time, bidPrice, askPrice, bidSize,
+    askSize, tickAttribBidAsk)`` args."""
+
+    reqId: int
+    time: int
+    bidPrice: float
+    askPrice: float
+    bidSize: float
+    askSize: float
+    tickAttribBidAsk: TickAttribBidAsk
+
+
+@dataclass(slots=True, frozen=True)
+class TickByTickMidPointArgs:
+    """``Wrapper.tickByTickMidPoint(reqId, time, midPoint)`` args."""
+
+    reqId: int
+    time: int
+    midPoint: float
+
+
+# ``dispatchTickByTick`` returns one of these branch shapes based on
+# which oneof variant the proto carried, or ``None`` when no oneof
+# variant was set.
 TickByTickDispatch: TypeAlias = (
-    tuple[Literal["allLast"], TickByTickAllLastArgs]
-    | tuple[Literal["bidAsk"], TickByTickBidAskArgs]
-    | tuple[Literal["midPoint"], TickByTickMidPointArgs]
-    | tuple[Literal[""], tuple[()]]
+    TickByTickAllLastArgs | TickByTickBidAskArgs | TickByTickMidPointArgs | None
 )
 
 
@@ -159,7 +260,7 @@ def createPriceSizeTickArgs(
     tickType = proto.tickType if proto.HasField("tickType") else 0
     price = float(proto.price) if proto.HasField("price") else 0.0
     size = _wireSizeToFloat(proto.size) if proto.HasField("size") else 0.0
-    return reqId, tickType, price, size
+    return PriceSizeTickArgs(reqId=reqId, tickType=tickType, price=price, size=size)
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +273,7 @@ def createTickSizeArgs(proto: TickSize_pb2.TickSize) -> TickSizeArgs:
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
     size = _wireSizeToFloat(proto.size) if proto.HasField("size") else 0.0
-    return reqId, tickType, size
+    return TickSizeArgs(reqId=reqId, tickType=tickType, size=size)
 
 
 def createTickGenericArgs(
@@ -182,7 +283,7 @@ def createTickGenericArgs(
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
     value = float(proto.value) if proto.HasField("value") else 0.0
-    return reqId, tickType, value
+    return TickGenericArgs(reqId=reqId, tickType=tickType, value=value)
 
 
 def createTickStringArgs(proto: TickString_pb2.TickString) -> TickStringArgs:
@@ -190,7 +291,7 @@ def createTickStringArgs(proto: TickString_pb2.TickString) -> TickStringArgs:
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
     value = proto.value if proto.HasField("value") else ""
-    return reqId, tickType, value
+    return TickStringArgs(reqId=reqId, tickType=tickType, value=value)
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +315,12 @@ def createTickReqParamsArgs(
     snapshotPermissions = (
         proto.snapshotPermissions if proto.HasField("snapshotPermissions") else 0
     )
-    return reqId, minTick, bboExchange, snapshotPermissions
+    return TickReqParamsArgs(
+        reqId=reqId,
+        minTick=minTick,
+        bboExchange=bboExchange,
+        snapshotPermissions=snapshotPermissions,
+    )
 
 
 def createTickSnapshotEndReqId(proto: TickSnapshotEnd_pb2.TickSnapshotEnd) -> int:
@@ -249,18 +355,18 @@ def createTickOptionComputationArgs(
     vega = float(proto.vega) if proto.HasField("vega") else 0.0
     theta = float(proto.theta) if proto.HasField("theta") else 0.0
     undPrice = float(proto.undPrice) if proto.HasField("undPrice") else 0.0
-    return (
-        reqId,
-        tickType,
-        tickAttrib,
-        impliedVol,
-        delta,
-        optPrice,
-        pvDividend,
-        gamma,
-        vega,
-        theta,
-        undPrice,
+    return TickOptionComputationArgs(
+        reqId=reqId,
+        tickType=tickType,
+        tickAttrib=tickAttrib,
+        impliedVol=impliedVol,
+        delta=delta,
+        optPrice=optPrice,
+        pvDividend=pvDividend,
+        gamma=gamma,
+        vega=vega,
+        theta=theta,
+        undPrice=undPrice,
     )
 
 
@@ -286,13 +392,9 @@ def createTickAttribLast(proto: TickAttribLast_pb2.TickAttribLast) -> TickAttrib
 
 
 def dispatchTickByTick(proto: TickByTickData_pb2.TickByTickData) -> TickByTickDispatch:
-    """Decode a TickByTickData into a (kind, args) pair the decoder
-    can dispatch through. ``kind`` is one of:
-
-    * ``"allLast"`` — args for ``Wrapper.tickByTickAllLast``
-    * ``"bidAsk"`` — args for ``Wrapper.tickByTickBidAsk``
-    * ``"midPoint"`` — args for ``Wrapper.tickByTickMidPoint``
-    * ``""`` — no oneof set; caller drops
+    """Decode a TickByTickData into one of the branch dataclasses the
+    decoder can dispatch through, or ``None`` when no oneof variant
+    was set.
 
     Tick types 1 and 2 ("last" and "all-last") share the same
     HistoricalTickLast inner shape; the outer ``tickType`` field
@@ -303,39 +405,45 @@ def dispatchTickByTick(proto: TickByTickData_pb2.TickByTickData) -> TickByTickDi
 
     if proto.HasField("historicalTickLast"):
         inner = proto.historicalTickLast
-        return "allLast", (
-            reqId,
-            tickType,
-            inner.time if inner.HasField("time") else 0,
-            float(inner.price) if inner.HasField("price") else 0.0,
-            _wireSizeToFloat(inner.size) if inner.HasField("size") else 0.0,
-            createTickAttribLast(inner.tickAttribLast)
+        return TickByTickAllLastArgs(
+            reqId=reqId,
+            tickType=tickType,
+            time=inner.time if inner.HasField("time") else 0,
+            price=float(inner.price) if inner.HasField("price") else 0.0,
+            size=_wireSizeToFloat(inner.size) if inner.HasField("size") else 0.0,
+            tickAttribLast=createTickAttribLast(inner.tickAttribLast)
             if inner.HasField("tickAttribLast")
             else TickAttribLast(),
-            inner.exchange if inner.HasField("exchange") else "",
-            inner.specialConditions if inner.HasField("specialConditions") else "",
+            exchange=inner.exchange if inner.HasField("exchange") else "",
+            specialConditions=inner.specialConditions
+            if inner.HasField("specialConditions")
+            else "",
         )
     if proto.HasField("historicalTickBidAsk"):
-        inner = proto.historicalTickBidAsk
-        return "bidAsk", (
-            reqId,
-            inner.time if inner.HasField("time") else 0,
-            float(inner.priceBid) if inner.HasField("priceBid") else 0.0,
-            float(inner.priceAsk) if inner.HasField("priceAsk") else 0.0,
-            _wireSizeToFloat(inner.sizeBid) if inner.HasField("sizeBid") else 0.0,
-            _wireSizeToFloat(inner.sizeAsk) if inner.HasField("sizeAsk") else 0.0,
-            createTickAttribBidAsk(inner.tickAttribBidAsk)
-            if inner.HasField("tickAttribBidAsk")
+        innerBA = proto.historicalTickBidAsk
+        return TickByTickBidAskArgs(
+            reqId=reqId,
+            time=innerBA.time if innerBA.HasField("time") else 0,
+            bidPrice=float(innerBA.priceBid) if innerBA.HasField("priceBid") else 0.0,
+            askPrice=float(innerBA.priceAsk) if innerBA.HasField("priceAsk") else 0.0,
+            bidSize=_wireSizeToFloat(innerBA.sizeBid)
+            if innerBA.HasField("sizeBid")
+            else 0.0,
+            askSize=_wireSizeToFloat(innerBA.sizeAsk)
+            if innerBA.HasField("sizeAsk")
+            else 0.0,
+            tickAttribBidAsk=createTickAttribBidAsk(innerBA.tickAttribBidAsk)
+            if innerBA.HasField("tickAttribBidAsk")
             else TickAttribBidAsk(),
         )
     if proto.HasField("historicalTickMidPoint"):
-        inner = proto.historicalTickMidPoint
-        return "midPoint", (
-            reqId,
-            inner.time if inner.HasField("time") else 0,
-            float(inner.price) if inner.HasField("price") else 0.0,
+        innerMP = proto.historicalTickMidPoint
+        return TickByTickMidPointArgs(
+            reqId=reqId,
+            time=innerMP.time if innerMP.HasField("time") else 0,
+            midPoint=float(innerMP.price) if innerMP.HasField("price") else 0.0,
         )
-    return "", ()
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +457,7 @@ def createMarketDataTypeArgs(
     """``Wrapper.marketDataType(reqId, marketDataType)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     marketDataType = proto.marketDataType if proto.HasField("marketDataType") else 0
-    return reqId, marketDataType
+    return MarketDataTypeArgs(reqId=reqId, marketDataType=marketDataType)
 
 
 # ---------------------------------------------------------------------------
@@ -385,9 +493,18 @@ def createUpdateMktDepthArgs(
     """
     reqId = proto.reqId if proto.HasField("reqId") else 0
     if not proto.HasField("marketDepthData"):
-        return reqId, 0, 0, 0, 0.0, 0.0
+        return UpdateMktDepthArgs(
+            reqId=reqId, position=0, operation=0, side=0, price=0.0, size=0.0
+        )
     position, operation, side, price, size, _, _ = _depthDataArgs(proto.marketDepthData)
-    return reqId, position, operation, side, price, size
+    return UpdateMktDepthArgs(
+        reqId=reqId,
+        position=position,
+        operation=operation,
+        side=side,
+        price=price,
+        size=size,
+    )
 
 
 def createUpdateMktDepthL2Args(
@@ -397,11 +514,29 @@ def createUpdateMktDepthL2Args(
     side, price, size, isSmartDepth)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     if not proto.HasField("marketDepthData"):
-        return reqId, 0, "", 0, 0, 0.0, 0.0, False
+        return UpdateMktDepthL2Args(
+            reqId=reqId,
+            position=0,
+            marketMaker="",
+            operation=0,
+            side=0,
+            price=0.0,
+            size=0.0,
+            isSmartDepth=False,
+        )
     position, operation, side, price, size, marketMaker, isSmartDepth = _depthDataArgs(
         proto.marketDepthData
     )
-    return reqId, position, marketMaker, operation, side, price, size, isSmartDepth
+    return UpdateMktDepthL2Args(
+        reqId=reqId,
+        position=position,
+        marketMaker=marketMaker,
+        operation=operation,
+        side=side,
+        price=price,
+        size=size,
+        isSmartDepth=isSmartDepth,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +577,7 @@ def createRerouteMktDataReqArgs(
     reqId = proto.reqId if proto.HasField("reqId") else 0
     conId = proto.conId if proto.HasField("conId") else 0
     exchange = proto.exchange if proto.HasField("exchange") else ""
-    return reqId, conId, exchange
+    return RerouteMktReqArgs(reqId=reqId, conId=conId, exchange=exchange)
 
 
 def createRerouteMktDepthReqArgs(
@@ -452,7 +587,7 @@ def createRerouteMktDepthReqArgs(
     reqId = proto.reqId if proto.HasField("reqId") else 0
     conId = proto.conId if proto.HasField("conId") else 0
     exchange = proto.exchange if proto.HasField("exchange") else ""
-    return reqId, conId, exchange
+    return RerouteMktReqArgs(reqId=reqId, conId=conId, exchange=exchange)
 
 
 # ===========================================================================

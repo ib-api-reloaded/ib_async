@@ -568,13 +568,23 @@ class Decoder:
     def _protoUpdateAccountValue(self, proto: Any) -> None:
         from ._proto.accounts import createUpdateAccountValueArgs
 
-        tag, val, currency, account = createUpdateAccountValueArgs(proto)
-        self.wrapper.updateAccountValue(tag, val, currency, account)
+        a = createUpdateAccountValueArgs(proto)
+        self.wrapper.updateAccountValue(a.tag, a.val, a.currency, a.account)
 
     def _protoUpdatePortfolio(self, proto: Any) -> None:
         from ._proto.accounts import createUpdatePortfolioArgs
 
-        self.wrapper.updatePortfolio(*createUpdatePortfolioArgs(proto))
+        a = createUpdatePortfolioArgs(proto)
+        self.wrapper.updatePortfolio(
+            a.contract,
+            a.position,
+            a.marketPrice,
+            a.marketValue,
+            a.averageCost,
+            a.unrealizedPNL,
+            a.realizedPNL,
+            a.account,
+        )
 
     def _protoUpdateAccountTime(self, proto: Any) -> None:
         ts = proto.timeStamp if proto.HasField("timeStamp") else ""
@@ -592,7 +602,8 @@ class Decoder:
     def _protoPosition(self, proto: Any) -> None:
         from ._proto.accounts import createPositionArgs
 
-        self.wrapper.position(*createPositionArgs(proto))
+        a = createPositionArgs(proto)
+        self.wrapper.position(a.account, a.contract, a.position, a.avgCost)
 
     def _protoPositionEnd(self, proto: Any) -> None:
         self.wrapper.positionEnd()
@@ -600,7 +611,8 @@ class Decoder:
     def _protoAccountSummary(self, proto: Any) -> None:
         from ._proto.accounts import createAccountSummaryArgs
 
-        self.wrapper.accountSummary(*createAccountSummaryArgs(proto))
+        a = createAccountSummaryArgs(proto)
+        self.wrapper.accountSummary(a.reqId, a.account, a.tag, a.value, a.currency)
 
     def _protoAccountSummaryEnd(self, proto: Any) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
@@ -609,7 +621,10 @@ class Decoder:
     def _protoPositionMulti(self, proto: Any) -> None:
         from ._proto.accounts import createPositionMultiArgs
 
-        self.wrapper.positionMulti(*createPositionMultiArgs(proto))
+        a = createPositionMultiArgs(proto)
+        self.wrapper.positionMulti(
+            a.reqId, a.account, a.modelCode, a.contract, a.pos, a.avgCost
+        )
 
     def _protoPositionMultiEnd(self, proto: Any) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
@@ -618,7 +633,10 @@ class Decoder:
     def _protoAccountUpdateMulti(self, proto: Any) -> None:
         from ._proto.accounts import createAccountUpdateMultiArgs
 
-        self.wrapper.accountUpdateMulti(*createAccountUpdateMultiArgs(proto))
+        a = createAccountUpdateMultiArgs(proto)
+        self.wrapper.accountUpdateMulti(
+            a.reqId, a.account, a.modelCode, a.tag, a.val, a.currency
+        )
 
     def _protoAccountUpdateMultiEnd(self, proto: Any) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
@@ -629,27 +647,34 @@ class Decoder:
     def _protoPriceSizeTick(self, proto: Any) -> None:
         from ._proto.market_data import createPriceSizeTickArgs
 
-        self.wrapper.priceSizeTick(*createPriceSizeTickArgs(proto))
+        a = createPriceSizeTickArgs(proto)
+        self.wrapper.priceSizeTick(a.reqId, a.tickType, a.price, a.size)
 
     def _protoTickSize(self, proto: Any) -> None:
         from ._proto.market_data import createTickSizeArgs
 
-        self.wrapper.tickSize(*createTickSizeArgs(proto))
+        a = createTickSizeArgs(proto)
+        self.wrapper.tickSize(a.reqId, a.tickType, a.size)
 
     def _protoTickGeneric(self, proto: Any) -> None:
         from ._proto.market_data import createTickGenericArgs
 
-        self.wrapper.tickGeneric(*createTickGenericArgs(proto))
+        a = createTickGenericArgs(proto)
+        self.wrapper.tickGeneric(a.reqId, a.tickType, a.value)
 
     def _protoTickString(self, proto: Any) -> None:
         from ._proto.market_data import createTickStringArgs
 
-        self.wrapper.tickString(*createTickStringArgs(proto))
+        a = createTickStringArgs(proto)
+        self.wrapper.tickString(a.reqId, a.tickType, a.value)
 
     def _protoTickReqParams(self, proto: Any) -> None:
         from ._proto.market_data import createTickReqParamsArgs
 
-        self.wrapper.tickReqParams(*createTickReqParamsArgs(proto))
+        a = createTickReqParamsArgs(proto)
+        self.wrapper.tickReqParams(
+            a.reqId, a.minTick, a.bboExchange, a.snapshotPermissions
+        )
 
     def _protoTickSnapshotEnd(self, proto: Any) -> None:
         from ._proto.market_data import createTickSnapshotEndReqId
@@ -659,34 +684,83 @@ class Decoder:
     def _protoTickOptionComputation(self, proto: Any) -> None:
         from ._proto.market_data import createTickOptionComputationArgs
 
-        self.wrapper.tickOptionComputation(*createTickOptionComputationArgs(proto))
+        a = createTickOptionComputationArgs(proto)
+        self.wrapper.tickOptionComputation(
+            a.reqId,
+            a.tickType,
+            a.tickAttrib,
+            a.impliedVol,
+            a.delta,
+            a.optPrice,
+            a.pvDividend,
+            a.gamma,
+            a.vega,
+            a.theta,
+            a.undPrice,
+        )
 
     def _protoTickByTick(self, proto: Any) -> None:
-        from ._proto.market_data import dispatchTickByTick
+        from ._proto.market_data import (
+            TickByTickAllLastArgs,
+            TickByTickBidAskArgs,
+            TickByTickMidPointArgs,
+            dispatchTickByTick,
+        )
 
-        kind, args = dispatchTickByTick(proto)
-        if kind == "allLast":
-            self.wrapper.tickByTickAllLast(*args)
-        elif kind == "bidAsk":
-            self.wrapper.tickByTickBidAsk(*args)
-        elif kind == "midPoint":
-            self.wrapper.tickByTickMidPoint(*args)
-        # else: oneof not set — drop, matches binary path
+        a = dispatchTickByTick(proto)
+        if isinstance(a, TickByTickAllLastArgs):
+            self.wrapper.tickByTickAllLast(
+                a.reqId,
+                a.tickType,
+                a.time,
+                a.price,
+                a.size,
+                a.tickAttribLast,
+                a.exchange,
+                a.specialConditions,
+            )
+        elif isinstance(a, TickByTickBidAskArgs):
+            self.wrapper.tickByTickBidAsk(
+                a.reqId,
+                a.time,
+                a.bidPrice,
+                a.askPrice,
+                a.bidSize,
+                a.askSize,
+                a.tickAttribBidAsk,
+            )
+        elif isinstance(a, TickByTickMidPointArgs):
+            self.wrapper.tickByTickMidPoint(a.reqId, a.time, a.midPoint)
+        # else None — oneof not set, drop (matches binary path)
 
     def _protoMarketDataType(self, proto: Any) -> None:
         from ._proto.market_data import createMarketDataTypeArgs
 
-        self.wrapper.marketDataType(*createMarketDataTypeArgs(proto))
+        a = createMarketDataTypeArgs(proto)
+        self.wrapper.marketDataType(a.reqId, a.marketDataType)
 
     def _protoUpdateMktDepth(self, proto: Any) -> None:
         from ._proto.market_data import createUpdateMktDepthArgs
 
-        self.wrapper.updateMktDepth(*createUpdateMktDepthArgs(proto))
+        a = createUpdateMktDepthArgs(proto)
+        self.wrapper.updateMktDepth(
+            a.reqId, a.position, a.operation, a.side, a.price, a.size
+        )
 
     def _protoUpdateMktDepthL2(self, proto: Any) -> None:
         from ._proto.market_data import createUpdateMktDepthL2Args
 
-        self.wrapper.updateMktDepthL2(*createUpdateMktDepthL2Args(proto))
+        a = createUpdateMktDepthL2Args(proto)
+        self.wrapper.updateMktDepthL2(
+            a.reqId,
+            a.position,
+            a.marketMaker,
+            a.operation,
+            a.side,
+            a.price,
+            a.size,
+            a.isSmartDepth,
+        )
 
     def _protoMktDepthExchanges(self, proto: Any) -> None:
         from ._proto.market_data import createMarketDepthExchangesList
@@ -696,66 +770,89 @@ class Decoder:
     def _protoRerouteMktDataReq(self, proto: Any) -> None:
         from ._proto.market_data import createRerouteMktDataReqArgs
 
-        self.wrapper.rerouteMktDataReq(*createRerouteMktDataReqArgs(proto))
+        a = createRerouteMktDataReqArgs(proto)
+        self.wrapper.rerouteMktDataReq(a.reqId, a.conId, a.exchange)
 
     def _protoRerouteMktDepthReq(self, proto: Any) -> None:
         from ._proto.market_data import createRerouteMktDepthReqArgs
 
-        self.wrapper.rerouteMktDepthReq(*createRerouteMktDepthReqArgs(proto))
+        a = createRerouteMktDepthReqArgs(proto)
+        self.wrapper.rerouteMktDepthReq(a.reqId, a.conId, a.exchange)
 
     # --- historical-data handlers -----------------------------------------
 
     def _protoHistoricalData(self, proto: Any) -> None:
         from ._proto.historical import iterHistoricalDataBars
 
-        reqId, bars = iterHistoricalDataBars(proto)
-        for bar in bars:
-            self.wrapper.historicalData(reqId, bar)
+        a = iterHistoricalDataBars(proto)
+        for bar in a.bars:
+            self.wrapper.historicalData(a.reqId, bar)
 
     def _protoHistoricalDataEnd(self, proto: Any) -> None:
         from ._proto.historical import createHistoricalDataEndArgs
 
-        self.wrapper.historicalDataEnd(*createHistoricalDataEndArgs(proto))
+        a = createHistoricalDataEndArgs(proto)
+        self.wrapper.historicalDataEnd(a.reqId, a.start, a.end)
 
     def _protoHistoricalDataUpdate(self, proto: Any) -> None:
         from ._proto.historical import createHistoricalDataUpdateArgs
 
-        self.wrapper.historicalDataUpdate(*createHistoricalDataUpdateArgs(proto))
+        a = createHistoricalDataUpdateArgs(proto)
+        self.wrapper.historicalDataUpdate(a.reqId, a.bar)
 
     def _protoRealtimeBar(self, proto: Any) -> None:
         from ._proto.historical import createRealtimeBarArgs
 
-        self.wrapper.realtimeBar(*createRealtimeBarArgs(proto))
+        a = createRealtimeBarArgs(proto)
+        self.wrapper.realtimeBar(
+            a.reqId,
+            a.time,
+            a.open_,
+            a.high,
+            a.low,
+            a.close,
+            a.volume,
+            a.wap,
+            a.count,
+        )
 
     def _protoHeadTimestamp(self, proto: Any) -> None:
         from ._proto.historical import createHeadTimestampArgs
 
-        self.wrapper.headTimestamp(*createHeadTimestampArgs(proto))
+        a = createHeadTimestampArgs(proto)
+        self.wrapper.headTimestamp(a.reqId, a.headTimestamp)
 
     def _protoHistogramData(self, proto: Any) -> None:
         from ._proto.historical import createHistogramDataArgs
 
-        self.wrapper.histogramData(*createHistogramDataArgs(proto))
+        a = createHistogramDataArgs(proto)
+        self.wrapper.histogramData(a.reqId, a.items)
 
     def _protoHistoricalSchedule(self, proto: Any) -> None:
         from ._proto.historical import createHistoricalScheduleArgs
 
-        self.wrapper.historicalSchedule(*createHistoricalScheduleArgs(proto))
+        a = createHistoricalScheduleArgs(proto)
+        self.wrapper.historicalSchedule(
+            a.reqId, a.startDateTime, a.endDateTime, a.timeZone, a.sessions
+        )
 
     def _protoHistoricalTicks(self, proto: Any) -> None:
         from ._proto.historical import createHistoricalTicksArgs
 
-        self.wrapper.historicalTicks(*createHistoricalTicksArgs(proto))
+        a = createHistoricalTicksArgs(proto)
+        self.wrapper.historicalTicks(a.reqId, a.ticks, a.done)
 
     def _protoHistoricalTicksBidAsk(self, proto: Any) -> None:
         from ._proto.historical import createHistoricalTicksBidAskArgs
 
-        self.wrapper.historicalTicksBidAsk(*createHistoricalTicksBidAskArgs(proto))
+        a = createHistoricalTicksBidAskArgs(proto)
+        self.wrapper.historicalTicksBidAsk(a.reqId, a.ticks, a.done)
 
     def _protoHistoricalTicksLast(self, proto: Any) -> None:
         from ._proto.historical import createHistoricalTicksLastArgs
 
-        self.wrapper.historicalTicksLast(*createHistoricalTicksLastArgs(proto))
+        a = createHistoricalTicksLastArgs(proto)
+        self.wrapper.historicalTicksLast(a.reqId, a.ticks, a.done)
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""

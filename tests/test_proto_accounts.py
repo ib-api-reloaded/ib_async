@@ -77,7 +77,10 @@ from ib_async._proto.accounts import (
 
 def test_account_value_empty_proto_returns_empty_strings():
     args = createUpdateAccountValueArgs(AccountValue_pb2.AccountValue())
-    assert args == ("", "", "", "")
+    assert args.tag == ""
+    assert args.val == ""
+    assert args.currency == ""
+    assert args.account == ""
 
 
 def test_account_value_partial_proto_returns_partial_args():
@@ -85,11 +88,11 @@ def test_account_value_partial_proto_returns_partial_args():
     proto.key = "NetLiquidation"
     proto.value = "12345.67"
     # currency, accountName missing on purpose
-    tag, val, currency, account = createUpdateAccountValueArgs(proto)
-    assert tag == "NetLiquidation"
-    assert val == "12345.67"
-    assert currency == ""
-    assert account == ""
+    args = createUpdateAccountValueArgs(proto)
+    assert args.tag == "NetLiquidation"
+    assert args.val == "12345.67"
+    assert args.currency == ""
+    assert args.account == ""
 
 
 def test_account_value_wire_key_maps_to_domain_tag():
@@ -120,7 +123,11 @@ def test_account_value_modelCode_is_always_empty_for_this_proto():
 
 def test_account_summary_empty_proto():
     args = createAccountSummaryArgs(AccountSummary_pb2.AccountSummary())
-    assert args == (0, "", "", "", "")
+    assert args.reqId == 0
+    assert args.account == ""
+    assert args.tag == ""
+    assert args.value == ""
+    assert args.currency == ""
 
 
 def test_account_summary_full_round_trip():
@@ -131,13 +138,12 @@ def test_account_summary_full_round_trip():
         value="100000.00",
         currency="USD",
     )
-    assert createAccountSummaryArgs(proto) == (
-        42,
-        "DU1",
-        "NetLiquidation",
-        "100000.00",
-        "USD",
-    )
+    args = createAccountSummaryArgs(proto)
+    assert args.reqId == 42
+    assert args.account == "DU1"
+    assert args.tag == "NetLiquidation"
+    assert args.value == "100000.00"
+    assert args.currency == "USD"
 
 
 def test_account_summary_request_proto_carries_every_field():
@@ -167,9 +173,13 @@ def test_cancel_account_summary_round_trip_via_serialize():
 
 
 def test_account_update_multi_empty_proto():
-    assert createAccountUpdateMultiArgs(
-        AccountUpdateMulti_pb2.AccountUpdateMulti()
-    ) == (0, "", "", "", "", "")
+    args = createAccountUpdateMultiArgs(AccountUpdateMulti_pb2.AccountUpdateMulti())
+    assert args.reqId == 0
+    assert args.account == ""
+    assert args.modelCode == ""
+    assert args.tag == ""
+    assert args.val == ""
+    assert args.currency == ""
 
 
 def test_account_update_multi_wire_key_maps_to_domain_tag():
@@ -181,15 +191,13 @@ def test_account_update_multi_wire_key_maps_to_domain_tag():
         value="50000.00",
         currency="USD",
     )
-    reqId, account, modelCode, tag, val, currency = createAccountUpdateMultiArgs(proto)
-    assert (reqId, account, modelCode, tag, val, currency) == (
-        7,
-        "DU1",
-        "MODEL_A",
-        "NetLiquidation",
-        "50000.00",
-        "USD",
-    )
+    args = createAccountUpdateMultiArgs(proto)
+    assert args.reqId == 7
+    assert args.account == "DU1"
+    assert args.modelCode == "MODEL_A"
+    assert args.tag == "NetLiquidation"
+    assert args.val == "50000.00"
+    assert args.currency == "USD"
 
 
 def test_account_updates_multi_request_proto_round_trip_with_false_flag():
@@ -284,11 +292,11 @@ def test_position_args_helper_returns_wrapper_args_in_order():
     ``Wrapper.position(*args)`` without naming each."""
     proto = Position_pb2.Position(account="DU1", position="100", avgCost=150.25)
     proto.contract.symbol = "AAPL"
-    account, contract, pos, avg = createPositionArgs(proto)
-    assert account == "DU1"
-    assert contract.symbol == "AAPL"
-    assert pos == Decimal("100")
-    assert avg == Decimal("150.25")
+    args = createPositionArgs(proto)
+    assert args.account == "DU1"
+    assert args.contract.symbol == "AAPL"
+    assert args.position == Decimal("100")
+    assert args.avgCost == Decimal("150.25")
 
 
 def test_position_with_no_contract_yields_default_contract():
@@ -307,10 +315,11 @@ def test_position_with_no_contract_yields_default_contract():
 
 def test_position_multi_empty_proto_yields_zeros_and_nones():
     args = createPositionMultiArgs(PositionMulti_pb2.PositionMulti())
-    reqId, account, modelCode, contract, pos, avg = args
-    assert (reqId, account, modelCode) == (0, "", "")
-    assert pos is None
-    assert avg is None
+    assert args.reqId == 0
+    assert args.account == ""
+    assert args.modelCode == ""
+    assert args.pos is None
+    assert args.avgCost is None
 
 
 def test_position_multi_full_round_trip():
@@ -319,11 +328,12 @@ def test_position_multi_full_round_trip():
     )
     proto.contract.symbol = "AAPL"
     args = createPositionMultiArgs(proto)
-    reqId, account, modelCode, contract, pos, avg = args
-    assert (reqId, account, modelCode) == (42, "DU1", "MODEL_A")
-    assert contract.symbol == "AAPL"
-    assert pos == Decimal("100")
-    assert avg == Decimal("150.25")
+    assert args.reqId == 42
+    assert args.account == "DU1"
+    assert args.modelCode == "MODEL_A"
+    assert args.contract.symbol == "AAPL"
+    assert args.pos == Decimal("100")
+    assert args.avgCost == Decimal("150.25")
 
 
 def test_positions_multi_request_proto_round_trip():
@@ -400,18 +410,16 @@ def test_portfolio_value_full_round_trip():
     assert item.account == "DU1"
 
 
-def test_update_portfolio_args_helper_returns_8_tuple():
+def test_update_portfolio_args_helper_returns_8_fields():
     proto = PortfolioValue_pb2.PortfolioValue(
         position="100",
         marketPrice=150.25,
         accountName="DU1",
     )
     args = createUpdatePortfolioArgs(proto)
-    assert len(args) == 8
-    contract, posSize, mp, mv, ac, upnl, rpnl, account = args
-    assert posSize == Decimal("100")
-    assert mp == Decimal("150.25")
-    assert account == "DU1"
+    assert args.position == Decimal("100")
+    assert args.marketPrice == Decimal("150.25")
+    assert args.account == "DU1"
 
 
 # ---------------------------------------------------------------------------
@@ -492,21 +500,29 @@ def test_fa_replace_proto_carries_every_field():
 
 
 def test_receive_fa_empty_proto():
-    assert createReceiveFAArgs(ReceiveFA_pb2.ReceiveFA()) == (0, "")
+    args = createReceiveFAArgs(ReceiveFA_pb2.ReceiveFA())
+    assert args.faDataType == 0
+    assert args.xml == ""
 
 
 def test_receive_fa_full_round_trip():
     proto = ReceiveFA_pb2.ReceiveFA(faDataType=2, xml="<xml/>")
-    assert createReceiveFAArgs(proto) == (2, "<xml/>")
+    args = createReceiveFAArgs(proto)
+    assert args.faDataType == 2
+    assert args.xml == "<xml/>"
 
 
 def test_replace_fa_end_empty_proto():
-    assert createReplaceFAEndArgs(ReplaceFAEnd_pb2.ReplaceFAEnd()) == (0, "")
+    args = createReplaceFAEndArgs(ReplaceFAEnd_pb2.ReplaceFAEnd())
+    assert args.reqId == 0
+    assert args.text == ""
 
 
 def test_replace_fa_end_full_round_trip():
     proto = ReplaceFAEnd_pb2.ReplaceFAEnd(reqId=7, text="ok")
-    assert createReplaceFAEndArgs(proto) == (7, "ok")
+    args = createReplaceFAEndArgs(proto)
+    assert args.reqId == 7
+    assert args.text == "ok"
 
 
 # ---------------------------------------------------------------------------

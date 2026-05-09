@@ -33,8 +33,8 @@ proto.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import TypeAlias
 
 from .._pb import (
     CancelHeadTimestamp_pb2,
@@ -77,25 +77,105 @@ from .contracts import createContractProto
 from .market_data import createTickAttribBidAsk, createTickAttribLast
 from .safe import safe_decimal
 
-# Module-level type aliases for converter return shapes. Each one names the
-# wrapper method whose positional arguments it carries so call sites read as
-# ``self.wrapper.X(*args)`` without losing the type story.
+# Frozen-slotted dataclass return shapes for converter functions. Each one
+# names the wrapper method whose positional arguments it carries so call
+# sites read as ``self.wrapper.X(*astuple(args))`` (or by named field)
+# without losing the type story.
 
-# ``Wrapper.realtimeBar(reqId, time, open_, high, low, close, volume, wap, count)``
-RealtimeBarArgs: TypeAlias = tuple[
-    int,
-    int,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    int,
-]
 
-# ``Wrapper.historicalSchedule(reqId, start, end, timeZone, sessions)``
-HistoricalScheduleArgs: TypeAlias = tuple[int, str, str, str, list["HistoricalSession"]]
+@dataclass(slots=True, frozen=True)
+class HistoricalDataBars:
+    """``Wrapper.historicalData(reqId, bar)`` — batched per-reqId bars."""
+
+    reqId: int
+    bars: list[BarData]
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalDataEndArgs:
+    """``Wrapper.historicalDataEnd(reqId, start, end)`` args."""
+
+    reqId: int
+    start: str
+    end: str
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalDataUpdateArgs:
+    """``Wrapper.historicalDataUpdate(reqId, bar)`` args."""
+
+    reqId: int
+    bar: BarData
+
+
+@dataclass(slots=True, frozen=True)
+class RealtimeBarArgs:
+    """``Wrapper.realtimeBar(reqId, time, open_, high, low, close, volume, wap, count)`` args."""
+
+    reqId: int
+    time: int
+    open_: Decimal | None
+    high: Decimal | None
+    low: Decimal | None
+    close: Decimal | None
+    volume: Decimal | None
+    wap: Decimal | None
+    count: int
+
+
+@dataclass(slots=True, frozen=True)
+class HeadTimestampArgs:
+    """``Wrapper.headTimestamp(reqId, headTimestamp)`` args."""
+
+    reqId: int
+    headTimestamp: str
+
+
+@dataclass(slots=True, frozen=True)
+class HistogramDataArgs:
+    """``Wrapper.histogramData(reqId, items)`` args."""
+
+    reqId: int
+    items: list[HistogramData]
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalScheduleArgs:
+    """``Wrapper.historicalSchedule(reqId, startDateTime, endDateTime, timeZone, sessions)`` args."""
+
+    reqId: int
+    startDateTime: str
+    endDateTime: str
+    timeZone: str
+    sessions: list[HistoricalSession]
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalTicksArgs:
+    """``Wrapper.historicalTicks(reqId, ticks, done)`` args."""
+
+    reqId: int
+    ticks: list[HistoricalTick]
+    done: bool
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalTicksBidAskArgs:
+    """``Wrapper.historicalTicksBidAsk(reqId, ticks, done)`` args."""
+
+    reqId: int
+    ticks: list[HistoricalTickBidAsk]
+    done: bool
+
+
+@dataclass(slots=True, frozen=True)
+class HistoricalTicksLastArgs:
+    """``Wrapper.historicalTicksLast(reqId, ticks, done)`` args."""
+
+    reqId: int
+    ticks: list[HistoricalTickLast]
+    done: bool
+
 
 # ---------------------------------------------------------------------------
 # HistoricalDataBar — building block for HistoricalData / Update
@@ -128,8 +208,8 @@ def createBarData(proto: HistoricalDataBar_pb2.HistoricalDataBar) -> BarData:
 
 def iterHistoricalDataBars(
     proto: HistoricalData_pb2.HistoricalData,
-) -> tuple[int, list[BarData]]:
-    """Decode a HistoricalData proto into ``(reqId, [BarData])``.
+) -> HistoricalDataBars:
+    """Decode a HistoricalData proto into ``HistoricalDataBars(reqId, bars)``.
 
     The wrapper's ``historicalData(reqId, bar)`` is called per-bar by
     the binary path; the protobuf path delivers all bars in a single
@@ -137,17 +217,17 @@ def iterHistoricalDataBars(
     """
     reqId = proto.reqId if proto.HasField("reqId") else -1
     bars = [createBarData(b) for b in proto.historicalDataBars]
-    return reqId, bars
+    return HistoricalDataBars(reqId=reqId, bars=bars)
 
 
 def createHistoricalDataEndArgs(
     proto: HistoricalDataEnd_pb2.HistoricalDataEnd,
-) -> tuple[int, str, str]:
+) -> HistoricalDataEndArgs:
     """``Wrapper.historicalDataEnd(reqId, start, end)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
     start = proto.startDateStr if proto.HasField("startDateStr") else ""
     end = proto.endDateStr if proto.HasField("endDateStr") else ""
-    return reqId, start, end
+    return HistoricalDataEndArgs(reqId=reqId, start=start, end=end)
 
 
 # ---------------------------------------------------------------------------
@@ -157,14 +237,14 @@ def createHistoricalDataEndArgs(
 
 def createHistoricalDataUpdateArgs(
     proto: HistoricalDataUpdate_pb2.HistoricalDataUpdate,
-) -> tuple[int, BarData]:
+) -> HistoricalDataUpdateArgs:
     """``Wrapper.historicalDataUpdate(reqId, bar)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
     if proto.HasField("historicalDataBar"):
         bar = createBarData(proto.historicalDataBar)
     else:
         bar = BarData()
-    return reqId, bar
+    return HistoricalDataUpdateArgs(reqId=reqId, bar=bar)
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +270,17 @@ def createRealtimeBarArgs(
     volume = safe_decimal(proto.volume) if proto.HasField("volume") else None
     wap = safe_decimal(proto.WAP) if proto.HasField("WAP") else None
     count = proto.count if proto.HasField("count") else 0
-    return reqId, time_, open_, high, low, close, volume, wap, count
+    return RealtimeBarArgs(
+        reqId=reqId,
+        time=time_,
+        open_=open_,
+        high=high,
+        low=low,
+        close=close,
+        volume=volume,
+        wap=wap,
+        count=count,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -200,11 +290,11 @@ def createRealtimeBarArgs(
 
 def createHeadTimestampArgs(
     proto: HeadTimestamp_pb2.HeadTimestamp,
-) -> tuple[int, str]:
+) -> HeadTimestampArgs:
     """``Wrapper.headTimestamp(reqId, headTimestamp)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
     head = proto.headTimestamp if proto.HasField("headTimestamp") else ""
-    return reqId, head
+    return HeadTimestampArgs(reqId=reqId, headTimestamp=head)
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +316,7 @@ def createHistogramDataEntry(
 
 def createHistogramDataArgs(
     proto: HistogramData_pb2.HistogramData,
-) -> tuple[int, list[HistogramData]]:
+) -> HistogramDataArgs:
     """``Wrapper.histogramData(reqId, items)`` args.
 
     Note ``size`` on the wire is a string (Decimal precision); we coerce
@@ -236,7 +326,7 @@ def createHistogramDataArgs(
     """
     reqId = proto.reqId if proto.HasField("reqId") else -1
     items = [createHistogramDataEntry(e) for e in proto.histogramDataEntries]
-    return reqId, items
+    return HistogramDataArgs(reqId=reqId, items=items)
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +355,13 @@ def createHistoricalScheduleArgs(
     endDateTime = proto.endDateTime if proto.HasField("endDateTime") else ""
     timeZone = proto.timeZone if proto.HasField("timeZone") else ""
     sessions = [createHistoricalSession(s) for s in proto.historicalSessions]
-    return reqId, startDateTime, endDateTime, timeZone, sessions
+    return HistoricalScheduleArgs(
+        reqId=reqId,
+        startDateTime=startDateTime,
+        endDateTime=endDateTime,
+        timeZone=timeZone,
+        sessions=sessions,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -330,32 +426,32 @@ def createHistoricalTickLast(
 
 def createHistoricalTicksArgs(
     proto: HistoricalTicks_pb2.HistoricalTicks,
-) -> tuple[int, list[HistoricalTick], bool]:
+) -> HistoricalTicksArgs:
     """``Wrapper.historicalTicks(reqId, ticks, done)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
     ticks = [createHistoricalTick(t) for t in proto.historicalTicks]
     done = proto.isDone if proto.HasField("isDone") else False
-    return reqId, ticks, done
+    return HistoricalTicksArgs(reqId=reqId, ticks=ticks, done=done)
 
 
 def createHistoricalTicksBidAskArgs(
     proto: HistoricalTicksBidAsk_pb2.HistoricalTicksBidAsk,
-) -> tuple[int, list[HistoricalTickBidAsk], bool]:
+) -> HistoricalTicksBidAskArgs:
     """``Wrapper.historicalTicksBidAsk(reqId, ticks, done)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
-    ticks = [createHistoricalTickBidAsk(t) for t in proto.historicalTicksBidAsk]
+    ticksBA = [createHistoricalTickBidAsk(t) for t in proto.historicalTicksBidAsk]
     done = proto.isDone if proto.HasField("isDone") else False
-    return reqId, ticks, done
+    return HistoricalTicksBidAskArgs(reqId=reqId, ticks=ticksBA, done=done)
 
 
 def createHistoricalTicksLastArgs(
     proto: HistoricalTicksLast_pb2.HistoricalTicksLast,
-) -> tuple[int, list[HistoricalTickLast], bool]:
+) -> HistoricalTicksLastArgs:
     """``Wrapper.historicalTicksLast(reqId, ticks, done)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
-    ticks = [createHistoricalTickLast(t) for t in proto.historicalTicksLast]
+    ticksLast = [createHistoricalTickLast(t) for t in proto.historicalTicksLast]
     done = proto.isDone if proto.HasField("isDone") else False
-    return reqId, ticks, done
+    return HistoricalTicksLastArgs(reqId=reqId, ticks=ticksLast, done=done)
 
 
 # ===========================================================================

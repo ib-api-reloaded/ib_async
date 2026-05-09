@@ -6,8 +6,8 @@ Coverage strategy mirrors ``test_proto_accounts``:
   crashing — exercises HasField guards.
 * Wire-string sizes ("nan", "", garbage) must coerce to ``0.0`` for
   wrapper-side comparisons, never raise.
-* TickByTickData oneof dispatch must produce the right (kind, args)
-  tuple per inner-message variant.
+* TickByTickData oneof dispatch must produce the right branch
+  dataclass per inner-message variant.
 * Send-side request envelopes must carry every caller-supplied field
   including bool flags (``snapshot``, ``regulatorySnapshot``,
   ``isSmartDepth``, ``ignoreSize``) whose proto3 default would
@@ -42,6 +42,9 @@ from ib_async._pb import (
     TickString_pb2,
 )
 from ib_async._proto.market_data import (
+    TickByTickAllLastArgs,
+    TickByTickBidAskArgs,
+    TickByTickMidPointArgs,
     createCancelMarketDataProto,
     createCancelMarketDepthProto,
     createCancelTickByTickProto,
@@ -74,26 +77,35 @@ from ib_async._proto.market_data import (
 
 def test_tick_price_empty_proto_is_zero_args():
     args = createPriceSizeTickArgs(TickPrice_pb2.TickPrice())
-    assert args == (0, 0, 0.0, 0.0)
+    assert args.reqId == 0
+    assert args.tickType == 0
+    assert args.price == 0.0
+    assert args.size == 0.0
 
 
 def test_tick_price_garbage_size_string_is_zero():
     """Wire ``size`` is string; "abc" must coerce to 0.0, not raise."""
     proto = TickPrice_pb2.TickPrice(reqId=1, tickType=4, price=150.25, size="abc")
-    reqId, tickType, price, size = createPriceSizeTickArgs(proto)
-    assert (reqId, tickType, price) == (1, 4, 150.25)
-    assert size == 0.0
+    args = createPriceSizeTickArgs(proto)
+    assert args.reqId == 1
+    assert args.tickType == 4
+    assert args.price == 150.25
+    assert args.size == 0.0
 
 
 def test_tick_price_nan_size_is_zero():
     proto = TickPrice_pb2.TickPrice(reqId=1, tickType=4, price=150.25, size="nan")
-    _, _, _, size = createPriceSizeTickArgs(proto)
-    assert size == 0.0
+    args = createPriceSizeTickArgs(proto)
+    assert args.size == 0.0
 
 
 def test_tick_price_full_round_trip():
     proto = TickPrice_pb2.TickPrice(reqId=1, tickType=4, price=150.25, size="100")
-    assert createPriceSizeTickArgs(proto) == (1, 4, 150.25, 100.0)
+    args = createPriceSizeTickArgs(proto)
+    assert args.reqId == 1
+    assert args.tickType == 4
+    assert args.price == 150.25
+    assert args.size == 100.0
 
 
 def test_tick_price_attrMask_is_silently_dropped():
@@ -102,7 +114,8 @@ def test_tick_price_attrMask_is_silently_dropped():
         reqId=1, tickType=4, price=150.25, size="100", attrMask=3
     )
     args = createPriceSizeTickArgs(proto)
-    assert len(args) == 4  # no attrMask in tuple
+    # PriceSizeTickArgs has exactly 4 named fields; no attrMask slot.
+    assert not hasattr(args, "attrMask")
 
 
 # ---------------------------------------------------------------------------
@@ -111,27 +124,42 @@ def test_tick_price_attrMask_is_silently_dropped():
 
 
 def test_tick_size_empty():
-    assert createTickSizeArgs(TickSize_pb2.TickSize()) == (0, 0, 0.0)
+    args = createTickSizeArgs(TickSize_pb2.TickSize())
+    assert args.reqId == 0
+    assert args.tickType == 0
+    assert args.size == 0.0
 
 
 def test_tick_size_round_trip():
     proto = TickSize_pb2.TickSize(reqId=7, tickType=0, size="500")
-    assert createTickSizeArgs(proto) == (7, 0, 500.0)
+    args = createTickSizeArgs(proto)
+    assert args.reqId == 7
+    assert args.tickType == 0
+    assert args.size == 500.0
 
 
 def test_tick_generic_round_trip():
     proto = TickGeneric_pb2.TickGeneric(reqId=7, tickType=23, value=42.5)
-    assert createTickGenericArgs(proto) == (7, 23, 42.5)
+    args = createTickGenericArgs(proto)
+    assert args.reqId == 7
+    assert args.tickType == 23
+    assert args.value == 42.5
 
 
 def test_tick_string_empty_value():
     proto = TickString_pb2.TickString(reqId=7, tickType=45)
-    assert createTickStringArgs(proto) == (7, 45, "")
+    args = createTickStringArgs(proto)
+    assert args.reqId == 7
+    assert args.tickType == 45
+    assert args.value == ""
 
 
 def test_tick_string_round_trip():
     proto = TickString_pb2.TickString(reqId=7, tickType=45, value="20260509 09:30:00")
-    assert createTickStringArgs(proto) == (7, 45, "20260509 09:30:00")
+    args = createTickStringArgs(proto)
+    assert args.reqId == 7
+    assert args.tickType == 45
+    assert args.value == "20260509 09:30:00"
 
 
 # ---------------------------------------------------------------------------
@@ -140,19 +168,22 @@ def test_tick_string_round_trip():
 
 
 def test_tick_req_params_empty():
-    assert createTickReqParamsArgs(TickReqParams_pb2.TickReqParams()) == (
-        0,
-        0.0,
-        "",
-        0,
-    )
+    args = createTickReqParamsArgs(TickReqParams_pb2.TickReqParams())
+    assert args.reqId == 0
+    assert args.minTick == 0.0
+    assert args.bboExchange == ""
+    assert args.snapshotPermissions == 0
 
 
 def test_tick_req_params_round_trip():
     proto = TickReqParams_pb2.TickReqParams(
         reqId=7, minTick="0.01", bboExchange="ARCA", snapshotPermissions=3
     )
-    assert createTickReqParamsArgs(proto) == (7, 0.01, "ARCA", 3)
+    args = createTickReqParamsArgs(proto)
+    assert args.reqId == 7
+    assert args.minTick == 0.01
+    assert args.bboExchange == "ARCA"
+    assert args.snapshotPermissions == 3
 
 
 def test_tick_snapshot_end_returns_minus_one_on_empty():
@@ -173,8 +204,11 @@ def test_tick_option_computation_empty_proto():
     args = createTickOptionComputationArgs(
         TickOptionComputation_pb2.TickOptionComputation()
     )
-    assert len(args) == 11
-    assert args[:3] == (0, 0, 0)
+    assert args.reqId == 0
+    assert args.tickType == 0
+    assert args.tickAttrib == 0
+    assert args.impliedVol == 0.0
+    assert args.undPrice == 0.0
 
 
 def test_tick_option_computation_full_round_trip():
@@ -192,7 +226,17 @@ def test_tick_option_computation_full_round_trip():
         undPrice=150.0,
     )
     args = createTickOptionComputationArgs(proto)
-    assert args == (7, 10, 1, 0.25, 0.5, 10.50, 0.0, 0.05, 0.10, -0.02, 150.0)
+    assert args.reqId == 7
+    assert args.tickType == 10
+    assert args.tickAttrib == 1
+    assert args.impliedVol == 0.25
+    assert args.delta == 0.5
+    assert args.optPrice == 10.50
+    assert args.pvDividend == 0.0
+    assert args.gamma == 0.05
+    assert args.vega == 0.10
+    assert args.theta == -0.02
+    assert args.undPrice == 150.0
 
 
 # ---------------------------------------------------------------------------
@@ -200,11 +244,9 @@ def test_tick_option_computation_full_round_trip():
 # ---------------------------------------------------------------------------
 
 
-def test_tick_by_tick_no_oneof_set_returns_empty_kind():
+def test_tick_by_tick_no_oneof_set_returns_none():
     proto = TickByTickData_pb2.TickByTickData(reqId=7, tickType=1)
-    kind, args = dispatchTickByTick(proto)
-    assert kind == ""
-    assert args == ()
+    assert dispatchTickByTick(proto) is None
 
 
 def test_tick_by_tick_all_last_dispatch():
@@ -217,19 +259,16 @@ def test_tick_by_tick_all_last_dispatch():
     inner.specialConditions = ""
     inner.tickAttribLast.pastLimit = True
     inner.tickAttribLast.unreported = False
-    kind, args = dispatchTickByTick(proto)
-    assert kind == "allLast"
-    reqId, tickType, time_, price, size, attrib, exchange, sc = args
-    assert (reqId, tickType, time_, price, size, exchange, sc) == (
-        7,
-        1,
-        1700000000,
-        150.25,
-        100.0,
-        "ARCA",
-        "",
-    )
-    assert attrib.pastLimit is True
+    args = dispatchTickByTick(proto)
+    assert isinstance(args, TickByTickAllLastArgs)
+    assert args.reqId == 7
+    assert args.tickType == 1
+    assert args.time == 1700000000
+    assert args.price == 150.25
+    assert args.size == 100.0
+    assert args.exchange == "ARCA"
+    assert args.specialConditions == ""
+    assert args.tickAttribLast.pastLimit is True
 
 
 def test_tick_by_tick_bid_ask_dispatch():
@@ -241,18 +280,15 @@ def test_tick_by_tick_bid_ask_dispatch():
     inner.sizeBid = "100"
     inner.sizeAsk = "200"
     inner.tickAttribBidAsk.askPastHigh = True
-    kind, args = dispatchTickByTick(proto)
-    assert kind == "bidAsk"
-    reqId, time_, bid, ask, bsz, asz, attrib = args
-    assert (reqId, time_, bid, ask, bsz, asz) == (
-        7,
-        1700000000,
-        150.0,
-        150.5,
-        100.0,
-        200.0,
-    )
-    assert attrib.askPastHigh is True
+    args = dispatchTickByTick(proto)
+    assert isinstance(args, TickByTickBidAskArgs)
+    assert args.reqId == 7
+    assert args.time == 1700000000
+    assert args.bidPrice == 150.0
+    assert args.askPrice == 150.5
+    assert args.bidSize == 100.0
+    assert args.askSize == 200.0
+    assert args.tickAttribBidAsk.askPastHigh is True
 
 
 def test_tick_by_tick_mid_point_dispatch():
@@ -260,9 +296,11 @@ def test_tick_by_tick_mid_point_dispatch():
     inner = proto.historicalTickMidPoint
     inner.time = 1700000000
     inner.price = 150.25
-    kind, args = dispatchTickByTick(proto)
-    assert kind == "midPoint"
-    assert args == (7, 1700000000, 150.25)
+    args = dispatchTickByTick(proto)
+    assert isinstance(args, TickByTickMidPointArgs)
+    assert args.reqId == 7
+    assert args.time == 1700000000
+    assert args.midPoint == 150.25
 
 
 # ---------------------------------------------------------------------------
@@ -271,12 +309,16 @@ def test_tick_by_tick_mid_point_dispatch():
 
 
 def test_market_data_type_empty():
-    assert createMarketDataTypeArgs(MarketDataType_pb2.MarketDataType()) == (0, 0)
+    args = createMarketDataTypeArgs(MarketDataType_pb2.MarketDataType())
+    assert args.reqId == 0
+    assert args.marketDataType == 0
 
 
 def test_market_data_type_round_trip():
     proto = MarketDataType_pb2.MarketDataType(reqId=7, marketDataType=3)
-    assert createMarketDataTypeArgs(proto) == (7, 3)
+    args = createMarketDataTypeArgs(proto)
+    assert args.reqId == 7
+    assert args.marketDataType == 3
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +329,12 @@ def test_market_data_type_round_trip():
 def test_update_mkt_depth_empty_proto_is_zero_args():
     """MarketDepth without inner data — sane defaults, no crash."""
     args = createUpdateMktDepthArgs(MarketDepth_pb2.MarketDepth())
-    assert args == (0, 0, 0, 0, 0.0, 0.0)
+    assert args.reqId == 0
+    assert args.position == 0
+    assert args.operation == 0
+    assert args.side == 0
+    assert args.price == 0.0
+    assert args.size == 0.0
 
 
 def test_update_mkt_depth_full_round_trip():
@@ -298,7 +345,12 @@ def test_update_mkt_depth_full_round_trip():
     proto.marketDepthData.price = 150.0
     proto.marketDepthData.size = "100"
     args = createUpdateMktDepthArgs(proto)
-    assert args == (7, 0, 0, 1, 150.0, 100.0)
+    assert args.reqId == 7
+    assert args.position == 0
+    assert args.operation == 0
+    assert args.side == 1
+    assert args.price == 150.0
+    assert args.size == 100.0
 
 
 def test_update_mkt_depth_l2_carries_market_maker_and_smart_depth():
@@ -311,24 +363,21 @@ def test_update_mkt_depth_l2_carries_market_maker_and_smart_depth():
     proto.marketDepthData.size = "200"
     proto.marketDepthData.isSmartDepth = True
     args = createUpdateMktDepthL2Args(proto)
-    reqId, position, mm, operation, side, price, size, smart = args
-    assert (reqId, position, mm, operation, side, price, size) == (
-        7,
-        1,
-        "ARCA",
-        1,
-        0,
-        150.5,
-        200.0,
-    )
-    assert smart is True
+    assert args.reqId == 7
+    assert args.position == 1
+    assert args.marketMaker == "ARCA"
+    assert args.operation == 1
+    assert args.side == 0
+    assert args.price == 150.5
+    assert args.size == 200.0
+    assert args.isSmartDepth is True
 
 
 def test_update_mkt_depth_l2_garbage_size_is_zero():
     proto = MarketDepthL2_pb2.MarketDepthL2(reqId=7)
     proto.marketDepthData.size = "abc"
-    _, _, _, _, _, _, size, _ = createUpdateMktDepthL2Args(proto)
-    assert size == 0.0
+    args = createUpdateMktDepthL2Args(proto)
+    assert args.size == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -386,14 +435,20 @@ def test_reroute_mkt_data_req_round_trip():
     proto = RerouteMarketDataRequest_pb2.RerouteMarketDataRequest(
         reqId=7, conId=12345, exchange="SMART"
     )
-    assert createRerouteMktDataReqArgs(proto) == (7, 12345, "SMART")
+    args = createRerouteMktDataReqArgs(proto)
+    assert args.reqId == 7
+    assert args.conId == 12345
+    assert args.exchange == "SMART"
 
 
 def test_reroute_mkt_depth_req_round_trip():
     proto = RerouteMarketDepthRequest_pb2.RerouteMarketDepthRequest(
         reqId=7, conId=12345, exchange="SMART"
     )
-    assert createRerouteMktDepthReqArgs(proto) == (7, 12345, "SMART")
+    args = createRerouteMktDepthReqArgs(proto)
+    assert args.reqId == 7
+    assert args.conId == 12345
+    assert args.exchange == "SMART"
 
 
 # ===========================================================================

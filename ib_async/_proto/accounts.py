@@ -26,8 +26,8 @@ Wire-shape notes:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import TypeAlias
 
 from .._pb import (
     AccountDataRequest_pb2,
@@ -60,45 +60,96 @@ from ..objects import AccountValue, FamilyCode, PortfolioItem, Position
 from .contracts import createContract
 from .safe import safe_decimal
 
-# Module-level type aliases for converter return shapes. Each one names the
-# wrapper method whose positional arguments it carries — call sites read as
-# ``self.wrapper.X(*args)`` without losing the type story.
+# Frozen slotted dataclasses for converter return shapes. Each one names the
+# wrapper method whose positional arguments it carries — call sites can either
+# read fields by name or splat into ``self.wrapper.X(*dataclasses.astuple(args))``
+# when positional dispatch is preferred.
 
-# ``Wrapper.updateAccountValue(tag, val, currency, account)``
-UpdateAccountValueArgs: TypeAlias = tuple[str, str, str, str]
 
-# ``Wrapper.accountSummary(reqId, account, tag, value, currency)``
-AccountSummaryArgs: TypeAlias = tuple[int, str, str, str, str]
+@dataclass(slots=True, frozen=True)
+class UpdateAccountValueArgs:
+    """Args for ``Wrapper.updateAccountValue(tag, val, currency, account)``."""
 
-# ``Wrapper.accountUpdateMulti(reqId, account, modelCode, tag, val, currency)``
-AccountUpdateMultiArgs: TypeAlias = tuple[int, str, str, str, str, str]
+    tag: str
+    val: str
+    currency: str
+    account: str
 
-# ``Wrapper.position(account, contract, posSize, avgCost)``
-PositionArgs: TypeAlias = tuple[str, Contract, Decimal | None, Decimal | None]
 
-# ``Wrapper.positionMulti(reqId, account, modelCode, contract, pos, avgCost)``
-PositionMultiArgs: TypeAlias = tuple[
-    int, str, str, Contract, Decimal | None, Decimal | None
-]
+@dataclass(slots=True, frozen=True)
+class AccountSummaryArgs:
+    """Args for ``Wrapper.accountSummary(reqId, account, tag, value, currency)``."""
 
-# ``Wrapper.updatePortfolio(contract, posSize, marketPrice, marketValue,
-# averageCost, unrealizedPNL, realizedPNL, account)``
-UpdatePortfolioArgs: TypeAlias = tuple[
-    Contract,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    Decimal | None,
-    str,
-]
+    reqId: int
+    account: str
+    tag: str
+    value: str
+    currency: str
 
-# ``Wrapper.receiveFA(faDataType, xml)``
-ReceiveFAArgs: TypeAlias = tuple[int, str]
 
-# ``Wrapper.replaceFAEnd(reqId, text)``
-ReplaceFAEndArgs: TypeAlias = tuple[int, str]
+@dataclass(slots=True, frozen=True)
+class AccountUpdateMultiArgs:
+    """Args for ``Wrapper.accountUpdateMulti(reqId, account, modelCode, tag, val, currency)``."""
+
+    reqId: int
+    account: str
+    modelCode: str
+    tag: str
+    val: str
+    currency: str
+
+
+@dataclass(slots=True, frozen=True)
+class PositionArgs:
+    """Args for ``Wrapper.position(account, contract, posSize, avgCost)``."""
+
+    account: str
+    contract: Contract
+    position: Decimal | None
+    avgCost: Decimal | None
+
+
+@dataclass(slots=True, frozen=True)
+class PositionMultiArgs:
+    """Args for ``Wrapper.positionMulti(reqId, account, modelCode, contract, pos, avgCost)``."""
+
+    reqId: int
+    account: str
+    modelCode: str
+    contract: Contract
+    pos: Decimal | None
+    avgCost: Decimal | None
+
+
+@dataclass(slots=True, frozen=True)
+class UpdatePortfolioArgs:
+    """Args for ``Wrapper.updatePortfolio(contract, posSize, marketPrice, marketValue, averageCost, unrealizedPNL, realizedPNL, account)``."""
+
+    contract: Contract
+    position: Decimal | None
+    marketPrice: Decimal | None
+    marketValue: Decimal | None
+    averageCost: Decimal | None
+    unrealizedPNL: Decimal | None
+    realizedPNL: Decimal | None
+    account: str
+
+
+@dataclass(slots=True, frozen=True)
+class ReceiveFAArgs:
+    """Args for ``Wrapper.receiveFA(faDataType, xml)``."""
+
+    faDataType: int
+    xml: str
+
+
+@dataclass(slots=True, frozen=True)
+class ReplaceFAEndArgs:
+    """Args for ``Wrapper.replaceFAEnd(reqId, text)``."""
+
+    reqId: int
+    text: str
+
 
 # ---------------------------------------------------------------------------
 # AccountValue / updateAccountValue (msgId 6 receive)
@@ -119,7 +170,7 @@ def createUpdateAccountValueArgs(
     val = proto.value if proto.HasField("value") else ""
     currency = proto.currency if proto.HasField("currency") else ""
     account = proto.accountName if proto.HasField("accountName") else ""
-    return tag, val, currency, account
+    return UpdateAccountValueArgs(tag=tag, val=val, currency=currency, account=account)
 
 
 def createAccountValue(proto: AccountValue_pb2.AccountValue) -> AccountValue:
@@ -130,8 +181,8 @@ def createAccountValue(proto: AccountValue_pb2.AccountValue) -> AccountValue:
     always empty in this proto family — only ``AccountUpdateMulti``
     carries it).
     """
-    tag, val, currency, account = createUpdateAccountValueArgs(proto)
-    return AccountValue(account, tag, val, currency, "")
+    args = createUpdateAccountValueArgs(proto)
+    return AccountValue(args.account, args.tag, args.val, args.currency, "")
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +199,9 @@ def createAccountSummaryArgs(
     tag = proto.tag if proto.HasField("tag") else ""
     value = proto.value if proto.HasField("value") else ""
     currency = proto.currency if proto.HasField("currency") else ""
-    return reqId, account, tag, value, currency
+    return AccountSummaryArgs(
+        reqId=reqId, account=account, tag=tag, value=value, currency=currency
+    )
 
 
 def createAccountSummaryRequestProto(
@@ -188,7 +241,14 @@ def createAccountUpdateMultiArgs(
     tag = proto.key if proto.HasField("key") else ""
     val = proto.value if proto.HasField("value") else ""
     currency = proto.currency if proto.HasField("currency") else ""
-    return reqId, account, modelCode, tag, val, currency
+    return AccountUpdateMultiArgs(
+        reqId=reqId,
+        account=account,
+        modelCode=modelCode,
+        tag=tag,
+        val=val,
+        currency=currency,
+    )
 
 
 def createAccountUpdatesMultiRequestProto(
@@ -254,7 +314,12 @@ def createPositionArgs(
 ) -> PositionArgs:
     """``Wrapper.position(account, contract, posSize, avgCost)`` args."""
     pos = createPosition(proto)
-    return pos.account, pos.contract, pos.position, pos.avgCost
+    return PositionArgs(
+        account=pos.account,
+        contract=pos.contract,
+        position=pos.position,
+        avgCost=pos.avgCost,
+    )
 
 
 def createPositionsRequestProto() -> PositionsRequest_pb2.PositionsRequest:
@@ -282,7 +347,14 @@ def createPositionMultiArgs(
     )
     pos = safe_decimal(proto.position) if proto.HasField("position") else None
     avgCost = safe_decimal(str(proto.avgCost)) if proto.HasField("avgCost") else None
-    return reqId, account, modelCode, contract, pos, avgCost
+    return PositionMultiArgs(
+        reqId=reqId,
+        account=account,
+        modelCode=modelCode,
+        contract=contract,
+        pos=pos,
+        avgCost=avgCost,
+    )
 
 
 def createPositionsMultiRequestProto(
@@ -354,15 +426,15 @@ def createUpdatePortfolioArgs(
     """``Wrapper.updatePortfolio(contract, posSize, marketPrice, marketValue,
     averageCost, unrealizedPNL, realizedPNL, account)`` args."""
     item = createPortfolioItem(proto)
-    return (
-        item.contract,
-        item.position,
-        item.marketPrice,
-        item.marketValue,
-        item.averageCost,
-        item.unrealizedPNL,
-        item.realizedPNL,
-        item.account,
+    return UpdatePortfolioArgs(
+        contract=item.contract,
+        position=item.position,
+        marketPrice=item.marketPrice,
+        marketValue=item.marketValue,
+        averageCost=item.averageCost,
+        unrealizedPNL=item.unrealizedPNL,
+        realizedPNL=item.realizedPNL,
+        account=item.account,
     )
 
 
@@ -428,11 +500,11 @@ def createReceiveFAArgs(proto: ReceiveFA_pb2.ReceiveFA) -> ReceiveFAArgs:
     """``Wrapper.receiveFA(faDataType, xml)`` args."""
     faDataType = proto.faDataType if proto.HasField("faDataType") else 0
     xml = proto.xml if proto.HasField("xml") else ""
-    return faDataType, xml
+    return ReceiveFAArgs(faDataType=faDataType, xml=xml)
 
 
 def createReplaceFAEndArgs(proto: ReplaceFAEnd_pb2.ReplaceFAEnd) -> ReplaceFAEndArgs:
     """``Wrapper.replaceFAEnd(reqId, text)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     text = proto.text if proto.HasField("text") else ""
-    return reqId, text
+    return ReplaceFAEndArgs(reqId=reqId, text=text)

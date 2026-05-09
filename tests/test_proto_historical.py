@@ -122,9 +122,9 @@ def test_bar_data_full_round_trip_through_str_routing():
 
 
 def test_iter_historical_data_bars_empty():
-    reqId, bars = iterHistoricalDataBars(HistoricalData_pb2.HistoricalData())
-    assert reqId == -1
-    assert bars == []
+    args = iterHistoricalDataBars(HistoricalData_pb2.HistoricalData())
+    assert args.reqId == -1
+    assert args.bars == []
 
 
 def test_iter_historical_data_bars_round_trip():
@@ -133,44 +133,42 @@ def test_iter_historical_data_bars_round_trip():
     a.date, a.open, a.close, a.barCount = "20260509", 150.0, 151.0, 100
     b = proto.historicalDataBars.add()
     b.date, b.open, b.close, b.barCount = "20260510", 151.0, 152.0, 110
-    reqId, bars = iterHistoricalDataBars(proto)
-    assert reqId == 7
-    assert len(bars) == 2
-    assert bars[0].open == Decimal("150")
-    assert bars[1].close == Decimal("152")
+    args = iterHistoricalDataBars(proto)
+    assert args.reqId == 7
+    assert len(args.bars) == 2
+    assert args.bars[0].open == Decimal("150")
+    assert args.bars[1].close == Decimal("152")
 
 
 def test_historical_data_end_empty_proto():
-    assert createHistoricalDataEndArgs(HistoricalDataEnd_pb2.HistoricalDataEnd()) == (
-        -1,
-        "",
-        "",
-    )
+    args = createHistoricalDataEndArgs(HistoricalDataEnd_pb2.HistoricalDataEnd())
+    assert (args.reqId, args.start, args.end) == (-1, "", "")
 
 
 def test_historical_data_end_full_round_trip():
     proto = HistoricalDataEnd_pb2.HistoricalDataEnd(
         reqId=7, startDateStr="20260101", endDateStr="20260509"
     )
-    assert createHistoricalDataEndArgs(proto) == (7, "20260101", "20260509")
+    args = createHistoricalDataEndArgs(proto)
+    assert (args.reqId, args.start, args.end) == (7, "20260101", "20260509")
 
 
 def test_historical_data_update_empty_proto():
-    reqId, bar = createHistoricalDataUpdateArgs(
+    args = createHistoricalDataUpdateArgs(
         HistoricalDataUpdate_pb2.HistoricalDataUpdate()
     )
-    assert reqId == -1
-    assert bar.open is None
+    assert args.reqId == -1
+    assert args.bar.open is None
 
 
 def test_historical_data_update_round_trip():
     proto = HistoricalDataUpdate_pb2.HistoricalDataUpdate(reqId=7)
     proto.historicalDataBar.open = 150.25
     proto.historicalDataBar.barCount = 5
-    reqId, bar = createHistoricalDataUpdateArgs(proto)
-    assert reqId == 7
-    assert bar.open == Decimal("150.25")
-    assert bar.barCount == 5
+    args = createHistoricalDataUpdateArgs(proto)
+    assert args.reqId == 7
+    assert args.bar.open == Decimal("150.25")
+    assert args.bar.barCount == 5
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +178,9 @@ def test_historical_data_update_round_trip():
 
 def test_realtime_bar_empty_proto_yields_none_numerics():
     args = createRealtimeBarArgs(RealTimeBarTick_pb2.RealTimeBarTick())
-    reqId, time_, open_, high, low, close, volume, wap, count = args
-    assert (reqId, time_, count) == (0, 0, 0)
-    assert open_ is None
-    assert wap is None
+    assert (args.reqId, args.time, args.count) == (0, 0, 0)
+    assert args.open_ is None
+    assert args.wap is None
 
 
 def test_realtime_bar_full_round_trip():
@@ -199,11 +196,10 @@ def test_realtime_bar_full_round_trip():
         count=10,
     )
     args = createRealtimeBarArgs(proto)
-    _, _, open_, high, low, close, volume, wap, _ = args
-    assert open_ == Decimal("150")
-    assert close == Decimal("150.5")
-    assert volume == Decimal("1000")
-    assert wap == Decimal("150.25")
+    assert args.open_ == Decimal("150")
+    assert args.close == Decimal("150.5")
+    assert args.volume == Decimal("1000")
+    assert args.wap == Decimal("150.25")
 
 
 # ---------------------------------------------------------------------------
@@ -212,12 +208,14 @@ def test_realtime_bar_full_round_trip():
 
 
 def test_head_timestamp_empty_proto():
-    assert createHeadTimestampArgs(HeadTimestamp_pb2.HeadTimestamp()) == (-1, "")
+    args = createHeadTimestampArgs(HeadTimestamp_pb2.HeadTimestamp())
+    assert (args.reqId, args.headTimestamp) == (-1, "")
 
 
 def test_head_timestamp_round_trip():
     proto = HeadTimestamp_pb2.HeadTimestamp(reqId=7, headTimestamp="20100101 09:30:00")
-    assert createHeadTimestampArgs(proto) == (7, "20100101 09:30:00")
+    args = createHeadTimestampArgs(proto)
+    assert (args.reqId, args.headTimestamp) == (7, "20100101 09:30:00")
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +224,9 @@ def test_head_timestamp_round_trip():
 
 
 def test_histogram_data_empty_proto():
-    reqId, items = createHistogramDataArgs(HistogramData_pb2.HistogramData())
-    assert reqId == -1
-    assert items == []
+    args = createHistogramDataArgs(HistogramData_pb2.HistogramData())
+    assert args.reqId == -1
+    assert args.items == []
 
 
 def test_histogram_data_repeated_round_trip():
@@ -237,20 +235,20 @@ def test_histogram_data_repeated_round_trip():
     a.price, a.size = 150.0, "100"
     b = proto.histogramDataEntries.add()
     b.price, b.size = 150.5, "200"
-    reqId, items = createHistogramDataArgs(proto)
-    assert reqId == 7
-    assert len(items) == 2
-    assert items[0].price == 150.0
-    assert items[0].count == 100
-    assert items[1].count == 200
+    args = createHistogramDataArgs(proto)
+    assert args.reqId == 7
+    assert len(args.items) == 2
+    assert args.items[0].price == 150.0
+    assert args.items[0].count == 100
+    assert args.items[1].count == 200
 
 
 def test_histogram_data_garbage_size_yields_zero_count():
     proto = HistogramData_pb2.HistogramData(reqId=7)
     e = proto.histogramDataEntries.add()
     e.price, e.size = 150.0, "abc"
-    _, items = createHistogramDataArgs(proto)
-    assert items[0].count == 0
+    args = createHistogramDataArgs(proto)
+    assert args.items[0].count == 0
 
 
 # ---------------------------------------------------------------------------
@@ -260,10 +258,9 @@ def test_histogram_data_garbage_size_yields_zero_count():
 
 def test_historical_schedule_empty_proto():
     args = createHistoricalScheduleArgs(HistoricalSchedule_pb2.HistoricalSchedule())
-    reqId, start, end, tz, sessions = args
-    assert reqId == -1
-    assert (start, end, tz) == ("", "", "")
-    assert sessions == []
+    assert args.reqId == -1
+    assert (args.startDateTime, args.endDateTime, args.timeZone) == ("", "", "")
+    assert args.sessions == []
 
 
 def test_historical_schedule_full_round_trip():
@@ -278,11 +275,10 @@ def test_historical_schedule_full_round_trip():
     s2 = proto.historicalSessions.add()
     s2.startDateTime, s2.endDateTime, s2.refDate = "13:00:00", "16:00:00", "20260509"
     args = createHistoricalScheduleArgs(proto)
-    reqId, start, end, tz, sessions = args
-    assert reqId == 7
-    assert tz == "US/Eastern"
-    assert len(sessions) == 2
-    assert sessions[0].refDate == "20260509"
+    assert args.reqId == 7
+    assert args.timeZone == "US/Eastern"
+    assert len(args.sessions) == 2
+    assert args.sessions[0].refDate == "20260509"
 
 
 # ---------------------------------------------------------------------------
@@ -337,12 +333,10 @@ def test_historical_tick_last_round_trip():
 
 
 def test_historical_ticks_empty_proto():
-    reqId, ticks, done = createHistoricalTicksArgs(
-        HistoricalTicks_pb2.HistoricalTicks()
-    )
-    assert reqId == -1
-    assert ticks == []
-    assert done is False
+    args = createHistoricalTicksArgs(HistoricalTicks_pb2.HistoricalTicks())
+    assert args.reqId == -1
+    assert args.ticks == []
+    assert args.done is False
 
 
 def test_historical_ticks_round_trip_with_done_flag():
@@ -351,12 +345,12 @@ def test_historical_ticks_round_trip_with_done_flag():
     a.time, a.price, a.size = 1700000000, 150.0, "100"
     b = proto.historicalTicks.add()
     b.time, b.price, b.size = 1700000010, 150.5, "150"
-    reqId, ticks, done = createHistoricalTicksArgs(proto)
-    assert reqId == 7
-    assert len(ticks) == 2
-    assert ticks[0].price == 150.0
-    assert ticks[1].size == 150.0
-    assert done is True
+    args = createHistoricalTicksArgs(proto)
+    assert args.reqId == 7
+    assert len(args.ticks) == 2
+    assert args.ticks[0].price == 150.0
+    assert args.ticks[1].size == 150.0
+    assert args.done is True
 
 
 def test_historical_ticks_bid_ask_carries_done():
@@ -364,8 +358,8 @@ def test_historical_ticks_bid_ask_carries_done():
     t = proto.historicalTicksBidAsk.add()
     t.time, t.priceBid, t.priceAsk = 1700000000, 150.0, 150.5
     t.sizeBid, t.sizeAsk = "100", "200"
-    reqId, ticks, done = createHistoricalTicksBidAskArgs(proto)
-    assert (reqId, len(ticks), done) == (7, 1, True)
+    args = createHistoricalTicksBidAskArgs(proto)
+    assert (args.reqId, len(args.ticks), args.done) == (7, 1, True)
 
 
 def test_historical_ticks_last_carries_done():
@@ -373,9 +367,9 @@ def test_historical_ticks_last_carries_done():
     t = proto.historicalTicksLast.add()
     t.time, t.price, t.size = 1700000000, 150.0, "100"
     t.exchange = "ARCA"
-    reqId, ticks, done = createHistoricalTicksLastArgs(proto)
-    assert (reqId, len(ticks), done) == (7, 1, False)
-    assert ticks[0].exchange == "ARCA"
+    args = createHistoricalTicksLastArgs(proto)
+    assert (args.reqId, len(args.ticks), args.done) == (7, 1, False)
+    assert args.ticks[0].exchange == "ARCA"
 
 
 # ===========================================================================
