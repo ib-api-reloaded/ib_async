@@ -96,6 +96,10 @@ exclude = [
   "notebooks/",
   "upstream_api_architecture/",
   "examples/",
+  # Generated protobuf bindings live under ib_async/_pb/ (gitignored,
+  # produced by scripts/generate_protos.py). They aren't subject to
+  # our lint or format rules.
+  "ib_async/_pb/",
 ]
 
 [tool.ruff.lint]

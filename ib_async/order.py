@@ -26,10 +26,14 @@ class Order:
     clientId: int = 0
     permId: int = 0
     action: str = ""
-    totalQuantity: float = 0.0
+    # Primary quantity / price fields are ``Decimal | None`` — ``None``
+    # means the wire didn't carry a value, which is falsy under
+    # ``if order.lmtPrice:`` checks. ``Decimal('NaN')`` would be
+    # silently truthy and break those checks across user code.
+    totalQuantity: Decimal | None = None
     orderType: str = ""
-    lmtPrice: float | Decimal | None = UNSET_DOUBLE
-    auxPrice: float | Decimal | None = UNSET_DOUBLE
+    lmtPrice: Decimal | None = None
+    auxPrice: Decimal | None = None
     tif: str = ""
     activeStartTime: str = ""
     activeStopTime: str = ""
@@ -51,8 +55,8 @@ class Order:
     minQty: int = UNSET_INTEGER
     percentOffset: float | Decimal = UNSET_DOUBLE
     overridePercentageConstraints: bool = False
-    trailStopPrice: float | Decimal = UNSET_DOUBLE
-    trailingPercent: float | Decimal = UNSET_DOUBLE
+    trailStopPrice: Decimal | None = None
+    trailingPercent: Decimal | None = None
     faGroup: str = ""
     faProfile: str = ""  # obsolete
     faMethod: str = ""
@@ -124,12 +128,12 @@ class Order:
     referenceChangeAmount: float = 0.0
     referenceExchangeId: str = ""
     adjustedOrderType: str = ""
-    triggerPrice: float | Decimal | None = UNSET_DOUBLE
-    adjustedStopPrice: float | Decimal = UNSET_DOUBLE
-    adjustedStopLimitPrice: float | Decimal = UNSET_DOUBLE
-    adjustedTrailingAmount: float | Decimal = UNSET_DOUBLE
+    triggerPrice: Decimal | None = None
+    adjustedStopPrice: Decimal | None = None
+    adjustedStopLimitPrice: Decimal | None = None
+    adjustedTrailingAmount: Decimal | None = None
     adjustableTrailingUnit: int = 0
-    lmtPriceOffset: float | Decimal = UNSET_DOUBLE
+    lmtPriceOffset: Decimal | None = None
     conditions: list[OrderCondition] = field(default_factory=list)
     conditionsCancelOrder: bool = False
     conditionsIgnoreRth: bool = False
@@ -144,7 +148,7 @@ class Order:
     isOmsContainer: bool = False
     discretionaryUpToLimitPrice: bool = False
     autoCancelDate: str = ""
-    filledQuantity: float | Decimal = UNSET_DOUBLE
+    filledQuantity: Decimal | None = None
     refFuturesConId: int = 0
     autoCancelParent: bool = False
     shareholder: str = ""
@@ -182,34 +186,95 @@ class Order:
     def __hash__(self):
         return id(self)
 
+    # Quantity / price fields that must be ``Decimal`` (or ``None``).
+    # ``__post_init__`` coerces user-supplied ``float`` / ``int`` /
+    # ``str`` values for these to ``Decimal`` via ``str()`` so a clean
+    # ``Order(lmtPrice=50.5)`` user-construction lands the right type
+    # without forcing every caller to write ``Decimal('50.5')``.
+    _DECIMAL_FIELDS: ClassVar[tuple[str, ...]] = (
+        "totalQuantity",
+        "filledQuantity",
+        "lmtPrice",
+        "auxPrice",
+        "trailStopPrice",
+        "trailingPercent",
+        "lmtPriceOffset",
+        "triggerPrice",
+        "adjustedStopPrice",
+        "adjustedStopLimitPrice",
+        "adjustedTrailingAmount",
+    )
+
+    def __post_init__(self) -> None:
+        for name in self._DECIMAL_FIELDS:
+            v = getattr(self, name)
+            if v is not None and not isinstance(v, Decimal):
+                setattr(self, name, _toDecimal(v))
+
+
+def _toDecimal(value: Decimal | float | int | str | None) -> Decimal | None:
+    """Coerce a user-supplied numeric to ``Decimal | None``.
+
+    Goes through ``str()`` for floats so binary-float imprecision (e.g.
+    ``Decimal(0.1) → Decimal('0.1000000000000000055...')``) doesn't
+    contaminate user-provided fractional-share quantities or option
+    prices. ``None`` and ``""`` round-trip as ``None``.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
 
 class LimitOrder(Order):
-    def __init__(self, action: str, totalQuantity: float, lmtPrice: float, **kwargs):
+    def __init__(
+        self,
+        action: str,
+        totalQuantity: Decimal | float | int | str,
+        lmtPrice: Decimal | float | int | str,
+        **kwargs,
+    ):
         Order.__init__(
             self,
             orderType="LMT",
             action=action,
-            totalQuantity=totalQuantity,
-            lmtPrice=lmtPrice,
+            totalQuantity=_toDecimal(totalQuantity),
+            lmtPrice=_toDecimal(lmtPrice),
             **kwargs,
         )
 
 
 class MarketOrder(Order):
-    def __init__(self, action: str, totalQuantity: float, **kwargs):
+    def __init__(
+        self,
+        action: str,
+        totalQuantity: Decimal | float | int | str,
+        **kwargs,
+    ):
         Order.__init__(
-            self, orderType="MKT", action=action, totalQuantity=totalQuantity, **kwargs
+            self,
+            orderType="MKT",
+            action=action,
+            totalQuantity=_toDecimal(totalQuantity),
+            **kwargs,
         )
 
 
 class StopOrder(Order):
-    def __init__(self, action: str, totalQuantity: float, stopPrice: float, **kwargs):
+    def __init__(
+        self,
+        action: str,
+        totalQuantity: Decimal | float | int | str,
+        stopPrice: Decimal | float | int | str,
+        **kwargs,
+    ):
         Order.__init__(
             self,
             orderType="STP",
             action=action,
-            totalQuantity=totalQuantity,
-            auxPrice=stopPrice,
+            totalQuantity=_toDecimal(totalQuantity),
+            auxPrice=_toDecimal(stopPrice),
             **kwargs,
         )
 
@@ -218,18 +283,18 @@ class StopLimitOrder(Order):
     def __init__(
         self,
         action: str,
-        totalQuantity: float,
-        lmtPrice: float,
-        stopPrice: float,
+        totalQuantity: Decimal | float | int | str,
+        lmtPrice: Decimal | float | int | str,
+        stopPrice: Decimal | float | int | str,
         **kwargs,
     ):
         Order.__init__(
             self,
             orderType="STP LMT",
             action=action,
-            totalQuantity=totalQuantity,
-            lmtPrice=lmtPrice,
-            auxPrice=stopPrice,
+            totalQuantity=_toDecimal(totalQuantity),
+            lmtPrice=_toDecimal(lmtPrice),
+            auxPrice=_toDecimal(stopPrice),
             **kwargs,
         )
 
@@ -238,19 +303,29 @@ class StopLimitOrder(Order):
 class OrderStatus:
     orderId: int = 0
     status: str = ""
-    filled: float = 0.0
-    remaining: float = 0.0
-    avgFillPrice: float = 0.0
+    # Quantity / price fields default to ``None`` so unset is falsy.
+    # ``Decimal('NaN')`` would be silently truthy and break ``if filled:``
+    # checks across user code.
+    filled: Decimal | None = None
+    remaining: Decimal | None = None
+    avgFillPrice: Decimal | None = None
     permId: int = 0
     parentId: int = 0
-    lastFillPrice: float = 0.0
+    lastFillPrice: Decimal | None = None
     clientId: int = 0
     whyHeld: str = ""
-    mktCapPrice: float = 0.0
+    mktCapPrice: Decimal | None = None
 
     @property
-    def total(self) -> float:
-        """Helper property to return the total size of this requested order."""
+    def total(self) -> Decimal | None:
+        """Total size of this requested order: ``filled`` + ``remaining``.
+
+        Returns ``None`` when either side is unset — there is no honest
+        sum we can report. Callers that want a definite zero-floor
+        should substitute via ``order.total or Decimal('0')``.
+        """
+        if self.filled is None or self.remaining is None:
+            return None
         return self.filled + self.remaining
 
     PendingSubmit: ClassVar[str] = "PendingSubmit"
@@ -472,18 +547,38 @@ class Trade:
         """True if completely filled or cancelled, false otherwise."""
         return self.orderStatus.status in OrderStatus.DoneStates
 
-    def filled(self) -> float:
-        """Number of shares filled."""
+    def filled(self) -> Decimal:
+        """Number of shares filled across all observed executions.
+
+        Returns ``Decimal('0')`` when no fills exist or none have a
+        share quantity yet — never ``None``, since "the trade has
+        zero shares filled so far" is a definite answer that user
+        code can do arithmetic on.
+        """
         fills = self.fills
         if self.contract.secType == "BAG":
             # don't count fills for the leg contracts
             fills = [f for f in fills if f.contract.secType == "BAG"]
 
-        return sum([f.execution.shares for f in fills])
+        total = Decimal("0")
+        for f in fills:
+            shares = f.execution.shares
+            if shares is not None:
+                total += shares
+        return total
 
-    def remaining(self) -> float:
-        """Number of shares remaining to be filled."""
-        return float(self.order.totalQuantity) - self.filled()
+    def remaining(self) -> Decimal:
+        """Number of shares remaining to be filled.
+
+        Returns ``Decimal('0')`` when ``order.totalQuantity`` is
+        unset — there is no honest non-zero "remaining" to report
+        without a known total. Negative outcomes (over-fill) propagate
+        unchanged.
+        """
+        total = self.order.totalQuantity
+        if total is None:
+            return Decimal("0")
+        return total - self.filled()
 
 
 class BracketOrder(NamedTuple):

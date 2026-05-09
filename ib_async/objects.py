@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
+from decimal import Decimal
 from typing import Any, NamedTuple
 
 from eventkit import Event
@@ -57,17 +58,21 @@ class Execution:
     acctNumber: str = ""
     exchange: str = ""
     side: str = ""
-    shares: float = 0.0
-    price: float = 0.0
+    # Quantity / price fields are ``Decimal | None``: ``None`` means the
+    # wire didn't carry a value, which is falsy under ``if shares:``
+    # checks. ``Decimal('NaN')`` would be silently truthy and break
+    # those checks across user code.
+    shares: Decimal | None = None
+    price: Decimal | None = None
     permId: int = 0
     clientId: int = 0
     orderId: int = 0
     liquidation: int = 0
-    cumQty: float = 0.0
-    avgPrice: float = 0.0
+    cumQty: Decimal | None = None
+    avgPrice: Decimal | None = None
     orderRef: str = ""
     evRule: str = ""
-    evMultiplier: float = 0.0
+    evMultiplier: Decimal | None = None
     modelCode: str = ""
     lastLiquidity: int = 0
     pendingPriceRevision: bool = False
@@ -76,10 +81,10 @@ class Execution:
 @dataclass
 class CommissionReport:
     execId: str = ""
-    commission: float = 0.0
+    commission: Decimal | None = None
     currency: str = ""
-    realizedPNL: float = 0.0
-    yield_: float = 0.0
+    realizedPNL: Decimal | None = None
+    yield_: Decimal | None = None
     yieldRedemptionDate: int = 0
 
 

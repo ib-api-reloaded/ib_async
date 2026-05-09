@@ -677,10 +677,10 @@ class Decoder:
         self.wrapper.commissionReport(
             CommissionReport(
                 execId,
-                float(commission or 0),
+                safe_decimal(commission),
                 currency,
-                float(realizedPNL or 0),
-                float(yield_ or 0),
+                safe_decimal(realizedPNL),
+                safe_decimal(yield_),
                 int(yieldRedemptionDate or 0),
             )
         )
