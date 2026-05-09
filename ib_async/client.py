@@ -12,6 +12,11 @@ from typing import Any, Final
 
 from eventkit import Event
 
+from ._pb_msgids import (
+    MIN_SERVER_VER_PROTOBUF,
+    PROTOBUF_MSG_ID,
+    PROTOBUF_MSG_IDS,
+)
 from .connection import Connection
 from .contract import Contract
 from .decoder import Decoder
@@ -78,11 +83,11 @@ def _make_format_handlers(makeEmpty: bool) -> dict[Any, Callable[[Any], str]]:
     # fmt: on
 
 
-_FORMAT_HANDLERS_EMPTY: Final[dict[Any, Callable[[Any], str]]] = (
-    _make_format_handlers(makeEmpty=True)
+_FORMAT_HANDLERS_EMPTY: Final[dict[Any, Callable[[Any], str]]] = _make_format_handlers(
+    makeEmpty=True
 )
-_FORMAT_HANDLERS_KEEP: Final[dict[Any, Callable[[Any], str]]] = (
-    _make_format_handlers(makeEmpty=False)
+_FORMAT_HANDLERS_KEEP: Final[dict[Any, Callable[[Any], str]]] = _make_format_handlers(
+    makeEmpty=False
 )
 
 
@@ -200,6 +205,32 @@ class Client:
 
     def serverVersion(self) -> int:
         return self._serverVersion
+
+    def useProtoBuf(self, canonicalMsgId: int) -> bool:
+        """True when ``canonicalMsgId`` should be sent as protobuf.
+
+        Consults the ``PROTOBUF_MSG_IDS`` per-message gate table mirrored
+        from IBKR's reference. Messages not in the table (and connections
+        below the per-family minimum server version) stay on the legacy
+        binary path.
+        """
+        gate = PROTOBUF_MSG_IDS.get(canonicalMsgId)
+        if gate is None:
+            return False
+        return self._serverVersion >= gate
+
+    def sendProto(self, canonicalMsgId: int, serialized: bytes) -> None:
+        """Send a protobuf-framed message.
+
+        Wire framing matches IBKR ``ibapi/comm.py:make_msg_proto``:
+        4-byte big-endian length prefix, then 4-byte big-endian wire
+        ``msgId = canonical + PROTOBUF_MSG_ID``, then the serialized
+        protobuf body. Receivers detect the +200 sentinel and route to
+        the protobuf decoder; everything else stays binary.
+        """
+        wireMsgId = canonicalMsgId + PROTOBUF_MSG_ID
+        body = struct.pack(">I", wireMsgId) + serialized
+        self.conn.sendMsg(self._prefix(body))
 
     def run(self):
         loop = getLoop()
@@ -395,11 +426,35 @@ class Client:
                 # insufficient data for now
                 break
 
-            msg = self._data[4:msgEnd].decode(errors="backslashreplace")
+            body = self._data[4:msgEnd]
             self._data = self._data[msgEnd:]
-            fields = msg.split("\0")
-            fields.pop()  # pop off last empty element
             self._numMsgRecv += 1
+
+            # Wire framing depends on server version and the +200 sentinel.
+            # Pre-handshake and legacy (<201) servers use NUL-separated
+            # text. From 201 onwards the body opens with a 4-byte big-endian
+            # wire msgId; if that wire msgId is greater than the protobuf
+            # sentinel (200) the body is a protobuf payload, otherwise it
+            # is a binary frame with the new 4-byte msgId framing.
+            if self._serverVersion >= MIN_SERVER_VER_PROTOBUF:
+                wireMsgId = struct.unpack(">I", body[:4])[0]
+                payload = body[4:]
+                if wireMsgId > PROTOBUF_MSG_ID:
+                    canonicalMsgId = wireMsgId - PROTOBUF_MSG_ID
+                    if debug:
+                        self._logger.debug(
+                            "<<< proto %d, %d bytes", canonicalMsgId, len(payload)
+                        )
+                    self.decoder.processProtoBuf(canonicalMsgId, payload)
+                    continue
+                fields = [
+                    str(wireMsgId),
+                    *payload.decode(errors="backslashreplace").split("\0"),
+                ]
+                fields.pop()
+            else:
+                fields = body.decode(errors="backslashreplace").split("\0")
+                fields.pop()
 
             if debug:
                 self._logger.debug("<<< %s", ",".join(fields))

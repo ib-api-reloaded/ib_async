@@ -207,6 +207,23 @@ class Decoder:
         except Exception:
             self.logger.exception(f"Error handling fields: {fields}")
 
+    def processProtoBuf(self, canonicalMsgId: int, payload: bytes) -> None:
+        """Decode a protobuf-framed wire message.
+
+        Currently a stub: the receive-side framing detector identifies
+        protobuf messages by the +200 sentinel and routes them here, but
+        no per-msgId proto-class dispatch is wired yet — that lands in
+        the per-family conversion phases. For now we log the canonical
+        msgId and payload size at debug level and drop the message; this
+        keeps the connection alive on a server that has flipped a
+        message family to protobuf before our converter is in place.
+        """
+        self.logger.debug(
+            "protobuf msg %d, %d bytes (no handler yet)",
+            canonicalMsgId,
+            len(payload),
+        )
+
     def parse(self, obj):
         """Parse the object's properties according to its default types."""
         cls = type(obj)

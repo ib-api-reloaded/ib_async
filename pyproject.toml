@@ -22,6 +22,7 @@ classifiers = [
 dependencies = [
     "aeventkit>=2.1.0,<3.0.0",
     "nest_asyncio",
+    "protobuf>=5.0.0,<7.0.0",
     "tzdata>=2025.2"
 ]
 
@@ -31,6 +32,7 @@ Repository = "https://github.com/ib-api-reloaded/ib_async"
 
 [dependency-groups]
 dev = [
+    "grpcio-tools>=1.60.0",
     "mypy>=1.11.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -51,12 +53,14 @@ python = ">=3.11"
 aeventkit = "^2.1.0"
 # aeventkit = { path = "../eventkit", develop = true }
 nest_asyncio = "*"
+protobuf = ">=5.0.0,<7.0.0"
 tzdata = ">=2025.2"
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
+grpcio-tools = ">=1.60.0"
 mypy = ">=1.11.0"
 pytest = ">=8.0"
 pytest-asyncio = ">=0.23"

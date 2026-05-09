@@ -1,4 +1,5 @@
 ib_async/__pycache__
+ib_async/_pb/
 dist
 build
 .vscode
