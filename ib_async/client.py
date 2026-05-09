@@ -832,6 +832,14 @@ class Client:
         self.send(5, 1)
 
     def reqAccountUpdates(self, subscribe, acctCode):
+        if self.useProtoBuf(_M.REQ_ACCT_DATA):
+            from ._proto.accounts import createAccountDataRequestProto
+
+            self.sendProto(
+                _M.REQ_ACCT_DATA,
+                createAccountDataRequestProto(subscribe, acctCode).SerializeToString(),
+            )
+            return
         self.send(6, 2, subscribe, acctCode)
 
     def reqExecutions(self, reqId, execFilter):
@@ -936,6 +944,14 @@ class Client:
         self.send(16, 1)
 
     def reqManagedAccts(self):
+        if self.useProtoBuf(_M.REQ_MANAGED_ACCTS):
+            from ._proto.accounts import createManagedAccountsRequestProto
+
+            self.sendProto(
+                _M.REQ_MANAGED_ACCTS,
+                createManagedAccountsRequestProto().SerializeToString(),
+            )
+            return
         self.send(17, 1)
 
     def requestFA(self, faData):
@@ -1131,15 +1147,48 @@ class Client:
         self.send(59, 1, marketDataType)
 
     def reqPositions(self):
+        if self.useProtoBuf(_M.REQ_POSITIONS):
+            from ._proto.accounts import createPositionsRequestProto
+
+            self.sendProto(
+                _M.REQ_POSITIONS, createPositionsRequestProto().SerializeToString()
+            )
+            return
         self.send(61, 1)
 
     def reqAccountSummary(self, reqId, groupName, tags):
+        if self.useProtoBuf(_M.REQ_ACCOUNT_SUMMARY):
+            from ._proto.accounts import createAccountSummaryRequestProto
+
+            self.sendProto(
+                _M.REQ_ACCOUNT_SUMMARY,
+                createAccountSummaryRequestProto(
+                    reqId, groupName, tags
+                ).SerializeToString(),
+            )
+            return
         self.send(62, 1, reqId, groupName, tags)
 
     def cancelAccountSummary(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_ACCOUNT_SUMMARY):
+            from ._proto.accounts import createCancelAccountSummaryProto
+
+            self.sendProto(
+                _M.CANCEL_ACCOUNT_SUMMARY,
+                createCancelAccountSummaryProto(reqId).SerializeToString(),
+            )
+            return
         self.send(63, 1, reqId)
 
     def cancelPositions(self):
+        if self.useProtoBuf(_M.CANCEL_POSITIONS):
+            from ._proto.accounts import createCancelPositionsProto
+
+            self.sendProto(
+                _M.CANCEL_POSITIONS,
+                createCancelPositionsProto().SerializeToString(),
+            )
+            return
         self.send(64, 1)
 
     def verifyRequest(self, apiName, apiVersion):
@@ -1170,15 +1219,51 @@ class Client:
         self.send(73, 1, apiData, xyzResponse)
 
     def reqPositionsMulti(self, reqId, account, modelCode):
+        if self.useProtoBuf(_M.REQ_POSITIONS_MULTI):
+            from ._proto.accounts import createPositionsMultiRequestProto
+
+            self.sendProto(
+                _M.REQ_POSITIONS_MULTI,
+                createPositionsMultiRequestProto(
+                    reqId, account, modelCode
+                ).SerializeToString(),
+            )
+            return
         self.send(74, 1, reqId, account, modelCode)
 
     def cancelPositionsMulti(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_POSITIONS_MULTI):
+            from ._proto.accounts import createCancelPositionsMultiProto
+
+            self.sendProto(
+                _M.CANCEL_POSITIONS_MULTI,
+                createCancelPositionsMultiProto(reqId).SerializeToString(),
+            )
+            return
         self.send(75, 1, reqId)
 
     def reqAccountUpdatesMulti(self, reqId, account, modelCode, ledgerAndNLV):
+        if self.useProtoBuf(_M.REQ_ACCOUNT_UPDATES_MULTI):
+            from ._proto.accounts import createAccountUpdatesMultiRequestProto
+
+            self.sendProto(
+                _M.REQ_ACCOUNT_UPDATES_MULTI,
+                createAccountUpdatesMultiRequestProto(
+                    reqId, account, modelCode, ledgerAndNLV
+                ).SerializeToString(),
+            )
+            return
         self.send(76, 1, reqId, account, modelCode, ledgerAndNLV)
 
     def cancelAccountUpdatesMulti(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_ACCOUNT_UPDATES_MULTI):
+            from ._proto.accounts import createCancelAccountUpdatesMultiProto
+
+            self.sendProto(
+                _M.CANCEL_ACCOUNT_UPDATES_MULTI,
+                createCancelAccountUpdatesMultiProto(reqId).SerializeToString(),
+            )
+            return
         self.send(77, 1, reqId)
 
     def reqSecDefOptParams(

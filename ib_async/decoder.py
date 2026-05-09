@@ -89,16 +89,30 @@ def _initProtoMsgHandlers() -> None:
     if _PROTO_MSG_HANDLERS:
         return
     from ._pb import (
+        AccountDataEnd_pb2,
+        AccountSummary_pb2,
+        AccountSummaryEnd_pb2,
+        AccountUpdateMulti_pb2,
+        AccountUpdateMultiEnd_pb2,
+        AccountUpdateTime_pb2,
+        AccountValue_pb2,
         CommissionAndFeesReport_pb2,
         CompletedOrder_pb2,
+        CompletedOrdersEnd_pb2,
         ContractData_pb2,
         ContractDataEnd_pb2,
         ExecutionDetails_pb2,
         ExecutionDetailsEnd_pb2,
+        ManagedAccounts_pb2,
         OpenOrder_pb2,
         OpenOrdersEnd_pb2,
         OrderBound_pb2,
         OrderStatus_pb2,
+        PortfolioValue_pb2,
+        Position_pb2,
+        PositionEnd_pb2,
+        PositionMulti_pb2,
+        PositionMultiEnd_pb2,
     )
 
     # Canonical IBKR ``IN`` msgIds (see ``ibapi/message.py``).
@@ -106,11 +120,16 @@ def _initProtoMsgHandlers() -> None:
         {
             3: (OrderStatus_pb2.OrderStatus, "_protoOrderStatus"),
             5: (OpenOrder_pb2.OpenOrder, "_protoOpenOrder"),
+            6: (AccountValue_pb2.AccountValue, "_protoUpdateAccountValue"),
+            7: (PortfolioValue_pb2.PortfolioValue, "_protoUpdatePortfolio"),
+            8: (AccountUpdateTime_pb2.AccountUpdateTime, "_protoUpdateAccountTime"),
             10: (ContractData_pb2.ContractData, "_protoContractData"),
             11: (ExecutionDetails_pb2.ExecutionDetails, "_protoExecutionDetails"),
+            15: (ManagedAccounts_pb2.ManagedAccounts, "_protoManagedAccounts"),
             18: (ContractData_pb2.ContractData, "_protoBondContractData"),
             52: (ContractDataEnd_pb2.ContractDataEnd, "_protoContractDataEnd"),
             53: (OpenOrdersEnd_pb2.OpenOrdersEnd, "_protoOpenOrderEnd"),
+            54: (AccountDataEnd_pb2.AccountDataEnd, "_protoAccountDownloadEnd"),
             55: (
                 ExecutionDetailsEnd_pb2.ExecutionDetailsEnd,
                 "_protoExecutionDetailsEnd",
@@ -119,18 +138,30 @@ def _initProtoMsgHandlers() -> None:
                 CommissionAndFeesReport_pb2.CommissionAndFeesReport,
                 "_protoCommissionReport",
             ),
+            61: (Position_pb2.Position, "_protoPosition"),
+            62: (PositionEnd_pb2.PositionEnd, "_protoPositionEnd"),
+            63: (AccountSummary_pb2.AccountSummary, "_protoAccountSummary"),
+            64: (AccountSummaryEnd_pb2.AccountSummaryEnd, "_protoAccountSummaryEnd"),
+            71: (PositionMulti_pb2.PositionMulti, "_protoPositionMulti"),
+            72: (
+                PositionMultiEnd_pb2.PositionMultiEnd,
+                "_protoPositionMultiEnd",
+            ),
+            73: (
+                AccountUpdateMulti_pb2.AccountUpdateMulti,
+                "_protoAccountUpdateMulti",
+            ),
+            74: (
+                AccountUpdateMultiEnd_pb2.AccountUpdateMultiEnd,
+                "_protoAccountUpdateMultiEnd",
+            ),
             100: (OrderBound_pb2.OrderBound, "_protoOrderBound"),
             101: (CompletedOrder_pb2.CompletedOrder, "_protoCompletedOrder"),
-            # 102: completed-orders-end ships a CompletedOrdersEnd proto with
-            # no fields — payload is empty bytes. We still need a proto
-            # class for ParseFromString; CompletedOrdersEnd_pb2 supplies it.
+            102: (
+                CompletedOrdersEnd_pb2.CompletedOrdersEnd,
+                "_protoCompletedOrdersEnd",
+            ),
         }
-    )
-    from ._pb import CompletedOrdersEnd_pb2
-
-    _PROTO_MSG_HANDLERS[102] = (
-        CompletedOrdersEnd_pb2.CompletedOrdersEnd,
-        "_protoCompletedOrdersEnd",
     )
 
 
@@ -454,6 +485,67 @@ class Decoder:
         clientId = proto.clientId if proto.HasField("clientId") else 0
         orderId = proto.orderId if proto.HasField("orderId") else 0
         self.wrapper.orderBound(permId, clientId, orderId)
+
+    # --- accounts / positions handlers ------------------------------------
+
+    def _protoUpdateAccountValue(self, proto: Any) -> None:
+        from ._proto.accounts import createUpdateAccountValueArgs
+
+        tag, val, currency, account = createUpdateAccountValueArgs(proto)
+        self.wrapper.updateAccountValue(tag, val, currency, account)
+
+    def _protoUpdatePortfolio(self, proto: Any) -> None:
+        from ._proto.accounts import createUpdatePortfolioArgs
+
+        self.wrapper.updatePortfolio(*createUpdatePortfolioArgs(proto))
+
+    def _protoUpdateAccountTime(self, proto: Any) -> None:
+        ts = proto.timeStamp if proto.HasField("timeStamp") else ""
+        self.wrapper.updateAccountTime(ts)
+
+    def _protoAccountDownloadEnd(self, proto: Any) -> None:
+        account = proto.accountName if proto.HasField("accountName") else ""
+        self.wrapper.accountDownloadEnd(account)
+
+    def _protoManagedAccounts(self, proto: Any) -> None:
+        from ._proto.accounts import createManagedAccountsList
+
+        self.wrapper.managedAccounts(createManagedAccountsList(proto))
+
+    def _protoPosition(self, proto: Any) -> None:
+        from ._proto.accounts import createPositionArgs
+
+        self.wrapper.position(*createPositionArgs(proto))
+
+    def _protoPositionEnd(self, proto: Any) -> None:
+        self.wrapper.positionEnd()
+
+    def _protoAccountSummary(self, proto: Any) -> None:
+        from ._proto.accounts import createAccountSummaryArgs
+
+        self.wrapper.accountSummary(*createAccountSummaryArgs(proto))
+
+    def _protoAccountSummaryEnd(self, proto: Any) -> None:
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        self.wrapper.accountSummaryEnd(reqId)
+
+    def _protoPositionMulti(self, proto: Any) -> None:
+        from ._proto.accounts import createPositionMultiArgs
+
+        self.wrapper.positionMulti(*createPositionMultiArgs(proto))
+
+    def _protoPositionMultiEnd(self, proto: Any) -> None:
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        self.wrapper.positionMultiEnd(reqId)
+
+    def _protoAccountUpdateMulti(self, proto: Any) -> None:
+        from ._proto.accounts import createAccountUpdateMultiArgs
+
+        self.wrapper.accountUpdateMulti(*createAccountUpdateMultiArgs(proto))
+
+    def _protoAccountUpdateMultiEnd(self, proto: Any) -> None:
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        self.wrapper.accountUpdateMultiEnd(reqId)
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""
