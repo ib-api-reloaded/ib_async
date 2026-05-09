@@ -421,6 +421,15 @@ class Trade:
     log: list[TradeLogEntry] = field(default_factory=list)
     advancedError: str = ""
 
+    # Most recent unmerged TWS-authored snapshot of this order's state.
+    # ``order`` is updated through the MUTABLE_ORDER_FIELDS allowlist in
+    # ``Wrapper.openOrder`` to keep user-set fields safe from TWS
+    # placeholder values; ``serverOrder`` is the raw TWS view, so callers
+    # who need a field that isn't in the allowlist can still read it
+    # without waiting for the allowlist to grow. ``None`` until the first
+    # ``openOrder`` callback for this trade.
+    serverOrder: Order | None = None
+
     # TODO: replace these with an enum?
     events: ClassVar = (
         "statusEvent",

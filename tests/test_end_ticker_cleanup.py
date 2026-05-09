@@ -1,43 +1,40 @@
-"""Cancellation must fully unregister the reqId from the ticker maps.
+"""Cancellation must fully unregister the reqId from the registry.
 
-A leak in the reqId -> Ticker map would cause two problems:
-  - unbounded growth of reqId2Ticker over the life of the connection
+A leak in the reqId → Ticker mapping would cause two problems:
+  - unbounded growth of the mapping over the life of the connection
   - late ticks delivered for a cancelled reqId would still mutate the
     (logically unsubscribed) Ticker
+
+The registry's flat ``ticker_by_reqid`` view (used by every tick
+handler) and its ``by_market_data_key`` index (used by the cancel
+path) must both be dropped on ``Subscription.close()``.
 """
 
 import ib_async as ibi
+from ib_async._subscriptions import MktDataSub
 
 
-def test_end_ticker_pops_reqid_to_ticker():
-    ib = ibi.IB()
-    contract = ibi.Stock("ABC", "SMART", "USD")
-    contract.conId = 12345
-    reqId = 7
-
-    ticker = ib.wrapper.startTicker(reqId, contract, "mktData")
-    assert ib.wrapper.reqId2Ticker[reqId] is ticker
-    assert ib.wrapper.ticker2ReqId["mktData"][ticker] == reqId
-    assert ib.wrapper._reqId2Contract[reqId] is contract
-
-    returnedReqId = ib.wrapper.endTicker(ticker, "mktData")
-    assert returnedReqId == reqId
-    assert reqId not in ib.wrapper.reqId2Ticker
-    assert ticker not in ib.wrapper.ticker2ReqId["mktData"]
-    assert reqId not in ib.wrapper._reqId2Contract
-
-
-def test_late_tick_after_cancel_is_dropped():
+def test_subscription_close_removes_registry_ticker_view():
+    """Closing a Subscription removes the per-reqId ticker view used by
+    the tick hot path, so late ticks find no ticker and become no-ops."""
     ib = ibi.IB()
     contract = ibi.Stock("ABC", "SMART", "USD")
     contract.conId = 12345
     reqId = 8
 
-    ticker = ib.wrapper.startTicker(reqId, contract, "mktData")
-    ib.wrapper.endTicker(ticker, "mktData")
+    ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
+    sub = MktDataSub(reqId=reqId, contract=contract, ticker=ticker)
+    ib.wrapper.subscriptions.add(sub)
 
-    # A stray priceSizeTick after cancel must be a no-op, not silently
-    # mutate the now-unsubscribed Ticker. The handler does an early-return
-    # via reqId2Ticker.get(reqId), so neither bid nor pendingTickers move.
+    assert ib.wrapper.subscriptions.get_ticker(reqId) is ticker
+    assert ib.wrapper.subscriptions.find_market_data(12345, "mktData") is sub
+
+    sub.close(send_cancel=False)
+
+    assert ib.wrapper.subscriptions.get_ticker(reqId) is None
+    assert ib.wrapper.subscriptions.find_market_data(12345, "mktData") is None
+
+    # A stray priceSizeTick after cancel is a no-op via the registry's
+    # early-return guard.
     ib.wrapper.priceSizeTick(reqId, 1, 123.45, 100)
     assert ticker not in ib.wrapper.pendingTickers

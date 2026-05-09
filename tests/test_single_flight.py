@@ -12,6 +12,7 @@ import asyncio
 import pytest
 
 import ib_async as ibi
+from ib_async._requests import SingletonKey
 from ib_async.order import Order, OrderState
 
 pytestmark = pytest.mark.asyncio
@@ -19,8 +20,14 @@ pytestmark = pytest.mark.asyncio
 
 async def test_open_orders_concurrent_callers_share_future():
     ib = ibi.IB()
-    f1, isNew1 = ib.wrapper.startReqOrAttach("openOrders")
-    f2, isNew2 = ib.wrapper.startReqOrAttach("openOrders")
+    req1, isNew1 = ib.wrapper.requests.open(
+        SingletonKey("openOrders"), single_flight=True
+    )
+    f1 = req1.future
+    req2, isNew2 = ib.wrapper.requests.open(
+        SingletonKey("openOrders"), single_flight=True
+    )
+    f2 = req2.future
 
     assert isNew1 is True
     assert isNew2 is False
@@ -41,8 +48,14 @@ async def test_open_orders_concurrent_callers_share_future():
 
 async def test_completed_orders_concurrent_callers_share_future():
     ib = ibi.IB()
-    f1, isNew1 = ib.wrapper.startReqOrAttach("completedOrders")
-    f2, isNew2 = ib.wrapper.startReqOrAttach("completedOrders")
+    req1, isNew1 = ib.wrapper.requests.open(
+        SingletonKey("completedOrders"), single_flight=True
+    )
+    f1 = req1.future
+    req2, isNew2 = ib.wrapper.requests.open(
+        SingletonKey("completedOrders"), single_flight=True
+    )
+    f2 = req2.future
 
     assert isNew1 is True
     assert isNew2 is False
@@ -63,11 +76,17 @@ async def test_completed_orders_concurrent_callers_share_future():
 async def test_attach_reissues_after_settle():
     """After a request settles, the next caller starts a fresh request."""
     ib = ibi.IB()
-    f1, isNew1 = ib.wrapper.startReqOrAttach("positions")
+    req1, isNew1 = ib.wrapper.requests.open(
+        SingletonKey("positions"), single_flight=True
+    )
+    f1 = req1.future
     assert isNew1 is True
     ib.wrapper.positionEnd()
     await f1
 
-    f2, isNew2 = ib.wrapper.startReqOrAttach("positions")
+    req2, isNew2 = ib.wrapper.requests.open(
+        SingletonKey("positions"), single_flight=True
+    )
+    f2 = req2.future
     assert isNew2 is True
     assert f2 is not f1

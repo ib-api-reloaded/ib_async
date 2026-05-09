@@ -1,5 +1,6 @@
 import ib_async as ibi
 from ib_async import IB, Stock
+from ib_async._subscriptions import MktDataSub
 from ib_async.ticker import Ticker
 
 
@@ -8,8 +9,9 @@ def test_tickNews_populates_contract_from_active_ticker():
     streaming-news flow via reqMktData), the emitted NewsTick carries the
     originating contract as a typed snapshot."""
     ib = IB()
-    contract = Stock("AAPL", "SMART", "USD")
-    ib.wrapper.reqId2Ticker[1] = Ticker(contract=contract, defaults=ib.wrapper.defaults)
+    contract = Stock("AAPL", "SMART", "USD", conId=265598)
+    ticker = Ticker(contract=contract, defaults=ib.wrapper.defaults)
+    ib.wrapper.subscriptions.add(MktDataSub(reqId=1, contract=contract, ticker=ticker))
 
     captured: list[ibi.NewsTick] = []
     ib.tickNewsEvent += captured.append
@@ -34,12 +36,15 @@ def test_tickNews_populates_contract_from_active_ticker():
     assert news.contract is not contract
 
 
-def test_tickNews_falls_back_to_reqId2Contract():
-    """When no ticker is registered but the reqId exists in the generic
-    request-contract map, the fallback lookup still populates the contract."""
+def test_tickNews_falls_back_to_request_contract():
+    """When no Subscription is registered but a one-shot Request carries
+    the originating contract, the fallback lookup still populates the
+    contract on the emitted NewsTick."""
+    from ib_async._requests import ReqIdKey
+
     ib = IB()
     contract = Stock("MSFT", "SMART", "USD")
-    ib.wrapper._reqId2Contract[42] = contract
+    ib.wrapper.requests.open(ReqIdKey(42), contract=contract)
 
     captured: list[ibi.NewsTick] = []
     ib.tickNewsEvent += captured.append

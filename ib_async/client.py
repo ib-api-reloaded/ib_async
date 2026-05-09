@@ -428,7 +428,11 @@ class Client:
             self._logger.error(msg)
             self.apiError.emit(msg)
 
-        self.wrapper.setEventsDone()
+        # ``connectionClosed`` is the single teardown path: it fails
+        # every in-flight request, closes every Subscription, sets done
+        # on per-subscriber and per-trade events, and resets wrapper
+        # state. We only call it when the API was actually ready —
+        # before that, no requests, subscriptions, or trades exist.
         if wasReady:
             self.wrapper.connectionClosed()
 

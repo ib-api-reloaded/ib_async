@@ -9,7 +9,7 @@ Both are wrong: a Filled or Cancelled order is final.
 """
 
 import ib_async as ibi
-from ib_async.order import Order, OrderState, OrderStatus, Trade
+from ib_async.order import Order, OrderStatus, Trade
 
 
 def _doneTrade(ib, *, orderId=1, permId=42, status=OrderStatus.Filled):
@@ -28,8 +28,9 @@ def test_warning_error_does_not_mutate_filled_trade():
     trade = _doneTrade(ib, orderId=1, status=OrderStatus.Filled)
 
     # 105 is in the warning code set
-    ib.wrapper.error(reqId=1, errorCode=105, errorString="late warning",
-                     advancedOrderRejectJson="")
+    ib.wrapper.error(
+        reqId=1, errorCode=105, errorString="late warning", advancedOrderRejectJson=""
+    )
 
     assert trade.orderStatus.status == OrderStatus.Filled
     assert trade.log == []
@@ -42,8 +43,12 @@ def test_error_does_not_set_advancedError_on_cancelled_trade():
     assert trade.advancedError == ""
 
     # 201 is a non-warning order error code
-    ib.wrapper.error(reqId=2, errorCode=201, errorString="late reject",
-                     advancedOrderRejectJson='{"foo":"bar"}')
+    ib.wrapper.error(
+        reqId=2,
+        errorCode=201,
+        errorString="late reject",
+        advancedOrderRejectJson='{"foo":"bar"}',
+    )
 
     assert trade.advancedError == ""
     assert trade.orderStatus.status == OrderStatus.Cancelled
@@ -55,8 +60,9 @@ def test_warning_error_still_mutates_live_trade():
     ib.wrapper.clientId = 0
     trade = _doneTrade(ib, orderId=3, status=OrderStatus.Submitted)
 
-    ib.wrapper.error(reqId=3, errorCode=105, errorString="live warning",
-                     advancedOrderRejectJson="")
+    ib.wrapper.error(
+        reqId=3, errorCode=105, errorString="live warning", advancedOrderRejectJson=""
+    )
 
     assert trade.orderStatus.status == OrderStatus.ValidationError
     assert len(trade.log) == 1

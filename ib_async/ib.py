@@ -12,6 +12,17 @@ from typing import Any
 from eventkit import Event
 
 import ib_async.util as util
+from ib_async._requests import CompositeKey, ReqIdKey, SingletonKey, WhatIfKey
+from ib_async._subscriptions import (
+    HistoricalBarsSub,
+    MktDataSub,
+    MktDepthSub,
+    PnLSingleSub,
+    PnLSub,
+    RealTimeBarsSub,
+    ScannerSub,
+    TickByTickSub,
+)
 from ib_async.client import Client
 from ib_async.contract import Contract, ContractDescription, ContractDetails
 from ib_async.objects import (
@@ -573,10 +584,10 @@ class IB:
             modelCode: If specified, filter for this account model.
         """
         return [
-            v
-            for v in self.wrapper.reqId2PnL.values()
-            if (not account or v.account == account)
-            and (not modelCode or v.modelCode == modelCode)
+            sub.pnl
+            for sub in self.wrapper.subscriptions.subs_of_type(PnLSub)
+            if (not account or sub.account == account)
+            and (not modelCode or sub.modelCode == modelCode)
         ]
 
     def pnlSingle(
@@ -594,11 +605,11 @@ class IB:
             conId: If specified, filter for this contract ID.
         """
         return [
-            v
-            for v in self.wrapper.reqId2PnlSingle.values()
-            if (not account or v.account == account)
-            and (not modelCode or v.modelCode == modelCode)
-            and (not conId or v.conId == conId)
+            sub.pnlSingle
+            for sub in self.wrapper.subscriptions.subs_of_type(PnLSingleSub)
+            if (not account or sub.account == account)
+            and (not modelCode or sub.modelCode == modelCode)
+            and (not conId or sub.conId == conId)
         ]
 
     def trades(self) -> list[Trade]:
@@ -642,11 +653,11 @@ class IB:
         Args:
             contract: Contract to get ticker for.
         """
-        return self.wrapper.tickers.get(hash(contract))
+        return self.wrapper.subscriptions.ticker_for_contract(contract)
 
     def tickers(self) -> list[Ticker]:
         """Get a list of all tickers."""
-        return list(self.wrapper.tickers.values())
+        return self.wrapper.subscriptions.pooled_tickers()
 
     def pendingTickers(self) -> list[Ticker]:
         """Get a list of all tickers that have pending ticks or domTicks."""
@@ -657,7 +668,14 @@ class IB:
         Get a list of all live updated bars. These can be 5 second realtime
         bars or live updated historical bars.
         """
-        return list(self.wrapper.reqId2Subscriber.values())
+        result: list[BarDataList | RealTimeBarList] = [
+            sub.bars for sub in self.wrapper.subscriptions.subs_of_type(RealTimeBarsSub)
+        ]
+        result.extend(
+            sub.bars
+            for sub in self.wrapper.subscriptions.subs_of_type(HistoricalBarsSub)
+        )
+        return result
 
     def newsTicks(self) -> list[NewsTick]:
         """
@@ -1004,15 +1022,25 @@ class IB:
             account: Subscribe to this account.
             modelCode: If specified, filter for this account model.
         """
-        key = (account, modelCode)
-        assert key not in self.wrapper.pnlKey2ReqId
+        # Silent dedupe: a second reqPnL for the same (account, modelCode)
+        # returns the existing PnL instead of asserting (the previous
+        # behavior crashed callers that retried after a transient error).
+        existing = self.wrapper.subscriptions.get_pnl(account, modelCode)
+        if existing is not None:
+            return existing.pnl
 
         reqId = self.client.getReqId()
-        self.wrapper.pnlKey2ReqId[key] = reqId
         pnl = PnL(account, modelCode)
-        self.wrapper.reqId2PnL[reqId] = pnl
+        self.wrapper.subscriptions.add(
+            PnLSub(
+                reqId=reqId,
+                contract=Contract(),  # PnL is not contract-bound
+                pnl=pnl,
+                account=account,
+                modelCode=modelCode,
+            )
+        )
         self.client.reqPnL(reqId, account, modelCode)
-
         return pnl
 
     def cancelPnL(self, account, modelCode: str = ""):
@@ -1023,16 +1051,14 @@ class IB:
             account: Cancel for this account.
             modelCode: If specified, cancel for this account model.
         """
-        key = (account, modelCode)
-        reqId = self.wrapper.pnlKey2ReqId.pop(key, None)
-        if reqId:
-            self.client.cancelPnL(reqId)
-            self.wrapper.reqId2PnL.pop(reqId, None)
-        else:
+        sub = self.wrapper.subscriptions.get_pnl(account, modelCode)
+        if sub is None:
             self._logger.error(
                 "cancelPnL: No subscription for "
                 f"account {account}, modelCode {modelCode}"
             )
+            return
+        sub.close()  # sends cancelPnL(reqId) and unregisters
 
     def reqPnLSingle(self, account: str, modelCode: str, conId: int) -> PnLSingle:
         """
@@ -1048,15 +1074,24 @@ class IB:
             modelCode: Filter for this account model.
             conId: Filter for this contract ID.
         """
-        key = (account, modelCode, conId)
-        assert key not in self.wrapper.pnlSingleKey2ReqId
+        # Silent dedupe: same shape as reqPnL.
+        existing = self.wrapper.subscriptions.get_pnl_single(account, modelCode, conId)
+        if existing is not None:
+            return existing.pnlSingle
 
         reqId = self.client.getReqId()
-        self.wrapper.pnlSingleKey2ReqId[key] = reqId
         pnlSingle = PnLSingle(account, modelCode, conId)
-        self.wrapper.reqId2PnlSingle[reqId] = pnlSingle
+        self.wrapper.subscriptions.add(
+            PnLSingleSub(
+                reqId=reqId,
+                contract=Contract(conId=conId),
+                pnlSingle=pnlSingle,
+                account=account,
+                modelCode=modelCode,
+                conId=conId,
+            )
+        )
         self.client.reqPnLSingle(reqId, account, modelCode, conId)
-
         return pnlSingle
 
     def cancelPnLSingle(self, account: str, modelCode: str, conId: int):
@@ -1069,16 +1104,14 @@ class IB:
             modelCode: Cancel for this account model.
             conId: Cancel for this contract ID.
         """
-        key = (account, modelCode, conId)
-        reqId = self.wrapper.pnlSingleKey2ReqId.pop(key, None)
-        if reqId:
-            self.client.cancelPnLSingle(reqId)
-            self.wrapper.reqId2PnlSingle.pop(reqId, None)
-        else:
+        sub = self.wrapper.subscriptions.get_pnl_single(account, modelCode, conId)
+        if sub is None:
             self._logger.error(
                 "cancelPnLSingle: No subscription for "
                 f"account {account}, modelCode {modelCode}, conId {conId}"
             )
+            return
+        sub.close()
 
     def reqContractDetails(self, contract: Contract) -> list[ContractDetails]:
         """
@@ -1158,7 +1191,9 @@ class IB:
         bars.whatToShow = whatToShow
         bars.useRTH = useRTH
         bars.realTimeBarsOptions = realTimeBarsOptions or []
-        self.wrapper.startSubscription(reqId, bars, contract)
+        self.wrapper.subscriptions.add(
+            RealTimeBarsSub(reqId=reqId, contract=contract, bars=bars)
+        )
         self.client.reqRealTimeBars(
             reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
         )
@@ -1171,8 +1206,12 @@ class IB:
         Args:
             bars: The bar list that was obtained from ``reqRealTimeBars``.
         """
-        self.client.cancelRealTimeBars(bars.reqId)
-        self.wrapper.endSubscription(bars)
+        sub = self.wrapper.subscriptions.get_sub(bars.reqId)
+        if sub is not None:
+            sub.close()  # sends cancelRealTimeBars(reqId) + sets bars done
+        else:
+            # Pre-Stage-G subscription not in the new registry; fall back.
+            self.client.cancelRealTimeBars(bars.reqId)
 
     def reqHistoricalData(
         self,
@@ -1253,8 +1292,11 @@ class IB:
                 with a keepUpToDate subscription.
 
         """
-        self.client.cancelHistoricalData(bars.reqId)
-        self.wrapper.endSubscription(bars)
+        sub = self.wrapper.subscriptions.get_sub(bars.reqId)
+        if sub is not None:
+            sub.close()  # sends cancelHistoricalData(reqId) + sets bars done
+        else:
+            self.client.cancelHistoricalData(bars.reqId)
 
     def reqHistoricalSchedule(
         self,
@@ -1422,8 +1464,28 @@ class IB:
             regulatorySnapshot: Request NBBO snapshot (may incur a fee).
             mktDataOptions: Unknown
         """
+        # Idempotent re-subscribe: a second call for the same qualified
+        # contract returns the existing ticker without issuing a second
+        # IB request. Unqualified contracts (conId=0) skip the dedup
+        # index entirely (see SubscriptionRegistry._market_data_kind),
+        # so concurrent callers on the same blank conId stay distinct.
+        existing = self.wrapper.subscriptions.find_market_data(
+            contract.conId, "mktData"
+        )
+        if existing is not None:
+            return existing.ticker  # type: ignore[attr-defined]
+
         reqId = self.client.getReqId()
-        ticker = self.wrapper.startTicker(reqId, contract, "mktData")
+        ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
+        self.wrapper.subscriptions.add(
+            MktDataSub(
+                reqId=reqId,
+                contract=contract,
+                ticker=ticker,
+                snapshot=snapshot,
+                genericTickList=genericTickList,
+            )
+        )
         self.client.reqMktData(
             reqId,
             contract,
@@ -1445,16 +1507,12 @@ class IB:
             Returns True if cancel was successful.
             Returns False if 'contract' was not found.
         """
-        ticker = self.ticker(contract)
-        reqId = self.wrapper.endTicker(ticker, "mktData") if ticker else 0
-
-        if reqId:
-            self.client.cancelMktData(reqId)
-            return True
-
-        self._logger.error(f"cancelMktData: No reqId found for contract {contract}")
-
-        return False
+        sub = self.wrapper.subscriptions.find_market_data(contract.conId, "mktData")
+        if sub is None:
+            self._logger.error(f"cancelMktData: No subscription for {contract}")
+            return False
+        sub.close()  # sends cancelMktData(reqId) and unregisters
+        return True
 
     def reqTickByTickData(
         self,
@@ -1475,13 +1533,27 @@ class IB:
             numberOfTicks: Number of ticks or 0 for unlimited.
             ignoreSize: Ignore bid/ask ticks that only update the size.
         """
-        reqId = self.client.getReqId()
-        ticker = self.wrapper.startTicker(reqId, contract, tickType)
+        # Idempotent re-subscribe per (contract, tickType): a second
+        # call for the same qualified contract+kind returns the existing
+        # Ticker without issuing a duplicate IB request. Unqualified
+        # contracts skip the dedup index (see _market_data_kind).
+        existing = self.wrapper.subscriptions.find_market_data(contract.conId, tickType)
+        if existing is not None:
+            return existing.ticker  # type: ignore[attr-defined]
 
+        reqId = self.client.getReqId()
+        ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
+        self.wrapper.subscriptions.add(
+            TickByTickSub(
+                reqId=reqId,
+                contract=contract,
+                ticker=ticker,
+                tickType=tickType,
+            )
+        )
         self.client.reqTickByTickData(
             reqId, contract, tickType, numberOfTicks, ignoreSize
         )
-
         return ticker
 
     def cancelTickByTickData(self, contract: Contract, tickType: str) -> bool:
@@ -1495,15 +1567,14 @@ class IB:
             Returns True if cancel was successful.
             Returns False if 'contract' was not found.
         """
-        ticker = self.ticker(contract)
-        reqId = self.wrapper.endTicker(ticker, tickType) if ticker else 0
-
-        if reqId:
-            self.client.cancelTickByTickData(reqId)
-            return True
-
-        self._logger.error(f"cancelMktData: No reqId found for contract {contract}")
-        return False
+        sub = self.wrapper.subscriptions.find_market_data(contract.conId, tickType)
+        if sub is None:
+            self._logger.error(
+                f"cancelTickByTickData: No subscription for {contract} / {tickType}"
+            )
+            return False
+        sub.close()
+        return True
 
     def reqSmartComponents(self, bboExchange: str) -> list[SmartComponent]:
         """
@@ -1545,12 +1616,29 @@ class IB:
             and ``ticker.domAsks`` and the list of MktDepthData in
             ``ticker.domTicks``.
         """
+        # Idempotent re-subscribe: a second reqMktDepth on the same
+        # qualified contract returns the existing Ticker without issuing
+        # a duplicate request.
+        existing = self.wrapper.subscriptions.find_market_data(
+            contract.conId, "mktDepth"
+        )
+        if existing is not None:
+            return existing.ticker  # type: ignore[attr-defined]
+
         reqId = self.client.getReqId()
-        ticker = self.wrapper.startTicker(reqId, contract, "mktDepth")
+        ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
         ticker.domBids.clear()
         ticker.domAsks.clear()
         ticker.domBidsDict.clear()
         ticker.domAsksDict.clear()
+        self.wrapper.subscriptions.add(
+            MktDepthSub(
+                reqId=reqId,
+                contract=contract,
+                ticker=ticker,
+                isSmartDepth=isSmartDepth,
+            )
+        )
         self.client.reqMktDepth(reqId, contract, numRows, isSmartDepth, mktDepthOptions)
         return ticker
 
@@ -1562,21 +1650,18 @@ class IB:
             contract: The exact contract object that was used to
                 subscribe with.
         """
-        ticker = self.ticker(contract)
-        reqId = self.wrapper.endTicker(ticker, "mktDepth") if ticker else 0
-        if ticker and reqId:
-            self.client.cancelMktDepth(reqId, isSmartDepth)
-
-            # clear market depth state from live ticker since it is not longer
-            # being updated after the cancel request.
-            ticker.domBids.clear()
-            ticker.domAsks.clear()
-            ticker.domBidsDict.clear()
-            ticker.domAsksDict.clear()
-        else:
-            self._logger.error(
-                f"cancelMktDepth: No reqId found for contract {contract}"
-            )
+        sub = self.wrapper.subscriptions.find_market_data(contract.conId, "mktDepth")
+        if sub is None:
+            self._logger.error(f"cancelMktDepth: No subscription for {contract}")
+            return
+        ticker = sub.ticker  # type: ignore[attr-defined]
+        sub.close()  # sends cancelMktDepth(reqId, isSmartDepth)
+        # Clear DOM state on the live Ticker — it is no longer being
+        # updated, so leftover levels would be stale.
+        ticker.domBids.clear()
+        ticker.domAsks.clear()
+        ticker.domBidsDict.clear()
+        ticker.domAsksDict.clear()
 
     def reqHistogramData(
         self, contract: Contract, useRTH: bool, period: str
@@ -1677,7 +1762,9 @@ class IB:
         dataList.scannerSubscriptionFilterOptions = (
             scannerSubscriptionFilterOptions or []
         )
-        self.wrapper.startSubscription(reqId, dataList)
+        self.wrapper.subscriptions.add(
+            ScannerSub(reqId=reqId, contract=Contract(), dataList=dataList)
+        )
         self.client.reqScannerSubscription(
             reqId,
             subscription,
@@ -1696,8 +1783,11 @@ class IB:
             dataList: The scan data list that was obtained from
                 :meth:`.reqScannerSubscription`.
         """
-        self.client.cancelScannerSubscription(dataList.reqId)
-        self.wrapper.endSubscription(dataList)
+        sub = self.wrapper.subscriptions.get_sub(dataList.reqId)
+        if sub is not None:
+            sub.close()
+        else:
+            self.client.cancelScannerSubscription(dataList.reqId)
 
     def reqScannerParameters(self) -> str:
         """
@@ -2192,22 +2282,34 @@ class IB:
     async def reqTickersAsync(
         self, *contracts: Contract, regulatorySnapshot: bool = False
     ) -> list[Ticker]:
-        futures = []
-        tickers = []
-        reqIds = []
+        # Each contract gets its own snapshot subscription. Snapshot
+        # MktDataSubs are registered by reqId only — they are
+        # deliberately not indexed at ``(conId, "mktData")`` so that
+        # concurrent snapshots for the same contract coexist with each
+        # other (and with any live streaming subscription).
+        futures: list[Awaitable[Any]] = []
+        subs: list[MktDataSub] = []
+        tickers: list[Ticker] = []
         for contract in contracts:
             reqId = self.client.getReqId()
-            reqIds.append(reqId)
-            future = self.wrapper.startReq(reqId, contract)
+            req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+            future = req.future
             futures.append(future)
-            ticker = self.wrapper.startTicker(reqId, contract, "snapshot")
+            ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
             tickers.append(ticker)
+            sub = MktDataSub(
+                reqId=reqId, contract=contract, ticker=ticker, snapshot=True
+            )
+            self.wrapper.subscriptions.add(sub)
+            subs.append(sub)
             self.client.reqMktData(reqId, contract, "", True, regulatorySnapshot, [])
 
         await asyncio.gather(*futures)
 
-        for ticker in tickers:
-            self.wrapper.endTicker(ticker, "snapshot")
+        # IB auto-completes snapshots; close locally without sending a
+        # cancel just to unregister from the SubscriptionRegistry.
+        for sub in subs:
+            sub.close(send_cancel=False)
 
         return tickers
 
@@ -2216,19 +2318,30 @@ class IB:
     ) -> Awaitable[OrderState]:
         whatIfOrder = copy.copy(order)
         whatIfOrder.whatIf = True
-        reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
-        self.client.placeOrder(reqId, contract, whatIfOrder)
+        orderId = self.client.getReqId()
+        # WhatIf responses arrive via ``openOrder`` (with ``whatIf=True``)
+        # and are settled by the wrapper handler keyed on the orderId.
+        # Use ``WhatIfKey`` so the open key matches the settle key — a
+        # plain ``ReqIdKey`` here would never resolve.
+        req, _ = self.wrapper.requests.open(WhatIfKey(orderId), contract=contract)
+        future = req.future
+        self.client.placeOrder(orderId, contract, whatIfOrder)
         return future
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
-        future, isNew = self.wrapper.startReqOrAttach("currentTime")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("currentTime"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqCurrentTime()
         return future
 
     def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
-        future, isNew = self.wrapper.startReqOrAttach("accountValues")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("accountValues"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqAccountUpdates(True, account)
         return future
@@ -2237,7 +2350,8 @@ class IB:
         self, account: str, modelCode: str = ""
     ) -> Awaitable[None]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         self.client.reqAccountUpdatesMulti(reqId, account, modelCode, False)
         return future
 
@@ -2255,7 +2369,8 @@ class IB:
 
     def reqAccountSummaryAsync(self) -> Awaitable[None]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         tags = (
             "AccountType,NetLiquidation,TotalCashValue,SettledCash,"
             "AccruedCash,BuyingPower,EquityWithLoanValue,"
@@ -2273,19 +2388,28 @@ class IB:
         return future
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
-        future, isNew = self.wrapper.startReqOrAttach("openOrders")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("openOrders"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqOpenOrders()
         return future
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
-        future, isNew = self.wrapper.startReqOrAttach("openOrders")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("openOrders"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqAllOpenOrders()
         return future
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
-        future, isNew = self.wrapper.startReqOrAttach("completedOrders")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("completedOrders"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqCompletedOrders(apiOnly)
         return future
@@ -2295,12 +2419,16 @@ class IB:
     ) -> Awaitable[list[Fill]]:
         execFilter = execFilter or ExecutionFilter()
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         self.client.reqExecutions(reqId, execFilter)
         return future
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
-        future, isNew = self.wrapper.startReqOrAttach("positions")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("positions"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqPositions()
         return future
@@ -2309,7 +2437,8 @@ class IB:
         self, contract: Contract
     ) -> Awaitable[list[ContractDetails]]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         self.client.reqContractDetails(reqId, contract)
         return future
 
@@ -2317,7 +2446,8 @@ class IB:
         self, pattern: str
     ) -> list[ContractDescription] | None:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         self.client.reqMatchingSymbols(reqId, pattern)
         try:
             await asyncio.wait_for(future, 4)
@@ -2329,7 +2459,10 @@ class IB:
     async def reqMarketRuleAsync(
         self, marketRuleId: int
     ) -> list[PriceIncrement] | None:
-        future, isNew = self.wrapper.startReqOrAttach(f"marketRule-{marketRuleId}")
+        req, isNew = self.wrapper.requests.open(
+            CompositeKey("marketRule", (marketRuleId,)), single_flight=True
+        )
+        future = req.future
         try:
             if isNew:
                 self.client.reqMarketRule(marketRuleId)
@@ -2364,9 +2497,14 @@ class IB:
         bars.formatDate = formatDate
         bars.keepUpToDate = keepUpToDate
         bars.chartOptions = chartOptions or []
-        future = self.wrapper.startReq(reqId, contract, container=bars)
+        req, _ = self.wrapper.requests.open(
+            ReqIdKey(reqId), contract=contract, container=bars
+        )
+        future = req.future
         if keepUpToDate:
-            self.wrapper.startSubscription(reqId, bars, contract)
+            self.wrapper.subscriptions.add(
+                HistoricalBarsSub(reqId=reqId, contract=contract, bars=bars)
+            )
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalData(
             reqId,
@@ -2398,7 +2536,8 @@ class IB:
         useRTH: bool = True,
     ) -> Awaitable[HistoricalSchedule]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalData(
             reqId,
@@ -2427,7 +2566,8 @@ class IB:
         miscOptions: list[TagValue] = [],
     ) -> Awaitable[list]:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalTicks(
@@ -2448,7 +2588,8 @@ class IB:
     ) -> datetime.datetime:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         self.client.reqHeadTimeStamp(reqId, contract, whatToShow, useRTH, formatDate)
         await future
 
@@ -2458,12 +2599,16 @@ class IB:
     def reqSmartComponentsAsync(self, bboExchange):
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         self.client.reqSmartComponents(reqId, bboExchange)
         return future
 
     def reqMktDepthExchangesAsync(self) -> Awaitable[list[DepthMktDataDescription]]:
-        future, isNew = self.wrapper.startReqOrAttach("mktDepthExchanges")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("mktDepthExchanges"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqMktDepthExchanges()
         return future
@@ -2473,7 +2618,8 @@ class IB:
     ) -> Awaitable[list[HistogramData]]:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         self.client.reqHistogramData(reqId, contract, useRTH, period)
         return future
 
@@ -2485,7 +2631,8 @@ class IB:
     ) -> Awaitable[str]:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         self.client.reqFundamentalData(
             reqId, contract, reportType, fundamentalDataOptions
         )
@@ -2503,14 +2650,20 @@ class IB:
             scannerSubscriptionFilterOptions or [],
         )
 
-        future = self.wrapper.startReq(dataList.reqId, container=dataList)
+        req, _ = self.wrapper.requests.open(
+            ReqIdKey(dataList.reqId), container=dataList
+        )
+        future = req.future
         await future
 
         self.client.cancelScannerSubscription(dataList.reqId)
         return future.result()
 
     def reqScannerParametersAsync(self) -> Awaitable[str]:
-        future, isNew = self.wrapper.startReqOrAttach("scannerParams")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("scannerParams"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqScannerParameters()
         return future
@@ -2523,7 +2676,8 @@ class IB:
         implVolOptions: list[TagValue] = [],
     ) -> OptionComputation | None:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         self.client.calculateImpliedVolatility(
             reqId, contract, optionPrice, underPrice, implVolOptions
         )
@@ -2544,7 +2698,8 @@ class IB:
         optPrcOptions: list[TagValue] = [],
     ) -> OptionComputation | None:
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId, contract)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId), contract=contract)
+        future = req.future
         self.client.calculateOptionPrice(
             reqId, contract, volatility, underPrice, optPrcOptions
         )
@@ -2566,14 +2721,18 @@ class IB:
     ) -> Awaitable[list[OptionChain]]:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         self.client.reqSecDefOptParams(
             reqId, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
         )
         return future
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
-        future, isNew = self.wrapper.startReqOrAttach("newsProviders")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("newsProviders"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.reqNewsProviders()
         return future
@@ -2583,7 +2742,8 @@ class IB:
     ) -> Awaitable[NewsArticle]:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         self.client.reqNewsArticle(reqId, providerCode, articleId, newsArticleOptions)
         return future
 
@@ -2598,7 +2758,8 @@ class IB:
     ) -> list[HistoricalNews] | None:
         reqId = self.client.getReqId()
 
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalNews(
@@ -2612,7 +2773,10 @@ class IB:
             return None
 
     async def requestFAAsync(self, faDataType: int):
-        future, isNew = self.wrapper.startReqOrAttach("requestFA")
+        req, isNew = self.wrapper.requests.open(
+            SingletonKey("requestFA"), single_flight=True
+        )
+        future = req.future
         if isNew:
             self.client.requestFA(faDataType)
         try:
@@ -2626,7 +2790,10 @@ class IB:
             self.cancelWshMetaData()
 
         self.reqWshMetaData()
-        future = self.wrapper.startReq(self.wrapper.wshMetaReqId, container="")
+        req, _ = self.wrapper.requests.open(
+            ReqIdKey(self.wrapper.wshMetaReqId), container=""
+        )
+        future = req.future
         await future
 
         return future.result()
@@ -2636,7 +2803,10 @@ class IB:
             self.cancelWshEventData()
 
         self.reqWshEventData(data)
-        future = self.wrapper.startReq(self.wrapper.wshEventReqId, container="")
+        req, _ = self.wrapper.requests.open(
+            ReqIdKey(self.wrapper.wshEventReqId), container=""
+        )
+        future = req.future
         await future
 
         self.cancelWshEventData()
@@ -2644,7 +2814,8 @@ class IB:
 
     def reqUserInfoAsync(self):
         reqId = self.client.getReqId()
-        future = self.wrapper.startReq(reqId)
+        req, _ = self.wrapper.requests.open(ReqIdKey(reqId))
+        future = req.future
         self.client.reqUserInfo(reqId)
         return future
 
