@@ -1678,6 +1678,14 @@ class Wrapper:
         # reqId is a local orderId, but is delivered as -1 if this is a non-order-related error
         if reqId != -1:
             trade = self.trades.get((self.clientId, reqId))
+            # Trades are never evicted from `self.trades`, so a late or
+            # replayed error for an already-finished order would otherwise
+            # corrupt its status (warning branch sets ValidationError) or
+            # set `advancedError` (error branch) on a completed trade.
+            # Treat done trades as absent here so the rest of the function
+            # only acts on live orders.
+            if trade and trade.isDone():
+                trade = None
 
         # Warnings are currently:
         # 105 - Order being modified does not match the original order. (?)
