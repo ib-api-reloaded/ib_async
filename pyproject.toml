@@ -1,6 +1,6 @@
 [project]
 name = "ib_async"
-version = "2.1.0"
+version = "3.0.0"
 description = "Python sync/async framework for Interactive Brokers API"
 readme = "README.md"
 license = "BSD-2-Clause"

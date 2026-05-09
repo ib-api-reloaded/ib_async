@@ -2,10 +2,13 @@
 
 import dataclasses
 import logging
+import typing
 from collections.abc import Callable
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Final
 
+from ._proto.safe import safe_decimal
 from .contract import (
     ComboLeg,
     Contract,
@@ -66,6 +69,27 @@ def _noopHandler(fields: list[str]) -> None:
     """Returned by Decoder.wrap() when the wrapper has no method for a msgId,
     so the dispatch table never contains None and hot-path lookup can call
     unconditionally."""
+
+
+def _resolveCoerceType(annotation: Any) -> type | None:
+    """Return the target coercion type for a dataclass field annotation.
+
+    Walks ``T | None`` / ``Optional[T]`` / ``Union[T, None]`` down to
+    the inner ``T``. Returns ``None`` when the annotation is not a
+    type ``parse()`` knows how to coerce (e.g. plain ``str``, list,
+    nested dataclass).
+    """
+    args = typing.get_args(annotation)
+    if args:
+        nonNone = [a for a in args if a is not type(None)]
+        if len(nonNone) == 1:
+            inner = nonNone[0]
+            if inner in (int, float, bool, Decimal):
+                return inner
+        return None
+    if annotation in (int, float, bool, Decimal):
+        return annotation
+    return None
 
 
 class Decoder:
@@ -229,13 +253,15 @@ class Decoder:
         cls = type(obj)
         entries = _PARSE_FIELDS.get(cls)
         if entries is None:
-            # Cache miss: walk the dataclass once to record every int/float/bool
-            # field and its default. Subsequent parse() calls of this class skip
-            # straight to the coercion loop.
+            # Cache miss: resolve every coercible field's type via the
+            # class annotations so ``Decimal | None`` fields (whose
+            # ``field.default`` is ``None``) are recognised. Subsequent
+            # ``parse()`` calls of this class hit the cached plan.
+            hints = typing.get_type_hints(cls)
             plan: list[tuple[str, type, Any]] = []
             for field in dataclasses.fields(obj):
-                typ = type(field.default)
-                if typ in (int, float, bool):
+                typ = _resolveCoerceType(hints.get(field.name))
+                if typ is not None:
                     plan.append((field.name, typ, field.default))
             entries = tuple(plan)
             _PARSE_FIELDS[cls] = entries
@@ -248,6 +274,12 @@ class Decoder:
                 setattr(obj, name, int(v))
             elif typ is float:
                 setattr(obj, name, float(v))
+            elif typ is Decimal:
+                # Wire string → ``Decimal | None``. ``safe_decimal``
+                # returns ``None`` for empty / "nan" / malformed input;
+                # callers that need a non-``None`` floor (rare) can
+                # post-process the field after ``parse()``.
+                setattr(obj, name, safe_decimal(v))
             else:  # bool
                 setattr(obj, name, bool(int(v)))
 

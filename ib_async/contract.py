@@ -2,6 +2,7 @@
 
 import datetime as dt
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import NamedTuple, Optional
 
 import ib_async.util as util
@@ -552,7 +553,11 @@ class TradingSession(NamedTuple):
 class ContractDetails:
     contract: Contract | None = None
     marketName: str = ""
-    minTick: float = 0.0
+    # Decimal-typed numeric fields default to ``None`` for "unset" so
+    # ``if details.minTick:`` evaluates falsy when the wire didn't
+    # carry a value. ``Decimal('NaN')`` would be truthy and silently
+    # break those checks across user code.
+    minTick: Decimal | None = None
     orderTypes: str = ""
     validExchanges: str = ""
     priceMagnifier: int = 0
@@ -566,7 +571,7 @@ class ContractDetails:
     tradingHours: str = ""
     liquidHours: str = ""
     evRule: str = ""
-    evMultiplier: int = 0
+    evMultiplier: Decimal | None = None
     mdSizeMultiplier: int = 1  # obsolete
     aggGroup: int = 0
     underSymbol: str = ""
@@ -576,10 +581,10 @@ class ContractDetails:
     realExpirationDate: str = ""
     lastTradeTime: str = ""
     stockType: str = ""
-    minSize: float = 0.0
-    sizeIncrement: float = 0.0
-    suggestedSizeIncrement: float = 0.0
-    # minCashQtySize: float = 0.0
+    minSize: Decimal | None = None
+    sizeIncrement: Decimal | None = None
+    suggestedSizeIncrement: Decimal | None = None
+    # minCashQtySize: Decimal | None = None
     cusip: str = ""
     ratings: str = ""
     descAppend: str = ""
@@ -587,7 +592,7 @@ class ContractDetails:
     couponType: str = ""
     callable: bool = False
     putable: bool = False
-    coupon: float = 0
+    coupon: Decimal | None = None
     convertible: bool = False
     maturity: str = ""
     issueDate: str = ""
