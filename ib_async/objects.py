@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
 from decimal import Decimal, InvalidOperation
-from typing import Any, NamedTuple
+from typing import Any
 
 from eventkit import Event
 
@@ -102,12 +102,16 @@ class ExecutionFilter:
 @dataclass
 class BarData:
     date: date_ | datetime = EPOCH
-    open: float = 0.0
-    high: float = 0.0
-    low: float = 0.0
-    close: float = 0.0
-    volume: float = 0
-    average: float = 0.0
+    # OHLC + volume + average are ``Decimal | None`` end-to-end.
+    # ``None`` means the wire didn't carry a value; falsy under
+    # ``if bar.open:`` checks so user code's existing idioms keep
+    # working. ``Decimal('NaN')`` would silently evaluate True.
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    close: Decimal | None = None
+    volume: Decimal | None = None
+    average: Decimal | None = None
     barCount: int = 0
 
 
@@ -115,12 +119,12 @@ class BarData:
 class RealTimeBar:
     time: datetime = EPOCH
     endTime: int = -1
-    open_: float = 0.0
-    high: float = 0.0
-    low: float = 0.0
-    close: float = 0.0
-    volume: float = 0.0
-    wap: float = 0.0
+    open_: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    close: Decimal | None = None
+    volume: Decimal | None = None
+    wap: Decimal | None = None
     count: int = 0
 
 
@@ -378,20 +382,33 @@ class AccountValue:
         return result
 
 
-class TickData(NamedTuple):
+# Tick / bar / depth records — slotted frozen dataclasses for v3.0.
+# Numeric ``price`` / ``size`` fields stay ``float`` here pending the
+# Ticker hot-path benchmark in the same phase. Migrating these to
+# ``Decimal | None`` is coherent with the framework-wide direction but
+# coupled to ``Ticker``'s field types (these tick records are stored
+# verbatim onto ``ticker.ticks`` / ``ticker.tickByTicks`` lists, so the
+# inner type tracks Ticker exactly). The dataclass-shape change here is
+# structural only and adds slots for per-record memory savings.
+
+
+@dataclass(slots=True, frozen=True)
+class TickData:
     time: datetime
     tickType: int
     price: float
     size: float
 
 
-class HistoricalTick(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class HistoricalTick:
     time: datetime
     price: float
     size: float
 
 
-class HistoricalTickBidAsk(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class HistoricalTickBidAsk:
     time: datetime
     tickAttribBidAsk: TickAttribBidAsk
     priceBid: float
@@ -400,7 +417,8 @@ class HistoricalTickBidAsk(NamedTuple):
     sizeAsk: float
 
 
-class HistoricalTickLast(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class HistoricalTickLast:
     time: datetime
     tickAttribLast: TickAttribLast
     price: float
@@ -409,7 +427,8 @@ class HistoricalTickLast(NamedTuple):
     specialConditions: str
 
 
-class TickByTickAllLast(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class TickByTickAllLast:
     tickType: int
     time: datetime
     price: float
@@ -419,7 +438,8 @@ class TickByTickAllLast(NamedTuple):
     specialConditions: str
 
 
-class TickByTickBidAsk(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class TickByTickBidAsk:
     time: datetime
     bidPrice: float
     askPrice: float
@@ -428,12 +448,14 @@ class TickByTickBidAsk(NamedTuple):
     tickAttribBidAsk: TickAttribBidAsk
 
 
-class TickByTickMidPoint(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class TickByTickMidPoint:
     time: datetime
     midPoint: float
 
 
-class MktDepthData(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class MktDepthData:
     time: datetime
     position: int
     marketMaker: str
@@ -443,13 +465,15 @@ class MktDepthData(NamedTuple):
     size: float
 
 
-class DOMLevel(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class DOMLevel:
     price: float
     size: float
     marketMaker: str
 
 
-class PriceIncrement(NamedTuple):
+@dataclass(slots=True, frozen=True)
+class PriceIncrement:
     lowEdge: float
     increment: float
 

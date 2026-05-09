@@ -990,12 +990,12 @@ class Wrapper:
         self,
         reqId: int,
         time: int,
-        open_: float,
-        high: float,
-        low: float,
-        close: float,
-        volume: float,
-        wap: float,
+        open_: Decimal | None,
+        high: Decimal | None,
+        low: Decimal | None,
+        close: Decimal | None,
+        volume: Decimal | None,
+        wap: Decimal | None,
         count: int,
     ):
         dt = datetime.fromtimestamp(time, self.defaultTimezone)

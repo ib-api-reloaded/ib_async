@@ -244,7 +244,8 @@ class Decoder:
             ),
             49: self.wrap("currentTime", [int]),
             50: self.wrap(
-                "realtimeBar", [int, int, float, float, float, float, float, float, int]
+                "realtimeBar",
+                [int, int, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal, int],
             ),
             51: self.wrap("fundamentalData", [int, str]),
             52: self.wrap("contractDetailsEnd", [int]),
@@ -872,12 +873,12 @@ class Decoder:
         for _ in range(int(numBars)):
             bar = BarData(
                 date=get(),
-                open=float(get()),
-                high=float(get()),
-                low=float(get()),
-                close=float(get()),
-                volume=float(get()),
-                average=float(get()),
+                open=safe_decimal(get()),
+                high=safe_decimal(get()),
+                low=safe_decimal(get()),
+                close=safe_decimal(get()),
+                volume=safe_decimal(get()),
+                average=safe_decimal(get()),
                 barCount=int(get()),
             )
             self.wrapper.historicalData(int(reqId), bar)
@@ -891,12 +892,12 @@ class Decoder:
         bar = BarData(
             barCount=int(get() or 0),
             date=get(),
-            open=float(get() or 0),
-            close=float(get() or 0),
-            high=float(get() or 0),
-            low=float(get() or 0),
-            average=float(get() or 0),
-            volume=float(get() or 0),
+            open=safe_decimal(get()),
+            close=safe_decimal(get()),
+            high=safe_decimal(get()),
+            low=safe_decimal(get()),
+            average=safe_decimal(get()),
+            volume=safe_decimal(get()),
         )
 
         self.wrapper.historicalDataUpdate(int(reqId), bar)
