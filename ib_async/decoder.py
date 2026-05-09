@@ -43,11 +43,16 @@ from .wrapper import Wrapper
 # behaviour (``field or 0``) is preserved verbatim from the original inline
 # ternary in Decoder.wrap(); hoisting lets that wrap() resolve the converter
 # list once at construction time instead of branching per field per dispatch.
+# ``Decimal`` is the 3.0-era type for size, quantity, and price fields:
+# ``safe_decimal`` returns ``Decimal | None`` (``None`` for empty / "nan" /
+# malformed input) so binary-path handlers and protobuf converters share
+# the same Decimal-coherent shape on the way into the wrapper.
 _CONV: Final[dict[type, Callable[[str], Any]]] = {
     str: lambda f: f,
     int: lambda f: int(f or 0),
     float: lambda f: float(f or 0),
     bool: lambda f: bool(int(f or 0)),
+    Decimal: safe_decimal,
 }
 
 # Cache of dataclass-field coercion plans keyed by class. Each entry is a tuple
@@ -69,6 +74,64 @@ def _noopHandler(fields: list[str]) -> None:
     """Returned by Decoder.wrap() when the wrapper has no method for a msgId,
     so the dispatch table never contains None and hot-path lookup can call
     unconditionally."""
+
+
+# Per-canonical-msgId protobuf dispatch table for ``Decoder.processProtoBuf``.
+# Each entry is ``(ProtoClass, decoder_handler_method_name)``. Mirrors IBKR's
+# ``decoder.py:msgId2handleInfoProtoBuf`` for the message families covered
+# in the orders / contracts phase. Other phases extend this dict in place
+# as they land. Build is deferred to the first instantiation so the heavy
+# ``_pb`` imports don't fire at decoder-module import time.
+_PROTO_MSG_HANDLERS: dict[int, tuple[type, str]] = {}
+
+
+def _initProtoMsgHandlers() -> None:
+    if _PROTO_MSG_HANDLERS:
+        return
+    from ._pb import (
+        CommissionAndFeesReport_pb2,
+        CompletedOrder_pb2,
+        ContractData_pb2,
+        ContractDataEnd_pb2,
+        ExecutionDetails_pb2,
+        ExecutionDetailsEnd_pb2,
+        OpenOrder_pb2,
+        OpenOrdersEnd_pb2,
+        OrderBound_pb2,
+        OrderStatus_pb2,
+    )
+
+    # Canonical IBKR ``IN`` msgIds (see ``ibapi/message.py``).
+    _PROTO_MSG_HANDLERS.update(
+        {
+            3: (OrderStatus_pb2.OrderStatus, "_protoOrderStatus"),
+            5: (OpenOrder_pb2.OpenOrder, "_protoOpenOrder"),
+            10: (ContractData_pb2.ContractData, "_protoContractData"),
+            11: (ExecutionDetails_pb2.ExecutionDetails, "_protoExecutionDetails"),
+            18: (ContractData_pb2.ContractData, "_protoBondContractData"),
+            52: (ContractDataEnd_pb2.ContractDataEnd, "_protoContractDataEnd"),
+            53: (OpenOrdersEnd_pb2.OpenOrdersEnd, "_protoOpenOrderEnd"),
+            55: (
+                ExecutionDetailsEnd_pb2.ExecutionDetailsEnd,
+                "_protoExecutionDetailsEnd",
+            ),
+            59: (
+                CommissionAndFeesReport_pb2.CommissionAndFeesReport,
+                "_protoCommissionReport",
+            ),
+            100: (OrderBound_pb2.OrderBound, "_protoOrderBound"),
+            101: (CompletedOrder_pb2.CompletedOrder, "_protoCompletedOrder"),
+            # 102: completed-orders-end ships a CompletedOrdersEnd proto with
+            # no fields — payload is empty bytes. We still need a proto
+            # class for ParseFromString; CompletedOrdersEnd_pb2 supplies it.
+        }
+    )
+    from ._pb import CompletedOrdersEnd_pb2
+
+    _PROTO_MSG_HANDLERS[102] = (
+        CompletedOrdersEnd_pb2.CompletedOrdersEnd,
+        "_protoCompletedOrdersEnd",
+    )
 
 
 def _resolveCoerceType(annotation: Any) -> type | None:
@@ -99,12 +162,28 @@ class Decoder:
         self.wrapper = wrapper
         self.serverVersion = serverVersion
         self.logger = logging.getLogger("ib_async.Decoder")
+        # Populate the protobuf dispatch table on first construction
+        # so the heavy ``_pb`` imports don't fire at module-load time
+        # for callers that only use the binary path.
+        _initProtoMsgHandlers()
         self.handlers = {
             1: self.priceSizeTick,
             2: self.wrap("tickSize", [int, int, float]),
             3: self.wrap(
                 "orderStatus",
-                [int, str, float, float, float, int, int, float, int, str, float],
+                [
+                    int,
+                    str,
+                    Decimal,
+                    Decimal,
+                    Decimal,
+                    int,
+                    int,
+                    Decimal,
+                    int,
+                    str,
+                    Decimal,
+                ],
                 skip=1,
             ),
             4: self.errorMsg,
@@ -232,21 +311,149 @@ class Decoder:
             self.logger.exception(f"Error handling fields: {fields}")
 
     def processProtoBuf(self, canonicalMsgId: int, payload: bytes) -> None:
-        """Decode a protobuf-framed wire message.
+        """Decode a protobuf-framed wire message and dispatch to the
+        matching wrapper method.
 
-        Currently a stub: the receive-side framing detector identifies
-        protobuf messages by the +200 sentinel and routes them here, but
-        no per-msgId proto-class dispatch is wired yet — that lands in
-        the per-family conversion phases. For now we log the canonical
-        msgId and payload size at debug level and drop the message; this
-        keeps the connection alive on a server that has flipped a
-        message family to protobuf before our converter is in place.
+        Per-msgId table maps canonical IBKR ``IN`` ids to ``(ProtoClass,
+        handler_method_name)``. The handler parses the proto, calls the
+        relevant ``_proto`` converter to produce domain dataclasses,
+        and forwards to the same ``Wrapper`` method the binary path
+        uses — so user-visible behaviour is identical regardless of
+        which encoding the server chose for a given message family.
+
+        An unknown msgId is logged at debug and dropped; an exception
+        from a handler is logged and dropped so a single malformed
+        message can't kill the connection. Any awaiter-fail behaviour
+        (the registry-level ``set_error`` path) lives in the wrapper
+        methods themselves, the same way it does on the binary path.
         """
-        self.logger.debug(
-            "protobuf msg %d, %d bytes (no handler yet)",
-            canonicalMsgId,
-            len(payload),
+        entry = _PROTO_MSG_HANDLERS.get(canonicalMsgId)
+        if entry is None:
+            self.logger.debug(
+                "protobuf msg %d, %d bytes (no handler)",
+                canonicalMsgId,
+                len(payload),
+            )
+            return
+        protoCls, handlerName = entry
+        try:
+            proto = protoCls()
+            proto.ParseFromString(payload)
+            getattr(self, handlerName)(proto)
+        except Exception:
+            self.logger.exception(
+                "Error decoding protobuf msg %d, %d bytes",
+                canonicalMsgId,
+                len(payload),
+            )
+
+    # --- protobuf message handlers ----------------------------------------
+    #
+    # Each ``_protoXxx`` helper translates a parsed proto into the same
+    # arguments the binary-path equivalent passes to its wrapper method,
+    # so wrapper code stays unaware of which encoding the wire used.
+
+    def _protoOrderStatus(self, proto: Any) -> None:
+        from ._proto.orders import createOrderStatus
+
+        s = createOrderStatus(proto)
+        self.wrapper.orderStatus(
+            s.orderId,
+            s.status,
+            s.filled,
+            s.remaining,
+            s.avgFillPrice,
+            s.permId,
+            s.parentId,
+            s.lastFillPrice,
+            s.clientId,
+            s.whyHeld,
+            s.mktCapPrice,
         )
+
+    def _protoOpenOrder(self, proto: Any) -> None:
+        from ._proto.orders import createOpenOrder
+
+        orderId, contract, order, state = createOpenOrder(proto)
+        self.wrapper.openOrder(orderId, contract, order, state)
+
+    def _protoOpenOrderEnd(self, proto: Any) -> None:
+        self.wrapper.openOrderEnd()
+
+    def _protoCompletedOrder(self, proto: Any) -> None:
+        from ._proto.contracts import createContract
+        from ._proto.orders import createOrder, createOrderState
+
+        contract = (
+            createContract(proto.contract) if proto.HasField("contract") else Contract()
+        )
+        order = createOrder(proto.order) if proto.HasField("order") else Order()
+        state = (
+            createOrderState(proto.orderState)
+            if proto.HasField("orderState")
+            else OrderState()
+        )
+        self.wrapper.completedOrder(contract, order, state)
+
+    def _protoCompletedOrdersEnd(self, proto: Any) -> None:
+        self.wrapper.completedOrdersEnd()
+
+    def _protoExecutionDetails(self, proto: Any) -> None:
+        from ._proto.contracts import createContract
+        from ._proto.orders import createExecution
+
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        contract = (
+            createContract(proto.contract) if proto.HasField("contract") else Contract()
+        )
+        execution = (
+            createExecution(proto.execution)
+            if proto.HasField("execution")
+            else Execution()
+        )
+        self.wrapper.execDetails(reqId, contract, execution)
+
+    def _protoExecutionDetailsEnd(self, proto: Any) -> None:
+        # ExecutionDetailsEnd carries just a reqId.
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        self.wrapper.execDetailsEnd(reqId)
+
+    def _protoCommissionReport(self, proto: Any) -> None:
+        from ._proto.orders import createCommissionReport
+
+        report = createCommissionReport(proto)
+        self.wrapper.commissionReport(report)
+
+    def _protoContractData(self, proto: Any) -> None:
+        from ._proto.contracts import createContractDetailsFromContractData
+
+        # ContractData wraps reqId + contract + contractDetails. Our
+        # converter unwraps the inner contract+details into a single
+        # ``ContractDetails`` (with ``.contract`` populated).
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        details = createContractDetailsFromContractData(proto)
+        self.wrapper.contractDetails(reqId, details)
+
+    def _protoBondContractData(self, proto: Any) -> None:
+        # BondContractData uses the same proto shape as ContractData.
+        # Both the binary bond and non-bond paths land at the same
+        # ``Wrapper.contractDetails`` method — the bond-specific fields
+        # are populated on the same ``ContractDetails`` dataclass.
+        from ._proto.contracts import createContractDetailsFromContractData
+
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        details = createContractDetailsFromContractData(proto)
+        self.wrapper.contractDetails(reqId, details)
+
+    def _protoContractDataEnd(self, proto: Any) -> None:
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        self.wrapper.contractDetailsEnd(reqId)
+
+    def _protoOrderBound(self, proto: Any) -> None:
+        permId = proto.permId if proto.HasField("permId") else 0
+        clientId = proto.clientId if proto.HasField("clientId") else 0
+        orderId = proto.orderId if proto.HasField("orderId") else 0
+        self.wrapper.orderBound(permId, clientId, orderId)
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""

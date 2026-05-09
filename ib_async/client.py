@@ -12,6 +12,7 @@ from typing import Any, Final
 
 from eventkit import Event
 
+from . import _pb_msgids as _M
 from ._pb_msgids import (
     MIN_SERVER_VER_PROTOBUF,
     PROTOBUF_MSG_ID,
@@ -552,6 +553,19 @@ class Client:
         self.send(2, 2, reqId)
 
     def placeOrder(self, orderId, contract, order):
+        # On TWS / IB Gateway server versions that support protobuf for
+        # placeOrder (gate 203), emit a ``PlaceOrderRequest`` proto and
+        # return; binary fallback below preserves compatibility with
+        # older servers. Per-msgId gating (not per-connection): a 207
+        # server uses protobuf for orders but binary for historical
+        # data, etc.
+        if self.useProtoBuf(_M.PLACE_ORDER):
+            from ._proto.orders import createPlaceOrderRequestProto
+
+            proto = createPlaceOrderRequestProto(orderId, contract, order)
+            self.sendProto(_M.PLACE_ORDER, proto.SerializeToString())
+            return
+
         version = self.serverVersion()
 
         # IBKR API BUG FIX:
@@ -794,18 +808,39 @@ class Client:
         self.send(*fields)
 
     def cancelOrder(self, orderId, manualCancelOrderTime=""):
+        if self.useProtoBuf(_M.CANCEL_ORDER):
+            from ._proto.orders import createCancelOrderRequestProto
+
+            proto = createCancelOrderRequestProto(
+                orderId, manualCancelOrderTime=manualCancelOrderTime
+            )
+            self.sendProto(_M.CANCEL_ORDER, proto.SerializeToString())
+            return
         fields = [4, 1, orderId]
         if self.serverVersion() >= 169:
             fields += [manualCancelOrderTime]
         self.send(*fields)
 
     def reqOpenOrders(self):
+        if self.useProtoBuf(_M.REQ_OPEN_ORDERS):
+            from ._proto.orders import createOpenOrdersRequestProto
+
+            self.sendProto(
+                _M.REQ_OPEN_ORDERS, createOpenOrdersRequestProto().SerializeToString()
+            )
+            return
         self.send(5, 1)
 
     def reqAccountUpdates(self, subscribe, acctCode):
         self.send(6, 2, subscribe, acctCode)
 
     def reqExecutions(self, reqId, execFilter):
+        if self.useProtoBuf(_M.REQ_EXECUTIONS):
+            from ._proto.orders import createExecutionRequestProto
+
+            proto = createExecutionRequestProto(reqId, execFilter)
+            self.sendProto(_M.REQ_EXECUTIONS, proto.SerializeToString())
+            return
         self.send(
             7,
             3,
@@ -823,6 +858,12 @@ class Client:
         self.send(8, 1, numIds)
 
     def reqContractDetails(self, reqId, contract):
+        if self.useProtoBuf(_M.REQ_CONTRACT_DATA):
+            from ._proto.contracts import createContractDataRequestProto
+
+            proto = createContractDataRequestProto(reqId, contract)
+            self.sendProto(_M.REQ_CONTRACT_DATA, proto.SerializeToString())
+            return
         fields = [
             9,
             8,
@@ -873,9 +914,25 @@ class Client:
         self.send(14, 1, logLevel)
 
     def reqAutoOpenOrders(self, bAutoBind):
+        if self.useProtoBuf(_M.REQ_AUTO_OPEN_ORDERS):
+            from ._proto.orders import createAutoOpenOrdersRequestProto
+
+            self.sendProto(
+                _M.REQ_AUTO_OPEN_ORDERS,
+                createAutoOpenOrdersRequestProto(bAutoBind).SerializeToString(),
+            )
+            return
         self.send(15, 1, bAutoBind)
 
     def reqAllOpenOrders(self):
+        if self.useProtoBuf(_M.REQ_ALL_OPEN_ORDERS):
+            from ._proto.orders import createAllOpenOrdersRequestProto
+
+            self.sendProto(
+                _M.REQ_ALL_OPEN_ORDERS,
+                createAllOpenOrdersRequestProto().SerializeToString(),
+            )
+            return
         self.send(16, 1)
 
     def reqManagedAccts(self):
@@ -1060,6 +1117,14 @@ class Client:
         self.send(57, 1, reqId)
 
     def reqGlobalCancel(self):
+        if self.useProtoBuf(_M.REQ_GLOBAL_CANCEL):
+            from ._proto.orders import createGlobalCancelRequestProto
+
+            self.sendProto(
+                _M.REQ_GLOBAL_CANCEL,
+                createGlobalCancelRequestProto().SerializeToString(),
+            )
+            return
         self.send(58, 1)
 
     def reqMarketDataType(self, marketDataType):
@@ -1237,6 +1302,14 @@ class Client:
         self.send(98, reqId)
 
     def reqCompletedOrders(self, apiOnly):
+        if self.useProtoBuf(_M.REQ_COMPLETED_ORDERS):
+            from ._proto.orders import createCompletedOrdersRequestProto
+
+            self.sendProto(
+                _M.REQ_COMPLETED_ORDERS,
+                createCompletedOrdersRequestProto(apiOnly).SerializeToString(),
+            )
+            return
         self.send(99, apiOnly)
 
     def reqWshMetaData(self, reqId):

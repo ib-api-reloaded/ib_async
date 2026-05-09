@@ -7,6 +7,7 @@ from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Final, TypeAlias, cast
 from zoneinfo import ZoneInfo
 
@@ -820,15 +821,15 @@ class Wrapper:
         self,
         orderId: int,
         status: str,
-        filled: float,
-        remaining: float,
-        avgFillPrice: float,
+        filled: Decimal | None,
+        remaining: Decimal | None,
+        avgFillPrice: Decimal | None,
         permId: int,
         parentId: int,
-        lastFillPrice: float,
+        lastFillPrice: Decimal | None,
         clientId: int,
         whyHeld: str,
-        mktCapPrice: float = 0.0,
+        mktCapPrice: Decimal | None = None,
     ):
         key = self.orderKey(clientId, orderId, permId)
         trade = self.trades.get(key)

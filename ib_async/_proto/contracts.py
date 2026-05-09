@@ -19,6 +19,7 @@ from .._pb import (
     ComboLeg_pb2,
     Contract_pb2,
     ContractData_pb2,
+    ContractDataRequest_pb2,
     ContractDescription_pb2,
     ContractDetails_pb2,
     DeltaNeutralContract_pb2,
@@ -348,6 +349,19 @@ def createContractDetailsFromContractData(
 
 
 # --- ContractDescription --------------------------------------------------
+
+
+def createContractDataRequestProto(
+    reqId: int, contract: Contract
+) -> ContractDataRequest_pb2.ContractDataRequest:
+    """Encode a ``ContractDataRequest`` envelope for ``reqContractDetails``.
+
+    Wraps a freshly-encoded ``ContractProto`` plus the request id.
+    """
+    proto = ContractDataRequest_pb2.ContractDataRequest()
+    proto.reqId = reqId
+    proto.contract.CopyFrom(createContractProto(contract))
+    return proto
 
 
 def createContractDescription(

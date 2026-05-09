@@ -21,10 +21,17 @@ from __future__ import annotations
 from decimal import Decimal
 
 from .._pb import (
+    AllOpenOrdersRequest_pb2,
+    AutoOpenOrdersRequest_pb2,
     CancelOrderRequest_pb2,
     CommissionAndFeesReport_pb2,
+    CompletedOrdersRequest_pb2,
     Execution_pb2,
+    ExecutionFilter_pb2,
+    ExecutionRequest_pb2,
+    GlobalCancelRequest_pb2,
     OpenOrder_pb2,
+    OpenOrdersRequest_pb2,
     Order_pb2,
     OrderCancel_pb2,
     OrderState_pb2,
@@ -32,7 +39,7 @@ from .._pb import (
     PlaceOrderRequest_pb2,
 )
 from ..contract import Contract
-from ..objects import CommissionReport, Execution
+from ..objects import CommissionReport, Execution, ExecutionFilter
 from ..order import Order, OrderState, OrderStatus
 from .contracts import createContract, createContractProto
 from .safe import safe_decimal
@@ -473,4 +480,73 @@ def createCancelOrderRequestProto(
     if manualOrderIndicator:
         cancel.manualOrderIndicator = manualOrderIndicator
     proto.orderCancel.CopyFrom(cancel)
+    return proto
+
+
+# --- Empty / single-field request envelopes -----------------------------
+
+
+def createOpenOrdersRequestProto() -> OpenOrdersRequest_pb2.OpenOrdersRequest:
+    return OpenOrdersRequest_pb2.OpenOrdersRequest()
+
+
+def createAllOpenOrdersRequestProto() -> AllOpenOrdersRequest_pb2.AllOpenOrdersRequest:
+    return AllOpenOrdersRequest_pb2.AllOpenOrdersRequest()
+
+
+def createAutoOpenOrdersRequestProto(
+    autoBind: bool,
+) -> AutoOpenOrdersRequest_pb2.AutoOpenOrdersRequest:
+    proto = AutoOpenOrdersRequest_pb2.AutoOpenOrdersRequest()
+    proto.autoBind = autoBind
+    return proto
+
+
+def createCompletedOrdersRequestProto(
+    apiOnly: bool,
+) -> CompletedOrdersRequest_pb2.CompletedOrdersRequest:
+    proto = CompletedOrdersRequest_pb2.CompletedOrdersRequest()
+    proto.apiOnly = apiOnly
+    return proto
+
+
+def createGlobalCancelRequestProto(
+    manualCancelOrderTime: str = "",
+) -> GlobalCancelRequest_pb2.GlobalCancelRequest:
+    proto = GlobalCancelRequest_pb2.GlobalCancelRequest()
+    if manualCancelOrderTime:
+        proto.orderCancel.manualOrderCancelTime = manualCancelOrderTime
+    return proto
+
+
+# --- ExecutionRequest ---------------------------------------------------
+
+
+def createExecutionFilterProto(
+    execFilter: ExecutionFilter,
+) -> ExecutionFilter_pb2.ExecutionFilter:
+    proto = ExecutionFilter_pb2.ExecutionFilter()
+    if execFilter.clientId:
+        proto.clientId = execFilter.clientId
+    if execFilter.acctCode:
+        proto.acctCode = execFilter.acctCode
+    if execFilter.time:
+        proto.time = execFilter.time
+    if execFilter.symbol:
+        proto.symbol = execFilter.symbol
+    if execFilter.secType:
+        proto.secType = execFilter.secType
+    if execFilter.exchange:
+        proto.exchange = execFilter.exchange
+    if execFilter.side:
+        proto.side = execFilter.side
+    return proto
+
+
+def createExecutionRequestProto(
+    reqId: int, execFilter: ExecutionFilter
+) -> ExecutionRequest_pb2.ExecutionRequest:
+    proto = ExecutionRequest_pb2.ExecutionRequest()
+    proto.reqId = reqId
+    proto.executionFilter.CopyFrom(createExecutionFilterProto(execFilter))
     return proto
