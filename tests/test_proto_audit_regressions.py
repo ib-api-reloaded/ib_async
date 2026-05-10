@@ -31,11 +31,17 @@ from zoneinfo import ZoneInfo
 import ib_async as ibi
 from ib_async._pb import (
     CommissionAndFeesReport_pb2,
+    ConfigResponse_pb2,
     Contract_pb2,
     ContractData_pb2,
+    DisplayGroupList_pb2,
+    DisplayGroupUpdated_pb2,
     ExecutionDetails_pb2,
     OpenOrder_pb2,
     TickByTickData_pb2,
+    UpdateConfigResponse_pb2,
+    VerifyCompleted_pb2,
+    VerifyMessageApi_pb2,
 )
 from ib_async._proto.contracts import (
     createContract,
@@ -407,3 +413,103 @@ def test_contract_details_split_skipped_when_field_empty():
     details = createContractDetailsFromContractData(proto)
     assert details.contract.lastTradeDateOrContractMonth == ""
     assert details.lastTradeTime == ""
+
+
+# ---------------------------------------------------------------------------
+# Verify / DisplayGroup / Config handlers — IBKR ground-truth dispatch parity
+# ---------------------------------------------------------------------------
+
+
+def test_verify_message_api_proto_routes_to_wrapper_method():
+    """canonical msgId 65 (VERIFY_MESSAGE_API) — IBKR registers a
+    protobuf handler; we used to silently drop. Route to
+    wrapper.verifyMessageAPI(apiData) when present.
+    """
+    ib = ibi.IB()
+    seen: list[str] = []
+    ib.wrapper.verifyMessageAPI = lambda apiData: seen.append(apiData)
+
+    proto = VerifyMessageApi_pb2.VerifyMessageApi()
+    proto.apiData = "hello-from-tws"
+    ib.client.decoder.processProtoBuf(65, proto.SerializeToString())
+
+    assert seen == ["hello-from-tws"]
+
+
+def test_verify_message_api_drops_when_method_missing():
+    """No wrapper method → silent drop, no exception."""
+    ib = ibi.IB()
+    proto = VerifyMessageApi_pb2.VerifyMessageApi()
+    proto.apiData = "x"
+    ib.client.decoder.processProtoBuf(65, proto.SerializeToString())
+
+
+def test_verify_completed_proto_routes_to_wrapper_method():
+    ib = ibi.IB()
+    seen: list[tuple[bool, str]] = []
+    ib.wrapper.verifyCompleted = lambda ok, err: seen.append((ok, err))
+
+    proto = VerifyCompleted_pb2.VerifyCompleted()
+    proto.isSuccessful = True
+    proto.errorText = "ok"
+    ib.client.decoder.processProtoBuf(66, proto.SerializeToString())
+
+    assert seen == [(True, "ok")]
+
+
+def test_display_group_list_proto_routes_to_wrapper_method():
+    ib = ibi.IB()
+    seen: list[tuple[int, str]] = []
+    ib.wrapper.displayGroupList = lambda reqId, groups: seen.append((reqId, groups))
+
+    proto = DisplayGroupList_pb2.DisplayGroupList()
+    proto.reqId = 7
+    proto.groups = "1|2|3"
+    ib.client.decoder.processProtoBuf(67, proto.SerializeToString())
+
+    assert seen == [(7, "1|2|3")]
+
+
+def test_display_group_updated_proto_routes_to_wrapper_method():
+    ib = ibi.IB()
+    seen: list[tuple[int, str]] = []
+    ib.wrapper.displayGroupUpdated = lambda reqId, info: seen.append((reqId, info))
+
+    proto = DisplayGroupUpdated_pb2.DisplayGroupUpdated()
+    proto.reqId = 7
+    proto.contractInfo = "AAPL@SMART"
+    ib.client.decoder.processProtoBuf(68, proto.SerializeToString())
+
+    assert seen == [(7, "AAPL@SMART")]
+
+
+def test_config_response_proto_routes_to_wrapper_proto_method():
+    """ConfigResponse carries nested config sub-messages with no flat
+    equivalent. The handler delivers the raw proto to a
+    ``configResponseProtoBuf`` wrapper hook, mirroring IBKR's
+    reference behaviour.
+    """
+    ib = ibi.IB()
+    seen: list[object] = []
+    ib.wrapper.configResponseProtoBuf = lambda p: seen.append(p)
+
+    proto = ConfigResponse_pb2.ConfigResponse()
+    proto.reqId = 1
+    ib.client.decoder.processProtoBuf(110, proto.SerializeToString())
+
+    assert len(seen) == 1
+    assert seen[0].reqId == 1
+
+
+def test_update_config_response_proto_routes_to_wrapper_proto_method():
+    ib = ibi.IB()
+    seen: list[object] = []
+    ib.wrapper.updateConfigResponseProtoBuf = lambda p: seen.append(p)
+
+    proto = UpdateConfigResponse_pb2.UpdateConfigResponse()
+    proto.reqId = 2
+    proto.status = "OK"
+    ib.client.decoder.processProtoBuf(111, proto.SerializeToString())
+
+    assert len(seen) == 1
+    assert seen[0].status == "OK"
