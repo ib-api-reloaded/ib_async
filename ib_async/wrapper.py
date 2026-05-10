@@ -129,6 +129,13 @@ PRICE_TICK_MAP: Final[TickDict] = {
     99: "etfNavLow",
     101: "estimatedIpoMidpoint",
     102: "finalIpoLast",
+    # Odd-lot quotes (TickType 105 ODD_LOT_BID / 106 ODD_LOT_ASK).
+    # IBKR added the odd-lot generic-tick family for retail-sized prints
+    # that round-lot consolidated quotes hide. Without these mappings,
+    # the assert in :meth:`Wrapper.priceSizeTick` would fire mid-stream
+    # the moment a server delivers an odd-lot price.
+    105: "oddLotBid",
+    106: "oddLotAsk",
 }
 
 
@@ -150,6 +157,9 @@ SIZE_TICK_MAP: Final[TickDict] = {
     86: "futuresOpenInterest",
     87: "avOptionVolume",
     89: "shortableShares",
+    # Odd-lot sizes paired with TickType 105/106 above.
+    107: "oddLotBidSize",
+    108: "oddLotAskSize",
 }
 
 GENERIC_TICK_MAP: Final[TickDict] = {
@@ -165,6 +175,18 @@ GENERIC_TICK_MAP: Final[TickDict] = {
     60: "bondFactorMultiplier",
     90: "delayedHalted",
 }
+
+# Generic-tick types whose value space is signed or carries a sentinel
+# meaning at zero/negative — must NOT be passed through the
+# ``value > 0 else emptySize`` clamp in :meth:`Wrapper.tickGeneric`.
+#
+# - 31 INDEX_FUTURE_PREMIUM: legitimately negative when futures trade at a
+#   discount to spot. Clamping to ``emptySize`` (0) erases the sign.
+# - 49 HALTED / 90 DELAYED_HALTED: IBKR documents the halt code as an
+#   integer in {-1=unset, 0=not halted, 1=general halt, 2=volatility
+#   halt}. The clamp maps -1 (unset) → 0 (not halted), conflating two
+#   distinct states user code uses to gate trading decisions.
+_GENERIC_TICK_NO_CLAMP: Final[frozenset[int]] = frozenset({31, 49, 90})
 
 GREEKS_TICK_MAP: Final[TickDict] = {
     10: "bidGreeks",
@@ -197,6 +219,9 @@ STRING_TICK_MAP: Final[TickDict] = {
     85: "lastRegTime",
     91: "reutersMutualFunds",
     100: "socialMarketAnalytics",
+    # Odd-lot quote exchanges (TickType 109 / 110).
+    109: "oddLotBidExch",
+    110: "oddLotAskExch",
 }
 
 TIMESTAMP_TICK_MAP: Final[TickDict] = {
@@ -729,10 +754,25 @@ class Wrapper:
         pos: Decimal | None,
         avgCost: Decimal | None,
     ):
-        pass
+        # ``Client.reqPositionsMulti`` is exposed for advisor accounts.
+        # Surface every row on ``positionEvent`` (same shape as the
+        # ``position`` callback) and accumulate against the request key
+        # so any future ``reqPositionsMultiAsync`` can drain it. Drop
+        # zero / unset positions the same way ``position`` does.
+        contract = Contract.recreate(contract)
+        position = Position(account, contract, pos, avgCost)
+        if not pos:
+            self.positions[account].pop(contract.conId, None)
+        else:
+            self.positions[account][contract.conId] = position
+        self.requests.append(ReqIdKey(reqId), position)
+        self.ib.positionEvent.emit(position)
 
     def positionMultiEnd(self, reqId: int):
-        pass
+        # Mirrors ``accountUpdateMultiEnd``: settle the request future
+        # so any future async waiter resolves. No-op when no waiter
+        # is registered for this reqId.
+        self.requests.set_result(ReqIdKey(reqId))
 
     def pnl(
         self, reqId: int, dailyPnL: float, unrealizedPnL: float, realizedPnL: float
@@ -1424,7 +1464,13 @@ class Wrapper:
 
         try:
             value = float(value)
-            value = value if value > 0 else self.defaultEmptySize
+            # The "empty size" clamp normalizes IBKR's "no quote" sentinel
+            # (negative / zero values for sided book metrics) into the
+            # user-configured empty value. But certain tick types carry
+            # signed semantics or a -1 unset code that must survive — see
+            # ``_GENERIC_TICK_NO_CLAMP`` for the rationale.
+            if tickType not in _GENERIC_TICK_NO_CLAMP:
+                value = value if value > 0 else self.defaultEmptySize
         except ValueError:
             self._logger.error(
                 f"[tickType {tickType}] genericTick: malformed value: {value!r}"

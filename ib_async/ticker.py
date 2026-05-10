@@ -132,6 +132,15 @@ class Ticker:
     socialMarketAnalytics: str = ""
     estimatedIpoMidpoint: float = nan
     finalIpoLast: float = nan
+    # Odd-lot quote board (TickType 105-110, IBKR ``ODD_LOT_*``). Sized
+    # smaller than round-lot prints; arrives only when the user includes
+    # the ODD_LOT generic tick in ``reqMktData``.
+    oddLotBid: float = nan
+    oddLotAsk: float = nan
+    oddLotBidSize: float = nan
+    oddLotAskSize: float = nan
+    oddLotBidExch: str = ""
+    oddLotAskExch: str = ""
     dividends: Dividends | None = None
     fundamentalRatios: FundamentalRatios | None = None
     ticks: list[TickData] = field(default_factory=list)
@@ -247,6 +256,10 @@ class Ticker:
             self.etfNavLow = self.defaults.unset
             self.estimatedIpoMidpoint = self.defaults.unset
             self.finalIpoLast = self.defaults.unset
+            self.oddLotBid = self.defaults.unset
+            self.oddLotAsk = self.defaults.unset
+            self.oddLotBidSize = self.defaults.unset
+            self.oddLotAskSize = self.defaults.unset
 
             self.created = True
 

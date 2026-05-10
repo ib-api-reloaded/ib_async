@@ -74,11 +74,17 @@ def _make_format_handlers(makeEmpty: bool) -> dict[Any, Callable[[Any], str]]:
 
         # Float conversion has 3 stages:
         #  - Convert 'IBKR unset' double to empty (if requested)
-        #  - Convert infinity to 'Infinite' string (if appropriate)
+        #  - Convert positive infinity to the IBKR ``INFINITY_STR``
+        #    constant. IBKR's reference (``ibapi/const.py``) defines this
+        #    as the literal ``"Infinity"`` (not ``"Infinite"``); the
+        #    server parses ``"Infinity"`` for fields like
+        #    ``competeAgainstBestOffset = COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID``
+        #    and rejects any other spelling. Sending ``"Infinite"``
+        #    silently corrupts those mid-peg orders.
         #  - else, convert float to string normally
         float: lambda f: ""
         if (makeEmpty and f == UNSET_DOUBLE)
-        else ("Infinite" if (f == math.inf) else str(f)),
+        else ("Infinity" if (f == math.inf) else str(f)),
 
         # Int conversion has 2 stages:
         #  - Convert 'IBKR unset' to empty (if requested)
@@ -1271,7 +1277,10 @@ class Client:
             self.sendProto(
                 _M.REQ_SCANNER_SUBSCRIPTION,
                 createScannerSubscriptionRequestProto(
-                    reqId, subscription
+                    reqId,
+                    subscription,
+                    scannerSubscriptionOptions=scannerSubscriptionOptions,
+                    scannerSubscriptionFilterOptions=scannerSubscriptionFilterOptions,
                 ).SerializeToString(),
             )
             return
@@ -1406,7 +1415,10 @@ class Client:
             self.sendProto(
                 _M.REQ_FUNDAMENTAL_DATA,
                 createFundamentalsDataRequestProto(
-                    reqId, contract, reportType
+                    reqId,
+                    contract,
+                    reportType,
+                    fundamentalsDataOptions=fundamentalDataOptions,
                 ).SerializeToString(),
             )
             return
@@ -1771,7 +1783,10 @@ class Client:
             self.sendProto(
                 _M.REQ_NEWS_ARTICLE,
                 createNewsArticleRequestProto(
-                    reqId, providerCode, articleId
+                    reqId,
+                    providerCode,
+                    articleId,
+                    newsArticleOptions=newsArticleOptions,
                 ).SerializeToString(),
             )
             return
@@ -1810,6 +1825,7 @@ class Client:
                     startDateTime,
                     endDateTime,
                     totalResults,
+                    historicalNewsOptions=historicalNewsOptions,
                 ).SerializeToString(),
             )
             return
