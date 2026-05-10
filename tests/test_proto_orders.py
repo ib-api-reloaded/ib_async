@@ -607,7 +607,7 @@ def test_open_order_envelope_handles_missing_inner_messages():
 
 def test_cancel_order_request_carries_manual_cancel_time():
     proto = createCancelOrderRequestProto(
-        orderId=42, manualCancelOrderTime="20300101 09:30:00"
+        orderId=42, manualOrderCancelTime="20300101 09:30:00"
     )
     assert proto.orderId == 42
     assert proto.orderCancel.manualOrderCancelTime == "20300101 09:30:00"

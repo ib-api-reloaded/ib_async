@@ -380,6 +380,24 @@ class OrderStatus:
 
 
 @dataclass(slots=True, frozen=True)
+class OrderCancel:
+    """CME-tagging envelope for cancelOrder + reqGlobalCancel.
+
+    IBKR's reference cancelOrder / reqGlobalCancel take this object
+    rather than scalar arguments so callers can attach the
+    ``manualOrderCancelTime`` (gate 169), ``extOperator`` (gate 192),
+    and ``manualOrderIndicator`` (gate 192) fields the wire protocol
+    grew for CME compliance. ``UNSET_INTEGER`` (2**31 - 1) is the
+    "manualOrderIndicator unset" sentinel — gates skip the wire field
+    when at the sentinel.
+    """
+
+    manualOrderCancelTime: str = ""
+    extOperator: str = ""
+    manualOrderIndicator: int = UNSET_INTEGER
+
+
+@dataclass(slots=True, frozen=True)
 class OrderAllocation:
     """Per-account allocation snapshot carried on an ``OrderState``
     for FA / model orders. Mirrors IBKR's reference shape.

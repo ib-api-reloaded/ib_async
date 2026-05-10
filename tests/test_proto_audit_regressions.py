@@ -763,3 +763,90 @@ def test_historical_data_post_196_does_not_emit_inline_end():
 
     assert len(bars) == 1
     assert ends == []  # end signal comes from separate msgId 108 frame
+
+
+# ---------------------------------------------------------------------------
+# cancelOrder / reqGlobalCancel — CME_TAGGING_FIELDS gate (192)
+# ---------------------------------------------------------------------------
+
+
+def test_cancel_order_pre_192_carries_legacy_version_byte():
+    """Pre-192 wire frame: [4, 1, orderId, manualOrderCancelTime] —
+    the leading 1 is a VERSION marker IBKR drops at gate 192. Without
+    the gate, a 192+ server reads the 1 as orderId and our cancel
+    targets order ID 1 instead of the real one.
+    """
+    from ib_async.order import OrderCancel
+
+    ib = ibi.IB()
+    ib.client._serverVersion = 191  # below CME_TAGGING_FIELDS
+    sent: list = []
+    ib.client.send = lambda *a: sent.append(a)
+    ib.client.cancelOrder(42, OrderCancel(manualOrderCancelTime="20300101 09:30:00"))
+
+    assert len(sent) == 1
+    args = sent[0]
+    # [msgId=4, VERSION=1, orderId=42, manualOrderCancelTime, ...]
+    assert args[0] == 4
+    assert args[1] == 1  # legacy VERSION
+    assert args[2] == 42
+    assert args[3] == "20300101 09:30:00"
+
+
+def test_cancel_order_post_192_drops_version_appends_cme_tagging():
+    """At gate 192 IBKR drops the VERSION byte and appends
+    extOperator + manualOrderIndicator. Wrong gate means our cancel
+    frame is corrupted: the leading 1 lands as orderId.
+    """
+    from ib_async.order import OrderCancel
+
+    ib = ibi.IB()
+    ib.client._serverVersion = 192
+    sent: list = []
+    ib.client.send = lambda *a: sent.append(a)
+    ib.client.cancelOrder(
+        42,
+        OrderCancel(
+            manualOrderCancelTime="20300101 09:30:00",
+            extOperator="EXT-7",
+            manualOrderIndicator=42,
+        ),
+    )
+
+    assert len(sent) == 1
+    args = sent[0]
+    # [msgId=4, orderId=42, manualOrderCancelTime, extOperator, manualOrderIndicator]
+    assert args[0] == 4
+    assert args[1] == 42  # orderId — NOT VERSION
+    assert args[2] == "20300101 09:30:00"
+    assert args[3] == "EXT-7"
+    assert args[4] == 42
+
+
+def test_req_global_cancel_post_192_appends_cme_tagging():
+    """reqGlobalCancel mirrors cancelOrder's gating: drop VERSION,
+    append extOperator + manualOrderIndicator at 192+.
+    """
+    from ib_async.order import OrderCancel
+
+    ib = ibi.IB()
+    ib.client._serverVersion = 192
+    sent: list = []
+    ib.client.send = lambda *a: sent.append(a)
+    ib.client.reqGlobalCancel(OrderCancel(extOperator="EXT-9", manualOrderIndicator=7))
+
+    assert len(sent) == 1
+    args = sent[0]
+    # [msgId=58, extOperator, manualOrderIndicator]
+    assert args == (58, "EXT-9", 7)
+
+
+def test_req_global_cancel_pre_192_keeps_version_byte():
+    ib = ibi.IB()
+    ib.client._serverVersion = 191
+    sent: list = []
+    ib.client.send = lambda *a: sent.append(a)
+    ib.client.reqGlobalCancel()
+
+    assert len(sent) == 1
+    assert sent[0] == (58, 1)  # legacy VERSION=1, no CME-tagging
