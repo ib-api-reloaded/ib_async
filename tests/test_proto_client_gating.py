@@ -1,6 +1,6 @@
 """Send-side per-msgId gating tests.
 
-For each Phase 1 ``Client`` send method, verify:
+For each gated ``Client`` send method, verify:
 
 1. On a server below the per-family gate, the legacy NUL-separated
    binary frame goes out (no protobuf).

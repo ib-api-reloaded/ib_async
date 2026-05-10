@@ -1,10 +1,10 @@
-"""End-to-end dispatch + gating tests for Phase 5 REST messages.
+"""End-to-end dispatch + gating tests for the REST-style protobuf messages.
 
-Covers nextValidId / currentTime / currentTimeInMillis (NEW v3.0
+Covers nextValidId / currentTime / currentTimeInMillis (new v3.0
 capability) / userInfo / secDefOptParameter(End) / softDollarTiers /
 symbolSamples / smartComponents / marketRule / familyCodes / receiveFA
-/ replaceFAEnd on the receive side, plus the per-msgId gating for all
-Phase 5 send methods.
+/ replaceFAEnd on the receive side, plus the per-msgId gating for the
+matching send methods.
 
 The new public method ``IB.reqCurrentTimeInMillisAsync`` is exercised
 end-to-end: open the singleton waiter, fire the proto receive handler,

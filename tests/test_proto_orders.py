@@ -824,7 +824,7 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     # Box / vol auction
     assert order.startingPrice == 49.0
     assert order.stockRefPrice == 50.0
-    assert order.delta == 0.6
+    assert order.delta == Decimal("0.6")
     assert order.stockRangeLower == 48.0
     assert order.stockRangeUpper == 52.0
     assert order.displaySize == 10
@@ -835,10 +835,10 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     assert order.ocaType == 2
     assert order.triggerMethod == 1
     # Volatility / delta-neutral
-    assert order.volatility == 0.3
+    assert order.volatility == Decimal("0.3")
     assert order.volatilityType == 1
     assert order.deltaNeutralOrderType == "MKT"
-    assert order.deltaNeutralAuxPrice == 0.05
+    assert order.deltaNeutralAuxPrice == Decimal("0.05")
     assert order.deltaNeutralConId == 99
     assert order.deltaNeutralSettlingFirm == "dnsf"
     assert order.deltaNeutralClearingAccount == "dnca"
@@ -859,10 +859,10 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     # Scale
     assert order.scaleInitLevelSize == 100
     assert order.scaleSubsLevelSize == 200
-    assert order.scalePriceIncrement == 0.5
-    assert order.scalePriceAdjustValue == 0.1
+    assert order.scalePriceIncrement == Decimal("0.5")
+    assert order.scalePriceAdjustValue == Decimal("0.1")
     assert order.scalePriceAdjustInterval == 60
-    assert order.scaleProfitOffset == 1.0
+    assert order.scaleProfitOffset == Decimal("1.0")
     assert order.scaleAutoReset is True
     assert order.scaleInitPosition == 0
     assert order.scaleInitFillQty == 10
@@ -929,9 +929,9 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     # Mid-price competition
     assert order.minTradeQty == 10
     assert order.minCompeteSize == 100
-    assert order.competeAgainstBestOffset == 0.01
-    assert order.midOffsetAtWhole == 0.005
-    assert order.midOffsetAtHalf == 0.0025
+    assert order.competeAgainstBestOffset == Decimal("0.01")
+    assert order.midOffsetAtWhole == Decimal("0.005")
+    assert order.midOffsetAtHalf == Decimal("0.0025")
     # Completed-order
     assert order.autoCancelDate == "20301231"
     assert order.filledQuantity == Decimal("50")

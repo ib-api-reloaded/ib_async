@@ -67,16 +67,24 @@ def fill_tag_value_map(items: object, target: object) -> None:
         target[tag] = value  # type: ignore[index]
 
 
-def safe_decimal(value: str | Decimal | None) -> Decimal | None:
-    """Convert a protobuf-string Decimal field to a ``Decimal | None``.
+def safe_decimal(value: str | Decimal | float | int | None) -> Decimal | None:
+    """Convert any wire-typed numeric to a domain ``Decimal | None``.
 
-    Returns ``None`` for any input that cannot be coerced to a finite
-    ``Decimal`` — including empty / ``"nan"`` / ``"Infinity"`` / IBKR's
-    UNSET_INTEGER / UNSET_LONG / UNSET_DOUBLE sentinel strings / garbage
-    — so domain dataclass fields typed ``Decimal | None`` carry the
-    "unset" signal explicitly. Callers that need a non-``None``
+    Accepts protobuf ``string`` (the IBKR-canonical encoding for
+    quantities, prices, commissions), protobuf ``double`` (used for
+    a handful of legacy fields like ``percentOffset`` and the
+    ``cashQty`` family), pre-coerced ``Decimal``, plain ``int``,
+    or ``None``. Returns ``None`` for any input that cannot be coerced
+    to a finite ``Decimal`` — including empty / ``"nan"`` / ``"Infinity"``
+    / IBKR's UNSET_INTEGER / UNSET_LONG / UNSET_DOUBLE sentinel strings
+    / garbage — so domain dataclass fields typed ``Decimal | None``
+    carry the "unset" signal explicitly. Callers that need a non-``None``
     fallback (e.g. ``filledQuantity`` defaulting to zero) substitute
     via ``safe_decimal(value) or Decimal('0')``.
+
+    Float inputs route through ``str()`` so binary-float imprecision
+    (e.g. ``Decimal(0.1) == Decimal('0.1000000000000000055...')``)
+    does not contaminate the result; ``Decimal(str(0.1)) == Decimal('0.1')``.
 
     Pre-coerced ``Decimal`` inputs pass through unchanged (after the
     sentinel / NaN / Infinity guards) so callers like ``Decoder.parse``
@@ -87,6 +95,16 @@ def safe_decimal(value: str | Decimal | None) -> Decimal | None:
         return None
     if isinstance(value, str) and value in _DECIMAL_UNSET_STRINGS:
         return None
+    if isinstance(value, float):
+        # The IBKR magic-double sentinel arrives here on the protobuf
+        # ``double`` paths; checking after str() would miss it because
+        # ``str(sys.float_info.max)`` does not match the canonical
+        # sentinel spelling on every Python build.
+        from ..util import UNSET_DOUBLE
+
+        if value == UNSET_DOUBLE:
+            return None
+        value = str(value)
     try:
         result = Decimal(value)
     except (InvalidOperation, ValueError, TypeError):

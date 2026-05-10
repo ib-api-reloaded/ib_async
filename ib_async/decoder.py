@@ -67,7 +67,7 @@ from .objects import (
     TickAttribLast,
 )
 from .order import Order, OrderAllocation, OrderComboLeg, OrderCondition, OrderState
-from .util import UNSET_DOUBLE, ZoneInfo, parseIBDatetime
+from .util import UNSET_DOUBLE, UNSET_INTEGER, ZoneInfo, parseIBDatetime
 from .wrapper import Wrapper
 
 # Per-type wire-string-to-typed-value converters. The empty-string-to-default
@@ -2347,8 +2347,11 @@ class Decoder:
 
         (o.scaleInitLevelSize, o.scaleSubsLevelSize, increment, *fields) = fields
 
-        o.scalePriceIncrement = float(increment or UNSET_DOUBLE)
-        if 0 < o.scalePriceIncrement < UNSET_DOUBLE:
+        o.scalePriceIncrement = safe_decimal(increment)
+        if (
+            o.scalePriceIncrement is not None
+            and 0 < o.scalePriceIncrement < UNSET_DOUBLE
+        ):
             (
                 o.scalePriceAdjustValue,
                 o.scalePriceAdjustInterval,
@@ -2527,31 +2530,27 @@ class Decoder:
                 *fields,
             ) = fields
 
-        # Trailing wire fields IBKR appends past gate 170. Most landing
-        # slots have no Order dataclass field yet — they are consumed and
-        # discarded so subsequent gated reads don't shift left. Order
-        # dataclass field expansion is task #163; only ``extOperator`` and
-        # ``imbalanceOnly`` (already on Order) are surfaced here.
+        # Trailing wire fields IBKR appends past gate 170. Each one lands
+        # on the matching ``Order`` dataclass field — the order here MUST
+        # match IBKR's reference ``decoder.py:processOpenOrderMsg``.
         if self.serverVersion >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _customerAccount, *fields = fields
+            o.customerAccount, *fields = fields
         if self.serverVersion >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _professionalCustomer, *fields = fields
+            professionalCustomer, *fields = fields
+            o.professionalCustomer = bool(int(professionalCustomer or 0))
         if self.serverVersion >= MIN_SERVER_VER_BOND_ACCRUED_INTEREST:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _bondAccruedInterest, *fields = fields
+            o.bondAccruedInterest, *fields = fields
         if self.serverVersion >= MIN_SERVER_VER_INCLUDE_OVERNIGHT:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _includeOvernight, *fields = fields
+            includeOvernight, *fields = fields
+            o.includeOvernight = bool(int(includeOvernight or 0))
         if self.serverVersion >= MIN_SERVER_VER_CME_TAGGING_FIELDS_IN_OPEN_ORDER:
-            # ``extOperator`` lives on Order; ``manualOrderIndicator`` does not
-            # yet — consumed and discarded. Order dataclass field expansion is
-            # task #163.
-            o.extOperator, _manualOrderIndicator, *fields = fields
+            extOperator, manualOrderIndicator, *fields = fields
+            o.extOperator = extOperator
+            o.manualOrderIndicator = (
+                int(manualOrderIndicator) if manualOrderIndicator else UNSET_INTEGER
+            )
         if self.serverVersion >= MIN_SERVER_VER_SUBMITTER:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _submitter, *fields = fields
+            o.submitter, *fields = fields
         if self.serverVersion >= MIN_SERVER_VER_IMBALANCE_ONLY:
             o.imbalanceOnly, *fields = fields
 
@@ -2681,8 +2680,11 @@ class Decoder:
                 o.smartComboRoutingParams.append(TagValue(tag, value))
         (o.scaleInitLevelSize, o.scaleSubsLevelSize, increment, *fields) = fields
 
-        o.scalePriceIncrement = float(increment or UNSET_DOUBLE)
-        if 0 < o.scalePriceIncrement < UNSET_DOUBLE:
+        o.scalePriceIncrement = safe_decimal(increment)
+        if (
+            o.scalePriceIncrement is not None
+            and 0 < o.scalePriceIncrement < UNSET_DOUBLE
+        ):
             (
                 o.scalePriceAdjustValue,
                 o.scalePriceAdjustInterval,
@@ -2768,17 +2770,17 @@ class Decoder:
             ) = fields
 
         # Trailing wire fields IBKR's ``processCompletedOrderMsg`` appends past
-        # gate 170. Order dataclass field expansion is task #163 — these slots
-        # are consumed and discarded so subsequent gated reads stay aligned.
+        # gate 170. The completedOrder feed lacks the bond / overnight /
+        # CME-tagging block that openOrder carries, but customerAccount /
+        # professionalCustomer / submitter all land on the corresponding
+        # ``Order`` dataclass fields the same way openOrder does.
         if self.serverVersion >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _customerAccount, *fields = fields
+            o.customerAccount, *fields = fields
         if self.serverVersion >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _professionalCustomer, *fields = fields
+            professionalCustomer, *fields = fields
+            o.professionalCustomer = bool(int(professionalCustomer or 0))
         if self.serverVersion >= MIN_SERVER_VER_SUBMITTER:
-            # Consumed but not surfaced; Order dataclass field expansion is task #163
-            _submitter, *fields = fields
+            o.submitter, *fields = fields
 
         self.parse(c)
         self.parse(o)

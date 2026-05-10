@@ -1,13 +1,14 @@
-"""Regression locks for the R7-R14 audit fixes.
+"""Regression locks for v3.0 IBKR-parity fixes.
 
-Each test pins one specific behaviour that an audit round caught and
-fixed. The tests are intentionally small, standalone, and worded so a
+Each test pins one specific behaviour that the v3.0 wire-protocol and
+Decimal-coercion sweep caught and fixed against the IBKR reference
+client. The tests are intentionally small, standalone, and worded so a
 future refactor that unfixes the issue surfaces a clearly-named failure
-rather than a cascade.
+rather than a silent regression cascade.
 
-The companion ``test_proto_audit_regressions.py`` covers R1-R6; this
-file covers R7-R14. R15 reached convergence (zero findings), so no
-new locks come from it.
+The companion ``test_proto_audit_regressions.py`` covers earlier
+plumbing-level invariants; this file pins the lifecycle, coercion,
+and send-side parity fixes.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ from ib_async.util import UNSET_DOUBLE
 from ib_async.wrapper import _MAX_PENDING_COMMISSION_REPORTS
 
 # ---------------------------------------------------------------------------
-# R9 — AccountValue.decimalValue rejects IBKR UNSET sentinels (#198)
+# AccountValue.decimalValue rejects IBKR UNSET sentinels
 # ---------------------------------------------------------------------------
 
 # IBKR sentinels that show up in real wire payloads for unset numeric
@@ -106,7 +107,7 @@ def test_account_value_decimal_value_none_for_non_monetary_tag():
 
 
 # ---------------------------------------------------------------------------
-# R9 — Order._toDecimal filters NaN / Infinity from float and Decimal (#199)
+# Order._toDecimal filters NaN / Infinity from float and Decimal inputs
 # ---------------------------------------------------------------------------
 
 
@@ -163,7 +164,7 @@ def test_order_post_init_filters_float_infinity_input():
 
 
 # ---------------------------------------------------------------------------
-# R9 — _pendingCommissionReports bounded FIFO eviction (#202)
+# _pendingCommissionReports bounded FIFO eviction
 # ---------------------------------------------------------------------------
 
 
@@ -204,7 +205,7 @@ def test_pending_commission_reports_is_ordered_dict():
 
 
 # ---------------------------------------------------------------------------
-# R9 — OrderState.transform covers all 9 OutsideRTH margin variants (#203)
+# OrderState.transform covers all 9 OutsideRTH margin variants
 # ---------------------------------------------------------------------------
 
 # The full set of fields that ``transform`` must funnel through the
@@ -224,7 +225,9 @@ _TRANSFORMED_FIELDS = (
     "initMarginAfter",
     "maintMarginAfter",
     "equityWithLoanAfter",
-    # 9 OutsideRTH variants (the R9 fix added these — were silently dropped)
+    # 9 OutsideRTH variants — these were silently dropped by transform()
+    # before the v3.0 sweep, leaving them as raw wire strings while their
+    # siblings converted
     "initMarginBeforeOutsideRTH",
     "maintMarginBeforeOutsideRTH",
     "equityWithLoanBeforeOutsideRTH",
@@ -295,8 +298,8 @@ def test_order_state_transform_covers_outsidertch_variants():
 
 def test_order_state_numeric_converts_outsidertch_margins():
     """End-to-end: ``state.numeric()`` must convert OutsideRTH margins
-    to floats just like the regular margins. Prior to R9 the
-    OutsideRTH fields silently stayed as raw wire strings.
+    to floats just like the regular margins. Earlier versions of the
+    library silently left the OutsideRTH fields as raw wire strings.
     """
     state = OrderState(
         initMarginBeforeOutsideRTH="200.5",
@@ -310,15 +313,15 @@ def test_order_state_numeric_converts_outsidertch_margins():
 
 
 # ---------------------------------------------------------------------------
-# R13 — tickOptionComputation vega/theta sentinel maps to None (#206)
+# tickOptionComputation vega/theta sentinel maps to None
 # ---------------------------------------------------------------------------
 
 
 def test_tick_option_computation_vega_theta_sentinel_maps_to_none():
     """IBKR uses ``-2`` to mark "not yet computed" for vega and theta.
-    Prior to the R13 fix the wrapper had a tautology ``vega if vega
-    != -2 else -2`` so the sentinel leaked into ``OptionComputation``
-    where user code mistook -2 for a real greek.
+    A prior tautology of the form ``vega if vega != -2 else -2``
+    leaked the sentinel into ``OptionComputation`` where user code
+    mistook -2 for a real greek.
     """
     ib = ibi.IB()
     reqId = 42
@@ -355,8 +358,9 @@ def test_tick_option_computation_vega_theta_sentinel_maps_to_none():
 def test_tick_option_computation_other_sentinels_still_map_to_none():
     """The other sentinels on this callback — ``-1`` for impliedVol /
     optPrice / pvDividend / undPrice and ``-2`` for delta / gamma —
-    were correct before R13 but we lock them here too so a regression
-    that re-introduces the tautology pattern on any of them surfaces.
+    were correct before the v3.0 sweep too, but we lock them here so a
+    regression that re-introduces the tautology pattern on any of them
+    surfaces.
     """
     ib = ibi.IB()
     reqId = 43
@@ -389,16 +393,16 @@ def test_tick_option_computation_other_sentinels_still_map_to_none():
 
 
 # ---------------------------------------------------------------------------
-# R13 — Watchdog.probeContract is per-instance (not shared mutable) (#216)
+# Watchdog.probeContract is per-instance (not shared mutable default)
 # ---------------------------------------------------------------------------
 
 
 def test_watchdog_probe_contract_is_per_instance():
     """``Watchdog.probeContract`` uses ``field(default_factory=...)``
-    after R13. Prior to that it was a class-level mutable default —
-    every Watchdog instance shared the same Forex object, so mutating
-    probeContract on one watchdog (e.g. user changes the symbol)
-    silently affected every other live watchdog.
+    in v3.0. A class-level mutable default would mean every Watchdog
+    instance shared the same Forex object, so mutating probeContract
+    on one watchdog (e.g. user changes the symbol) would silently
+    affect every other live watchdog.
     """
     ib = ibi.IB()  # not connected — Watchdog only checks isConnected()
     controller = object()
@@ -425,16 +429,16 @@ def test_watchdog_probe_contract_defaults_to_eurusd_forex():
 
 
 # ---------------------------------------------------------------------------
-# R11 — headTimestamp catches ZoneInfoNotFoundError (#218)
+# Wrapper.headTimestamp catches ZoneInfoNotFoundError
 # ---------------------------------------------------------------------------
 
 
 def test_head_timestamp_zone_info_not_found_surfaces_as_request_error():
     """``parseIBDatetime`` raises ``ZoneInfoNotFoundError`` (a subclass
     of ``KeyError``, NOT of ``ValueError``) when IBKR ships a timezone
-    the host doesn't know. Prior to R11 the wrapper caught only
-    ``ValueError`` so the awaiter on ``reqHeadTimeStampAsync`` hung
-    forever instead of seeing the error.
+    the host doesn't know. Catching only ``ValueError`` would leave
+    the awaiter on ``reqHeadTimeStampAsync`` hanging forever instead
+    of seeing the error.
     """
     ib = ibi.IB()
     reqId = 77
@@ -451,9 +455,9 @@ def test_head_timestamp_zone_info_not_found_surfaces_as_request_error():
 
 
 def test_head_timestamp_value_error_still_surfaces_as_request_error():
-    """The pre-R11 ``ValueError`` branch still works — malformed
-    datetimes that ``parseIBDatetime`` rejects with ``ValueError``
-    must continue to wake the awaiter with the error.
+    """The ``ValueError`` branch still works — malformed datetimes
+    that ``parseIBDatetime`` rejects with ``ValueError`` must continue
+    to wake the awaiter with the error.
     """
     ib = ibi.IB()
     reqId = 78
@@ -485,7 +489,7 @@ def test_head_timestamp_success_path_resolves_with_datetime():
 
 
 # ---------------------------------------------------------------------------
-# R11 cross-check — math.nan handling on _toDecimal vs Decimal('NaN')
+# Cross-check — math.nan handling on _toDecimal vs Decimal('NaN')
 # ---------------------------------------------------------------------------
 
 
@@ -519,7 +523,7 @@ def _captureSend(ib: ibi.IB) -> list[bytes]:
 
 
 # ---------------------------------------------------------------------------
-# R14 — Client.replaceFA reqId trailing field gated at server 157 (#207)
+# Client.replaceFA reqId trailing field gated at server 157
 # ---------------------------------------------------------------------------
 
 
@@ -563,7 +567,7 @@ def test_replace_fa_appends_reqid_at_gate_157():
 
 
 # ---------------------------------------------------------------------------
-# R14 — requestFA / replaceFA reject faData=2 (Profiles) at gate 177 (#208)
+# requestFA / replaceFA reject faData=2 (Profiles) at gate 177
 # ---------------------------------------------------------------------------
 
 
@@ -618,16 +622,16 @@ def test_request_fa_below_gate_177_accepts_profile():
 
 
 # ---------------------------------------------------------------------------
-# R14 — placeOrder volatility-clear hoisted above proto branch (#209)
+# placeOrder volatility-clear runs above the protobuf-gated branch
 # ---------------------------------------------------------------------------
 
 
 def test_place_order_volatility_clear_applies_on_proto_path():
     """For a non-VOL order, ``placeOrder`` must reset ``order.volatility``
     to ``UNSET_DOUBLE`` BEFORE the protobuf-gated branch — so the proto
-    converter's ``_isValidFloat`` guard skips the field. Prior to R14,
-    the clear lived after the proto-branch return, so a TWS-populated
-    volatility echoed back out on every modify and the server rejected
+    converter's ``_isValidFloat`` guard skips the field. If the clear
+    lived below the proto-branch return, a TWS-populated volatility
+    would echo back out on every modify and the server would reject
     the order.
     """
     ib = _ibAtVersion(203)  # MIN_SERVER_VER_PROTOBUF_PLACE_ORDER
@@ -662,16 +666,17 @@ def test_place_order_volatility_preserved_for_vol_orders():
 
 
 # ---------------------------------------------------------------------------
-# R12 — binary openOrder duration gate at exact server 158 (#210)
+# Binary openOrder duration gate at exact server 158
 # ---------------------------------------------------------------------------
 
 
 def test_min_server_ver_duration_constant_is_158():
     """The duration field on binary ``openOrder`` is gated at exactly
-    server 158 (``MIN_SERVER_VER_DURATION``). The R12 audit replaced a
-    literal ``159`` (off-by-one — duration would never read on a 158
-    server, silently shifting every subsequent field by one position
-    and corrupting OpenOrder for that server) with this named constant.
+    server 158 (``MIN_SERVER_VER_DURATION``). A literal ``159`` would
+    be off-by-one — duration would never read on a 158 server,
+    silently shifting every subsequent field by one position and
+    corrupting OpenOrder for that server. The named constant guards
+    against this.
     """
     assert MIN_SERVER_VER_DURATION == 158
 
@@ -695,7 +700,7 @@ def test_decoder_uses_named_constant_for_duration_gate():
 
 
 # ---------------------------------------------------------------------------
-# R8 — Client.send raw-int msgId framing at server >= 201 (#219)
+# Client.send raw-int msgId framing at server >= 201
 # ---------------------------------------------------------------------------
 
 
@@ -733,17 +738,17 @@ def test_send_uses_legacy_text_msg_id_below_protobuf_gate():
 
 
 # ---------------------------------------------------------------------------
-# R10 — IB.disconnect fires wrapper.connectionClosed exactly once (#204)
+# IB.disconnect fires wrapper.connectionClosed exactly once
 # ---------------------------------------------------------------------------
 
 
 def test_ib_disconnect_fires_connection_closed_exactly_once():
     """``IB.disconnect`` delegates to ``client.disconnect``, which is the
-    single voluntary teardown path. Prior to R10, ``IB.disconnect`` ALSO
-    called ``wrapper.connectionClosed`` directly, so the callback fired
+    single voluntary teardown path. If ``IB.disconnect`` ALSO called
+    ``wrapper.connectionClosed`` directly, the callback would fire
     twice — once from the client, once again from IB. The duplicate
-    fire double-failed in-flight request futures (raising
-    ``InvalidStateError`` on the second attempt) and emitted
+    fire would double-fail in-flight request futures (raising
+    ``InvalidStateError`` on the second attempt) and emit
     ``globalErrorEvent`` twice for every disconnect.
     """
     ib = _ibAtVersion(MIN_SERVER_VER_PROTOBUF)
@@ -777,7 +782,7 @@ def test_ib_disconnect_no_op_when_already_disconnected():
 
 
 # ---------------------------------------------------------------------------
-# R10 — IB._backgroundTasks holds reconnect resync task strongly (#205)
+# IB._backgroundTasks holds reconnect-resync task strongly
 # ---------------------------------------------------------------------------
 
 
@@ -829,7 +834,7 @@ def test_background_tasks_no_op_on_unrelated_error_codes():
 
 
 # ---------------------------------------------------------------------------
-# R9 — cancel-async methods settle in-flight futures (#200)
+# Cancel-async methods settle in-flight futures
 # ---------------------------------------------------------------------------
 
 
@@ -845,8 +850,8 @@ def test_background_tasks_no_op_on_unrelated_error_codes():
 def test_cancel_async_method_settles_in_flight_future(cancel_name: str):
     """Each cancel-async method must call ``requests.cancel(ReqIdKey(...))``
     so the matching ``reqXxxAsync`` future raises ``CancelledError``
-    instead of hanging forever. Prior to R9 the cancel sent the wire
-    frame and returned, never waking the awaiter — TWS does not echo
+    instead of hanging forever. A naive implementation sends the wire
+    frame and returns, never waking the awaiter — TWS does not echo
     an End frame on cancel for any of these four request families.
     """
     ib = ibi.IB()
@@ -878,16 +883,17 @@ def test_cancel_async_on_unknown_req_id_is_idempotent():
 
 
 # ---------------------------------------------------------------------------
-# R9 — reqTickersAsync try/finally cleanup on gather raise (#201)
+# reqTickersAsync try/finally cleanup on gather raise
 # ---------------------------------------------------------------------------
 
 
 async def test_req_tickers_async_closes_subs_on_gather_raise():
     """``reqTickersAsync`` runs ``await gather(*futures)`` inside a
     ``try`` block; the ``finally`` closes every snapshot subscription
-    that was registered for the call. Prior to R9 the cleanup lived
-    inline after gather and a per-future failure leaked the other
-    in-flight snapshot subs in the SubscriptionRegistry's reqId index.
+    that was registered for the call. If cleanup lived inline after
+    gather instead of in ``finally``, a per-future failure would leak
+    the other in-flight snapshot subs in the SubscriptionRegistry's
+    reqId index.
     """
     ib = ibi.IB()
     ib.client._serverVersion = MIN_SERVER_VER_PROTOBUF
@@ -926,15 +932,16 @@ async def test_req_tickers_async_closes_subs_on_gather_raise():
 
 
 # ---------------------------------------------------------------------------
-# R13 — IBC monitorAsync survives stdout read exceptions (#215)
+# IBC.monitorAsync survives stdout read exceptions
 # ---------------------------------------------------------------------------
 
 
 async def test_ibc_monitor_async_breaks_on_stdout_read_exception():
     """``IBC.monitorAsync`` must catch arbitrary stdout-read failures
-    and exit the loop cleanly. Prior to R13 a transient stdout transport
-    failure (e.g. a decode raising on garbled bytes) propagated out and
-    silently killed the monitor task — the IBC process owner never knew.
+    and exit the loop cleanly. Without this guard a transient stdout
+    transport failure (e.g. a decode raising on garbled bytes) would
+    propagate out and silently kill the monitor task — the IBC process
+    owner would never know.
     """
     from ib_async.ibcontroller import IBC
 
@@ -1000,16 +1007,15 @@ async def test_ibc_monitor_async_drains_garbled_bytes_with_replace_decode():
 
 
 # ---------------------------------------------------------------------------
-# R11 — Watchdog.terminateAsync (actually IBC.terminateAsync) bounded
-# by SIGTERM(20s) + SIGKILL(10s) (#217)
+# IBC.terminateAsync bounded by SIGTERM(20s) + SIGKILL(10s)
 # ---------------------------------------------------------------------------
 
 
 async def test_ibc_terminate_async_escalates_to_sigkill_on_timeout():
     """``IBC.terminateAsync`` caps SIGTERM at 20s; on timeout it
-    escalates to SIGKILL with another 10s ceiling. Prior to R11 the
-    wait was unbounded, so a hung TWS during the daily reset would
-    block the Watchdog reconnect loop forever.
+    escalates to SIGKILL with another 10s ceiling. An unbounded wait
+    would let a hung TWS during the daily reset block the Watchdog
+    reconnect loop forever.
     """
     from ib_async.ibcontroller import IBC
 
@@ -1083,7 +1089,7 @@ async def test_ibc_terminate_async_no_op_when_no_proc():
 
 
 # ---------------------------------------------------------------------------
-# v3.0 commission → commissionAndFees rename (#164) — deprecation alias
+# v3.0 commission → commissionAndFees rename — deprecation alias
 # ---------------------------------------------------------------------------
 
 
