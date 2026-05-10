@@ -241,16 +241,18 @@ def test_histogram_data_repeated_round_trip():
     assert args.reqId == 7
     assert len(args.items) == 2
     assert args.items[0].price == 150.0
-    assert args.items[0].count == 100
-    assert args.items[1].count == 200
+    assert args.items[0].size == Decimal("100")
+    assert args.items[1].size == Decimal("200")
 
 
-def test_histogram_data_garbage_size_yields_zero_count():
+def test_histogram_data_garbage_size_yields_none():
+    """Malformed wire ``size`` lands as ``None`` rather than truncating
+    to zero — preserves the unset/invalid signal end-to-end."""
     proto = HistogramData_pb2.HistogramData(reqId=7)
     e = proto.histogramDataEntries.add()
     e.price, e.size = 150.0, "abc"
     args = createHistogramDataArgs(proto)
-    assert args.items[0].count == 0
+    assert args.items[0].size is None
 
 
 # ---------------------------------------------------------------------------

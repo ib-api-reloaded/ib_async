@@ -1560,7 +1560,7 @@ class Wrapper:
             dataList.updateEvent.emit(dataList)
 
     def histogramData(self, reqId: int, items: list[HistogramData]):
-        result = [HistogramData(item.price, item.count) for item in items]
+        result = [HistogramData(item.price, item.size) for item in items]
         self.requests.set_result(ReqIdKey(reqId), result)
 
     def securityDefinitionOptionParameter(

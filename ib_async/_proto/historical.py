@@ -308,23 +308,17 @@ def createHistogramDataEntry(
 ) -> HistogramData:
     """The proto's nested entry maps onto the domain ``HistogramData``
     dataclass directly (the domain does not distinguish container vs
-    entry — each entry IS a ``HistogramData`` row)."""
+    entry — each entry IS a ``HistogramData`` row).
+    """
     price = float(proto.price) if proto.HasField("price") else 0.0
-    size_d = safe_decimal(proto.size) if proto.HasField("size") else None
-    size = float(size_d) if size_d is not None else 0.0
-    return HistogramData(price=price, count=int(size))
+    size = safe_decimal(proto.size) if proto.HasField("size") else None
+    return HistogramData(price=price, size=size)
 
 
 def createHistogramDataArgs(
     proto: HistogramData_pb2.HistogramData,
 ) -> HistogramDataArgs:
-    """``Wrapper.histogramData(reqId, items)`` args.
-
-    Note ``size`` on the wire is a string (Decimal precision); we coerce
-    to an int count on the way out because the domain field is
-    ``HistogramData.count: int``. (Fractional histogram counts have no
-    semantics in the IBKR API.)
-    """
+    """``Wrapper.histogramData(reqId, items)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
     items = [createHistogramDataEntry(e) for e in proto.histogramDataEntries]
     return HistogramDataArgs(reqId=reqId, items=items)

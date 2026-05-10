@@ -156,8 +156,14 @@ class TickAttribLast:
 
 @dataclass
 class HistogramData:
+    # ``size`` is the wire-name in IBKR's reference (gate >=130).
+    # Earlier ib_async releases coerced this to an integer ``count``,
+    # which silently truncated fractional sizes that legitimately ship
+    # for crypto / FRACTIONAL_SIZE_SUPPORT (gate 163) instruments.
+    # ``Decimal | None`` end-to-end preserves the wire precision and
+    # carries the unset semantics the rest of the domain uses.
     price: float = 0.0
-    count: int = 0
+    size: Decimal | None = None
 
 
 @dataclass
