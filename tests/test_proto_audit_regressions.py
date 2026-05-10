@@ -2666,10 +2666,10 @@ def test_completed_order_first_time_uses_completed_status_not_status():
 
 
 def test_monetary_account_value_tags_covers_ibkr_summary_standard_set():
-    """``MONETARY_ACCOUNT_VALUE_TAGS`` must whitelist every monetary tag
-    IBKR's ``AccountSummaryTags`` ships — including the bare-name forms
-    (``Leverage``, ``ReqTEquity``, ``ReqTMargin``) the account-summary
-    stream uses without a segment suffix.
+    """``MONETARY_ACCOUNT_VALUE_TAGS`` must whitelist every truly
+    currency-denominated tag IBKR's ``AccountSummaryTags`` ships —
+    including the bare-name forms (``ReqTEquity``, ``ReqTMargin``) the
+    account-summary stream uses without a segment suffix.
 
     Without these, ``AccountValue.decimalValue`` returns ``None`` for
     valid monetary values from TWS and user code mistakes the value as
@@ -2678,7 +2678,7 @@ def test_monetary_account_value_tags_covers_ibkr_summary_standard_set():
     from ib_async.objects import MONETARY_ACCOUNT_VALUE_TAGS
 
     # Bare-name spellings IBKR's account-summary stream emits.
-    for tag in ("Leverage", "ReqTEquity", "ReqTMargin"):
+    for tag in ("ReqTEquity", "ReqTMargin"):
         assert tag in MONETARY_ACCOUNT_VALUE_TAGS, f"missing {tag!r}"
 
     # Spot-check a few -S / -C variants that were already covered to
@@ -2693,18 +2693,30 @@ def test_monetary_account_value_tags_covers_ibkr_summary_standard_set():
         assert tag in MONETARY_ACCOUNT_VALUE_TAGS
 
 
-def test_account_value_decimal_view_returns_decimal_for_leverage():
-    """AccountValue('Leverage', '2.5').decimalValue must round-trip to
-    ``Decimal('2.5')`` rather than ``None`` after the whitelist fix."""
-
-    av = ibi.AccountValue(
-        account="DU1",
-        tag="Leverage",
-        value="2.5",
-        currency="USD",
-        modelCode="",
-    )
-    assert av.decimalValue == Decimal("2.5")
+def test_account_value_decimal_view_returns_none_for_non_currency_tags():
+    """``decimalValue`` is for monetary (currency-denominated) tags only.
+    Pure ratios (``Leverage``), counts (``DayTradesRemaining``), unit
+    sizes (``BillableSize``), and string labels (``SegmentTitle-S``)
+    must return ``None`` so user code that asks for the typed Decimal
+    view never accidentally treats a ratio or count as a money amount.
+    """
+    for tag in (
+        "Leverage",
+        "Leverage-S",
+        "DayTradesRemaining",
+        "DayTradesRemainingT+1",
+        "BillableSize",
+        "ColumnPrio-C",
+        "SegmentTitle-S",
+    ):
+        av = ibi.AccountValue(
+            account="DU1",
+            tag=tag,
+            value="2.5",
+            currency="USD",
+            modelCode="",
+        )
+        assert av.decimalValue is None, f"{tag} must not coerce to Decimal"
 
 
 def test_order_bound_signature_uses_ibkr_argument_names():
@@ -3174,12 +3186,6 @@ def test_account_summary_default_tags_are_all_whitelisted():
         "LookAheadMaintMarginReq",
         "LookAheadAvailableFunds",
         "LookAheadExcessLiquidity",
-        "DayTradesRemaining",
-        "DayTradesRemainingT+1",
-        "DayTradesRemainingT+2",
-        "DayTradesRemainingT+3",
-        "DayTradesRemainingT+4",
-        "Leverage",
         # IBKR's plain ``ReqT*`` aliases the summary stream emits.
         "ReqTEquity",
         "ReqTMargin",

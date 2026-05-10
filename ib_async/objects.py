@@ -250,6 +250,14 @@ class WshEventData:
 # Decimal view via ``AccountValue.decimalValue`` get back ``None`` when
 # the tag isn't on this list, so user code can never accidentally
 # coerce ``"USD"`` into a Decimal.
+#
+# Strictly currency-denominated only: integer-counted tags
+# (``DayTradesRemaining``), sorting hints (``ColumnPrio-*``), string
+# labels (``SegmentTitle-*``), unit-counted tags (``BillableSize``),
+# and pure ratios (``Leverage*``) are intentionally excluded — none
+# of them represents an amount of money. ``Cushion`` and
+# ``ExchangeRate`` stay because they're shipped as base-currency-
+# context numerics that callers do reach for as ``Decimal``.
 MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
     {
         "AccruedCash",
@@ -261,21 +269,13 @@ MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
         "AvailableFunds",
         "AvailableFunds-C",
         "AvailableFunds-S",
-        "BillableSize",
         "Billable",
         "Billable-C",
         "Billable-S",
         "BuyingPower",
         "CashBalance",
-        "ColumnPrio-C",
-        "ColumnPrio-S",
         "CorporateBondValue",
         "Cushion",
-        "DayTradesRemaining",
-        "DayTradesRemainingT+1",
-        "DayTradesRemainingT+2",
-        "DayTradesRemainingT+3",
-        "DayTradesRemainingT+4",
         "EquityWithLoanValue",
         "EquityWithLoanValue-C",
         "EquityWithLoanValue-S",
@@ -310,14 +310,6 @@ MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
         "InitMarginReq-C",
         "InitMarginReq-S",
         "IssuerOptionValue",
-        # IBKR's ``AccountSummaryTags`` ships plain ``Leverage`` /
-        # ``ReqTEquity`` / ``ReqTMargin`` on the account-summary stream
-        # without the ``-S`` segment suffix. The ``-S`` variants below
-        # appear on the per-account stream; both forms carry monetary
-        # values so the typed Decimal view should not return ``None`` on
-        # either spelling.
-        "Leverage",
-        "Leverage-S",
         "LookAheadAvailableFunds",
         "LookAheadAvailableFunds-C",
         "LookAheadAvailableFunds-S",
@@ -376,8 +368,6 @@ MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
         "SettledCash-S",
         "SMA",
         "SMA-S",
-        "SegmentTitle-C",
-        "SegmentTitle-S",
         "StockMarketValue",
         "TBondValue",
         "TBillValue",
