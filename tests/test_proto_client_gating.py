@@ -83,11 +83,25 @@ def test_place_order_uses_binary_below_gate():
     order = ibi.LimitOrder("BUY", 100, 50.5)
     order.clientId = 7
     ib.client.placeOrder(orderId=42, contract=contract, order=order)
-    # Binary frame body starts with NUL-separated text "3\x00..." not
-    # 4-byte big-endian wire msgId.
+    # Binary fallback at server >= MIN_SERVER_VER_PROTOBUF (201) uses a
+    # 4-byte big-endian raw msgId prefix (matching IBKR's
+    # ``comm.make_msg(msgId, useRawIntMsgId=True, text)``); the body
+    # text follows. The +200 sentinel does NOT apply on the binary path.
     assert sent
     body = sent[0][4:]
-    assert body.startswith(b"3\x00")  # canonical PLACE_ORDER as NUL-text
+    assert body.startswith(b"\x00\x00\x00\x03")  # PLACE_ORDER=3, raw int
+
+
+def test_place_order_pre_protobuf_server_uses_legacy_text_msgid():
+    """Server <201 keeps the legacy NUL-text msgId framing."""
+    ib = _ibAtVersion(200)
+    sent = _captureSend(ib)
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    order = ibi.LimitOrder("BUY", 100, 50.5)
+    order.clientId = 7
+    ib.client.placeOrder(orderId=42, contract=contract, order=order)
+    body = sent[0][4:]
+    assert body.startswith(b"3\x00")
 
 
 def test_place_order_uses_protobuf_at_gate_and_round_trips_clientId():
@@ -133,7 +147,8 @@ def test_cancel_order_uses_binary_below_gate():
     ib = _ibAtVersion(201)
     sent = _captureSend(ib)
     ib.client.cancelOrder(orderId=42)
-    assert sent[0][4:].startswith(b"4\x00")  # CANCEL_ORDER as NUL-text
+    # Server >= 201 uses raw-int msgId prefix on the binary path.
+    assert sent[0][4:].startswith(b"\x00\x00\x00\x04")  # CANCEL_ORDER=4
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +242,8 @@ def test_req_contract_details_below_gate_stays_binary():
     sent = _captureSend(ib)
     contract = ibi.Stock("AAPL", "SMART", "USD")
     ib.client.reqContractDetails(reqId=7, contract=contract)
-    assert sent[0][4:].startswith(b"9\x00")  # canonical REQ_CONTRACT_DATA
+    # Server >= 201 uses raw-int msgId prefix on the binary path.
+    assert sent[0][4:].startswith(b"\x00\x00\x00\x09")  # REQ_CONTRACT_DATA=9
 
 
 # ---------------------------------------------------------------------------

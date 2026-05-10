@@ -303,7 +303,7 @@ def test_req_account_updates_uses_binary_below_gate():
     ib = _ibAtVersion(206)
     sent = _captureSend(ib)
     ib.client.reqAccountUpdates(True, "DU1")
-    assert sent[0][4:].startswith(b"6\x00")  # canonical REQ_ACCT_DATA
+    assert sent[0][4:].startswith(b"\x00\x00\x00\x06")  # REQ_ACCT_DATA=6, raw int (server>=201)
 
 
 def test_req_account_updates_uses_protobuf_at_gate():
@@ -355,7 +355,7 @@ def test_req_positions_uses_binary_below_gate():
     ib = _ibAtVersion(206)
     sent = _captureSend(ib)
     ib.client.reqPositions()
-    assert sent[0][4:].startswith(b"61\x00")
+    assert sent[0][4:].startswith(b"\x00\x00\x00\x3d")  # REQ_POSITIONS=61, raw int (server>=201)
 
 
 # ---------- reqAccountSummary / cancelAccountSummary --------------------

@@ -1353,9 +1353,17 @@ class Wrapper:
         ticker.last = price
         ticker.lastSize = size
 
+        # Wire-reported exchange tick time (epoch seconds) is authoritative;
+        # ``self.lastTime`` is a local-clock fallback used only when the
+        # wire delivered no time field.
+        tickTime = (
+            datetime.fromtimestamp(time, self.defaultTimezone)
+            if time
+            else self.lastTime
+        )
         tick = TickByTickAllLast(
             tickType,
-            self.lastTime,
+            tickTime,
             price,
             size,
             tickAttribLast,
@@ -1398,8 +1406,13 @@ class Wrapper:
             ticker.prevAskSize = ticker.askSize
             ticker.askSize = askSize if askSize > 0 else self.defaultEmptySize
 
+        tickTime = (
+            datetime.fromtimestamp(time, self.defaultTimezone)
+            if time
+            else self.lastTime
+        )
         tick = TickByTickBidAsk(
-            self.lastTime, bidPrice, askPrice, bidSize, askSize, tickAttribBidAsk
+            tickTime, bidPrice, askPrice, bidSize, askSize, tickAttribBidAsk
         )
 
         ticker.tickByTicks.append(tick)
@@ -1412,7 +1425,12 @@ class Wrapper:
             self._logger.debug(f"tickByTickMidPoint: Unknown reqId: {reqId}")
             return
 
-        tick = TickByTickMidPoint(self.lastTime, midPoint)
+        tickTime = (
+            datetime.fromtimestamp(time, self.defaultTimezone)
+            if time
+            else self.lastTime
+        )
+        tick = TickByTickMidPoint(tickTime, midPoint)
         ticker.tickByTicks.append(tick)
         self.pendingTickers.add(ticker)
 
