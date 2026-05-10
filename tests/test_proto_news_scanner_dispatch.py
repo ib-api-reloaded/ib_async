@@ -9,8 +9,6 @@ emits NUL-separated text; at or above, a 4-byte BE protobuf frame.
 
 from __future__ import annotations
 
-import struct
-
 import ib_async as ibi
 from ib_async._pb import (
     CancelFundamentalsData_pb2,
@@ -50,7 +48,6 @@ from ib_async._pb_msgids import (
     CANCEL_SCANNER_SUBSCRIPTION,
     CANCEL_WSH_EVENT_DATA,
     CANCEL_WSH_META_DATA,
-    PROTOBUF_MSG_ID,
     REQ_FUNDAMENTAL_DATA,
     REQ_HISTORICAL_NEWS,
     REQ_NEWS_ARTICLE,
@@ -64,27 +61,7 @@ from ib_async._pb_msgids import (
     REQ_WSH_META_DATA,
 )
 from ib_async._requests import ReqIdKey, SingletonKey
-
-
-def _ibAtVersion(version: int):
-    ib = ibi.IB()
-    ib.client._serverVersion = version
-    ib.client.connState = ib.client.CONNECTED
-    return ib
-
-
-def _captureSend(ib):
-    sent: list[bytes] = []
-    ib.client.conn.sendMsg = sent.append  # type: ignore[method-assign]
-    return sent
-
-
-def _decodeProtoFrame(framed: bytes) -> tuple[int, bytes]:
-    body_len = struct.unpack(">I", framed[:4])[0]
-    body = framed[4 : 4 + body_len]
-    wireMsgId = struct.unpack(">I", body[:4])[0]
-    return wireMsgId - PROTOBUF_MSG_ID, body[4:]
-
+from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 # ===========================================================================
 # RECEIVE SIDE

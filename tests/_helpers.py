@@ -1,5 +1,6 @@
 """Shared test helpers for injecting trades and fills directly into a
-Wrapper without going through the wire.
+Wrapper without going through the wire, and the small ``IB``-construction
+helpers shared across the ``test_proto_*_dispatch`` suites.
 
 Used by tests that exercise post-state behaviour (a late error, a
 disconnect-driven teardown, a commissionReport callback for a known fill)
@@ -9,11 +10,19 @@ Existing tests pre-date these helpers and use inline construction; new
 tests should prefer ``inject_trade`` / ``inject_fill`` so the test layer
 has one place to update if Wrapper's internal trade/fill maps ever
 restructure.
+
+``_ibAtVersion`` / ``_captureSend`` / ``_decodeProtoFrame`` live here
+because every ``test_proto_*_dispatch.py`` defined the same body —
+keeping one canonical implementation means a future tweak to the
+``IB`` faux-connect dance happens in exactly one place.
 """
 
 from __future__ import annotations
 
+import struct
+
 import ib_async as ibi
+from ib_async._pb_msgids import PROTOBUF_MSG_ID
 from ib_async.order import Order, OrderStatus, Trade
 
 
@@ -71,3 +80,37 @@ def inject_fill(
     )
     ib.wrapper.fills[execId] = fill
     return fill
+
+
+def _ibAtVersion(version: int) -> ibi.IB:
+    """Construct an ``IB`` pinned to the given server version with the
+    client pretend-connected.
+
+    Tests that exercise gated send paths or proto dispatch need the
+    client past the ``CONNECTED`` guard so ``Client.send`` doesn't raise
+    ``ConnectionError`` and ``Decoder.processProtoBuf`` runs at the right
+    serverVersion. No real socket I/O happens — tests replace
+    ``conn.sendMsg`` via ``_captureSend``.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = version
+    ib.client.connState = ib.client.CONNECTED
+    return ib
+
+
+def _captureSend(ib: ibi.IB) -> list[bytes]:
+    """Replace the connection's ``sendMsg`` with a capture list the test
+    can inspect. Returns the list of bytes written."""
+    sent: list[bytes] = []
+    ib.client.conn.sendMsg = sent.append  # type: ignore[method-assign]
+    return sent
+
+
+def _decodeProtoFrame(framed: bytes) -> tuple[int, bytes]:
+    """Strip the 4-byte length prefix, then read the 4-byte BE wire
+    msgId. Returns ``(canonicalMsgId, bodyBytes)`` where canonical is
+    ``wire - PROTOBUF_MSG_ID``."""
+    body_len = struct.unpack(">I", framed[:4])[0]
+    body = framed[4 : 4 + body_len]
+    wireMsgId = struct.unpack(">I", body[:4])[0]
+    return wireMsgId - PROTOBUF_MSG_ID, body[4:]

@@ -22,8 +22,6 @@ cancelTickByTickData.
 
 from __future__ import annotations
 
-import struct
-
 import ib_async as ibi
 from ib_async._pb import (
     CancelHistoricalData_pb2,
@@ -53,7 +51,6 @@ from ib_async._pb_msgids import (
     CANCEL_MKT_DATA,
     CANCEL_MKT_DEPTH,
     CANCEL_TICK_BY_TICK_DATA,
-    PROTOBUF_MSG_ID,
     REQ_HISTORICAL_DATA,
     REQ_MARKET_DATA_TYPE,
     REQ_MKT_DATA,
@@ -63,26 +60,7 @@ from ib_async._pb_msgids import (
     REQ_TICK_BY_TICK_DATA,
 )
 from ib_async._requests import ReqIdKey
-
-
-def _ibAtVersion(version: int):
-    ib = ibi.IB()
-    ib.client._serverVersion = version
-    ib.client.connState = ib.client.CONNECTED
-    return ib
-
-
-def _captureSend(ib):
-    sent: list[bytes] = []
-    ib.client.conn.sendMsg = sent.append  # type: ignore[method-assign]
-    return sent
-
-
-def _decodeProtoFrame(framed: bytes) -> tuple[int, bytes]:
-    body_len = struct.unpack(">I", framed[:4])[0]
-    body = framed[4 : 4 + body_len]
-    wireMsgId = struct.unpack(">I", body[:4])[0]
-    return wireMsgId - PROTOBUF_MSG_ID, body[4:]
+from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 
 def _seedTicker(ib, reqId: int, contract: ibi.Contract | None = None):

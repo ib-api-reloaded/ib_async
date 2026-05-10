@@ -15,7 +15,6 @@ globals, malformed input lands as ``None``.
 
 from __future__ import annotations
 
-import struct
 from decimal import Decimal
 
 import ib_async as ibi
@@ -46,7 +45,6 @@ from ib_async._pb_msgids import (
     CANCEL_ACCOUNT_UPDATES_MULTI,
     CANCEL_POSITIONS,
     CANCEL_POSITIONS_MULTI,
-    PROTOBUF_MSG_ID,
     REQ_ACCOUNT_SUMMARY,
     REQ_ACCOUNT_UPDATES_MULTI,
     REQ_ACCT_DATA,
@@ -55,27 +53,7 @@ from ib_async._pb_msgids import (
     REQ_POSITIONS_MULTI,
 )
 from ib_async._requests import ReqIdKey, SingletonKey
-
-
-def _ibAtVersion(version: int):
-    ib = ibi.IB()
-    ib.client._serverVersion = version
-    ib.client.connState = ib.client.CONNECTED
-    return ib
-
-
-def _captureSend(ib):
-    sent: list[bytes] = []
-    ib.client.conn.sendMsg = sent.append  # type: ignore[method-assign]
-    return sent
-
-
-def _decodeProtoFrame(framed: bytes) -> tuple[int, bytes]:
-    body_len = struct.unpack(">I", framed[:4])[0]
-    body = framed[4 : 4 + body_len]
-    wireMsgId = struct.unpack(">I", body[:4])[0]
-    return wireMsgId - PROTOBUF_MSG_ID, body[4:]
-
+from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 # ===========================================================================
 # RECEIVE SIDE — Decoder.processProtoBuf dispatch lands wrapper state

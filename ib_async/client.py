@@ -267,6 +267,23 @@ class Client:
         body = struct.pack(">I", wireMsgId) + serialized
         self.conn.sendMsg(self._prefix(body))
 
+    def _tryProto(
+        self, canonicalMsgId: int, build_proto: Callable[[], Any]
+    ) -> bool:
+        """Emit the protobuf-encoded frame for ``canonicalMsgId`` when the
+        negotiated server supports it. Returns True when the proto path
+        handled the send so callers can early-return; False when the caller
+        must fall through to the binary path.
+
+        ``build_proto`` is invoked only when the proto gate is open, which
+        keeps the lazy ``from ._proto.XXX import ...`` deferred so older
+        connections never pay the import cost.
+        """
+        if not self.useProtoBuf(canonicalMsgId):
+            return False
+        self.sendProto(canonicalMsgId, build_proto().SerializeToString())
+        return True
+
     def run(self):
         loop = getLoop()
         loop.run_forever()
@@ -603,20 +620,19 @@ class Client:
         regulatorySnapshot,
         mktDataOptions,
     ):
-        if self.useProtoBuf(_M.REQ_MKT_DATA):
+        def _proto():
             from ._proto.market_data import createMarketDataRequestProto
 
-            self.sendProto(
-                _M.REQ_MKT_DATA,
-                createMarketDataRequestProto(
-                    reqId,
-                    contract,
-                    genericTickList,
-                    snapshot,
-                    regulatorySnapshot,
-                    marketDataOptions=mktDataOptions,
-                ).SerializeToString(),
+            return createMarketDataRequestProto(
+                reqId,
+                contract,
+                genericTickList,
+                snapshot,
+                regulatorySnapshot,
+                marketDataOptions=mktDataOptions,
             )
+
+        if self._tryProto(_M.REQ_MKT_DATA, _proto):
             return
         fields = [1, 11, reqId, contract]
 
@@ -636,13 +652,12 @@ class Client:
         self.send(*fields)
 
     def cancelMktData(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_MKT_DATA):
+        def _proto():
             from ._proto.market_data import createCancelMarketDataProto
 
-            self.sendProto(
-                _M.CANCEL_MKT_DATA,
-                createCancelMarketDataProto(reqId).SerializeToString(),
-            )
+            return createCancelMarketDataProto(reqId)
+
+        if self._tryProto(_M.CANCEL_MKT_DATA, _proto):
             return
         self.send(2, 2, reqId)
 
@@ -667,11 +682,12 @@ class Client:
         # older servers. Per-msgId gating (not per-connection): a 207
         # server uses protobuf for orders but binary for historical
         # data, etc.
-        if self.useProtoBuf(_M.PLACE_ORDER):
+        def _proto():
             from ._proto.orders import createPlaceOrderRequestProto
 
-            proto = createPlaceOrderRequestProto(orderId, contract, order)
-            self.sendProto(_M.PLACE_ORDER, proto.SerializeToString())
+            return createPlaceOrderRequestProto(orderId, contract, order)
+
+        if self._tryProto(_M.PLACE_ORDER, _proto):
             return
 
         version = self.serverVersion()
@@ -948,16 +964,17 @@ class Client:
         elif isinstance(orderCancel, str):
             orderCancel = OrderCancel(manualOrderCancelTime=orderCancel)
 
-        if self.useProtoBuf(_M.CANCEL_ORDER):
+        def _proto():
             from ._proto.orders import createCancelOrderRequestProto
 
-            proto = createCancelOrderRequestProto(
+            return createCancelOrderRequestProto(
                 orderId,
                 manualOrderCancelTime=orderCancel.manualOrderCancelTime,
                 extOperator=orderCancel.extOperator,
                 manualOrderIndicator=orderCancel.manualOrderIndicator,
             )
-            self.sendProto(_M.CANCEL_ORDER, proto.SerializeToString())
+
+        if self._tryProto(_M.CANCEL_ORDER, _proto):
             return
 
         # Binary wire layout shifts at MIN_SERVER_VER_CME_TAGGING_FIELDS
@@ -981,32 +998,32 @@ class Client:
         self.send(*fields)
 
     def reqOpenOrders(self):
-        if self.useProtoBuf(_M.REQ_OPEN_ORDERS):
+        def _proto():
             from ._proto.orders import createOpenOrdersRequestProto
 
-            self.sendProto(
-                _M.REQ_OPEN_ORDERS, createOpenOrdersRequestProto().SerializeToString()
-            )
+            return createOpenOrdersRequestProto()
+
+        if self._tryProto(_M.REQ_OPEN_ORDERS, _proto):
             return
         self.send(5, 1)
 
     def reqAccountUpdates(self, subscribe, acctCode):
-        if self.useProtoBuf(_M.REQ_ACCT_DATA):
+        def _proto():
             from ._proto.accounts import createAccountDataRequestProto
 
-            self.sendProto(
-                _M.REQ_ACCT_DATA,
-                createAccountDataRequestProto(subscribe, acctCode).SerializeToString(),
-            )
+            return createAccountDataRequestProto(subscribe, acctCode)
+
+        if self._tryProto(_M.REQ_ACCT_DATA, _proto):
             return
         self.send(6, 2, subscribe, acctCode)
 
     def reqExecutions(self, reqId, execFilter):
-        if self.useProtoBuf(_M.REQ_EXECUTIONS):
+        def _proto():
             from ._proto.orders import createExecutionRequestProto
 
-            proto = createExecutionRequestProto(reqId, execFilter)
-            self.sendProto(_M.REQ_EXECUTIONS, proto.SerializeToString())
+            return createExecutionRequestProto(reqId, execFilter)
+
+        if self._tryProto(_M.REQ_EXECUTIONS, _proto):
             return
         fields: list[Any] = [
             7,
@@ -1036,11 +1053,12 @@ class Client:
         self.send(8, 1, numIds)
 
     def reqContractDetails(self, reqId, contract):
-        if self.useProtoBuf(_M.REQ_CONTRACT_DATA):
+        def _proto():
             from ._proto.contracts import createContractDataRequestProto
 
-            proto = createContractDataRequestProto(reqId, contract)
-            self.sendProto(_M.REQ_CONTRACT_DATA, proto.SerializeToString())
+            return createContractDataRequestProto(reqId, contract)
+
+        if self._tryProto(_M.REQ_CONTRACT_DATA, _proto):
             return
         fields = [
             9,
@@ -1058,19 +1076,18 @@ class Client:
         self.send(*fields)
 
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):
-        if self.useProtoBuf(_M.REQ_MKT_DEPTH):
+        def _proto():
             from ._proto.market_data import createMarketDepthRequestProto
 
-            self.sendProto(
-                _M.REQ_MKT_DEPTH,
-                createMarketDepthRequestProto(
-                    reqId,
-                    contract,
-                    numRows,
-                    isSmartDepth,
-                    marketDepthOptions=mktDepthOptions,
-                ).SerializeToString(),
+            return createMarketDepthRequestProto(
+                reqId,
+                contract,
+                numRows,
+                isSmartDepth,
+                marketDepthOptions=mktDepthOptions,
             )
+
+        if self._tryProto(_M.REQ_MKT_DEPTH, _proto):
             return
         self.send(
             10,
@@ -1094,79 +1111,72 @@ class Client:
         )
 
     def cancelMktDepth(self, reqId, isSmartDepth):
-        if self.useProtoBuf(_M.CANCEL_MKT_DEPTH):
+        def _proto():
             from ._proto.market_data import createCancelMarketDepthProto
 
-            self.sendProto(
-                _M.CANCEL_MKT_DEPTH,
-                createCancelMarketDepthProto(reqId, isSmartDepth).SerializeToString(),
-            )
+            return createCancelMarketDepthProto(reqId, isSmartDepth)
+
+        if self._tryProto(_M.CANCEL_MKT_DEPTH, _proto):
             return
         self.send(11, 1, reqId, isSmartDepth)
 
     def reqNewsBulletins(self, allMsgs):
-        if self.useProtoBuf(_M.REQ_NEWS_BULLETINS):
+        def _proto():
             from ._proto.news import createNewsBulletinsRequestProto
 
-            self.sendProto(
-                _M.REQ_NEWS_BULLETINS,
-                createNewsBulletinsRequestProto(allMsgs).SerializeToString(),
-            )
+            return createNewsBulletinsRequestProto(allMsgs)
+
+        if self._tryProto(_M.REQ_NEWS_BULLETINS, _proto):
             return
         self.send(12, 1, allMsgs)
 
     def cancelNewsBulletins(self):
-        if self.useProtoBuf(_M.CANCEL_NEWS_BULLETINS):
+        def _proto():
             from ._proto.news import createCancelNewsBulletinsProto
 
-            self.sendProto(
-                _M.CANCEL_NEWS_BULLETINS,
-                createCancelNewsBulletinsProto().SerializeToString(),
-            )
+            return createCancelNewsBulletinsProto()
+
+        if self._tryProto(_M.CANCEL_NEWS_BULLETINS, _proto):
             return
         self.send(13, 1)
 
     def setServerLogLevel(self, logLevel):
-        if self.useProtoBuf(_M.SET_SERVER_LOGLEVEL):
+        def _proto():
             from ._proto.rest import createSetServerLogLevelRequestProto
 
-            self.sendProto(
-                _M.SET_SERVER_LOGLEVEL,
-                createSetServerLogLevelRequestProto(logLevel).SerializeToString(),
-            )
+            return createSetServerLogLevelRequestProto(logLevel)
+
+        if self._tryProto(_M.SET_SERVER_LOGLEVEL, _proto):
             return
         self.send(14, 1, logLevel)
 
     def reqAutoOpenOrders(self, bAutoBind):
-        if self.useProtoBuf(_M.REQ_AUTO_OPEN_ORDERS):
+        def _proto():
             from ._proto.orders import createAutoOpenOrdersRequestProto
 
-            self.sendProto(
-                _M.REQ_AUTO_OPEN_ORDERS,
-                createAutoOpenOrdersRequestProto(bAutoBind).SerializeToString(),
-            )
+            return createAutoOpenOrdersRequestProto(bAutoBind)
+
+        if self._tryProto(_M.REQ_AUTO_OPEN_ORDERS, _proto):
             return
         self.send(15, 1, bAutoBind)
 
     def reqAllOpenOrders(self):
-        if self.useProtoBuf(_M.REQ_ALL_OPEN_ORDERS):
+        def _proto():
             from ._proto.orders import createAllOpenOrdersRequestProto
 
-            self.sendProto(
-                _M.REQ_ALL_OPEN_ORDERS,
-                createAllOpenOrdersRequestProto().SerializeToString(),
-            )
+            return createAllOpenOrdersRequestProto()
+
+        if self._tryProto(_M.REQ_ALL_OPEN_ORDERS, _proto):
             return
         self.send(16, 1)
 
     def reqManagedAccts(self):
-        if self.useProtoBuf(_M.REQ_MANAGED_ACCTS):
+        def _proto():
             from ._proto.accounts import createManagedAccountsRequestProto
 
-            self.sendProto(
-                _M.REQ_MANAGED_ACCTS,
-                createManagedAccountsRequestProto().SerializeToString(),
-            )
+            return createManagedAccountsRequestProto()
+
+        if self._tryProto(_M.REQ_MANAGED_ACCTS, _proto):
             return
         self.send(17, 1)
 
@@ -1179,10 +1189,12 @@ class Client:
             and int(faData) == 2
         ):
             return
-        if self.useProtoBuf(_M.REQ_FA):
+        def _proto():
             from ._proto.accounts import createFARequestProto
 
-            self.sendProto(_M.REQ_FA, createFARequestProto(faData).SerializeToString())
+            return createFARequestProto(faData)
+
+        if self._tryProto(_M.REQ_FA, _proto):
             return
         self.send(18, 1, faData)
 
@@ -1194,13 +1206,12 @@ class Client:
             and int(faData) == 2
         ):
             return
-        if self.useProtoBuf(_M.REPLACE_FA):
+        def _proto():
             from ._proto.accounts import createFAReplaceProto
 
-            self.sendProto(
-                _M.REPLACE_FA,
-                createFAReplaceProto(reqId, faData, cxml).SerializeToString(),
-            )
+            return createFAReplaceProto(reqId, faData, cxml)
+
+        if self._tryProto(_M.REPLACE_FA, _proto):
             return
         # The trailing ``reqId`` field only exists at server gate 157+
         # (REPLACE_FA_END). Sending it to a sub-157 server desyncs the
@@ -1223,24 +1234,23 @@ class Client:
         keepUpToDate,
         chartOptions,
     ):
-        if self.useProtoBuf(_M.REQ_HISTORICAL_DATA):
+        def _proto():
             from ._proto.historical import createHistoricalDataRequestProto
 
-            self.sendProto(
-                _M.REQ_HISTORICAL_DATA,
-                createHistoricalDataRequestProto(
-                    reqId,
-                    contract,
-                    endDateTime,
-                    durationStr,
-                    barSizeSetting,
-                    whatToShow,
-                    useRTH,
-                    formatDate,
-                    keepUpToDate,
-                    chartOptions=chartOptions,
-                ).SerializeToString(),
+            return createHistoricalDataRequestProto(
+                reqId,
+                contract,
+                endDateTime,
+                durationStr,
+                barSizeSetting,
+                whatToShow,
+                useRTH,
+                formatDate,
+                keepUpToDate,
+                chartOptions=chartOptions,
             )
+
+        if self._tryProto(_M.REQ_HISTORICAL_DATA, _proto):
             return
         fields = [
             20,
@@ -1276,23 +1286,22 @@ class Client:
         customerAccount: str = "",
         professionalCustomer: bool = False,
     ):
-        if self.useProtoBuf(_M.EXERCISE_OPTIONS):
+        def _proto():
             from ._proto.rest import createExerciseOptionsRequestProto
 
-            self.sendProto(
-                _M.EXERCISE_OPTIONS,
-                createExerciseOptionsRequestProto(
-                    reqId,
-                    contract,
-                    exerciseAction,
-                    exerciseQuantity,
-                    account,
-                    override,
-                    manualOrderTime=manualOrderTime,
-                    customerAccount=customerAccount,
-                    professionalCustomer=professionalCustomer,
-                ).SerializeToString(),
+            return createExerciseOptionsRequestProto(
+                reqId,
+                contract,
+                exerciseAction,
+                exerciseQuantity,
+                account,
+                override,
+                manualOrderTime=manualOrderTime,
+                customerAccount=customerAccount,
+                professionalCustomer=professionalCustomer,
             )
+
+        if self._tryProto(_M.EXERCISE_OPTIONS, _proto):
             return
         fields: list[Any] = [
             21,
@@ -1333,18 +1342,17 @@ class Client:
         scannerSubscriptionOptions,
         scannerSubscriptionFilterOptions,
     ):
-        if self.useProtoBuf(_M.REQ_SCANNER_SUBSCRIPTION):
+        def _proto():
             from ._proto.scanner import createScannerSubscriptionRequestProto
 
-            self.sendProto(
-                _M.REQ_SCANNER_SUBSCRIPTION,
-                createScannerSubscriptionRequestProto(
-                    reqId,
-                    subscription,
-                    scannerSubscriptionOptions=scannerSubscriptionOptions,
-                    scannerSubscriptionFilterOptions=scannerSubscriptionFilterOptions,
-                ).SerializeToString(),
+            return createScannerSubscriptionRequestProto(
+                reqId,
+                subscription,
+                scannerSubscriptionOptions=scannerSubscriptionOptions,
+                scannerSubscriptionFilterOptions=scannerSubscriptionFilterOptions,
             )
+
+        if self._tryProto(_M.REQ_SCANNER_SUBSCRIPTION, _proto):
             return
         sub = subscription
         self.send(
@@ -1376,46 +1384,42 @@ class Client:
         )
 
     def cancelScannerSubscription(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_SCANNER_SUBSCRIPTION):
+        def _proto():
             from ._proto.scanner import createCancelScannerSubscriptionProto
 
-            self.sendProto(
-                _M.CANCEL_SCANNER_SUBSCRIPTION,
-                createCancelScannerSubscriptionProto(reqId).SerializeToString(),
-            )
+            return createCancelScannerSubscriptionProto(reqId)
+
+        if self._tryProto(_M.CANCEL_SCANNER_SUBSCRIPTION, _proto):
             return
         self.send(23, 1, reqId)
 
     def reqScannerParameters(self):
-        if self.useProtoBuf(_M.REQ_SCANNER_PARAMETERS):
+        def _proto():
             from ._proto.scanner import createScannerParametersRequestProto
 
-            self.sendProto(
-                _M.REQ_SCANNER_PARAMETERS,
-                createScannerParametersRequestProto().SerializeToString(),
-            )
+            return createScannerParametersRequestProto()
+
+        if self._tryProto(_M.REQ_SCANNER_PARAMETERS, _proto):
             return
         self.send(24, 1)
 
     def cancelHistoricalData(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_HISTORICAL_DATA):
+        def _proto():
             from ._proto.historical import createCancelHistoricalDataProto
 
-            self.sendProto(
-                _M.CANCEL_HISTORICAL_DATA,
-                createCancelHistoricalDataProto(reqId).SerializeToString(),
-            )
+            return createCancelHistoricalDataProto(reqId)
+
+        if self._tryProto(_M.CANCEL_HISTORICAL_DATA, _proto):
             return
         self.send(25, 1, reqId)
 
     def reqCurrentTime(self):
-        if self.useProtoBuf(_M.REQ_CURRENT_TIME):
+        def _proto():
             from ._proto.rest import createCurrentTimeRequestProto
 
-            self.sendProto(
-                _M.REQ_CURRENT_TIME,
-                createCurrentTimeRequestProto().SerializeToString(),
-            )
+            return createCurrentTimeRequestProto()
+
+        if self._tryProto(_M.REQ_CURRENT_TIME, _proto):
             return
         self.send(49, 1)
 
@@ -1445,49 +1449,46 @@ class Client:
     def reqRealTimeBars(
         self, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
     ):
-        if self.useProtoBuf(_M.REQ_REAL_TIME_BARS):
+        def _proto():
             from ._proto.historical import createRealTimeBarsRequestProto
 
-            self.sendProto(
-                _M.REQ_REAL_TIME_BARS,
-                createRealTimeBarsRequestProto(
-                    reqId,
-                    contract,
-                    barSize,
-                    whatToShow,
-                    useRTH,
-                    realTimeBarsOptions=realTimeBarsOptions,
-                ).SerializeToString(),
+            return createRealTimeBarsRequestProto(
+                reqId,
+                contract,
+                barSize,
+                whatToShow,
+                useRTH,
+                realTimeBarsOptions=realTimeBarsOptions,
             )
+
+        if self._tryProto(_M.REQ_REAL_TIME_BARS, _proto):
             return
         self.send(
             50, 3, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
         )
 
     def cancelRealTimeBars(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_REAL_TIME_BARS):
+        def _proto():
             from ._proto.historical import createCancelRealTimeBarsProto
 
-            self.sendProto(
-                _M.CANCEL_REAL_TIME_BARS,
-                createCancelRealTimeBarsProto(reqId).SerializeToString(),
-            )
+            return createCancelRealTimeBarsProto(reqId)
+
+        if self._tryProto(_M.CANCEL_REAL_TIME_BARS, _proto):
             return
         self.send(51, 1, reqId)
 
     def reqFundamentalData(self, reqId, contract, reportType, fundamentalDataOptions):
-        if self.useProtoBuf(_M.REQ_FUNDAMENTAL_DATA):
+        def _proto():
             from ._proto.scanner import createFundamentalsDataRequestProto
 
-            self.sendProto(
-                _M.REQ_FUNDAMENTAL_DATA,
-                createFundamentalsDataRequestProto(
-                    reqId,
-                    contract,
-                    reportType,
-                    fundamentalsDataOptions=fundamentalDataOptions,
-                ).SerializeToString(),
+            return createFundamentalsDataRequestProto(
+                reqId,
+                contract,
+                reportType,
+                fundamentalsDataOptions=fundamentalDataOptions,
             )
+
+        if self._tryProto(_M.REQ_FUNDAMENTAL_DATA, _proto):
             return
         options = fundamentalDataOptions or []
         self.send(
@@ -1507,32 +1508,30 @@ class Client:
         )
 
     def cancelFundamentalData(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_FUNDAMENTAL_DATA):
+        def _proto():
             from ._proto.scanner import createCancelFundamentalsDataProto
 
-            self.sendProto(
-                _M.CANCEL_FUNDAMENTAL_DATA,
-                createCancelFundamentalsDataProto(reqId).SerializeToString(),
-            )
+            return createCancelFundamentalsDataProto(reqId)
+
+        if self._tryProto(_M.CANCEL_FUNDAMENTAL_DATA, _proto):
             return
         self.send(53, 1, reqId)
 
     def calculateImpliedVolatility(
         self, reqId, contract, optionPrice, underPrice, implVolOptions
     ):
-        if self.useProtoBuf(_M.REQ_CALC_IMPLIED_VOLAT):
+        def _proto():
             from ._proto.rest import createCalculateImpliedVolatilityRequestProto
 
-            self.sendProto(
-                _M.REQ_CALC_IMPLIED_VOLAT,
-                createCalculateImpliedVolatilityRequestProto(
-                    reqId,
-                    contract,
-                    optionPrice,
-                    underPrice,
-                    impliedVolatilityOptions=implVolOptions,
-                ).SerializeToString(),
+            return createCalculateImpliedVolatilityRequestProto(
+                reqId,
+                contract,
+                optionPrice,
+                underPrice,
+                impliedVolatilityOptions=implVolOptions,
             )
+
+        if self._tryProto(_M.REQ_CALC_IMPLIED_VOLAT, _proto):
             return
         self.send(
             54,
@@ -1548,19 +1547,18 @@ class Client:
     def calculateOptionPrice(
         self, reqId, contract, volatility, underPrice, optPrcOptions
     ):
-        if self.useProtoBuf(_M.REQ_CALC_OPTION_PRICE):
+        def _proto():
             from ._proto.rest import createCalculateOptionPriceRequestProto
 
-            self.sendProto(
-                _M.REQ_CALC_OPTION_PRICE,
-                createCalculateOptionPriceRequestProto(
-                    reqId,
-                    contract,
-                    volatility,
-                    underPrice,
-                    optionPriceOptions=optPrcOptions,
-                ).SerializeToString(),
+            return createCalculateOptionPriceRequestProto(
+                reqId,
+                contract,
+                volatility,
+                underPrice,
+                optionPriceOptions=optPrcOptions,
             )
+
+        if self._tryProto(_M.REQ_CALC_OPTION_PRICE, _proto):
             return
         self.send(
             55,
@@ -1574,24 +1572,22 @@ class Client:
         )
 
     def cancelCalculateImpliedVolatility(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_CALC_IMPLIED_VOLAT):
+        def _proto():
             from ._proto.rest import createCancelCalculateImpliedVolatilityProto
 
-            self.sendProto(
-                _M.CANCEL_CALC_IMPLIED_VOLAT,
-                createCancelCalculateImpliedVolatilityProto(reqId).SerializeToString(),
-            )
+            return createCancelCalculateImpliedVolatilityProto(reqId)
+
+        if self._tryProto(_M.CANCEL_CALC_IMPLIED_VOLAT, _proto):
             return
         self.send(56, 1, reqId)
 
     def cancelCalculateOptionPrice(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_CALC_OPTION_PRICE):
+        def _proto():
             from ._proto.rest import createCancelCalculateOptionPriceProto
 
-            self.sendProto(
-                _M.CANCEL_CALC_OPTION_PRICE,
-                createCancelCalculateOptionPriceProto(reqId).SerializeToString(),
-            )
+            return createCancelCalculateOptionPriceProto(reqId)
+
+        if self._tryProto(_M.CANCEL_CALC_OPTION_PRICE, _proto):
             return
         self.send(57, 1, reqId)
 
@@ -1601,16 +1597,15 @@ class Client:
         if orderCancel is None:
             orderCancel = OrderCancel()
 
-        if self.useProtoBuf(_M.REQ_GLOBAL_CANCEL):
+        def _proto():
             from ._proto.orders import createGlobalCancelRequestProto
 
-            self.sendProto(
-                _M.REQ_GLOBAL_CANCEL,
-                createGlobalCancelRequestProto(
-                    extOperator=orderCancel.extOperator,
-                    manualOrderIndicator=orderCancel.manualOrderIndicator,
-                ).SerializeToString(),
+            return createGlobalCancelRequestProto(
+                extOperator=orderCancel.extOperator,
+                manualOrderIndicator=orderCancel.manualOrderIndicator,
             )
+
+        if self._tryProto(_M.REQ_GLOBAL_CANCEL, _proto):
             return
 
         # Binary wire layout: pre-192 carries VERSION=1 prefix; >=192
@@ -1623,58 +1618,52 @@ class Client:
         self.send(*fields)
 
     def reqMarketDataType(self, marketDataType):
-        if self.useProtoBuf(_M.REQ_MARKET_DATA_TYPE):
+        def _proto():
             from ._proto.market_data import createMarketDataTypeRequestProto
 
-            self.sendProto(
-                _M.REQ_MARKET_DATA_TYPE,
-                createMarketDataTypeRequestProto(marketDataType).SerializeToString(),
-            )
+            return createMarketDataTypeRequestProto(marketDataType)
+
+        if self._tryProto(_M.REQ_MARKET_DATA_TYPE, _proto):
             return
         self.send(59, 1, marketDataType)
 
     def reqPositions(self):
-        if self.useProtoBuf(_M.REQ_POSITIONS):
+        def _proto():
             from ._proto.accounts import createPositionsRequestProto
 
-            self.sendProto(
-                _M.REQ_POSITIONS, createPositionsRequestProto().SerializeToString()
-            )
+            return createPositionsRequestProto()
+
+        if self._tryProto(_M.REQ_POSITIONS, _proto):
             return
         self.send(61, 1)
 
     def reqAccountSummary(self, reqId, groupName, tags):
-        if self.useProtoBuf(_M.REQ_ACCOUNT_SUMMARY):
+        def _proto():
             from ._proto.accounts import createAccountSummaryRequestProto
 
-            self.sendProto(
-                _M.REQ_ACCOUNT_SUMMARY,
-                createAccountSummaryRequestProto(
-                    reqId, groupName, tags
-                ).SerializeToString(),
-            )
+            return createAccountSummaryRequestProto(reqId, groupName, tags)
+
+        if self._tryProto(_M.REQ_ACCOUNT_SUMMARY, _proto):
             return
         self.send(62, 1, reqId, groupName, tags)
 
     def cancelAccountSummary(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_ACCOUNT_SUMMARY):
+        def _proto():
             from ._proto.accounts import createCancelAccountSummaryProto
 
-            self.sendProto(
-                _M.CANCEL_ACCOUNT_SUMMARY,
-                createCancelAccountSummaryProto(reqId).SerializeToString(),
-            )
+            return createCancelAccountSummaryProto(reqId)
+
+        if self._tryProto(_M.CANCEL_ACCOUNT_SUMMARY, _proto):
             return
         self.send(63, 1, reqId)
 
     def cancelPositions(self):
-        if self.useProtoBuf(_M.CANCEL_POSITIONS):
+        def _proto():
             from ._proto.accounts import createCancelPositionsProto
 
-            self.sendProto(
-                _M.CANCEL_POSITIONS,
-                createCancelPositionsProto().SerializeToString(),
-            )
+            return createCancelPositionsProto()
+
+        if self._tryProto(_M.CANCEL_POSITIONS, _proto):
             return
         self.send(64, 1)
 
@@ -1697,15 +1686,12 @@ class Client:
         self.send(70, 1, reqId)
 
     def startApi(self):
-        if self.useProtoBuf(_M.START_API):
+        def _proto():
             from ._proto.rest import createStartApiRequestProto
 
-            self.sendProto(
-                _M.START_API,
-                createStartApiRequestProto(
-                    self.clientId, self.optCapab
-                ).SerializeToString(),
-            )
+            return createStartApiRequestProto(self.clientId, self.optCapab)
+
+        if self._tryProto(_M.START_API, _proto):
             return
         self.send(71, 2, self.clientId, self.optCapab)
 
@@ -1716,50 +1702,44 @@ class Client:
         self.send(73, 1, apiData, xyzResponse)
 
     def reqPositionsMulti(self, reqId, account, modelCode):
-        if self.useProtoBuf(_M.REQ_POSITIONS_MULTI):
+        def _proto():
             from ._proto.accounts import createPositionsMultiRequestProto
 
-            self.sendProto(
-                _M.REQ_POSITIONS_MULTI,
-                createPositionsMultiRequestProto(
-                    reqId, account, modelCode
-                ).SerializeToString(),
-            )
+            return createPositionsMultiRequestProto(reqId, account, modelCode)
+
+        if self._tryProto(_M.REQ_POSITIONS_MULTI, _proto):
             return
         self.send(74, 1, reqId, account, modelCode)
 
     def cancelPositionsMulti(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_POSITIONS_MULTI):
+        def _proto():
             from ._proto.accounts import createCancelPositionsMultiProto
 
-            self.sendProto(
-                _M.CANCEL_POSITIONS_MULTI,
-                createCancelPositionsMultiProto(reqId).SerializeToString(),
-            )
+            return createCancelPositionsMultiProto(reqId)
+
+        if self._tryProto(_M.CANCEL_POSITIONS_MULTI, _proto):
             return
         self.send(75, 1, reqId)
 
     def reqAccountUpdatesMulti(self, reqId, account, modelCode, ledgerAndNLV):
-        if self.useProtoBuf(_M.REQ_ACCOUNT_UPDATES_MULTI):
+        def _proto():
             from ._proto.accounts import createAccountUpdatesMultiRequestProto
 
-            self.sendProto(
-                _M.REQ_ACCOUNT_UPDATES_MULTI,
-                createAccountUpdatesMultiRequestProto(
-                    reqId, account, modelCode, ledgerAndNLV
-                ).SerializeToString(),
+            return createAccountUpdatesMultiRequestProto(
+                reqId, account, modelCode, ledgerAndNLV
             )
+
+        if self._tryProto(_M.REQ_ACCOUNT_UPDATES_MULTI, _proto):
             return
         self.send(76, 1, reqId, account, modelCode, ledgerAndNLV)
 
     def cancelAccountUpdatesMulti(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_ACCOUNT_UPDATES_MULTI):
+        def _proto():
             from ._proto.accounts import createCancelAccountUpdatesMultiProto
 
-            self.sendProto(
-                _M.CANCEL_ACCOUNT_UPDATES_MULTI,
-                createCancelAccountUpdatesMultiProto(reqId).SerializeToString(),
-            )
+            return createCancelAccountUpdatesMultiProto(reqId)
+
+        if self._tryProto(_M.CANCEL_ACCOUNT_UPDATES_MULTI, _proto):
             return
         self.send(77, 1, reqId)
 
@@ -1771,19 +1751,18 @@ class Client:
         underlyingSecType,
         underlyingConId,
     ):
-        if self.useProtoBuf(_M.REQ_SEC_DEF_OPT_PARAMS):
+        def _proto():
             from ._proto.rest import createSecDefOptParamsRequestProto
 
-            self.sendProto(
-                _M.REQ_SEC_DEF_OPT_PARAMS,
-                createSecDefOptParamsRequestProto(
-                    reqId,
-                    underlyingSymbol,
-                    futFopExchange,
-                    underlyingSecType,
-                    underlyingConId,
-                ).SerializeToString(),
+            return createSecDefOptParamsRequestProto(
+                reqId,
+                underlyingSymbol,
+                futFopExchange,
+                underlyingSecType,
+                underlyingConId,
             )
+
+        if self._tryProto(_M.REQ_SEC_DEF_OPT_PARAMS, _proto):
             return
         self.send(
             78,
@@ -1795,86 +1774,77 @@ class Client:
         )
 
     def reqSoftDollarTiers(self, reqId):
-        if self.useProtoBuf(_M.REQ_SOFT_DOLLAR_TIERS):
+        def _proto():
             from ._proto.rest import createSoftDollarTiersRequestProto
 
-            self.sendProto(
-                _M.REQ_SOFT_DOLLAR_TIERS,
-                createSoftDollarTiersRequestProto(reqId).SerializeToString(),
-            )
+            return createSoftDollarTiersRequestProto(reqId)
+
+        if self._tryProto(_M.REQ_SOFT_DOLLAR_TIERS, _proto):
             return
         self.send(79, reqId)
 
     def reqFamilyCodes(self):
-        if self.useProtoBuf(_M.REQ_FAMILY_CODES):
+        def _proto():
             from ._proto.accounts import createFamilyCodesRequestProto
 
-            self.sendProto(
-                _M.REQ_FAMILY_CODES,
-                createFamilyCodesRequestProto().SerializeToString(),
-            )
+            return createFamilyCodesRequestProto()
+
+        if self._tryProto(_M.REQ_FAMILY_CODES, _proto):
             return
         self.send(80)
 
     def reqMatchingSymbols(self, reqId, pattern):
-        if self.useProtoBuf(_M.REQ_MATCHING_SYMBOLS):
+        def _proto():
             from ._proto.rest import createMatchingSymbolsRequestProto
 
-            self.sendProto(
-                _M.REQ_MATCHING_SYMBOLS,
-                createMatchingSymbolsRequestProto(reqId, pattern).SerializeToString(),
-            )
+            return createMatchingSymbolsRequestProto(reqId, pattern)
+
+        if self._tryProto(_M.REQ_MATCHING_SYMBOLS, _proto):
             return
         self.send(81, reqId, pattern)
 
     def reqMktDepthExchanges(self):
-        if self.useProtoBuf(_M.REQ_MKT_DEPTH_EXCHANGES):
+        def _proto():
             from ._proto.market_data import createMarketDepthExchangesRequestProto
 
-            self.sendProto(
-                _M.REQ_MKT_DEPTH_EXCHANGES,
-                createMarketDepthExchangesRequestProto().SerializeToString(),
-            )
+            return createMarketDepthExchangesRequestProto()
+
+        if self._tryProto(_M.REQ_MKT_DEPTH_EXCHANGES, _proto):
             return
         self.send(82)
 
     def reqSmartComponents(self, reqId, bboExchange):
-        if self.useProtoBuf(_M.REQ_SMART_COMPONENTS):
+        def _proto():
             from ._proto.rest import createSmartComponentsRequestProto
 
-            self.sendProto(
-                _M.REQ_SMART_COMPONENTS,
-                createSmartComponentsRequestProto(
-                    reqId, bboExchange
-                ).SerializeToString(),
-            )
+            return createSmartComponentsRequestProto(reqId, bboExchange)
+
+        if self._tryProto(_M.REQ_SMART_COMPONENTS, _proto):
             return
         self.send(83, reqId, bboExchange)
 
     def reqNewsArticle(self, reqId, providerCode, articleId, newsArticleOptions):
-        if self.useProtoBuf(_M.REQ_NEWS_ARTICLE):
+        def _proto():
             from ._proto.news import createNewsArticleRequestProto
 
-            self.sendProto(
-                _M.REQ_NEWS_ARTICLE,
-                createNewsArticleRequestProto(
-                    reqId,
-                    providerCode,
-                    articleId,
-                    newsArticleOptions=newsArticleOptions,
-                ).SerializeToString(),
+            return createNewsArticleRequestProto(
+                reqId,
+                providerCode,
+                articleId,
+                newsArticleOptions=newsArticleOptions,
             )
+
+        if self._tryProto(_M.REQ_NEWS_ARTICLE, _proto):
             return
         self.send(84, reqId, providerCode, articleId, newsArticleOptions)
 
     def reqNewsProviders(self):
-        if self.useProtoBuf(_M.REQ_NEWS_PROVIDERS):
+        def _proto():
             from ._proto.news import createNewsProvidersRequestProto
 
-            self.sendProto(
-                _M.REQ_NEWS_PROVIDERS,
-                createNewsProvidersRequestProto().SerializeToString(),
-            )
+            return createNewsProvidersRequestProto()
+
+        if self._tryProto(_M.REQ_NEWS_PROVIDERS, _proto):
             return
         self.send(85)
 
@@ -1888,21 +1858,20 @@ class Client:
         totalResults,
         historicalNewsOptions,
     ):
-        if self.useProtoBuf(_M.REQ_HISTORICAL_NEWS):
+        def _proto():
             from ._proto.news import createHistoricalNewsRequestProto
 
-            self.sendProto(
-                _M.REQ_HISTORICAL_NEWS,
-                createHistoricalNewsRequestProto(
-                    reqId,
-                    conId,
-                    providerCodes,
-                    startDateTime,
-                    endDateTime,
-                    totalResults,
-                    historicalNewsOptions=historicalNewsOptions,
-                ).SerializeToString(),
+            return createHistoricalNewsRequestProto(
+                reqId,
+                conId,
+                providerCodes,
+                startDateTime,
+                endDateTime,
+                totalResults,
+                historicalNewsOptions=historicalNewsOptions,
             )
+
+        if self._tryProto(_M.REQ_HISTORICAL_NEWS, _proto):
             return
         self.send(
             86,
@@ -1916,52 +1885,48 @@ class Client:
         )
 
     def reqHeadTimeStamp(self, reqId, contract, whatToShow, useRTH, formatDate):
-        if self.useProtoBuf(_M.REQ_HEAD_TIMESTAMP):
+        def _proto():
             from ._proto.historical import createHeadTimestampRequestProto
 
-            self.sendProto(
-                _M.REQ_HEAD_TIMESTAMP,
-                createHeadTimestampRequestProto(
-                    reqId, contract, useRTH, whatToShow, formatDate
-                ).SerializeToString(),
+            return createHeadTimestampRequestProto(
+                reqId, contract, useRTH, whatToShow, formatDate
             )
+
+        if self._tryProto(_M.REQ_HEAD_TIMESTAMP, _proto):
             return
         self.send(
             87, reqId, contract, contract.includeExpired, useRTH, whatToShow, formatDate
         )
 
     def reqHistogramData(self, tickerId, contract, useRTH, timePeriod):
-        if self.useProtoBuf(_M.REQ_HISTOGRAM_DATA):
+        def _proto():
             from ._proto.historical import createHistogramDataRequestProto
 
-            self.sendProto(
-                _M.REQ_HISTOGRAM_DATA,
-                createHistogramDataRequestProto(
-                    tickerId, contract, bool(useRTH), timePeriod
-                ).SerializeToString(),
+            return createHistogramDataRequestProto(
+                tickerId, contract, bool(useRTH), timePeriod
             )
+
+        if self._tryProto(_M.REQ_HISTOGRAM_DATA, _proto):
             return
         self.send(88, tickerId, contract, contract.includeExpired, useRTH, timePeriod)
 
     def cancelHistogramData(self, tickerId):
-        if self.useProtoBuf(_M.CANCEL_HISTOGRAM_DATA):
+        def _proto():
             from ._proto.historical import createCancelHistogramDataProto
 
-            self.sendProto(
-                _M.CANCEL_HISTOGRAM_DATA,
-                createCancelHistogramDataProto(tickerId).SerializeToString(),
-            )
+            return createCancelHistogramDataProto(tickerId)
+
+        if self._tryProto(_M.CANCEL_HISTOGRAM_DATA, _proto):
             return
         self.send(89, tickerId)
 
     def cancelHeadTimeStamp(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_HEAD_TIMESTAMP):
+        def _proto():
             from ._proto.historical import createCancelHeadTimestampProto
 
-            self.sendProto(
-                _M.CANCEL_HEAD_TIMESTAMP,
-                createCancelHeadTimestampProto(reqId).SerializeToString(),
-            )
+            return createCancelHeadTimestampProto(reqId)
+
+        if self._tryProto(_M.CANCEL_HEAD_TIMESTAMP, _proto):
             return
         self.send(90, reqId)
 
@@ -2033,58 +1998,52 @@ class Client:
         )
 
     def reqMarketRule(self, marketRuleId):
-        if self.useProtoBuf(_M.REQ_MARKET_RULE):
+        def _proto():
             from ._proto.rest import createMarketRuleRequestProto
 
-            self.sendProto(
-                _M.REQ_MARKET_RULE,
-                createMarketRuleRequestProto(marketRuleId).SerializeToString(),
-            )
+            return createMarketRuleRequestProto(marketRuleId)
+
+        if self._tryProto(_M.REQ_MARKET_RULE, _proto):
             return
         self.send(91, marketRuleId)
 
     def reqPnL(self, reqId, account, modelCode):
-        if self.useProtoBuf(_M.REQ_PNL):
+        def _proto():
             from ._proto.scanner import createPnLRequestProto
 
-            self.sendProto(
-                _M.REQ_PNL,
-                createPnLRequestProto(reqId, account, modelCode).SerializeToString(),
-            )
+            return createPnLRequestProto(reqId, account, modelCode)
+
+        if self._tryProto(_M.REQ_PNL, _proto):
             return
         self.send(92, reqId, account, modelCode)
 
     def cancelPnL(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_PNL):
+        def _proto():
             from ._proto.scanner import createCancelPnLProto
 
-            self.sendProto(
-                _M.CANCEL_PNL, createCancelPnLProto(reqId).SerializeToString()
-            )
+            return createCancelPnLProto(reqId)
+
+        if self._tryProto(_M.CANCEL_PNL, _proto):
             return
         self.send(93, reqId)
 
     def reqPnLSingle(self, reqId, account, modelCode, conid):
-        if self.useProtoBuf(_M.REQ_PNL_SINGLE):
+        def _proto():
             from ._proto.scanner import createPnLSingleRequestProto
 
-            self.sendProto(
-                _M.REQ_PNL_SINGLE,
-                createPnLSingleRequestProto(
-                    reqId, account, modelCode, conid
-                ).SerializeToString(),
-            )
+            return createPnLSingleRequestProto(reqId, account, modelCode, conid)
+
+        if self._tryProto(_M.REQ_PNL_SINGLE, _proto):
             return
         self.send(94, reqId, account, modelCode, conid)
 
     def cancelPnLSingle(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_PNL_SINGLE):
+        def _proto():
             from ._proto.scanner import createCancelPnLSingleProto
 
-            self.sendProto(
-                _M.CANCEL_PNL_SINGLE,
-                createCancelPnLSingleProto(reqId).SerializeToString(),
-            )
+            return createCancelPnLSingleProto(reqId)
+
+        if self._tryProto(_M.CANCEL_PNL_SINGLE, _proto):
             return
         self.send(95, reqId)
 
@@ -2100,23 +2059,22 @@ class Client:
         ignoreSize,
         miscOptions,
     ):
-        if self.useProtoBuf(_M.REQ_HISTORICAL_TICKS):
+        def _proto():
             from ._proto.historical import createHistoricalTicksRequestProto
 
-            self.sendProto(
-                _M.REQ_HISTORICAL_TICKS,
-                createHistoricalTicksRequestProto(
-                    reqId,
-                    contract,
-                    startDateTime,
-                    endDateTime,
-                    numberOfTicks,
-                    whatToShow,
-                    useRth,
-                    ignoreSize,
-                    miscOptions=miscOptions,
-                ).SerializeToString(),
+            return createHistoricalTicksRequestProto(
+                reqId,
+                contract,
+                startDateTime,
+                endDateTime,
+                numberOfTicks,
+                whatToShow,
+                useRth,
+                ignoreSize,
+                miscOptions=miscOptions,
             )
+
+        if self._tryProto(_M.REQ_HISTORICAL_TICKS, _proto):
             return
         self.send(
             96,
@@ -2133,70 +2091,64 @@ class Client:
         )
 
     def reqTickByTickData(self, reqId, contract, tickType, numberOfTicks, ignoreSize):
-        if self.useProtoBuf(_M.REQ_TICK_BY_TICK_DATA):
+        def _proto():
             from ._proto.market_data import createTickByTickRequestProto
 
-            self.sendProto(
-                _M.REQ_TICK_BY_TICK_DATA,
-                createTickByTickRequestProto(
-                    reqId, contract, tickType, numberOfTicks, ignoreSize
-                ).SerializeToString(),
+            return createTickByTickRequestProto(
+                reqId, contract, tickType, numberOfTicks, ignoreSize
             )
+
+        if self._tryProto(_M.REQ_TICK_BY_TICK_DATA, _proto):
             return
         self.send(97, reqId, contract, tickType, numberOfTicks, ignoreSize)
 
     def cancelTickByTickData(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_TICK_BY_TICK_DATA):
+        def _proto():
             from ._proto.market_data import createCancelTickByTickProto
 
-            self.sendProto(
-                _M.CANCEL_TICK_BY_TICK_DATA,
-                createCancelTickByTickProto(reqId).SerializeToString(),
-            )
+            return createCancelTickByTickProto(reqId)
+
+        if self._tryProto(_M.CANCEL_TICK_BY_TICK_DATA, _proto):
             return
         self.send(98, reqId)
 
     def reqCompletedOrders(self, apiOnly):
-        if self.useProtoBuf(_M.REQ_COMPLETED_ORDERS):
+        def _proto():
             from ._proto.orders import createCompletedOrdersRequestProto
 
-            self.sendProto(
-                _M.REQ_COMPLETED_ORDERS,
-                createCompletedOrdersRequestProto(apiOnly).SerializeToString(),
-            )
+            return createCompletedOrdersRequestProto(apiOnly)
+
+        if self._tryProto(_M.REQ_COMPLETED_ORDERS, _proto):
             return
         self.send(99, apiOnly)
 
     def reqWshMetaData(self, reqId):
-        if self.useProtoBuf(_M.REQ_WSH_META_DATA):
+        def _proto():
             from ._proto.news import createWshMetaDataRequestProto
 
-            self.sendProto(
-                _M.REQ_WSH_META_DATA,
-                createWshMetaDataRequestProto(reqId).SerializeToString(),
-            )
+            return createWshMetaDataRequestProto(reqId)
+
+        if self._tryProto(_M.REQ_WSH_META_DATA, _proto):
             return
         self.send(100, reqId)
 
     def cancelWshMetaData(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_WSH_META_DATA):
+        def _proto():
             from ._proto.news import createCancelWshMetaDataProto
 
-            self.sendProto(
-                _M.CANCEL_WSH_META_DATA,
-                createCancelWshMetaDataProto(reqId).SerializeToString(),
-            )
+            return createCancelWshMetaDataProto(reqId)
+
+        if self._tryProto(_M.CANCEL_WSH_META_DATA, _proto):
             return
         self.send(101, reqId)
 
     def reqWshEventData(self, reqId, data: WshEventData):
-        if self.useProtoBuf(_M.REQ_WSH_EVENT_DATA):
+        def _proto():
             from ._proto.news import createWshEventDataRequestProto
 
-            self.sendProto(
-                _M.REQ_WSH_EVENT_DATA,
-                createWshEventDataRequestProto(reqId, data).SerializeToString(),
-            )
+            return createWshEventDataRequestProto(reqId, data)
+
+        if self._tryProto(_M.REQ_WSH_EVENT_DATA, _proto):
             return
         fields = [102, reqId, data.conId]
         if self.serverVersion() >= 171:
@@ -2211,23 +2163,21 @@ class Client:
         self.send(*fields, makeEmpty=False)
 
     def cancelWshEventData(self, reqId):
-        if self.useProtoBuf(_M.CANCEL_WSH_EVENT_DATA):
+        def _proto():
             from ._proto.news import createCancelWshEventDataProto
 
-            self.sendProto(
-                _M.CANCEL_WSH_EVENT_DATA,
-                createCancelWshEventDataProto(reqId).SerializeToString(),
-            )
+            return createCancelWshEventDataProto(reqId)
+
+        if self._tryProto(_M.CANCEL_WSH_EVENT_DATA, _proto):
             return
         self.send(103, reqId)
 
     def reqUserInfo(self, reqId):
-        if self.useProtoBuf(_M.REQ_USER_INFO):
+        def _proto():
             from ._proto.rest import createUserInfoRequestProto
 
-            self.sendProto(
-                _M.REQ_USER_INFO,
-                createUserInfoRequestProto(reqId).SerializeToString(),
-            )
+            return createUserInfoRequestProto(reqId)
+
+        if self._tryProto(_M.REQ_USER_INFO, _proto):
             return
         self.send(104, reqId)
