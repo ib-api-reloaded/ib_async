@@ -449,11 +449,14 @@ class SubscriptionRegistry:
         ``IB.realtimeBars()``). One indexed lookup per Subscription
         type is fine here — these accessors are not on the per-tick
         hot path.
+
+        Iterates over a snapshot so a concurrent close in a callback
+        downstream of the consumer can't trip ``RuntimeError:
+        dictionary changed size during iteration`` — same defensive
+        pattern as :meth:`pnl_subs` / :meth:`pnl_single_subs`.
         """
 
-        for sub in self._by_reqid.values():
-            if isinstance(sub, sub_class):
-                yield sub
+        return iter([sub for sub in self._by_reqid.values() if isinstance(sub, sub_class)])
 
     def __contains__(self, reqId: int) -> bool:
         return reqId in self._by_reqid
@@ -462,7 +465,11 @@ class SubscriptionRegistry:
         return len(self._by_reqid)
 
     def __iter__(self) -> Iterator[Subscription]:
-        return iter(self._by_reqid.values())
+        # Snapshot so that consumers that don't materialize eagerly
+        # are still safe against a callback closing a subscription
+        # mid-iteration (matches :meth:`subs_of_type` /
+        # :meth:`pnl_subs` defensive style).
+        return iter(list(self._by_reqid.values()))
 
     # ---- bulk lifecycle -------------------------------------------------
 

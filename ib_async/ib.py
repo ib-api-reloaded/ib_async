@@ -307,6 +307,13 @@ class IB:
         self.errorEvent += self._onError
         self.client.apiEnd += self.disconnectedEvent
         self._logger = logging.getLogger("ib_async.ib")
+        # Strong references for fire-and-forget background tasks so the
+        # event loop doesn't garbage-collect them mid-run. Python's
+        # asyncio only keeps a weak ref to a Task from inside the loop;
+        # the *user* must hold a strong ref or the task can be cancelled
+        # silently. See https://docs.python.org/3/library/asyncio-task.html
+        # ("Save a reference to the result of this function").
+        self._backgroundTasks: set[asyncio.Task] = set()
 
     def _createEvents(self):
         self.connectedEvent = Event("connectedEvent")
@@ -429,26 +436,18 @@ class IB:
 
         self._logger.info(status)
 
-        # Tear down wrapper-side state — settle in-flight request
-        # futures, close every Subscription, transition live trades to
-        # Inactive — BEFORE the client closes the socket. Once
-        # ``client.disconnect`` flips ``_apiReady = False``, the async
-        # ``connection_lost`` callback sees ``wasReady=False`` and skips
-        # ``connectionClosed`` itself, so the voluntary path must drive
-        # the teardown explicitly. ``connectionClosed`` calls
-        # ``wrapper.reset()`` at the end, so no separate reset is
-        # required afterwards.
-        #
-        # The try/finally guarantees the socket gets closed even if a
-        # user handler attached to ``trade.statusEvent`` /
-        # ``orderStatusEvent`` raises during the Inactive transition;
-        # otherwise we'd leave the TCP connection half-open and a
-        # subsequent ``IB.disconnect`` would re-enter the entire
-        # teardown.
-        try:
-            self.wrapper.connectionClosed()
-        finally:
-            self.client.disconnect()
+        # ``client.disconnect`` is the single voluntary teardown path:
+        # it snapshots ``wasReady`` before flipping ``connState`` to
+        # DISCONNECTED, closes the socket, then calls
+        # ``wrapper.connectionClosed`` (which fails in-flight requests,
+        # closes Subscriptions, transitions live trades to Inactive, and
+        # finally calls ``wrapper.reset``). Calling
+        # ``wrapper.connectionClosed`` here as well would double-fire
+        # ``globalErrorEvent`` and double-reset the wrapper because
+        # ``client.disconnect`` reads ``wasReady`` BEFORE the wrapper
+        # state is touched, so the second invocation still sees the
+        # connection as ready and re-runs the teardown.
+        self.client.disconnect()
 
         return status
 
@@ -466,7 +465,16 @@ class IB:
             #        account-summary feed is restarted regardless.
             # Either way, resync the cached account summary so downstream
             # consumers see a fresh snapshot. Mirrors IBKR sample behavior.
-            asyncio.ensure_future(self.reqAccountSummaryAsync())
+            #
+            # Store a strong reference to the spawned task in
+            # ``_backgroundTasks``: asyncio holds only a weak ref from
+            # the loop, so a bare ``ensure_future`` whose handle is
+            # discarded can be garbage-collected mid-run and the resync
+            # silently never happens. The done-callback removes the
+            # task once it settles so the set doesn't grow unbounded.
+            task = asyncio.ensure_future(self.reqAccountSummaryAsync())
+            self._backgroundTasks.add(task)
+            task.add_done_callback(self._backgroundTasks.discard)
 
     run = staticmethod(util.run)
     schedule = staticmethod(util.schedule)

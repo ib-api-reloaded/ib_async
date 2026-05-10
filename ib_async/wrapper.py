@@ -1954,7 +1954,7 @@ class Wrapper:
                 status = trade.orderStatus.status = OrderStatus.ValidationError
                 logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)
                 trade.log.append(logEntry)
-                self._logger.warning(f"IBKR API validation warning: {trade}")
+                self._logger.warning(f"IBKR API validation warning: {msg}")
                 self.ib.orderStatusEvent.emit(trade)
                 trade.statusEvent.emit(trade)
             else:
@@ -1984,7 +1984,7 @@ class Wrapper:
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)
                     trade.log.append(logEntry)
-                    self._logger.warning(f"Canceled order: {trade}")
+                    self._logger.warning(f"Canceled order [{trade.order.orderId}]: {msg}")
                     self.ib.orderStatusEvent.emit(trade)
                     trade.statusEvent.emit(trade)
                     trade.cancelledEvent.emit(trade)
