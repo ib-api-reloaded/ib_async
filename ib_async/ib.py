@@ -2425,12 +2425,17 @@ class IB:
             subs.append(sub)
             self.client.reqMktData(reqId, contract, "", True, regulatorySnapshot, [])
 
-        await asyncio.gather(*futures)
-
-        # IB auto-completes snapshots; close locally without sending a
-        # cancel just to unregister from the SubscriptionRegistry.
-        for sub in subs:
-            sub.close(send_cancel=False)
+        try:
+            await asyncio.gather(*futures)
+        finally:
+            # IB auto-completes snapshots; close locally without sending a
+            # cancel just to unregister from the SubscriptionRegistry.
+            # ``finally`` so a per-future error (RaiseRequestErrors=True)
+            # or a cancellation does not leak the other in-flight
+            # snapshot subs in the registry's reqId / market-data
+            # indexes. ``close`` is idempotent on already-closed subs.
+            for sub in subs:
+                sub.close(send_cancel=False)
 
         return tickers
 
@@ -2931,22 +2936,42 @@ class IB:
         return future
 
     def cancelHeadTimeStamp(self, reqId: int):
-        """Cancel an in-flight reqHeadTimeStamp."""
+        """Cancel an in-flight reqHeadTimeStamp.
+
+        Sends the wire cancel and settles the in-flight registry entry
+        so the awaiting ``reqHeadTimeStampAsync`` future raises
+        ``CancelledError`` instead of hanging forever (TWS does not
+        send any End frame after a head-timestamp cancel).
+        """
         self.client.cancelHeadTimeStamp(reqId)
+        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelHeadTimeStamp")
 
     def cancelHistogramData(self, reqId: int):
-        """Cancel an in-flight reqHistogramData."""
+        """Cancel an in-flight reqHistogramData.
+
+        Settles the registry future so the awaiter wakes; see
+        :meth:`cancelHeadTimeStamp` for the rationale.
+        """
         self.client.cancelHistogramData(reqId)
+        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelHistogramData")
 
     def cancelContractData(self, reqId: int):
         """Cancel an in-flight reqContractDetails. Protobuf-only — TWS / IBG
-        server >= 215 (MIN_SERVER_VER_CANCEL_CONTRACT_DATA)."""
+        server >= 215 (MIN_SERVER_VER_CANCEL_CONTRACT_DATA).
+
+        Settles the registry future so the awaiter wakes.
+        """
         self.client.cancelContractData(reqId)
+        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelContractData")
 
     def cancelHistoricalTicks(self, reqId: int):
         """Cancel an in-flight reqHistoricalTicks. Protobuf-only —
-        same gate as cancelContractData (215)."""
+        same gate as cancelContractData (215).
+
+        Settles the registry future so the awaiter wakes.
+        """
         self.client.cancelHistoricalTicks(reqId)
+        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelHistoricalTicks")
 
     def queryDisplayGroups(self, reqId: int):
         """Query the TWS display-group list. Server replies via

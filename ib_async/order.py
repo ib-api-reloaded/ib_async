@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import ClassVar, NamedTuple
 
 from eventkit import Event
@@ -217,8 +217,16 @@ class Order:
     def __post_init__(self) -> None:
         for name in self._DECIMAL_FIELDS:
             v = getattr(self, name)
-            if v is not None and not isinstance(v, Decimal):
-                setattr(self, name, _toDecimal(v))
+            if v is None:
+                continue
+            # Always route through ``_toDecimal`` — even pre-coerced
+            # ``Decimal`` inputs — so a stray ``Decimal('NaN')`` /
+            # ``Decimal('Infinity')`` from user code lands as ``None``
+            # instead of as a silently-truthy ``Decimal('NaN')`` that
+            # breaks every downstream ``if order.lmtPrice:`` guard and
+            # corrupts ``_decimalToWireString`` to emit ``"NaN"`` on
+            # the wire.
+            setattr(self, name, _toDecimal(v))
 
 
 def _toDecimal(value: Decimal | float | int | str | None) -> Decimal | None:
@@ -227,13 +235,26 @@ def _toDecimal(value: Decimal | float | int | str | None) -> Decimal | None:
     Goes through ``str()`` for floats so binary-float imprecision (e.g.
     ``Decimal(0.1) → Decimal('0.1000000000000000055...')``) doesn't
     contaminate user-provided fractional-share quantities or option
-    prices. ``None`` and ``""`` round-trip as ``None``.
+    prices. ``None`` / ``""`` / ``float('nan')`` / ``float('inf')`` /
+    ``Decimal('NaN')`` / ``Decimal('Infinity')`` all round-trip to
+    ``None`` so the ``Decimal | None`` field semantics hold: ``None``
+    is the unset sentinel and ``if order.lmtPrice:`` checks stay
+    correct, instead of a silently-truthy ``Decimal('NaN')`` slipping
+    past the guard and corrupting downstream wire writes.
     """
     if value is None or value == "":
         return None
     if isinstance(value, Decimal):
+        if value.is_nan() or value.is_infinite():
+            return None
         return value
-    return Decimal(str(value))
+    try:
+        result = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    if result.is_nan() or result.is_infinite():
+        return None
+    return result
 
 
 class LimitOrder(Order):
@@ -471,6 +492,27 @@ class OrderState:
             initMarginAfter=transformer(self.initMarginAfter),
             maintMarginAfter=transformer(self.maintMarginAfter),
             equityWithLoanAfter=transformer(self.equityWithLoanAfter),
+            # OutsideRTH variants — same str-typed margin shape, populated
+            # from the wire alongside the non-OutsideRTH fields. Without
+            # transforming them ``state.numeric()`` and ``.formatted()``
+            # would silently leave them as raw strings while their
+            # non-OutsideRTH siblings were converted, breaking callers
+            # iterating margin fields uniformly.
+            initMarginBeforeOutsideRTH=transformer(self.initMarginBeforeOutsideRTH),
+            maintMarginBeforeOutsideRTH=transformer(self.maintMarginBeforeOutsideRTH),
+            equityWithLoanBeforeOutsideRTH=transformer(
+                self.equityWithLoanBeforeOutsideRTH
+            ),
+            initMarginChangeOutsideRTH=transformer(self.initMarginChangeOutsideRTH),
+            maintMarginChangeOutsideRTH=transformer(self.maintMarginChangeOutsideRTH),
+            equityWithLoanChangeOutsideRTH=transformer(
+                self.equityWithLoanChangeOutsideRTH
+            ),
+            initMarginAfterOutsideRTH=transformer(self.initMarginAfterOutsideRTH),
+            maintMarginAfterOutsideRTH=transformer(self.maintMarginAfterOutsideRTH),
+            equityWithLoanAfterOutsideRTH=transformer(
+                self.equityWithLoanAfterOutsideRTH
+            ),
             commission=transformer(self.commission),
             minCommission=transformer(self.minCommission),
             maxCommission=transformer(self.maxCommission),
@@ -525,6 +567,15 @@ class OrderStateNumeric(OrderState):
     initMarginAfter: float = float("nan")  # type: ignore
     maintMarginAfter: float = float("nan")  # type: ignore
     equityWithLoanAfter: float = float("nan")  # type: ignore
+    initMarginBeforeOutsideRTH: float = float("nan")  # type: ignore
+    maintMarginBeforeOutsideRTH: float = float("nan")  # type: ignore
+    equityWithLoanBeforeOutsideRTH: float = float("nan")  # type: ignore
+    initMarginChangeOutsideRTH: float = float("nan")  # type: ignore
+    maintMarginChangeOutsideRTH: float = float("nan")  # type: ignore
+    equityWithLoanChangeOutsideRTH: float = float("nan")  # type: ignore
+    initMarginAfterOutsideRTH: float = float("nan")  # type: ignore
+    maintMarginAfterOutsideRTH: float = float("nan")  # type: ignore
+    equityWithLoanAfterOutsideRTH: float = float("nan")  # type: ignore
     commission: float | None = None  # type: ignore[assignment]
     minCommission: float | None = None  # type: ignore[assignment]
     maxCommission: float | None = None  # type: ignore[assignment]

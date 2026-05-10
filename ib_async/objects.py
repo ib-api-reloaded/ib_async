@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from eventkit import Event
 
+from ._proto.safe import safe_decimal
 from .contract import Contract, ScanData, TagValue
 from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER
 
@@ -398,17 +399,18 @@ class AccountValue:
 
         Returns ``None`` for non-monetary tags (e.g. ``AccountType``,
         ``Currency``) and for monetary tags whose wire value can't be
-        parsed. Never raises.
+        parsed — including IBKR's UNSET_DOUBLE / UNSET_INTEGER /
+        UNSET_LONG sentinel strings, empty values, ``"NaN"`` and
+        ``"Infinity"``. Routed through ``safe_decimal`` so the sentinel
+        guard list stays in lockstep with every other Decimal-coercion
+        site (``decoder.parse``, ``_proto/*`` converters); a divergent
+        ad-hoc parse here previously surfaced a fake 1.8e308 / 2.1B
+        ``NetLiquidation`` whenever IBKR shipped the unset sentinel.
+        Never raises.
         """
         if self.tag not in MONETARY_ACCOUNT_VALUE_TAGS:
             return None
-        try:
-            result = Decimal(self.value)
-        except (InvalidOperation, ValueError, TypeError):
-            return None
-        if result.is_nan() or result.is_infinite():
-            return None
-        return result
+        return safe_decimal(self.value)
 
 
 # Tick / bar / depth records — slotted frozen dataclasses for v3.0.
