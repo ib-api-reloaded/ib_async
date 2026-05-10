@@ -295,7 +295,7 @@ def test_position_args_helper_returns_wrapper_args_in_order():
     args = createPositionArgs(proto)
     assert args.account == "DU1"
     assert args.contract.symbol == "AAPL"
-    assert args.position == Decimal("100")
+    assert args.posSize == Decimal("100")
     assert args.avgCost == Decimal("150.25")
 
 
@@ -417,7 +417,7 @@ def test_update_portfolio_args_helper_returns_8_fields():
         accountName="DU1",
     )
     args = createUpdatePortfolioArgs(proto)
-    assert args.position == Decimal("100")
+    assert args.posSize == Decimal("100")
     assert args.marketPrice == Decimal("150.25")
     assert args.account == "DU1"
 

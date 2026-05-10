@@ -818,7 +818,7 @@ class Decoder:
         a = createUpdatePortfolioArgs(proto)
         self.wrapper.updatePortfolio(
             a.contract,
-            a.position,
+            a.posSize,
             a.marketPrice,
             a.marketValue,
             a.averageCost,
@@ -844,7 +844,7 @@ class Decoder:
         from ._proto.accounts import createPositionArgs
 
         a = createPositionArgs(proto)
-        self.wrapper.position(a.account, a.contract, a.position, a.avgCost)
+        self.wrapper.position(a.account, a.contract, a.posSize, a.avgCost)
 
     def _protoPositionEnd(self, proto: Any) -> None:
         self.wrapper.positionEnd()
