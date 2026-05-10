@@ -44,19 +44,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .._pb import (
+    ApiConfig_pb2,
     CalculateImpliedVolatilityRequest_pb2,
     CalculateOptionPriceRequest_pb2,
     CancelCalculateImpliedVolatility_pb2,
     CancelCalculateOptionPrice_pb2,
+    ConfigRequest_pb2,
     CurrentTime_pb2,
     CurrentTimeInMillis_pb2,
     CurrentTimeInMillisRequest_pb2,
     CurrentTimeRequest_pb2,
     ExerciseOptionsRequest_pb2,
+    LockAndExitConfig_pb2,
     MarketRule_pb2,
     MarketRuleRequest_pb2,
     MatchingSymbolsRequest_pb2,
+    MessageConfig_pb2,
     NextValidId_pb2,
+    OrdersConfig_pb2,
     PriceIncrement_pb2,
     SecDefOptParameter_pb2,
     SecDefOptParameterEnd_pb2,
@@ -70,6 +75,8 @@ from .._pb import (
     SoftDollarTiersRequest_pb2,
     StartApiRequest_pb2,
     SymbolSamples_pb2,
+    UpdateConfigRequest_pb2,
+    UpdateConfigWarning_pb2,
     UserInfo_pb2,
     UserInfoRequest_pb2,
 )
@@ -499,4 +506,66 @@ def createCancelCalculateOptionPriceProto(
 ) -> CancelCalculateOptionPrice_pb2.CancelCalculateOptionPrice:
     proto = CancelCalculateOptionPrice_pb2.CancelCalculateOptionPrice()
     proto.reqId = reqId
+    return proto
+
+
+# ---------------------------------------------------------------------------
+# ConfigRequest / UpdateConfigRequest — proto-only API config messages.
+#
+# These two have no binary-protocol counterpart; the wire only carries
+# them as protobuf payloads. The matching outbound msgIds (108
+# ``REQ_CONFIG`` and 109 ``UPDATE_CONFIG``) are intentionally absent
+# from ``PROTOBUF_MSG_IDS`` so the gating-table check is bypassed
+# (``Client.useProtoBuf`` is not consulted on the proto-only path).
+# ---------------------------------------------------------------------------
+
+
+def createConfigRequestProto(reqId: int) -> ConfigRequest_pb2.ConfigRequest:
+    """Build a ``ConfigRequest`` proto carrying only ``reqId``. Mirrors
+    IBKR's ``client.py:reqConfigProtoBuf`` send shape — the request
+    body is just an int identifier; the full config payload comes
+    back on the response side.
+    """
+    proto = ConfigRequest_pb2.ConfigRequest()
+    proto.reqId = reqId
+    return proto
+
+
+def createUpdateConfigRequestProto(
+    reqId: int,
+    lockAndExit: LockAndExitConfig_pb2.LockAndExitConfig | None = None,
+    messages: list[MessageConfig_pb2.MessageConfig] | None = None,
+    api: ApiConfig_pb2.ApiConfig | None = None,
+    orders: OrdersConfig_pb2.OrdersConfig | None = None,
+    acceptedWarnings: list[UpdateConfigWarning_pb2.UpdateConfigWarning] | None = None,
+    resetAPIOrderSequence: bool | None = None,
+) -> UpdateConfigRequest_pb2.UpdateConfigRequest:
+    """Build an ``UpdateConfigRequest`` proto.
+
+    Mirrors IBKR's ``client.py:updateConfigProtoBuf`` send shape — the
+    request carries the full nested config family (lock-and-exit /
+    messages / api / orders) plus a list of warnings the user has
+    accepted and an opt-in flag to reset the API order sequence.
+
+    All composite sub-messages are optional; when the caller passes
+    ``None`` the field stays unset on the wire so older TWS builds
+    that don't carry that part of the schema parse cleanly. The
+    ``resetAPIOrderSequence`` bool is also optional — proto3 default
+    skipping would otherwise make ``False`` indistinguishable from
+    "user didn't say".
+    """
+    proto = UpdateConfigRequest_pb2.UpdateConfigRequest()
+    proto.reqId = reqId
+    if lockAndExit is not None:
+        proto.lockAndExit.CopyFrom(lockAndExit)
+    if messages:
+        proto.messages.extend(messages)
+    if api is not None:
+        proto.api.CopyFrom(api)
+    if orders is not None:
+        proto.orders.CopyFrom(orders)
+    if acceptedWarnings:
+        proto.acceptedWarnings.extend(acceptedWarnings)
+    if resetAPIOrderSequence is not None:
+        proto.resetAPIOrderSequence = resetAPIOrderSequence
     return proto

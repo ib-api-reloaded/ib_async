@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .._pb import (
+    CancelContractData_pb2,
     CancelHeadTimestamp_pb2,
     CancelHistogramData_pb2,
     CancelHistoricalData_pb2,
@@ -576,5 +577,17 @@ def createCancelHistoricalTicksProto(
     reqId: int,
 ) -> CancelHistoricalTicks_pb2.CancelHistoricalTicks:
     proto = CancelHistoricalTicks_pb2.CancelHistoricalTicks()
+    proto.reqId = reqId
+    return proto
+
+
+def createCancelContractDataProto(
+    reqId: int,
+) -> CancelContractData_pb2.CancelContractData:
+    """Build a CancelContractData proto. Proto-only message family —
+    the binary path has no equivalent. Mirrors IBKR's reference
+    ``client_utils.createCancelContractDataProto``.
+    """
+    proto = CancelContractData_pb2.CancelContractData()
     proto.reqId = reqId
     return proto

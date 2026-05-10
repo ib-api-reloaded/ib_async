@@ -22,6 +22,7 @@ from decimal import Decimal
 
 from .._pb import (
     AllOpenOrdersRequest_pb2,
+    AttachedOrders_pb2,
     AutoOpenOrdersRequest_pb2,
     CancelOrderRequest_pb2,
     CommissionAndFeesReport_pb2,
@@ -1286,6 +1287,30 @@ def createOpenOrder(
 # --- Envelope: PlaceOrderRequest ----------------------------------------
 
 
+def _createAttachedOrdersProto(order: Order) -> AttachedOrders_pb2.AttachedOrders:
+    """Build the AttachedOrders sub-message from the four cross-reference
+    fields on the domain Order (``slOrderId`` / ``slOrderType`` /
+    ``ptOrderId`` / ``ptOrderType``).
+
+    Mirrors IBKR's ``client_utils.createAttachedOrdersProto``. The wire
+    schema places these fields on a separate ``AttachedOrders`` message
+    that the ``PlaceOrderRequest`` envelope embeds — they are NOT on
+    ``Order_pb2.Order`` itself. Each field is gated by the standard
+    ``isValidIntValue`` / non-empty-string discipline so unset domain
+    defaults do not write sentinel values to the wire.
+    """
+    proto = AttachedOrders_pb2.AttachedOrders()
+    if _isValidInt(order.slOrderId):
+        proto.slOrderId = order.slOrderId
+    if order.slOrderType:
+        proto.slOrderType = order.slOrderType
+    if _isValidInt(order.ptOrderId):
+        proto.ptOrderId = order.ptOrderId
+    if order.ptOrderType:
+        proto.ptOrderType = order.ptOrderType
+    return proto
+
+
 def createPlaceOrderRequestProto(
     orderId: int, contract: Contract, order: Order
 ) -> PlaceOrderRequest_pb2.PlaceOrderRequest:
@@ -1295,11 +1320,17 @@ def createPlaceOrderRequestProto(
     caller can place the order under a freshly-allocated id without
     having to mutate the source Order. ``order.clientId`` round-trips
     intact via ``createOrderProto``.
+
+    Attached-order cross-references (``slOrderId`` / ``slOrderType`` /
+    ``ptOrderId`` / ``ptOrderType``) ride on the ``attachedOrders``
+    sub-message — IBKR's wire schema places them off ``Order`` rather
+    than on it.
     """
     proto = PlaceOrderRequest_pb2.PlaceOrderRequest()
     proto.orderId = orderId
     proto.contract.CopyFrom(createContractProto(contract))
     proto.order.CopyFrom(createOrderProto(order))
+    proto.attachedOrders.CopyFrom(_createAttachedOrdersProto(order))
     return proto
 
 
@@ -1395,6 +1426,15 @@ def createExecutionFilterProto(
         proto.exchange = execFilter.exchange
     if execFilter.side:
         proto.side = execFilter.side
+    # ``lastNDays`` / ``specificDates`` ship past
+    # ``MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS`` (200). The
+    # gating is the caller's responsibility (mirrors IBKR's reference);
+    # the encoder unconditionally writes when the domain field carries
+    # a non-sentinel value.
+    if _isValidInt(execFilter.lastNDays):
+        proto.lastNDays = execFilter.lastNDays
+    if execFilter.specificDates:
+        proto.specificDates.extend(execFilter.specificDates)
     return proto
 
 

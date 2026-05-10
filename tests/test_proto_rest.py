@@ -25,15 +25,18 @@ Coverage strategy:
 from __future__ import annotations
 
 from ib_async._pb import (
+    ApiConfig_pb2,
     CalculateImpliedVolatilityRequest_pb2,
     CalculateOptionPriceRequest_pb2,
     CancelCalculateImpliedVolatility_pb2,
     CancelCalculateOptionPrice_pb2,
+    ConfigRequest_pb2,
     CurrentTime_pb2,
     CurrentTimeInMillis_pb2,
     CurrentTimeInMillisRequest_pb2,
     CurrentTimeRequest_pb2,
     ExerciseOptionsRequest_pb2,
+    LockAndExitConfig_pb2,
     MarketRule_pb2,
     MarketRuleRequest_pb2,
     MatchingSymbolsRequest_pb2,
@@ -51,6 +54,7 @@ from ib_async._pb import (
     SoftDollarTiersRequest_pb2,
     StartApiRequest_pb2,
     SymbolSamples_pb2,
+    UpdateConfigRequest_pb2,
     UserInfo_pb2,
     UserInfoRequest_pb2,
 )
@@ -59,6 +63,7 @@ from ib_async._proto.rest import (
     createCalculateOptionPriceRequestProto,
     createCancelCalculateImpliedVolatilityProto,
     createCancelCalculateOptionPriceProto,
+    createConfigRequestProto,
     createCurrentTimeInMillisMillis,
     createCurrentTimeInMillisRequestProto,
     createCurrentTimeRequestProto,
@@ -81,6 +86,7 @@ from ib_async._proto.rest import (
     createSoftDollarTiersRequestProto,
     createStartApiRequestProto,
     createSymbolSamplesArgs,
+    createUpdateConfigRequestProto,
     createUserInfoArgs,
     createUserInfoRequestProto,
 )
@@ -559,3 +565,53 @@ def test_cancel_calculate_option_price_round_trip():
     parsed = CancelCalculateOptionPrice_pb2.CancelCalculateOptionPrice()
     parsed.ParseFromString(raw)
     assert parsed.reqId == 11
+
+
+# ---------------------------------------------------------------------------
+# ConfigRequest / UpdateConfigRequest — proto-only API config family.
+# ---------------------------------------------------------------------------
+
+
+def test_config_request_proto_round_trip():
+    raw = createConfigRequestProto(reqId=42).SerializeToString()
+    parsed = ConfigRequest_pb2.ConfigRequest()
+    parsed.ParseFromString(raw)
+    assert parsed.reqId == 42
+
+
+def test_update_config_request_proto_minimal_round_trip():
+    """Caller passes only ``reqId``; all composite sub-messages remain
+    unset — older TWS builds without the corresponding schema fields
+    must still parse the body cleanly."""
+    raw = createUpdateConfigRequestProto(reqId=7).SerializeToString()
+    parsed = UpdateConfigRequest_pb2.UpdateConfigRequest()
+    parsed.ParseFromString(raw)
+    assert parsed.reqId == 7
+    assert not parsed.HasField("lockAndExit")
+    assert not parsed.HasField("api")
+    assert not parsed.HasField("orders")
+    assert len(parsed.messages) == 0
+    assert len(parsed.acceptedWarnings) == 0
+    assert not parsed.HasField("resetAPIOrderSequence")
+
+
+def test_update_config_request_proto_full_round_trip():
+    """Caller fills every composite sub-message; round-trip must
+    preserve nested fields and the ``resetAPIOrderSequence`` opt-in
+    bool (proto3 default-skipping would otherwise drop ``False``)."""
+    lock = LockAndExitConfig_pb2.LockAndExitConfig()
+    api = ApiConfig_pb2.ApiConfig()
+    proto = createUpdateConfigRequestProto(
+        reqId=99,
+        lockAndExit=lock,
+        api=api,
+        resetAPIOrderSequence=True,
+    )
+    raw = proto.SerializeToString()
+    parsed = UpdateConfigRequest_pb2.UpdateConfigRequest()
+    parsed.ParseFromString(raw)
+    assert parsed.reqId == 99
+    assert parsed.HasField("lockAndExit")
+    assert parsed.HasField("api")
+    assert parsed.HasField("resetAPIOrderSequence")
+    assert parsed.resetAPIOrderSequence is True

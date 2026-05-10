@@ -102,6 +102,8 @@ class ExecutionFilter:
     secType: str = ""
     exchange: str = ""
     side: str = ""
+    lastNDays: int = UNSET_INTEGER
+    specificDates: list[int] = field(default_factory=list)
 
 
 @dataclass
