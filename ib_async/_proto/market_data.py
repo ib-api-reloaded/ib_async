@@ -76,6 +76,7 @@ from ..objects import (
     TickAttribBidAsk,
     TickAttribLast,
 )
+from ..util import UNSET_INTEGER
 from .contracts import createContractProto
 from .safe import fill_tag_value_map, wire_size_to_float
 
@@ -575,6 +576,12 @@ def createUpdateMktDepthL2Args(
 def createDepthMktDataDescription(
     proto: DepthMarketDataDescription_pb2.DepthMarketDataDescription,
 ) -> DepthMktDataDescription:
+    # Wire ``0`` (and IBKR's ``UNSET_INTEGER`` sentinel) collapse to
+    # ``None`` so user code gating on ``if desc.aggGroup:`` stays falsy
+    # without surfacing the sentinel's magic int.
+    aggGroup: int | None = None
+    if proto.HasField("aggGroup") and proto.aggGroup not in (0, UNSET_INTEGER):
+        aggGroup = proto.aggGroup
     return DepthMktDataDescription(
         exchange=proto.exchange if proto.HasField("exchange") else "",
         secType=proto.secType if proto.HasField("secType") else "",
@@ -582,7 +589,7 @@ def createDepthMktDataDescription(
         serviceDataType=proto.serviceDataType
         if proto.HasField("serviceDataType")
         else "",
-        aggGroup=proto.aggGroup if proto.HasField("aggGroup") else 0,
+        aggGroup=aggGroup,
     )
 
 

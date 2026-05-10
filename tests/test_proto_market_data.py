@@ -390,7 +390,10 @@ def test_depth_mkt_data_description_empty():
         DepthMarketDataDescription_pb2.DepthMarketDataDescription()
     )
     assert d.exchange == ""
-    assert d.aggGroup == 0
+    # ``aggGroup`` is ``int | None``: wire ``0`` (and IBKR's UNSET_INTEGER
+    # sentinel) collapse to ``None`` so user code's truthy gate stays
+    # falsy without the sentinel leaking.
+    assert d.aggGroup is None
 
 
 def test_depth_mkt_data_description_full_round_trip():

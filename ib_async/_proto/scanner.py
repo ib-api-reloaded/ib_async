@@ -55,23 +55,9 @@ from .._pb import (
 )
 from ..contract import Contract, ContractDetails, TagValue
 from ..objects import ScannerSubscription
-from ..util import UNSET_DOUBLE, UNSET_INTEGER
 from .contracts import createContract, createContractProto
+from .orders import _isValidInt
 from .safe import fill_tag_value_map, safe_decimal
-
-
-def _isValidFloat(value: float) -> bool:
-    """IBKR's ``isValidFloatValue`` — accept anything except the
-    ``UNSET_DOUBLE`` sentinel. Used to gate scanner numeric filters so
-    the wire stays unset when the user didn't provide a filter."""
-    return value != UNSET_DOUBLE
-
-
-def _isValidInt(value: int) -> bool:
-    """IBKR's ``isValidIntValue`` — accept anything except the
-    ``UNSET_INTEGER`` sentinel."""
-    return value != UNSET_INTEGER
-
 
 # ---------------------------------------------------------------------------
 # Args dataclasses (slotted, frozen — operator-mandated, not tuples)
@@ -339,14 +325,16 @@ def createScannerSubscriptionProto(
     """Translate the ~21-field domain ``ScannerSubscription`` to its proto.
 
     The numeric filter fields (``abovePrice`` / ``belowPrice`` /
-    ``marketCapAbove`` etc.) default to ``UNSET_DOUBLE`` /
-    ``UNSET_INTEGER`` on the domain dataclass — writing those sentinels
-    straight to the wire would have IBKR's server interpret e.g.
-    ``abovePrice=1.79e308`` as a real filter and reject the
-    subscription or return zero results. Each numeric is gated through
-    ``_isValidFloat`` / ``_isValidInt`` so the wire field stays unset
-    when the user didn't provide a filter, matching the binary path's
-    ``make_field_handle_empty`` behaviour.
+    ``marketCapAbove`` etc.) default to ``None`` on the domain
+    dataclass — the universal unset marker. ``None`` skips the wire
+    write entirely so the proto field stays unset when the user didn't
+    provide a filter; mirrors IBKR's ``isValidFloatValue`` /
+    ``isValidIntValue`` gating. ``Decimal``-typed filters are coerced
+    through ``float()`` for the proto's wire ``double`` slot.
+
+    ``numberOfRows`` keeps its legacy ``int = -1`` default (an explicit
+    "all rows" marker the IBKR server understands); the ``_isValidInt``
+    gate would also accept ``-1`` so the write goes through unchanged.
 
     Both option lists are TagValue trailers IBKR's reference encoder
     writes verbatim into the proto's ``map<string, string>`` fields. The
@@ -364,16 +352,16 @@ def createScannerSubscriptionProto(
         proto.locationCode = sub.locationCode
     if sub.scanCode:
         proto.scanCode = sub.scanCode
-    if _isValidFloat(sub.abovePrice):
-        proto.abovePrice = sub.abovePrice
-    if _isValidFloat(sub.belowPrice):
-        proto.belowPrice = sub.belowPrice
-    if _isValidInt(sub.aboveVolume):
+    if sub.abovePrice is not None:
+        proto.abovePrice = float(sub.abovePrice)
+    if sub.belowPrice is not None:
+        proto.belowPrice = float(sub.belowPrice)
+    if sub.aboveVolume is not None:
         proto.aboveVolume = sub.aboveVolume
-    if _isValidFloat(sub.marketCapAbove):
-        proto.marketCapAbove = sub.marketCapAbove
-    if _isValidFloat(sub.marketCapBelow):
-        proto.marketCapBelow = sub.marketCapBelow
+    if sub.marketCapAbove is not None:
+        proto.marketCapAbove = float(sub.marketCapAbove)
+    if sub.marketCapBelow is not None:
+        proto.marketCapBelow = float(sub.marketCapBelow)
     if sub.moodyRatingAbove:
         proto.moodyRatingAbove = sub.moodyRatingAbove
     if sub.moodyRatingBelow:
@@ -386,13 +374,13 @@ def createScannerSubscriptionProto(
         proto.maturityDateAbove = sub.maturityDateAbove
     if sub.maturityDateBelow:
         proto.maturityDateBelow = sub.maturityDateBelow
-    if _isValidFloat(sub.couponRateAbove):
-        proto.couponRateAbove = sub.couponRateAbove
-    if _isValidFloat(sub.couponRateBelow):
-        proto.couponRateBelow = sub.couponRateBelow
+    if sub.couponRateAbove is not None:
+        proto.couponRateAbove = float(sub.couponRateAbove)
+    if sub.couponRateBelow is not None:
+        proto.couponRateBelow = float(sub.couponRateBelow)
     if sub.excludeConvertible:
         proto.excludeConvertible = sub.excludeConvertible
-    if _isValidInt(sub.averageOptionVolumeAbove):
+    if sub.averageOptionVolumeAbove is not None:
         proto.averageOptionVolumeAbove = sub.averageOptionVolumeAbove
     if sub.scannerSettingPairs:
         proto.scannerSettingPairs = sub.scannerSettingPairs

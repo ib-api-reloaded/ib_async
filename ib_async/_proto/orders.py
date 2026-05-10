@@ -1439,12 +1439,12 @@ def createCancelOrderRequestProto(
     orderId: int,
     manualOrderCancelTime: str = "",
     extOperator: str = "",
-    manualOrderIndicator: int = UNSET_INTEGER,
+    manualOrderIndicator: int | None = None,
 ) -> CancelOrderRequest_pb2.CancelOrderRequest:
     """Encode a CancelOrderRequest including CME-tagging fields.
 
-    ``extOperator`` / ``manualOrderIndicator`` are skipped at the
-    UNSET sentinel; ``manualOrderCancelTime`` skipped on empty string.
+    ``extOperator`` / ``manualOrderIndicator`` skipped on ``None``;
+    ``manualOrderCancelTime`` skipped on empty string.
     """
     proto = CancelOrderRequest_pb2.CancelOrderRequest()
     proto.orderId = orderId
@@ -1453,7 +1453,7 @@ def createCancelOrderRequestProto(
         cancel.manualOrderCancelTime = manualOrderCancelTime
     if extOperator:
         cancel.extOperator = extOperator
-    if _isValidInt(manualOrderIndicator):
+    if manualOrderIndicator is not None:
         cancel.manualOrderIndicator = manualOrderIndicator
     proto.orderCancel.CopyFrom(cancel)
     return proto
@@ -1489,7 +1489,7 @@ def createCompletedOrdersRequestProto(
 def createGlobalCancelRequestProto(
     manualOrderCancelTime: str = "",
     extOperator: str = "",
-    manualOrderIndicator: int = UNSET_INTEGER,
+    manualOrderIndicator: int | None = None,
 ) -> GlobalCancelRequest_pb2.GlobalCancelRequest:
     """Encode a GlobalCancelRequest. CME-tagging fields land on the
     nested ``orderCancel`` envelope, matching IBKR's reference shape."""
@@ -1498,7 +1498,7 @@ def createGlobalCancelRequestProto(
         proto.orderCancel.manualOrderCancelTime = manualOrderCancelTime
     if extOperator:
         proto.orderCancel.extOperator = extOperator
-    if _isValidInt(manualOrderIndicator):
+    if manualOrderIndicator is not None:
         proto.orderCancel.manualOrderIndicator = manualOrderIndicator
     return proto
 
@@ -1529,7 +1529,7 @@ def createExecutionFilterProto(
     # gating is the caller's responsibility (mirrors IBKR's reference);
     # the encoder unconditionally writes when the domain field carries
     # a non-sentinel value.
-    if _isValidInt(execFilter.lastNDays):
+    if execFilter.lastNDays is not None:
         proto.lastNDays = execFilter.lastNDays
     if execFilter.specificDates:
         proto.specificDates.extend(execFilter.specificDates)

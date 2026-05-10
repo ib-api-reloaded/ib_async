@@ -18,9 +18,9 @@ Wire-shape notes:
   spec). The wrapper signature names the argument ``timeStamp`` (camel
   case) — args dataclass uses the wrapper's spelling.
 * ``WshEventDataRequest`` is built from a ``WshEventData`` domain
-  dataclass on the send side; ``UNSET_INTEGER`` from the domain object
-  is written verbatim to the proto when the user did not set a value
-  (mirrors the binary-path encoder behavior).
+  dataclass on the send side; ``None`` from the domain object skips the
+  proto write entirely (mirrors IBKR's ``isValidIntValue`` gating from
+  ``client_utils.createWshEventDataRequestProto``).
 """
 
 from __future__ import annotations
@@ -55,7 +55,6 @@ from ..objects import (
     NewsTick,
     WshEventData,
 )
-from ..util import UNSET_INTEGER
 from .safe import fill_tag_value_map
 
 # ---------------------------------------------------------------------------
@@ -397,12 +396,14 @@ def createWshEventDataRequestProto(
     """
     proto = WshEventDataRequest_pb2.WshEventDataRequest()
     proto.reqId = reqId
-    # ``conId`` and ``totalLimit`` default to ``UNSET_INTEGER`` on the
-    # domain ``WshEventData`` dataclass. Writing the sentinel verbatim
-    # would have IBKR's server interpret e.g. ``conId=2147483647`` as a
-    # real contract id and reject the subscription. Mirror IBKR's
-    # ``isValidIntValue`` gating from ``client_utils.createWshEventDataRequestProto``.
-    if data.conId != UNSET_INTEGER:
+    # ``conId`` and ``totalLimit`` default to ``None`` on the domain
+    # ``WshEventData`` dataclass — the universal unset marker. Writing
+    # the field with no user-supplied value would have IBKR's server
+    # interpret a sentinel as a real contract id and reject the
+    # subscription. Skip the write when the domain value is ``None``,
+    # mirroring IBKR's ``isValidIntValue`` gating from
+    # ``client_utils.createWshEventDataRequestProto``.
+    if data.conId is not None:
         proto.conId = data.conId
     if data.filter:
         proto.filter = data.filter
@@ -416,7 +417,7 @@ def createWshEventDataRequestProto(
         proto.startDate = data.startDate
     if data.endDate:
         proto.endDate = data.endDate
-    if data.totalLimit != UNSET_INTEGER:
+    if data.totalLimit is not None:
         proto.totalLimit = data.totalLimit
     return proto
 
