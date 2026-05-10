@@ -1090,9 +1090,10 @@ def _decodeOrderAllocations(proto: OrderState_pb2.OrderState) -> list[OrderAlloc
 def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
     """Decode an ``OrderState`` proto.
 
-    Handles the wire's ``commissionAndFees`` family rebadged from the
-    binary path's ``commission`` (the wire field includes IBKR fees;
-    the domain field name kept ``commission`` for backwards compat).
+    The wire ``commissionAndFees`` field is the IBKR-aligned canonical
+    name for the combined broker commission + exchange / regulatory
+    fees number. v3.0's domain field matches the wire name; the legacy
+    ``state.commission`` attribute is a deprecation alias.
     """
     state = OrderState()
     if proto.HasField("status"):
@@ -1115,10 +1116,10 @@ def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
         state.maintMarginAfter = str(proto.maintMarginAfter)
     if proto.HasField("equityWithLoanAfter"):
         state.equityWithLoanAfter = str(proto.equityWithLoanAfter)
-    # Wire ``commissionAndFees`` carries a single combined number;
-    # domain ``commission`` historically meant the same thing.
+    # Wire ``commissionAndFees`` is the IBKR-aligned canonical name
+    # (broker commission + exchange + regulatory fees combined).
     if proto.HasField("commissionAndFees"):
-        state.commission = safe_decimal(str(proto.commissionAndFees))
+        state.commissionAndFees = safe_decimal(str(proto.commissionAndFees))
     if proto.HasField("minCommissionAndFees"):
         state.minCommission = safe_decimal(str(proto.minCommissionAndFees))
     if proto.HasField("maxCommissionAndFees"):
@@ -1229,16 +1230,17 @@ def createCommissionReport(
     proto: CommissionAndFeesReport_pb2.CommissionAndFeesReport,
 ) -> CommissionReport:
     """Decode the wire ``CommissionAndFeesReport`` into our domain
-    ``CommissionReport``. The wire renamed ``commission`` to
-    ``commissionAndFees`` and ``yield`` to ``bondYield``; we map
-    those back to the historic domain field names. ``yieldRedemptionDate``
-    was an int in 2.x but is wire-string here — coerce.
+    ``CommissionReport``. v3.0's domain field matches the wire name
+    (``commissionAndFees``). The wire also renames ``yield`` to
+    ``bondYield``; we map that back to the historic domain field name.
+    ``yieldRedemptionDate`` is wire-string but our domain field is int —
+    coerce.
     """
     report = CommissionReport()
     if proto.HasField("execId"):
         report.execId = proto.execId
     if proto.HasField("commissionAndFees"):
-        report.commission = safe_decimal(str(proto.commissionAndFees))
+        report.commissionAndFees = safe_decimal(str(proto.commissionAndFees))
     if proto.HasField("currency"):
         report.currency = proto.currency
     if proto.HasField("realizedPNL"):

@@ -1897,7 +1897,7 @@ class Decoder:
             _,
             _,
             execId,
-            commission,
+            commissionAndFees,
             currency,
             realizedPNL,
             yield_,
@@ -1907,7 +1907,7 @@ class Decoder:
         self.wrapper.commissionReport(
             CommissionReport(
                 execId,
-                safe_decimal(commission),
+                safe_decimal(commissionAndFees),
                 currency,
                 safe_decimal(realizedPNL),
                 safe_decimal(yield_),
@@ -2401,7 +2401,7 @@ class Decoder:
             st.initMarginAfter,
             st.maintMarginAfter,
             st.equityWithLoanAfter,
-            st.commission,
+            st.commissionAndFees,
             st.minCommission,
             st.maxCommission,
             st.commissionCurrency,

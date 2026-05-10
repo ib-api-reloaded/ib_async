@@ -183,46 +183,46 @@ def test_portfolio_item_full_construction():
 
 def test_order_state_commission_defaults_are_none():
     s = OrderState()
-    assert s.commission is None
+    assert s.commissionAndFees is None
     assert s.minCommission is None
     assert s.maxCommission is None
 
 
 def test_order_state_unset_commission_is_falsy():
-    """The Decimal('NaN') trap fix: ``if state.commission:`` must be False
-    when commission is unset, not silently True the way NaN was.
+    """The Decimal('NaN') trap fix: ``if state.commissionAndFees:`` must be
+    False when commission is unset, not silently True the way NaN was.
     """
     s = OrderState()
-    assert not s.commission
+    assert not s.commissionAndFees
     assert not s.minCommission
     assert not s.maxCommission
 
 
 def test_order_state_commission_explicit_zero_is_falsy_too():
-    s = OrderState(commission=Decimal("0"))
-    assert not s.commission
+    s = OrderState(commissionAndFees=Decimal("0"))
+    assert not s.commissionAndFees
 
 
 def test_order_state_commission_nonzero_is_truthy():
-    s = OrderState(commission=Decimal("1.50"))
-    assert s.commission
+    s = OrderState(commissionAndFees=Decimal("1.50"))
+    assert s.commissionAndFees
 
 
 def test_order_state_numeric_round_trip_with_decimal_input():
     """``.numeric(2)`` must accept ``Decimal | None`` input from a
     Decimal-native ``OrderState`` and return float | None on the
-    commission family.
+    commissionAndFees family.
     """
-    s = OrderState(commission=Decimal("1.567"), minCommission=None)
+    s = OrderState(commissionAndFees=Decimal("1.567"), minCommission=None)
     n: OrderStateNumeric = s.numeric(2)
-    assert n.commission == 1.57
+    assert n.commissionAndFees == 1.57
     assert n.minCommission is None
 
 
 def test_order_state_formatted_handles_decimal_and_none():
-    s = OrderState(commission=Decimal("1234.567"))
+    s = OrderState(commissionAndFees=Decimal("1234.567"))
     out = s.formatted(2)
-    assert out.commission == "1,234.57"
+    assert out.commissionAndFees == "1,234.57"
     assert out.minCommission is None
 
 
@@ -305,8 +305,8 @@ def test_fill_construction_round_trip():
     fill = Fill(
         ibi.Stock("AAPL", "SMART", "USD"),
         Execution(execId="abc", shares=Decimal("10"), price=Decimal("150")),
-        ibi.CommissionReport(execId="abc", commission=Decimal("1.0")),
+        ibi.CommissionReport(execId="abc", commissionAndFees=Decimal("1.0")),
         datetime(2026, 5, 9, tzinfo=UTC),
     )
     assert fill.execution.shares == Decimal("10")
-    assert fill.commissionReport.commission == Decimal("1.0")
+    assert fill.commissionReport.commissionAndFees == Decimal("1.0")
