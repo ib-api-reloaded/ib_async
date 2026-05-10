@@ -65,6 +65,7 @@ from ib_async.order import (
     BracketOrder,
     LimitOrder,
     Order,
+    OrderCancel,
     OrderState,
     OrderStatus,
     StopOrder,
@@ -929,16 +930,26 @@ class IB:
         return trade
 
     def cancelOrder(
-        self, order: Order, manualCancelOrderTime: str = ""
+        self,
+        order: Order,
+        manualCancelOrderTime: str = "",
+        orderCancel: OrderCancel | None = None,
     ) -> Trade | None:
         """
         Cancel the order and return the Trade it belongs to.
 
         Args:
             order: The order to be canceled.
-            manualCancelOrderTime: For audit trail.
+            manualCancelOrderTime: For audit trail. Convenience kwarg —
+                ignored if ``orderCancel`` is also supplied.
+            orderCancel: Full ``OrderCancel`` envelope carrying CME
+                tagging fields (``manualOrderCancelTime``,
+                ``extOperator``, ``manualOrderIndicator``). Required
+                for compliant cancels on TWS / IB Gateway >= 192.
         """
-        self.client.cancelOrder(order.orderId, manualCancelOrderTime)
+        if orderCancel is None and manualCancelOrderTime:
+            orderCancel = OrderCancel(manualOrderCancelTime=manualCancelOrderTime)
+        self.client.cancelOrder(order.orderId, orderCancel)
         now = datetime.datetime.now(self.wrapper.defaultTimezone)
         key = self.wrapper.orderKey(order.clientId, order.orderId, order.permId)
         trade = self.wrapper.trades.get(key)
@@ -969,12 +980,18 @@ class IB:
 
         return trade
 
-    def reqGlobalCancel(self):
+    def reqGlobalCancel(self, orderCancel: OrderCancel | None = None):
         """
         Cancel all active trades including those placed by other
         clients or TWS/IB gateway.
+
+        Args:
+            orderCancel: Optional ``OrderCancel`` envelope carrying
+                CME-tagging fields (``extOperator``,
+                ``manualOrderIndicator``). Required for compliant
+                global cancels on TWS / IB Gateway >= 192.
         """
-        self.client.reqGlobalCancel()
+        self.client.reqGlobalCancel(orderCancel)
         self._logger.info("reqGlobalCancel")
 
     def reqCurrentTime(self) -> datetime.datetime:
@@ -2543,9 +2560,7 @@ class IB:
         req, isNew = self.wrapper.requests.open(key, single_flight=True)
         if isNew:
             self.client.reqMarketRule(marketRuleId)
-        return await self._awaitOrTimeout(
-            key, req.future, 1, "reqMarketRuleAsync"
-        )
+        return await self._awaitOrTimeout(key, req.future, 1, "reqMarketRuleAsync")
 
     async def reqHistoricalDataAsync(
         self,

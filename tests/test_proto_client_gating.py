@@ -113,9 +113,14 @@ def test_place_order_uses_protobuf_at_gate_and_round_trips_clientId():
 
 
 def test_cancel_order_uses_protobuf_at_gate():
+    from ib_async.order import OrderCancel
+
     ib = _ibAtVersion(203)
     sent = _captureSend(ib)
-    ib.client.cancelOrder(orderId=42, manualCancelOrderTime="20300101 09:30:00")
+    ib.client.cancelOrder(
+        orderId=42,
+        orderCancel=OrderCancel(manualOrderCancelTime="20300101 09:30:00"),
+    )
     canonical, body = _decodeProtoFrame(sent[0])
     assert canonical == CANCEL_ORDER
     proto = CancelOrderRequest_pb2.CancelOrderRequest()

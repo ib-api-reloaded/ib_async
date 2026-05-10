@@ -1308,18 +1308,23 @@ def createPlaceOrderRequestProto(
 
 def createCancelOrderRequestProto(
     orderId: int,
-    manualCancelOrderTime: str = "",
+    manualOrderCancelTime: str = "",
     extOperator: str = "",
-    manualOrderIndicator: int = 0,
+    manualOrderIndicator: int = UNSET_INTEGER,
 ) -> CancelOrderRequest_pb2.CancelOrderRequest:
+    """Encode a CancelOrderRequest including CME-tagging fields.
+
+    ``extOperator`` / ``manualOrderIndicator`` are skipped at the
+    UNSET sentinel; ``manualOrderCancelTime`` skipped on empty string.
+    """
     proto = CancelOrderRequest_pb2.CancelOrderRequest()
     proto.orderId = orderId
     cancel = OrderCancel_pb2.OrderCancel()
-    if manualCancelOrderTime:
-        cancel.manualOrderCancelTime = manualCancelOrderTime
+    if manualOrderCancelTime:
+        cancel.manualOrderCancelTime = manualOrderCancelTime
     if extOperator:
         cancel.extOperator = extOperator
-    if manualOrderIndicator:
+    if _isValidInt(manualOrderIndicator):
         cancel.manualOrderIndicator = manualOrderIndicator
     proto.orderCancel.CopyFrom(cancel)
     return proto
@@ -1353,11 +1358,19 @@ def createCompletedOrdersRequestProto(
 
 
 def createGlobalCancelRequestProto(
-    manualCancelOrderTime: str = "",
+    manualOrderCancelTime: str = "",
+    extOperator: str = "",
+    manualOrderIndicator: int = UNSET_INTEGER,
 ) -> GlobalCancelRequest_pb2.GlobalCancelRequest:
+    """Encode a GlobalCancelRequest. CME-tagging fields land on the
+    nested ``orderCancel`` envelope, matching IBKR's reference shape."""
     proto = GlobalCancelRequest_pb2.GlobalCancelRequest()
-    if manualCancelOrderTime:
-        proto.orderCancel.manualOrderCancelTime = manualCancelOrderTime
+    if manualOrderCancelTime:
+        proto.orderCancel.manualOrderCancelTime = manualOrderCancelTime
+    if extOperator:
+        proto.orderCancel.extOperator = extOperator
+    if _isValidInt(manualOrderIndicator):
+        proto.orderCancel.manualOrderIndicator = manualOrderIndicator
     return proto
 
 

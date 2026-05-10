@@ -18,6 +18,12 @@ from ._pb_msgids import (
     PROTOBUF_MSG_ID,
     PROTOBUF_MSG_IDS,
 )
+from ._server_versions import (
+    MIN_SERVER_VER_CME_TAGGING_FIELDS,
+    MIN_SERVER_VER_MANUAL_ORDER_TIME,
+    MIN_SERVER_VER_RFQ_FIELDS,
+    MIN_SERVER_VER_UNDO_RFQ_FIELDS,
+)
 from .connection import Connection
 from .contract import Contract
 from .decoder import Decoder
@@ -825,18 +831,49 @@ class Client:
 
         self.send(*fields)
 
-    def cancelOrder(self, orderId, manualCancelOrderTime=""):
+    def cancelOrder(self, orderId, orderCancel=None):
+        # Accept either a fully-formed ``OrderCancel`` envelope or
+        # ``None`` (= no CME-tagging fields). The legacy positional
+        # ``manualCancelOrderTime: str`` form is supported for backwards
+        # compatibility — a bare string promotes to an OrderCancel
+        # carrying just that field.
+        from .order import OrderCancel
+
+        if orderCancel is None:
+            orderCancel = OrderCancel()
+        elif isinstance(orderCancel, str):
+            orderCancel = OrderCancel(manualOrderCancelTime=orderCancel)
+
         if self.useProtoBuf(_M.CANCEL_ORDER):
             from ._proto.orders import createCancelOrderRequestProto
 
             proto = createCancelOrderRequestProto(
-                orderId, manualCancelOrderTime=manualCancelOrderTime
+                orderId,
+                manualOrderCancelTime=orderCancel.manualOrderCancelTime,
+                extOperator=orderCancel.extOperator,
+                manualOrderIndicator=orderCancel.manualOrderIndicator,
             )
             self.sendProto(_M.CANCEL_ORDER, proto.SerializeToString())
             return
-        fields = [4, 1, orderId]
-        if self.serverVersion() >= 169:
-            fields += [manualCancelOrderTime]
+
+        # Binary wire layout shifts at MIN_SERVER_VER_CME_TAGGING_FIELDS
+        # (192): IBKR drops the legacy ``VERSION=1`` prefix and appends
+        # ``extOperator`` + ``manualOrderIndicator``. There's also an
+        # interim RFQ_FIELDS triplet on servers in [187, 190).
+        fields: list[Any] = [4]
+        if self.serverVersion() < MIN_SERVER_VER_CME_TAGGING_FIELDS:
+            fields.append(1)  # legacy VERSION
+        fields.append(orderId)
+        if self.serverVersion() >= MIN_SERVER_VER_MANUAL_ORDER_TIME:
+            fields.append(orderCancel.manualOrderCancelTime)
+        if (
+            MIN_SERVER_VER_RFQ_FIELDS
+            <= self.serverVersion()
+            < MIN_SERVER_VER_UNDO_RFQ_FIELDS
+        ):
+            fields += ["", "", UNSET_INTEGER]
+        if self.serverVersion() >= MIN_SERVER_VER_CME_TAGGING_FIELDS:
+            fields += [orderCancel.extOperator, orderCancel.manualOrderIndicator]
         self.send(*fields)
 
     def reqOpenOrders(self):
@@ -1018,9 +1055,7 @@ class Client:
         if self.useProtoBuf(_M.REQ_FA):
             from ._proto.accounts import createFARequestProto
 
-            self.sendProto(
-                _M.REQ_FA, createFARequestProto(faData).SerializeToString()
-            )
+            self.sendProto(_M.REQ_FA, createFARequestProto(faData).SerializeToString())
             return
         self.send(18, 1, faData)
 
@@ -1361,9 +1396,7 @@ class Client:
 
             self.sendProto(
                 _M.CANCEL_CALC_IMPLIED_VOLAT,
-                createCancelCalculateImpliedVolatilityProto(
-                    reqId
-                ).SerializeToString(),
+                createCancelCalculateImpliedVolatilityProto(reqId).SerializeToString(),
             )
             return
         self.send(56, 1, reqId)
@@ -1379,16 +1412,32 @@ class Client:
             return
         self.send(57, 1, reqId)
 
-    def reqGlobalCancel(self):
+    def reqGlobalCancel(self, orderCancel=None):
+        from .order import OrderCancel
+
+        if orderCancel is None:
+            orderCancel = OrderCancel()
+
         if self.useProtoBuf(_M.REQ_GLOBAL_CANCEL):
             from ._proto.orders import createGlobalCancelRequestProto
 
             self.sendProto(
                 _M.REQ_GLOBAL_CANCEL,
-                createGlobalCancelRequestProto().SerializeToString(),
+                createGlobalCancelRequestProto(
+                    extOperator=orderCancel.extOperator,
+                    manualOrderIndicator=orderCancel.manualOrderIndicator,
+                ).SerializeToString(),
             )
             return
-        self.send(58, 1)
+
+        # Binary wire layout: pre-192 carries VERSION=1 prefix; >=192
+        # drops VERSION and appends extOperator + manualOrderIndicator.
+        fields: list[Any] = [58]
+        if self.serverVersion() < MIN_SERVER_VER_CME_TAGGING_FIELDS:
+            fields.append(1)  # legacy VERSION
+        if self.serverVersion() >= MIN_SERVER_VER_CME_TAGGING_FIELDS:
+            fields += [orderCancel.extOperator, orderCancel.manualOrderIndicator]
+        self.send(*fields)
 
     def reqMarketDataType(self, marketDataType):
         if self.useProtoBuf(_M.REQ_MARKET_DATA_TYPE):
@@ -1590,9 +1639,7 @@ class Client:
 
             self.sendProto(
                 _M.REQ_MATCHING_SYMBOLS,
-                createMatchingSymbolsRequestProto(
-                    reqId, pattern
-                ).SerializeToString(),
+                createMatchingSymbolsRequestProto(reqId, pattern).SerializeToString(),
             )
             return
         self.send(81, reqId, pattern)
