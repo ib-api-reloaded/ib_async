@@ -77,7 +77,7 @@ from ..objects import (
     TickAttribLast,
 )
 from .contracts import createContractProto
-from .safe import safe_decimal
+from .safe import wire_size_to_float
 
 # Slotted-frozen dataclass return shapes for converters. Each one names
 # the wrapper method whose positional arguments it carries and exposes
@@ -245,17 +245,6 @@ TickByTickDispatch: TypeAlias = (
 )
 
 
-def _wireSizeToFloat(s: str) -> float:
-    """Coerce a wire-string size to ``float`` for wrapper signatures.
-
-    Goes through ``safe_decimal`` so empty / "nan" / garbage land as
-    zero rather than raising. The wrapper's ``size == 0`` checks are
-    semantically equivalent to "size is unset" on the binary path.
-    """
-    d = safe_decimal(s)
-    return float(d) if d is not None else 0.0
-
-
 # ---------------------------------------------------------------------------
 # TickPrice — combined price+size dispatch (msgId 1 receive)
 # ---------------------------------------------------------------------------
@@ -294,7 +283,7 @@ def createPriceSizeTickArgs(
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
     price = float(proto.price) if proto.HasField("price") else 0.0
-    size = _wireSizeToFloat(proto.size) if proto.HasField("size") else 0.0
+    size = wire_size_to_float(proto.size) if proto.HasField("size") else 0.0
     attrMask = proto.attrMask if proto.HasField("attrMask") else 0
     attrib = decodeTickAttribFromMask(attrMask, serverVersion)
     return PriceSizeTickArgs(
@@ -311,7 +300,7 @@ def createTickSizeArgs(proto: TickSize_pb2.TickSize) -> TickSizeArgs:
     """``Wrapper.tickSize(reqId, tickType, size)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
-    size = _wireSizeToFloat(proto.size) if proto.HasField("size") else 0.0
+    size = wire_size_to_float(proto.size) if proto.HasField("size") else 0.0
     return TickSizeArgs(reqId=reqId, tickType=tickType, size=size)
 
 
@@ -349,7 +338,7 @@ def createTickReqParamsArgs(
     — the wrapper has no slots for them today.
     """
     reqId = proto.reqId if proto.HasField("reqId") else 0
-    minTick = _wireSizeToFloat(proto.minTick) if proto.HasField("minTick") else 0.0
+    minTick = wire_size_to_float(proto.minTick) if proto.HasField("minTick") else 0.0
     bboExchange = proto.bboExchange if proto.HasField("bboExchange") else ""
     snapshotPermissions = (
         proto.snapshotPermissions if proto.HasField("snapshotPermissions") else 0
@@ -449,7 +438,7 @@ def dispatchTickByTick(proto: TickByTickData_pb2.TickByTickData) -> TickByTickDi
             tickType=tickType,
             time=inner.time if inner.HasField("time") else 0,
             price=float(inner.price) if inner.HasField("price") else 0.0,
-            size=_wireSizeToFloat(inner.size) if inner.HasField("size") else 0.0,
+            size=wire_size_to_float(inner.size) if inner.HasField("size") else 0.0,
             tickAttribLast=createTickAttribLast(inner.tickAttribLast)
             if inner.HasField("tickAttribLast")
             else TickAttribLast(),
@@ -465,10 +454,10 @@ def dispatchTickByTick(proto: TickByTickData_pb2.TickByTickData) -> TickByTickDi
             time=innerBA.time if innerBA.HasField("time") else 0,
             bidPrice=float(innerBA.priceBid) if innerBA.HasField("priceBid") else 0.0,
             askPrice=float(innerBA.priceAsk) if innerBA.HasField("priceAsk") else 0.0,
-            bidSize=_wireSizeToFloat(innerBA.sizeBid)
+            bidSize=wire_size_to_float(innerBA.sizeBid)
             if innerBA.HasField("sizeBid")
             else 0.0,
-            askSize=_wireSizeToFloat(innerBA.sizeAsk)
+            askSize=wire_size_to_float(innerBA.sizeAsk)
             if innerBA.HasField("sizeAsk")
             else 0.0,
             tickAttribBidAsk=createTickAttribBidAsk(innerBA.tickAttribBidAsk)
@@ -515,7 +504,7 @@ def _depthDataArgs(
     operation = data.operation if data.HasField("operation") else 0
     side = data.side if data.HasField("side") else 0
     price = float(data.price) if data.HasField("price") else 0.0
-    size = _wireSizeToFloat(data.size) if data.HasField("size") else 0.0
+    size = wire_size_to_float(data.size) if data.HasField("size") else 0.0
     marketMaker = data.marketMaker if data.HasField("marketMaker") else ""
     isSmartDepth = data.isSmartDepth if data.HasField("isSmartDepth") else False
     return position, operation, side, price, size, marketMaker, isSmartDepth
