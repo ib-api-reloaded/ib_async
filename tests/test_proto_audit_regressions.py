@@ -3839,7 +3839,7 @@ def test_scanner_data_combo_legs_str_propagates_to_scan_data():
     wrapper as ``ScanData.legsStr`` so user code that switches on
     combo-vs-single scanners sees a non-empty string."""
     from ib_async._pb import ScannerData_pb2
-    from ib_async._proto.scanner import iterScannerData
+    from ib_async._proto.scanner import createScannerDataArgs
 
     proto = ScannerData_pb2.ScannerData()
     proto.reqId = 9
@@ -3851,7 +3851,7 @@ def test_scanner_data_combo_legs_str_propagates_to_scan_data():
     el.projection = "10%"
     el.comboKey = "1234,1;5678,-1"
 
-    args = iterScannerData(proto)
+    args = createScannerDataArgs(proto)
     assert args.reqId == 9
     assert len(args.elements) == 1
     elt = args.elements[0]

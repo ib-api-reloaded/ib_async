@@ -1023,9 +1023,9 @@ class Decoder:
     # --- historical-data handlers -----------------------------------------
 
     def _protoHistoricalData(self, proto: Any) -> None:
-        from ._proto.historical import iterHistoricalDataBars
+        from ._proto.historical import createHistoricalDataBars
 
-        a = iterHistoricalDataBars(proto)
+        a = createHistoricalDataBars(proto)
         for bar in a.bars:
             self.wrapper.historicalData(a.reqId, bar)
 
@@ -1161,9 +1161,9 @@ class Decoder:
         self.wrapper.scannerParameters(createScannerParametersXml(proto))
 
     def _protoScannerData(self, proto: Any) -> None:
-        from ._proto.scanner import iterScannerData
+        from ._proto.scanner import createScannerDataArgs
 
-        a = iterScannerData(proto)
+        a = createScannerDataArgs(proto)
         for el in a.elements:
             self.wrapper.scannerData(
                 el.reqId,
