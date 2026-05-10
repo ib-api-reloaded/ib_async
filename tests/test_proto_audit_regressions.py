@@ -31,9 +31,15 @@ from zoneinfo import ZoneInfo
 import ib_async as ibi
 from ib_async._pb import (
     CommissionAndFeesReport_pb2,
+    Contract_pb2,
+    ContractData_pb2,
     ExecutionDetails_pb2,
     OpenOrder_pb2,
     TickByTickData_pb2,
+)
+from ib_async._proto.contracts import (
+    createContract,
+    createContractDetailsFromContractData,
 )
 
 # ---------------------------------------------------------------------------
@@ -288,3 +294,82 @@ def test_proto_tick_by_tick_empty_oneof_is_dropped():
     ib.client.decoder.processProtoBuf(99, proto.SerializeToString())
 
     assert seen == []
+
+
+# ---------------------------------------------------------------------------
+# Contract / ContractDetails: parity with IBKR ground truth
+# ---------------------------------------------------------------------------
+
+
+def test_create_contract_reads_last_trade_date():
+    """IBKR's reference reads ``contractProto.lastTradeDate`` separately
+    from ``lastTradeDateOrContractMonth``. Our converter must too —
+    silently dropping the field would lose post-2024 IBKR contracts'
+    actual expiry date.
+    """
+    proto = Contract_pb2.Contract()
+    proto.symbol = "ESM6"
+    proto.secType = "FUT"
+    proto.lastTradeDateOrContractMonth = "20260619"
+    proto.lastTradeDate = "20260619-15:00:00"
+
+    contract = createContract(proto)
+    assert contract.lastTradeDateOrContractMonth == "20260619"
+    assert contract.lastTradeDate == "20260619-15:00:00"
+
+
+def test_contract_details_splits_last_trade_date_for_non_bond():
+    """ContractDetails wire packs date+time as a single string in
+    ``contract.lastTradeDateOrContractMonth``. The binary path
+    splits into separate ``lastTradeTime`` (and bond ``maturity``,
+    ``timeZoneId``) fields. The proto path must do the same split.
+    """
+    proto = ContractData_pb2.ContractData()
+    proto.contract.symbol = "ESM6"
+    proto.contract.secType = "FUT"
+    # Hyphen-separated form: date-time
+    proto.contract.lastTradeDateOrContractMonth = "20260619-15:00:00"
+    proto.contractDetails.marketName = "ES"
+
+    details = createContractDetailsFromContractData(proto)
+    assert details.contract.lastTradeDateOrContractMonth == "20260619"
+    assert details.lastTradeTime == "15:00:00"
+    # Non-bond: maturity and timeZoneId stay empty.
+    assert details.maturity == ""
+    assert details.timeZoneId == ""
+
+
+def test_contract_details_splits_last_trade_date_for_bond():
+    """For ``secType == 'BOND'``, the wire string carries
+    ``maturity time tz``. The split populates bond ``maturity`` and
+    bond ``timeZoneId`` rather than overwriting
+    ``lastTradeDateOrContractMonth``.
+    """
+    proto = ContractData_pb2.ContractData()
+    proto.contract.symbol = "TBOND"
+    proto.contract.secType = "BOND"
+    proto.contract.lastTradeDateOrContractMonth = "20300515 16:00:00 US/Eastern"
+    # Ensure the contractDetails sub-message is present on the wire so
+    # the populated path runs (where the post-process split lives).
+    proto.contractDetails.marketName = "BOND"
+
+    details = createContractDetailsFromContractData(proto)
+    assert details.maturity == "20300515"
+    assert details.lastTradeTime == "16:00:00"
+    assert details.timeZoneId == "US/Eastern"
+
+
+def test_contract_details_split_skipped_when_field_empty():
+    """No split when wire ``lastTradeDateOrContractMonth`` is empty —
+    domain fields stay at their defaults rather than crashing on a
+    missing-field split.
+    """
+    proto = ContractData_pb2.ContractData()
+    proto.contract.symbol = "AAPL"
+    proto.contract.secType = "STK"
+    # No lastTradeDateOrContractMonth set.
+    proto.contractDetails.marketName = "NMS"
+
+    details = createContractDetailsFromContractData(proto)
+    assert details.contract.lastTradeDateOrContractMonth == ""
+    assert details.lastTradeTime == ""

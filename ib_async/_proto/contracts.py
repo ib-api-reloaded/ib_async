@@ -128,6 +128,8 @@ def createContract(proto: Contract_pb2.Contract) -> Contract:
         contract.secType = proto.secType
     if proto.HasField("lastTradeDateOrContractMonth"):
         contract.lastTradeDateOrContractMonth = proto.lastTradeDateOrContractMonth
+    if proto.HasField("lastTradeDate"):
+        contract.lastTradeDate = proto.lastTradeDate
     if proto.HasField("strike"):
         contract.strike = proto.strike
     if proto.HasField("right"):
@@ -179,6 +181,8 @@ def createContractProto(contract: Contract) -> Contract_pb2.Contract:
         proto.secType = contract.secType
     if contract.lastTradeDateOrContractMonth:
         proto.lastTradeDateOrContractMonth = contract.lastTradeDateOrContractMonth
+    if contract.lastTradeDate:
+        proto.lastTradeDate = contract.lastTradeDate
     if contract.strike:
         proto.strike = contract.strike
     if contract.right:
@@ -330,6 +334,34 @@ def createContractDetails(
     return details
 
 
+def _setLastTradeDate(details: ContractDetails, isBond: bool) -> None:
+    """Split ``contract.lastTradeDateOrContractMonth`` into the
+    separate fields the binary path delivered.
+
+    The wire packs date + time (and bond timezone) into a single
+    space- or hyphen-separated string. The binary contractDetails
+    decoder splits it; the proto path needs the same split or
+    callers see ``ContractDetails.lastTradeTime`` (and bond
+    ``maturity`` / ``timeZoneId``) empty.
+    """
+    contract = details.contract
+    if contract is None:
+        return
+    raw = contract.lastTradeDateOrContractMonth
+    if not raw:
+        return
+    parts = raw.split("-") if "-" in raw else raw.split()
+    if parts:
+        if isBond:
+            details.maturity = parts[0]
+        else:
+            contract.lastTradeDateOrContractMonth = parts[0]
+    if len(parts) > 1:
+        details.lastTradeTime = parts[1]
+    if isBond and len(parts) > 2:
+        details.timeZoneId = parts[2]
+
+
 def createContractDetailsFromContractData(
     proto: ContractData_pb2.ContractData,
 ) -> ContractDetails:
@@ -342,7 +374,9 @@ def createContractDetailsFromContractData(
         createContract(proto.contract) if proto.HasField("contract") else Contract()
     )
     if proto.HasField("contractDetails"):
-        return createContractDetails(proto.contractDetails, contract)
+        details = createContractDetails(proto.contractDetails, contract)
+        _setLastTradeDate(details, isBond=contract.secType == "BOND")
+        return details
     details = ContractDetails()
     details.contract = contract
     return details
