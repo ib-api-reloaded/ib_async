@@ -65,7 +65,7 @@ from .._pb import (
     RealTimeBarsRequest_pb2,
     RealTimeBarTick_pb2,
 )
-from ..contract import Contract
+from ..contract import Contract, TagValue
 from ..objects import (
     BarData,
     HistogramData,
@@ -76,7 +76,7 @@ from ..objects import (
 )
 from .contracts import createContractProto
 from .market_data import createTickAttribBidAsk, createTickAttribLast
-from .safe import safe_decimal, wire_size_to_float
+from .safe import fill_tag_value_map, safe_decimal, wire_size_to_float
 
 # Frozen-slotted dataclass return shapes for converter functions. Each one
 # names the wrapper method whose positional arguments it carries so call
@@ -456,6 +456,7 @@ def createHistoricalDataRequestProto(
     useRTH: int,
     formatDate: int,
     keepUpToDate: bool,
+    chartOptions: list[TagValue] | None = None,
 ) -> HistoricalDataRequest_pb2.HistoricalDataRequest:
     proto = HistoricalDataRequest_pb2.HistoricalDataRequest()
     proto.reqId = reqId
@@ -467,6 +468,7 @@ def createHistoricalDataRequestProto(
     proto.whatToShow = whatToShow
     proto.formatDate = formatDate
     proto.keepUpToDate = keepUpToDate
+    fill_tag_value_map(chartOptions, proto.chartOptions)
     return proto
 
 
@@ -479,7 +481,12 @@ def createCancelHistoricalDataProto(
 
 
 def createRealTimeBarsRequestProto(
-    reqId: int, contract: Contract, barSize: int, whatToShow: str, useRTH: bool
+    reqId: int,
+    contract: Contract,
+    barSize: int,
+    whatToShow: str,
+    useRTH: bool,
+    realTimeBarsOptions: list[TagValue] | None = None,
 ) -> RealTimeBarsRequest_pb2.RealTimeBarsRequest:
     proto = RealTimeBarsRequest_pb2.RealTimeBarsRequest()
     proto.reqId = reqId
@@ -487,6 +494,7 @@ def createRealTimeBarsRequestProto(
     proto.barSize = barSize
     proto.whatToShow = whatToShow
     proto.useRTH = useRTH
+    fill_tag_value_map(realTimeBarsOptions, proto.realTimeBarsOptions)
     return proto
 
 
@@ -546,6 +554,7 @@ def createHistoricalTicksRequestProto(
     whatToShow: str,
     useRTH: int,
     ignoreSize: bool,
+    miscOptions: list[TagValue] | None = None,
 ) -> HistoricalTicksRequest_pb2.HistoricalTicksRequest:
     proto = HistoricalTicksRequest_pb2.HistoricalTicksRequest()
     proto.reqId = reqId
@@ -556,6 +565,7 @@ def createHistoricalTicksRequestProto(
     proto.whatToShow = whatToShow
     proto.useRTH = bool(useRTH)
     proto.ignoreSize = ignoreSize
+    fill_tag_value_map(miscOptions, proto.miscOptions)
     return proto
 
 

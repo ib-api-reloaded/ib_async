@@ -584,7 +584,12 @@ class Client:
             self.sendProto(
                 _M.REQ_MKT_DATA,
                 createMarketDataRequestProto(
-                    reqId, contract, genericTickList, snapshot, regulatorySnapshot
+                    reqId,
+                    contract,
+                    genericTickList,
+                    snapshot,
+                    regulatorySnapshot,
+                    marketDataOptions=mktDataOptions,
                 ).SerializeToString(),
             )
             return
@@ -1028,7 +1033,11 @@ class Client:
             self.sendProto(
                 _M.REQ_MKT_DEPTH,
                 createMarketDepthRequestProto(
-                    reqId, contract, numRows, isSmartDepth
+                    reqId,
+                    contract,
+                    numRows,
+                    isSmartDepth,
+                    marketDepthOptions=mktDepthOptions,
                 ).SerializeToString(),
             )
             return
@@ -1177,6 +1186,7 @@ class Client:
                     useRTH,
                     formatDate,
                     keepUpToDate,
+                    chartOptions=chartOptions,
                 ).SerializeToString(),
             )
             return
@@ -1389,7 +1399,12 @@ class Client:
             self.sendProto(
                 _M.REQ_REAL_TIME_BARS,
                 createRealTimeBarsRequestProto(
-                    reqId, contract, barSize, whatToShow, useRTH
+                    reqId,
+                    contract,
+                    barSize,
+                    whatToShow,
+                    useRTH,
+                    realTimeBarsOptions=realTimeBarsOptions,
                 ).SerializeToString(),
             )
             return
@@ -1459,7 +1474,11 @@ class Client:
             self.sendProto(
                 _M.REQ_CALC_IMPLIED_VOLAT,
                 createCalculateImpliedVolatilityRequestProto(
-                    reqId, contract, optionPrice, underPrice
+                    reqId,
+                    contract,
+                    optionPrice,
+                    underPrice,
+                    impliedVolatilityOptions=implVolOptions,
                 ).SerializeToString(),
             )
             return
@@ -1483,7 +1502,11 @@ class Client:
             self.sendProto(
                 _M.REQ_CALC_OPTION_PRICE,
                 createCalculateOptionPriceRequestProto(
-                    reqId, contract, volatility, underPrice
+                    reqId,
+                    contract,
+                    volatility,
+                    underPrice,
+                    optionPriceOptions=optPrcOptions,
                 ).SerializeToString(),
             )
             return
@@ -2039,6 +2062,7 @@ class Client:
                     whatToShow,
                     useRth,
                     ignoreSize,
+                    miscOptions=miscOptions,
                 ).SerializeToString(),
             )
             return
