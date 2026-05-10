@@ -1660,8 +1660,8 @@ class Wrapper:
             optPrice if optPrice != -1 else None,
             pvDividend if pvDividend != -1 else None,
             gamma if gamma != -2 else None,
-            vega if vega != -2 else vega,
-            theta if theta != -2 else theta,
+            vega if vega != -2 else None,
+            theta if theta != -2 else None,
             undPrice if undPrice != -1 else None,
         )
         ticker = self._get_ticker(reqId)

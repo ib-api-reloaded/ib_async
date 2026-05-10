@@ -4,7 +4,7 @@ import asyncio
 import logging
 import sys
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 
 from eventkit import Event
@@ -198,10 +198,20 @@ class IBC:
 
     async def monitorAsync(self):
         while self._proc:
-            line = await self._proc.stdout.readline()
+            try:
+                line = await self._proc.stdout.readline()
+            except (asyncio.CancelledError, GeneratorExit):
+                raise
+            except Exception as e:
+                # Don't let a transient stdout read failure (e.g. a decode
+                # path raising, or a closed transport) silently kill the
+                # monitor task. Log and stop draining; the process owner
+                # will still see termination via wait().
+                self._logger.warning("IBC stdout read failed: %r", e)
+                break
             if not line:
                 break
-            self._logger.log(IBC.IbcLogLevel, line.strip().decode())
+            self._logger.log(IBC.IbcLogLevel, line.strip().decode(errors="replace"))
 
 
 @dataclass
@@ -283,7 +293,7 @@ class Watchdog:
     readonly: bool = False
     account: str = ""
     raiseSyncErrors: bool = False
-    probeContract: Contract = Forex("EURUSD")
+    probeContract: Contract = field(default_factory=lambda: Forex("EURUSD"))
     probeTimeout: float = 4
 
     def __post_init__(self):
