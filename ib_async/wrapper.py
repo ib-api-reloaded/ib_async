@@ -729,7 +729,7 @@ class Wrapper:
     def pnlSingle(
         self,
         reqId: int,
-        pos: int,
+        pos: Decimal | None,
         dailyPnL: float,
         unrealizedPnL: float,
         realizedPnL: float,
