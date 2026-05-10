@@ -473,11 +473,11 @@ def test_req_current_time_below_gate_uses_binary():
     ib = _ibAtVersion(212)
     sent = _captureSend(ib)
     ib.client.reqCurrentTime()
-    assert sent[0][4:].startswith(b"49\x00")
+    assert sent[0][4:].startswith(b"\x00\x00\x00\x31")  # REQ_CURRENT_TIME=49, raw int (server>=201)
 
 
 def test_set_server_log_level_below_gate_uses_binary():
     ib = _ibAtVersion(212)
     sent = _captureSend(ib)
     ib.client.setServerLogLevel(3)
-    assert sent[0][4:].startswith(b"14\x00")
+    assert sent[0][4:].startswith(b"\x00\x00\x00\x0e")  # SET_SERVER_LOGLEVEL=14, raw int (server>=201)

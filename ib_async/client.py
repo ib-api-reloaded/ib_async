@@ -233,7 +233,7 @@ class Client:
         self._numBytesRecv = 0
         self._numMsgRecv = 0
         self._isThrottling = False
-        self._msgQ: deque[str] = deque()
+        self._msgQ: deque[bytes] = deque()
         self._timeQ: deque[float] = deque()
 
     def serverVersion(self) -> int:
@@ -383,9 +383,24 @@ class Client:
     def disconnect(self):
         """Disconnect from IB connection."""
         self._logger.info("Disconnecting")
+        # Snapshot ``wasReady`` BEFORE ``reset()`` clears ``_apiReady`` so
+        # that user-initiated disconnects fire ``wrapper.connectionClosed``
+        # the same way peer-initiated disconnects do via
+        # ``_onSocketDisconnected``. Without this, the asyncio
+        # connection_lost callback runs after we've already reset, sees
+        # ``isReady() == False``, and the teardown — failing in-flight
+        # request futures, closing Subscriptions, ending Trades — never
+        # runs on explicit ``IB.disconnect()``. ``_onSocketDisconnected``
+        # still fires later but its ``wasReady`` snapshot is False so it
+        # becomes a no-op (just logs "Disconnected.").
+        wasReady = self.isReady()
         self.connState = Client.DISCONNECTED
         self.conn.disconnect()
+        if wasReady:
+            self.wrapper.connectionClosed()
         self.reset()
+        if wasReady:
+            self.apiEnd.emit()
 
     def send(self, *fields, makeEmpty=True):
         """Serialize and send the given fields using the IB socket protocol.
@@ -400,28 +415,36 @@ class Client:
         # the per-type lambdas and their inline rationales.
         FORMAT_HANDLERS = _FORMAT_HANDLERS_EMPTY if makeEmpty else _FORMAT_HANDLERS_KEEP
 
-        # start of new message
-        msg = io.StringIO()
-
-        for field in fields:
+        # First field is always the canonical msgId; remaining fields are
+        # the body. Pre-201 servers receive both as NUL-terminated text;
+        # 201+ servers receive a 4-byte big-endian raw msgId followed by
+        # the NUL-terminated body, mirroring IBKR ``comm.make_msg``'s
+        # ``useRawIntMsgId`` branch (`make_msg(msgId, useRawIntMsgId=True,
+        # text)`). Sending the legacy text msgId to a 201+ server makes
+        # the server fail to decode the frame and silently drop the
+        # connection — every binary-path message (startApi, anything
+        # that's not in PROTOBUF_MSG_IDS, anything below its proto gate)
+        # is affected.
+        msgId = fields[0]
+        body = io.StringIO()
+        for field in fields[1:]:
             # Fetch type converter for this field (falls back to 'str(field)' as a default for unmatched types)
             # (extra `isinstance()` wrapper needed here because Contract subclasses are their own type, but we want
             #  to only match against the Contract parent class for formatting operations)
             convert = FORMAT_HANDLERS.get(
                 Contract if isinstance(field, Contract) else type(field), str
             )
+            body.write(convert(field))
+            body.write("\0")
 
-            # Convert field to IBKR protocol string part
-            s = convert(field)
-
-            # Append converted IBKR protocol string to message buffer
-            msg.write(s)
-            msg.write("\0")
-
-        generated = msg.getvalue()
+        text = body.getvalue().encode()
+        if self._serverVersion >= MIN_SERVER_VER_PROTOBUF:
+            generated = struct.pack(">I", int(msgId)) + text
+        else:
+            generated = (str(msgId) + "\0").encode() + text
         self.sendMsg(generated)
 
-    def sendMsg(self, msg: str):
+    def sendMsg(self, msg: bytes | None):
         loop = getLoop()
         t = loop.time()
         times = self._timeQ
@@ -434,10 +457,10 @@ class Client:
 
         while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
             msg = msgs.popleft()
-            self.conn.sendMsg(self._prefix(msg.encode()))
+            self.conn.sendMsg(self._prefix(msg))
             times.append(t)
             if self._logger.isEnabledFor(logging.DEBUG):
-                self._logger.debug(">>> %s", msg[:-1].replace("\0", ","))
+                self._logger.debug(">>> %r", msg)
 
         if msgs:
             if not self._isThrottling:
