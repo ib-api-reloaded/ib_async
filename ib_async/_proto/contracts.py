@@ -30,6 +30,8 @@ from ..contract import (
     ContractDescription,
     ContractDetails,
     DeltaNeutralContract,
+    IneligibilityReason,
+    TagValue,
 )
 from .safe import format_proto_double, safe_decimal
 
@@ -230,11 +232,10 @@ def createContractProto(contract: Contract) -> Contract_pb2.Contract:
 # converter populates both the regular and bond-specific fields on our
 # domain ``ContractDetails`` dataclass when the proto carries them.
 #
-# Fields that exist on the wire but not on our domain dataclass
-# (fund-specific fields, ineligibility-reason list, event-contract
-# fields, min-algo-size, last-price/size precision) are intentionally
-# skipped — adding them would be a public-API surface expansion that
-# Phase 1 does not target.
+# Fund-family, ineligibility-reason, event-contract, min-algo-size,
+# and last-price/size-precision fields are also populated here — they
+# arrive on the same wire message and IBKR's reference decoder reads
+# them all in one pass.
 
 
 def createContractDetails(
@@ -300,6 +301,18 @@ def createContractDetails(
         details.sizeIncrement = safe_decimal(proto.sizeIncrement)
     if proto.HasField("suggestedSizeIncrement"):
         details.suggestedSizeIncrement = safe_decimal(proto.suggestedSizeIncrement)
+    if proto.HasField("minAlgoSize"):
+        details.minAlgoSize = safe_decimal(proto.minAlgoSize)
+    if proto.HasField("lastPricePrecision"):
+        details.lastPricePrecision = safe_decimal(proto.lastPricePrecision)
+    if proto.HasField("lastSizePrecision"):
+        details.lastSizePrecision = safe_decimal(proto.lastSizePrecision)
+    # Wire ``secIdList`` is a string-keyed map, not a repeated message;
+    # iterate entries to populate the domain ``TagValue`` list.
+    if proto.secIdList:
+        details.secIdList = [
+            TagValue(tag=tag, value=value) for tag, value in proto.secIdList.items()
+        ]
     # Bond-side fields; the binary path handled them via a separate
     # ``bondContractDetails`` message. The proto unifies them here.
     if proto.HasField("cusip"):
@@ -331,6 +344,58 @@ def createContractDetails(
         details.nextOptionPartial = proto.nextOptionPartial
     if proto.HasField("bondNotes"):
         details.notes = proto.bondNotes
+    if proto.HasField("fundName"):
+        details.fundName = proto.fundName
+    if proto.HasField("fundFamily"):
+        details.fundFamily = proto.fundFamily
+    if proto.HasField("fundType"):
+        details.fundType = proto.fundType
+    if proto.HasField("fundFrontLoad"):
+        details.fundFrontLoad = proto.fundFrontLoad
+    if proto.HasField("fundBackLoad"):
+        details.fundBackLoad = proto.fundBackLoad
+    if proto.HasField("fundBackLoadTimeInterval"):
+        details.fundBackLoadTimeInterval = proto.fundBackLoadTimeInterval
+    if proto.HasField("fundManagementFee"):
+        details.fundManagementFee = proto.fundManagementFee
+    if proto.HasField("fundClosed"):
+        details.fundClosed = proto.fundClosed
+    if proto.HasField("fundClosedForNewInvestors"):
+        details.fundClosedForNewInvestors = proto.fundClosedForNewInvestors
+    if proto.HasField("fundClosedForNewMoney"):
+        details.fundClosedForNewMoney = proto.fundClosedForNewMoney
+    if proto.HasField("fundNotifyAmount"):
+        details.fundNotifyAmount = proto.fundNotifyAmount
+    if proto.HasField("fundMinimumInitialPurchase"):
+        details.fundMinimumInitialPurchase = proto.fundMinimumInitialPurchase
+    # Wire spelling is ``fundMinimumSubsequentPurchase``; domain spelling
+    # is ``fundSubsequentMinimumPurchase`` (matches IBKR's dataclass).
+    if proto.HasField("fundMinimumSubsequentPurchase"):
+        details.fundSubsequentMinimumPurchase = proto.fundMinimumSubsequentPurchase
+    if proto.HasField("fundBlueSkyStates"):
+        details.fundBlueSkyStates = proto.fundBlueSkyStates
+    if proto.HasField("fundBlueSkyTerritories"):
+        details.fundBlueSkyTerritories = proto.fundBlueSkyTerritories
+    if proto.HasField("fundDistributionPolicyIndicator"):
+        details.fundDistributionPolicyIndicator = proto.fundDistributionPolicyIndicator
+    if proto.HasField("fundAssetType"):
+        details.fundAssetType = proto.fundAssetType
+    if proto.ineligibilityReasonList:
+        details.ineligibilityReasonList = [
+            IneligibilityReason(
+                id_=reason.id if reason.HasField("id") else "",
+                description=reason.description
+                if reason.HasField("description")
+                else "",
+            )
+            for reason in proto.ineligibilityReasonList
+        ]
+    if proto.HasField("eventContract1"):
+        details.eventContract1 = proto.eventContract1
+    if proto.HasField("eventContractDescription1"):
+        details.eventContractDescription1 = proto.eventContractDescription1
+    if proto.HasField("eventContractDescription2"):
+        details.eventContractDescription2 = proto.eventContractDescription2
     return details
 
 

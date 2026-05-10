@@ -551,6 +551,14 @@ class TradingSession(NamedTuple):
 
 
 @dataclass
+class IneligibilityReason:
+    # ``id_`` (trailing underscore) mirrors IBKR's reference dataclass —
+    # ``id`` shadows the Python builtin so the upstream chose ``id_``.
+    id_: str = ""
+    description: str = ""
+
+
+@dataclass
 class ContractDetails:
     contract: Contract | None = None
     marketName: str = ""
@@ -585,6 +593,9 @@ class ContractDetails:
     minSize: Decimal | None = None
     sizeIncrement: Decimal | None = None
     suggestedSizeIncrement: Decimal | None = None
+    minAlgoSize: Decimal | None = None
+    lastPricePrecision: Decimal | None = None
+    lastSizePrecision: Decimal | None = None
     # minCashQtySize: Decimal | None = None
     cusip: str = ""
     ratings: str = ""
@@ -601,6 +612,27 @@ class ContractDetails:
     nextOptionType: str = ""
     nextOptionPartial: bool = False
     notes: str = ""
+    fundName: str = ""
+    fundFamily: str = ""
+    fundType: str = ""
+    fundFrontLoad: str = ""
+    fundBackLoad: str = ""
+    fundBackLoadTimeInterval: str = ""
+    fundManagementFee: str = ""
+    fundClosed: bool = False
+    fundClosedForNewInvestors: bool = False
+    fundClosedForNewMoney: bool = False
+    fundNotifyAmount: str = ""
+    fundMinimumInitialPurchase: str = ""
+    fundSubsequentMinimumPurchase: str = ""
+    fundBlueSkyStates: str = ""
+    fundBlueSkyTerritories: str = ""
+    fundDistributionPolicyIndicator: str = ""
+    fundAssetType: str = ""
+    ineligibilityReasonList: list[IneligibilityReason] = field(default_factory=list)
+    eventContract1: str = ""
+    eventContractDescription1: str = ""
+    eventContractDescription2: str = ""
 
     def tradingSessions(self) -> list[TradingSession]:
         return self._parseSessions(self.tradingHours)

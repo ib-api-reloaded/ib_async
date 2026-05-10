@@ -99,10 +99,13 @@ def _initProtoMsgHandlers() -> None:
         CommissionAndFeesReport_pb2,
         CompletedOrder_pb2,
         CompletedOrdersEnd_pb2,
+        ConfigResponse_pb2,
         ContractData_pb2,
         ContractDataEnd_pb2,
         CurrentTime_pb2,
         CurrentTimeInMillis_pb2,
+        DisplayGroupList_pb2,
+        DisplayGroupUpdated_pb2,
         ExecutionDetails_pb2,
         ExecutionDetailsEnd_pb2,
         FamilyCodes_pb2,
@@ -160,7 +163,10 @@ def _initProtoMsgHandlers() -> None:
         TickSize_pb2,
         TickSnapshotEnd_pb2,
         TickString_pb2,
+        UpdateConfigResponse_pb2,
         UserInfo_pb2,
+        VerifyCompleted_pb2,
+        VerifyMessageApi_pb2,
         WshEventData_pb2,
         WshMetaData_pb2,
     )
@@ -192,6 +198,13 @@ def _initProtoMsgHandlers() -> None:
             62: (PositionEnd_pb2.PositionEnd, "_protoPositionEnd"),
             63: (AccountSummary_pb2.AccountSummary, "_protoAccountSummary"),
             64: (AccountSummaryEnd_pb2.AccountSummaryEnd, "_protoAccountSummaryEnd"),
+            65: (VerifyMessageApi_pb2.VerifyMessageApi, "_protoVerifyMessageAPI"),
+            66: (VerifyCompleted_pb2.VerifyCompleted, "_protoVerifyCompleted"),
+            67: (DisplayGroupList_pb2.DisplayGroupList, "_protoDisplayGroupList"),
+            68: (
+                DisplayGroupUpdated_pb2.DisplayGroupUpdated,
+                "_protoDisplayGroupUpdated",
+            ),
             71: (PositionMulti_pb2.PositionMulti, "_protoPositionMulti"),
             72: (
                 PositionMultiEnd_pb2.PositionMultiEnd,
@@ -299,6 +312,11 @@ def _initProtoMsgHandlers() -> None:
             109: (
                 CurrentTimeInMillis_pb2.CurrentTimeInMillis,
                 "_protoCurrentTimeInMillis",
+            ),
+            110: (ConfigResponse_pb2.ConfigResponse, "_protoConfigResponse"),
+            111: (
+                UpdateConfigResponse_pb2.UpdateConfigResponse,
+                "_protoUpdateConfigResponse",
             ),
         }
     )
@@ -667,6 +685,60 @@ class Decoder:
         clientId = proto.clientId if proto.HasField("clientId") else 0
         orderId = proto.orderId if proto.HasField("orderId") else 0
         self.wrapper.orderBound(permId, clientId, orderId)
+
+    # --- verify / displayGroup / config handlers --------------------------
+    #
+    # The matching wrapper methods don't exist on our base ``Wrapper`` —
+    # the binary path's ``wrap()`` factory falls back to a noop when a
+    # wrapper method is missing, so we mirror that here via ``getattr``.
+    # Subclasses that wire up their own verify / display-group flow get
+    # their handlers invoked; vanilla setups silently drop these wire
+    # frames just like the binary path always has.
+
+    def _protoVerifyMessageAPI(self, proto: Any) -> None:
+        method = getattr(self.wrapper, "verifyMessageAPI", None)
+        if method is None:
+            return
+        apiData = proto.apiData if proto.HasField("apiData") else ""
+        method(apiData)
+
+    def _protoVerifyCompleted(self, proto: Any) -> None:
+        method = getattr(self.wrapper, "verifyCompleted", None)
+        if method is None:
+            return
+        isSuccessful = proto.isSuccessful if proto.HasField("isSuccessful") else False
+        errorText = proto.errorText if proto.HasField("errorText") else ""
+        method(isSuccessful, errorText)
+
+    def _protoDisplayGroupList(self, proto: Any) -> None:
+        method = getattr(self.wrapper, "displayGroupList", None)
+        if method is None:
+            return
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        groups = proto.groups if proto.HasField("groups") else ""
+        method(reqId, groups)
+
+    def _protoDisplayGroupUpdated(self, proto: Any) -> None:
+        method = getattr(self.wrapper, "displayGroupUpdated", None)
+        if method is None:
+            return
+        reqId = proto.reqId if proto.HasField("reqId") else -1
+        contractInfo = proto.contractInfo if proto.HasField("contractInfo") else ""
+        method(reqId, contractInfo)
+
+    def _protoConfigResponse(self, proto: Any) -> None:
+        # ConfigResponse carries nested ``LockAndExitConfig`` / ``ApiConfig``
+        # / ``MessageConfig`` / ``OrdersConfig`` sub-messages with no flat
+        # equivalent — the wrapper hook receives the raw proto. IBKR's
+        # reference does the same.
+        method = getattr(self.wrapper, "configResponseProtoBuf", None)
+        if method is not None:
+            method(proto)
+
+    def _protoUpdateConfigResponse(self, proto: Any) -> None:
+        method = getattr(self.wrapper, "updateConfigResponseProtoBuf", None)
+        if method is not None:
+            method(proto)
 
     # --- accounts / positions handlers ------------------------------------
 

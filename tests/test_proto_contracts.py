@@ -43,7 +43,9 @@ from ib_async.contract import (
     Contract,
     ContractDetails,
     DeltaNeutralContract,
+    IneligibilityReason,
     Stock,
+    TagValue,
 )
 
 # ---------------------------------------------------------------------------
@@ -337,6 +339,81 @@ def test_create_contract_details_from_contract_data_decodes_both_halves():
     assert details.contract is not None
     assert details.contract.symbol == "AAPL"
     assert details.marketName == "NMS"
+
+
+def test_create_contract_details_populates_fund_family_fields():
+    # Fund-family wire fields populate the matching domain fields. The
+    # one rename is wire ``fundMinimumSubsequentPurchase`` ->
+    # domain ``fundSubsequentMinimumPurchase``.
+    proto = ContractDetails_pb2.ContractDetails()
+    proto.fundName = "Vanguard Total Stock"
+    proto.fundFamily = "Vanguard"
+    proto.fundType = "Open-End"
+    proto.fundFrontLoad = "0"
+    proto.fundBackLoad = "0"
+    proto.fundBackLoadTimeInterval = "0"
+    proto.fundManagementFee = "0.04"
+    proto.fundClosed = True
+    proto.fundClosedForNewInvestors = False
+    proto.fundClosedForNewMoney = True
+    proto.fundNotifyAmount = "1000"
+    proto.fundMinimumInitialPurchase = "3000"
+    proto.fundMinimumSubsequentPurchase = "100"
+    proto.fundBlueSkyStates = "CA,NY"
+    proto.fundBlueSkyTerritories = "PR"
+    proto.fundDistributionPolicyIndicator = "N"
+    proto.fundAssetType = "004"
+    proto.eventContract1 = "EC1"
+    proto.eventContractDescription1 = "First desc"
+    proto.eventContractDescription2 = "Second desc"
+    proto.minAlgoSize = "5"
+    proto.lastPricePrecision = "0.01"
+    proto.lastSizePrecision = "0.001"
+    details = createContractDetails(proto, Contract())
+    assert details.fundName == "Vanguard Total Stock"
+    assert details.fundFamily == "Vanguard"
+    assert details.fundType == "Open-End"
+    assert details.fundFrontLoad == "0"
+    assert details.fundBackLoad == "0"
+    assert details.fundBackLoadTimeInterval == "0"
+    assert details.fundManagementFee == "0.04"
+    assert details.fundClosed is True
+    assert details.fundClosedForNewInvestors is False
+    assert details.fundClosedForNewMoney is True
+    assert details.fundNotifyAmount == "1000"
+    assert details.fundMinimumInitialPurchase == "3000"
+    assert details.fundSubsequentMinimumPurchase == "100"
+    assert details.fundBlueSkyStates == "CA,NY"
+    assert details.fundBlueSkyTerritories == "PR"
+    assert details.fundDistributionPolicyIndicator == "N"
+    assert details.fundAssetType == "004"
+    assert details.eventContract1 == "EC1"
+    assert details.eventContractDescription1 == "First desc"
+    assert details.eventContractDescription2 == "Second desc"
+    assert details.minAlgoSize == Decimal("5")
+    assert details.lastPricePrecision == Decimal("0.01")
+    assert details.lastSizePrecision == Decimal("0.001")
+
+
+def test_create_contract_details_populates_sec_id_and_ineligibility_lists():
+    # Wire ``secIdList`` is a string-keyed map; the domain field is a
+    # list of ``TagValue``. Two entries -> two TagValues.
+    # ``ineligibilityReasonList`` is a repeated message of (id, description).
+    proto = ContractDetails_pb2.ContractDetails()
+    proto.secIdList["ISIN"] = "US0378331005"
+    proto.secIdList["CUSIP"] = "037833100"
+    reason = proto.ineligibilityReasonList.add()
+    reason.id = "REASON_1"
+    reason.description = "Not eligible for trading"
+    details = createContractDetails(proto, Contract())
+    assert len(details.secIdList) == 2
+    by_tag = {tv.tag: tv.value for tv in details.secIdList}
+    assert by_tag == {"ISIN": "US0378331005", "CUSIP": "037833100"}
+    assert all(isinstance(tv, TagValue) for tv in details.secIdList)
+    assert len(details.ineligibilityReasonList) == 1
+    assert isinstance(details.ineligibilityReasonList[0], IneligibilityReason)
+    assert details.ineligibilityReasonList[0].id_ == "REASON_1"
+    assert details.ineligibilityReasonList[0].description == "Not eligible for trading"
 
 
 def test_create_contract_details_from_contract_data_handles_missing_inner():
