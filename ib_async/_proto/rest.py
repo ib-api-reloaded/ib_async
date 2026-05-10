@@ -80,9 +80,10 @@ from .._pb import (
     UserInfo_pb2,
     UserInfoRequest_pb2,
 )
-from ..contract import Contract, ContractDescription
+from ..contract import Contract, ContractDescription, TagValue
 from ..objects import PriceIncrement, SmartComponent, SoftDollarTier
 from .contracts import createContractDescription, createContractProto
+from .safe import fill_tag_value_map
 
 # ---------------------------------------------------------------------------
 # Args dataclasses for converter return shapes — slotted, frozen, named.
@@ -462,34 +463,46 @@ def createExerciseOptionsRequestProto(
 
 
 def createCalculateImpliedVolatilityRequestProto(
-    reqId: int, contract: Contract, optionPrice: float, underPrice: float
+    reqId: int,
+    contract: Contract,
+    optionPrice: float,
+    underPrice: float,
+    impliedVolatilityOptions: list[TagValue] | None = None,
 ) -> CalculateImpliedVolatilityRequest_pb2.CalculateImpliedVolatilityRequest:
     """Build a ``CalculateImpliedVolatilityRequest`` from caller args.
 
-    The ``impliedVolatilityOptions`` map is always sent empty — the
-    binary path doesn't carry it either.
+    Mirrors IBKR's ``client_utils.createCalculateImpliedVolatilityRequestProto``:
+    forwards ``impliedVolatilityOptions`` as the proto's ``map<string, string>``
+    so user-supplied trailers reach the wire.
     """
     proto = CalculateImpliedVolatilityRequest_pb2.CalculateImpliedVolatilityRequest()
     proto.reqId = reqId
     proto.contract.CopyFrom(createContractProto(contract))
     proto.optionPrice = optionPrice
     proto.underPrice = underPrice
+    fill_tag_value_map(impliedVolatilityOptions, proto.impliedVolatilityOptions)
     return proto
 
 
 def createCalculateOptionPriceRequestProto(
-    reqId: int, contract: Contract, volatility: float, underPrice: float
+    reqId: int,
+    contract: Contract,
+    volatility: float,
+    underPrice: float,
+    optionPriceOptions: list[TagValue] | None = None,
 ) -> CalculateOptionPriceRequest_pb2.CalculateOptionPriceRequest:
     """Build a ``CalculateOptionPriceRequest`` from caller args.
 
-    The ``optionPriceOptions`` map is always sent empty — the binary
-    path doesn't carry it either.
+    Mirrors IBKR's ``client_utils.createCalculateOptionPriceRequestProto``:
+    forwards ``optionPriceOptions`` as the proto's ``map<string, string>``
+    so user-supplied trailers reach the wire.
     """
     proto = CalculateOptionPriceRequest_pb2.CalculateOptionPriceRequest()
     proto.reqId = reqId
     proto.contract.CopyFrom(createContractProto(contract))
     proto.volatility = volatility
     proto.underPrice = underPrice
+    fill_tag_value_map(optionPriceOptions, proto.optionPriceOptions)
     return proto
 
 

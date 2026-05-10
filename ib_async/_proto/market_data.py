@@ -69,7 +69,7 @@ from .._server_versions import (
     MIN_SERVER_VER_PAST_LIMIT,
     MIN_SERVER_VER_PRE_OPEN_BID_ASK,
 )
-from ..contract import Contract
+from ..contract import Contract, TagValue
 from ..objects import (
     DepthMktDataDescription,
     TickAttrib,
@@ -77,7 +77,7 @@ from ..objects import (
     TickAttribLast,
 )
 from .contracts import createContractProto
-from .safe import wire_size_to_float
+from .safe import fill_tag_value_map, wire_size_to_float
 
 # Slotted-frozen dataclass return shapes for converters. Each one names
 # the wrapper method whose positional arguments it carries and exposes
@@ -629,6 +629,7 @@ def createMarketDataRequestProto(
     genericTickList: str,
     snapshot: bool,
     regulatorySnapshot: bool,
+    marketDataOptions: list[TagValue] | None = None,
 ) -> MarketDataRequest_pb2.MarketDataRequest:
     proto = MarketDataRequest_pb2.MarketDataRequest()
     proto.reqId = reqId
@@ -636,6 +637,7 @@ def createMarketDataRequestProto(
     proto.genericTickList = genericTickList
     proto.snapshot = snapshot
     proto.regulatorySnapshot = regulatorySnapshot
+    fill_tag_value_map(marketDataOptions, proto.marketDataOptions)
     return proto
 
 
@@ -654,13 +656,18 @@ def createMarketDataTypeRequestProto(
 
 
 def createMarketDepthRequestProto(
-    reqId: int, contract: Contract, numRows: int, isSmartDepth: bool
+    reqId: int,
+    contract: Contract,
+    numRows: int,
+    isSmartDepth: bool,
+    marketDepthOptions: list[TagValue] | None = None,
 ) -> MarketDepthRequest_pb2.MarketDepthRequest:
     proto = MarketDepthRequest_pb2.MarketDepthRequest()
     proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
     proto.numRows = numRows
     proto.isSmartDepth = isSmartDepth
+    fill_tag_value_map(marketDepthOptions, proto.marketDepthOptions)
     return proto
 
 
