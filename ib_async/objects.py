@@ -77,7 +77,10 @@ class Execution:
     lastLiquidity: int = 0
     pendingPriceRevision: bool = False
     submitter: str = ""
-    optExerciseOrLapseType: int = 0
+    # IBKR uses ``-1`` (OptionExerciseType.NoneItem) as the unset sentinel,
+    # NOT ``0``. ``0`` is "Exercise"; ``2`` is "Lapse". Defaulting to ``-1``
+    # preserves the unset semantics across user code that gates on the field.
+    optExerciseOrLapseType: int = -1
 
 
 @dataclass
