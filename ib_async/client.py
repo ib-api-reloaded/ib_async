@@ -175,8 +175,17 @@ class Client:
     MaxRequests = 45
     RequestsInterval = 1
 
+    # ``MaxClientVersion`` advertises the most-recent TWS / IB Gateway
+    # server version this client knows how to talk to. The handshake at
+    # ``connectAsync`` sends ``v{Min}..{Max}`` and the server picks the
+    # min(server-max, our-max) at negotiation time. Bumping this MUST be
+    # paired with patches to every send-side / receive-side gated field
+    # at gates between the old cap and the new — see
+    # ``ib_async/_server_versions.py`` for the symbolic gate constants.
+    # As of v3.0 the binary path handles all gates 158-225 and the
+    # protobuf path takes over per-message-family at 201-213.
     MinClientVersion = 157
-    MaxClientVersion = 178
+    MaxClientVersion = 225
 
     DISCONNECTED, CONNECTING, CONNECTED = range(3)
 
