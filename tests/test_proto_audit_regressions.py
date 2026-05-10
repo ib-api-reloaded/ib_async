@@ -555,6 +555,38 @@ def test_is_valid_int_rejects_unset_sentinel():
     assert _isValidInt(-(2**31)) is True
 
 
+def test_req_current_time_in_millis_async_end_to_end():
+    """The new v3.0 public method round-trips the proto receive
+    handler back to the future the caller awaits. Tests:
+    1. Calling the IB method opens a singleton request + sends a
+       protobuf REQ_CURRENT_TIME_IN_MILLIS frame.
+    2. Receiving a proto CurrentTimeInMillis settles the future
+       with the raw millisecond value.
+    """
+    from ib_async._pb import CurrentTimeInMillis_pb2
+
+    ib = ibi.IB()
+    ib.client._serverVersion = 213
+    ib.client.connState = ib.client.CONNECTED
+    sent: list[bytes] = []
+    ib.client.conn = type("X", (), {"sendMsg": lambda self, msg: sent.append(msg)})()
+
+    fut = ib.reqCurrentTimeInMillisAsync()
+    assert not fut.done()
+    assert sent  # the request frame went out
+
+    # Server replies with CurrentTimeInMillis carrying the timestamp.
+    proto = CurrentTimeInMillis_pb2.CurrentTimeInMillis()
+    proto.currentTimeInMillis = 1715251800123  # ~2024-05-09T13:30:00.123Z
+    ib.client.decoder.processProtoBuf(109, proto.SerializeToString())
+
+    # processProtoBuf settles the future synchronously (the wrapper
+    # method calls set_result directly), so it's already done — no
+    # event loop spin needed.
+    assert fut.done()
+    assert fut.result() == 1715251800123
+
+
 def test_is_valid_float_handles_nan_safely():
     """Float NaN compares != to anything including itself, so the
     sentinel guard returns True for NaN. This is the correct
