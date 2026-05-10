@@ -36,6 +36,7 @@ from ib_async._pb import (
     ContractData_pb2,
     DisplayGroupList_pb2,
     DisplayGroupUpdated_pb2,
+    ErrorMessage_pb2,
     ExecutionDetails_pb2,
     OpenOrder_pb2,
     TickByTickData_pb2,
@@ -598,3 +599,76 @@ def test_is_valid_float_handles_nan_safely():
 
     nan = float("nan")
     assert _isValidFloat(nan) is True  # NaN != UNSET_DOUBLE (NaN != anything)
+
+
+# ---------------------------------------------------------------------------
+# errorMsg / _protoError — server >= 194 ERROR_TIME gate
+# ---------------------------------------------------------------------------
+
+
+def test_proto_error_routes_to_wrapper_with_error_time():
+    """Canonical msgId 4 (ERR_MSG) on the protobuf path must decode and
+    dispatch to wrapper.error — including errorTime past gate 194.
+    Without this handler, every server-pushed error on a protobuf-routed
+    connection would be silently debug-dropped.
+    """
+    ib = ibi.IB()
+    seen: list[tuple] = []
+    ib.wrapper.error = lambda *a, **kw: seen.append(a)
+
+    proto = ErrorMessage_pb2.ErrorMessage()
+    proto.id = 42
+    proto.errorCode = 200
+    proto.errorMsg = "No security definition has been found"
+    proto.advancedOrderRejectJson = ""
+    proto.errorTime = 1715251800123
+    ib.client.decoder.processProtoBuf(4, proto.SerializeToString())
+
+    assert len(seen) == 1
+    args = seen[0]
+    assert args[0] == 42  # reqId
+    assert args[1] == 200  # errorCode
+    assert args[2] == "No security definition has been found"
+    assert args[3] == ""
+    assert args[4] == 1715251800123  # errorTime
+
+
+def test_binary_error_msg_drops_legacy_version_prefix_on_server_194():
+    """Pre-194 wire frame: [msgId, version, reqId, errorCode, errorString]
+    194+ wire frame: [msgId, reqId, errorCode, errorString, advRejectJson, errorTime]
+    The legacy version prefix is gone — eating it unconditionally
+    corrupts the entire message on a 194+ server.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 194
+    ib.client.decoder.serverVersion = 194
+    seen: list[tuple] = []
+    ib.wrapper.error = lambda *a, **kw: seen.append(a)
+
+    # 194+ wire frame fields list (msgId comes off in the dispatcher,
+    # we feed the rest including msgId placeholder for the slice).
+    # Binary path delivers fields as already-decoded str (NUL-split).
+    fields = ["4", "42", "200", "some error", "", "1715251800123"]
+    ib.client.decoder.errorMsg(fields)
+
+    assert len(seen) == 1
+    assert seen[0] == (42, 200, "some error", "", 1715251800123)
+
+
+def test_binary_error_msg_pre_194_keeps_legacy_version_prefix():
+    """Pre-194 wire frame keeps the version prefix; we must consume it
+    or reqId/errorCode/errorString shift one slot left.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 193
+    ib.client.decoder.serverVersion = 193
+    seen: list[tuple] = []
+    ib.wrapper.error = lambda *a, **kw: seen.append(a)
+
+    # Pre-194 wire frame fields: msgId, version, reqId, errorCode,
+    # errorString, advancedOrderRejectJson (ADVANCED_ORDER_REJECT >= 166).
+    fields = ["4", "2", "42", "200", "some error", ""]
+    ib.client.decoder.errorMsg(fields)
+
+    assert len(seen) == 1
+    assert seen[0] == (42, 200, "some error", "", 0)  # errorTime defaults 0

@@ -9,6 +9,10 @@ from decimal import Decimal
 from typing import Any, Final
 
 from ._proto.safe import safe_decimal
+from ._server_versions import (
+    MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
+    MIN_SERVER_VER_ERROR_TIME,
+)
 from .contract import (
     ComboLeg,
     Contract,
@@ -106,6 +110,7 @@ def _initProtoMsgHandlers() -> None:
         CurrentTimeInMillis_pb2,
         DisplayGroupList_pb2,
         DisplayGroupUpdated_pb2,
+        ErrorMessage_pb2,
         ExecutionDetails_pb2,
         ExecutionDetailsEnd_pb2,
         FamilyCodes_pb2,
@@ -175,6 +180,7 @@ def _initProtoMsgHandlers() -> None:
     _PROTO_MSG_HANDLERS.update(
         {
             3: (OrderStatus_pb2.OrderStatus, "_protoOrderStatus"),
+            4: (ErrorMessage_pb2.ErrorMessage, "_protoError"),
             5: (OpenOrder_pb2.OpenOrder, "_protoOpenOrder"),
             6: (AccountValue_pb2.AccountValue, "_protoUpdateAccountValue"),
             7: (PortfolioValue_pb2.PortfolioValue, "_protoUpdatePortfolio"),
@@ -551,6 +557,25 @@ class Decoder:
     # Each ``_protoXxx`` helper translates a parsed proto into the same
     # arguments the binary-path equivalent passes to its wrapper method,
     # so wrapper code stays unaware of which encoding the wire used.
+
+    def _protoError(self, proto: Any) -> None:
+        # ``ErrorMessage`` is the protobuf-form of msgId 4. Without this
+        # handler, server-pushed errors arriving as proto frames would
+        # silently debug-drop and the user would never see them. Live
+        # trading hazard: rejected orders, margin warnings, and
+        # connection-degraded notices all flow through here.
+        reqId = proto.id if proto.HasField("id") else 0
+        errorCode = proto.errorCode if proto.HasField("errorCode") else 0
+        errorMsg = proto.errorMsg if proto.HasField("errorMsg") else ""
+        advancedOrderRejectJson = (
+            proto.advancedOrderRejectJson
+            if proto.HasField("advancedOrderRejectJson")
+            else ""
+        )
+        errorTime = proto.errorTime if proto.HasField("errorTime") else 0
+        self.wrapper.error(
+            reqId, errorCode, errorMsg, advancedOrderRejectJson, errorTime
+        )
 
     def _protoOrderStatus(self, proto: Any) -> None:
         from ._proto.orders import createOrderStatus
@@ -1273,13 +1298,30 @@ class Decoder:
             )
 
     def errorMsg(self, fields):
-        _, _, reqId, errorCode, errorString, *fields = fields
+        # Wire layout:
+        #   pre-194:  msgId, version, reqId, errorCode, errorString [, advancedOrderRejectJson]
+        #   >=194:    msgId, reqId, errorCode, errorString, advancedOrderRejectJson, errorTime
+        # IBKR drops the legacy version prefix at MIN_SERVER_VER_ERROR_TIME (194)
+        # and appends a wall-clock millis ``errorTime`` int. Without the gate,
+        # a v>=194 server's reqId lands on errorCode, errorCode on errorString,
+        # and every error message is corrupted.
+        _, *fields = fields
+        if self.serverVersion < MIN_SERVER_VER_ERROR_TIME:
+            _, *fields = fields  # legacy version prefix
+        reqId, errorCode, errorString, *fields = fields
         advancedOrderRejectJson = ""
-        if self.serverVersion >= 166:
+        if self.serverVersion >= MIN_SERVER_VER_ADVANCED_ORDER_REJECT:
             advancedOrderRejectJson, *fields = fields
+        errorTime = 0
+        if self.serverVersion >= MIN_SERVER_VER_ERROR_TIME:
+            errorTime, *fields = fields
 
         self.wrapper.error(
-            int(reqId), int(errorCode), errorString, advancedOrderRejectJson
+            int(reqId),
+            int(errorCode),
+            errorString,
+            advancedOrderRejectJson,
+            int(errorTime or 0),
         )
 
     def updatePortfolio(self, fields):
