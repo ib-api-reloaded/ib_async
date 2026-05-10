@@ -179,14 +179,14 @@ def test_pending_commission_reports_evicts_oldest_at_cap():
     # Fill to exactly the cap.
     for i in range(_MAX_PENDING_COMMISSION_REPORTS):
         ib.wrapper.commissionReport(
-            ibi.CommissionReport(execId=f"orphan-{i}", commission=Decimal("1.0"))
+            ibi.CommissionReport(execId=f"orphan-{i}", commissionAndFees=Decimal("1.0"))
         )
     assert len(ib.wrapper._pendingCommissionReports) == _MAX_PENDING_COMMISSION_REPORTS
     assert "orphan-0" in ib.wrapper._pendingCommissionReports
 
     # One more push evicts the oldest (orphan-0) and admits the newest.
     ib.wrapper.commissionReport(
-        ibi.CommissionReport(execId="orphan-new", commission=Decimal("1.0"))
+        ibi.CommissionReport(execId="orphan-new", commissionAndFees=Decimal("1.0"))
     )
     assert len(ib.wrapper._pendingCommissionReports) == _MAX_PENDING_COMMISSION_REPORTS
     assert "orphan-0" not in ib.wrapper._pendingCommissionReports
@@ -234,8 +234,8 @@ _TRANSFORMED_FIELDS = (
     "initMarginAfterOutsideRTH",
     "maintMarginAfterOutsideRTH",
     "equityWithLoanAfterOutsideRTH",
-    # 3 commission monetary fields
-    "commission",
+    # 3 commission monetary fields (canonical v3.0 name)
+    "commissionAndFees",
     "minCommission",
     "maxCommission",
 )
@@ -273,7 +273,7 @@ def test_order_state_transform_covers_outsidertch_variants():
         initMarginAfterOutsideRTH="200",
         maintMarginAfterOutsideRTH="200",
         equityWithLoanAfterOutsideRTH="200",
-        commission=Decimal("1.5"),
+        commissionAndFees=Decimal("1.5"),
         minCommission=Decimal("1.0"),
         maxCommission=Decimal("2.0"),
     )
@@ -1080,3 +1080,69 @@ async def test_ibc_terminate_async_no_op_when_no_proc():
     ibc = IBC(twsVersion=974, gateway=True)
     assert ibc._proc is None
     await ibc.terminateAsync()  # no raise
+
+
+# ---------------------------------------------------------------------------
+# v3.0 commission → commissionAndFees rename (#164) — deprecation alias
+# ---------------------------------------------------------------------------
+
+
+def test_commission_report_canonical_name_is_commission_and_fees():
+    """``commissionAndFees`` is the canonical IBKR-aligned field name
+    in v3.0. The legacy ``commission`` attribute still works but emits
+    ``DeprecationWarning``; the canonical access does not.
+    """
+    import warnings
+
+    report = ibi.CommissionReport(commissionAndFees=Decimal("1.25"))
+    # Canonical access — no warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert report.commissionAndFees == Decimal("1.25")
+
+
+def test_commission_report_legacy_read_emits_deprecation_warning():
+    """``report.commission`` (read) emits ``DeprecationWarning`` but
+    returns the canonical value.
+    """
+    report = ibi.CommissionReport(commissionAndFees=Decimal("1.25"))
+    with pytest.warns(DeprecationWarning, match="commissionAndFees"):
+        value = report.commission
+    assert value == Decimal("1.25")
+
+
+def test_commission_report_legacy_write_emits_deprecation_warning():
+    """``report.commission = X`` emits ``DeprecationWarning`` and routes
+    the write to ``commissionAndFees``.
+    """
+    report = ibi.CommissionReport()
+    with pytest.warns(DeprecationWarning, match="commissionAndFees"):
+        report.commission = Decimal("2.50")
+    assert report.commissionAndFees == Decimal("2.50")
+
+
+def test_commission_report_legacy_construction_emits_deprecation_warning():
+    """``CommissionReport(commission=...)`` keyword arg keeps working
+    for v2.x callers but emits ``DeprecationWarning`` and aliases to
+    ``commissionAndFees``.
+    """
+    with pytest.warns(DeprecationWarning, match="commissionAndFees"):
+        report = ibi.CommissionReport(execId="x", commission=Decimal("3.75"))
+    assert report.commissionAndFees == Decimal("3.75")
+    assert report.execId == "x"
+
+
+def test_order_state_commission_alias_round_trips():
+    """``OrderState`` has the same deprecation alias; verify
+    construction, read, and write all flow through to ``commissionAndFees``.
+    """
+    from ib_async.order import OrderState
+
+    with pytest.warns(DeprecationWarning):
+        state = OrderState(commission=Decimal("5.00"))
+    assert state.commissionAndFees == Decimal("5.00")
+    with pytest.warns(DeprecationWarning):
+        assert state.commission == Decimal("5.00")
+    with pytest.warns(DeprecationWarning):
+        state.commission = Decimal("6.00")
+    assert state.commissionAndFees == Decimal("6.00")

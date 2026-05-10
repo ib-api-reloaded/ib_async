@@ -10,7 +10,7 @@ from typing import ClassVar, NamedTuple
 from eventkit import Event
 
 from .contract import Contract, TagValue
-from .objects import Fill, SoftDollarTier, TradeLogEntry
+from .objects import Fill, SoftDollarTier, TradeLogEntry, _install_commission_alias
 from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassNonDefaults
 
 
@@ -468,7 +468,10 @@ class OrderState:
     marginCurrency: str = ""
     # Monetary fields are ``Decimal | None`` end-to-end so user code
     # treats unset as falsy without the ``Decimal('NaN')`` truthy trap.
-    commission: Decimal | None = None
+    # ``commissionAndFees`` is the IBKR-aligned canonical name in v3.0+;
+    # ``commission`` continues to work via the deprecation alias installed
+    # below (removal target: v4.0).
+    commissionAndFees: Decimal | None = None
     minCommission: Decimal | None = None
     maxCommission: Decimal | None = None
     commissionCurrency: str = ""
@@ -513,7 +516,7 @@ class OrderState:
             equityWithLoanAfterOutsideRTH=transformer(
                 self.equityWithLoanAfterOutsideRTH
             ),
-            commission=transformer(self.commission),
+            commissionAndFees=transformer(self.commissionAndFees),
             minCommission=transformer(self.minCommission),
             maxCommission=transformer(self.maxCommission),
         )
@@ -576,9 +579,18 @@ class OrderStateNumeric(OrderState):
     initMarginAfterOutsideRTH: float = float("nan")  # type: ignore
     maintMarginAfterOutsideRTH: float = float("nan")  # type: ignore
     equityWithLoanAfterOutsideRTH: float = float("nan")  # type: ignore
-    commission: float | None = None  # type: ignore[assignment]
+    commissionAndFees: float | None = None  # type: ignore[assignment]
     minCommission: float | None = None  # type: ignore[assignment]
     maxCommission: float | None = None  # type: ignore[assignment]
+
+
+# Install legacy ``commission`` deprecation alias on both ``OrderState``
+# and ``OrderStateNumeric``. v2.x callers that read or set
+# ``state.commission`` continue to work but emit ``DeprecationWarning``;
+# the alias is slated for removal in v4.0. The same helper is applied to
+# ``CommissionReport`` in ``objects.py``.
+_install_commission_alias(OrderState)
+_install_commission_alias(OrderStateNumeric)
 
 
 @dataclass
