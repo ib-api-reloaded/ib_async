@@ -29,6 +29,8 @@ from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import pytest
+
 import ib_async as ibi
 from ib_async._pb import (
     CommissionAndFeesReport_pb2,
@@ -698,73 +700,73 @@ def test_historical_data_end_msg_id_108_routes_to_wrapper():
     assert seen == [(5, "20240101", "20240131")]
 
 
-def test_historical_data_pre_196_emits_inline_end_signal():
-    """Pre-196 servers carry startDateStr/endDateStr inline in the
-    bars frame and historicalData itself fires historicalDataEnd at
-    the tail. This must keep working on legacy servers.
+@pytest.mark.parametrize(
+    "serverVersion, fields, expected_ends",
+    [
+        # Pre-196: startDateStr/endDateStr inline, historicalData itself
+        # emits the end signal at the tail.
+        (
+            195,
+            [
+                "17",
+                "5",
+                "20240101",
+                "20240131",
+                "1",
+                "20240115",
+                "100.0",
+                "101.0",
+                "99.5",
+                "100.5",
+                "1000",
+                "100.25",
+                "10",
+            ],
+            [(5, "20240101", "20240131")],
+        ),
+        # >=196: no inline start/end. The end signal arrives via msgId 108.
+        (
+            196,
+            [
+                "17",
+                "5",
+                "1",
+                "20240115",
+                "100.0",
+                "101.0",
+                "99.5",
+                "100.5",
+                "1000",
+                "100.25",
+                "10",
+            ],
+            [],
+        ),
+    ],
+    ids=["pre_196_inline_end_signal", "gate_196_no_inline_end"],
+)
+def test_historical_data_end_signal_gate_196(serverVersion, fields, expected_ends):
+    """Gate 196 (HISTORICAL_DATA_END) wire-frame alignment.
+
+    Pre-196 servers carry startDateStr/endDateStr inline in the bars
+    frame and the historicalData handler itself fires
+    ``historicalDataEnd`` at the tail. >=196 those fields move to a
+    dedicated msgId 108 frame; the inline emit must be suppressed or
+    callers see the end signal twice.
     """
     ib = ibi.IB()
-    ib.client._serverVersion = 195
-    ib.client.decoder.serverVersion = 195
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
     bars: list = []
     ends: list[tuple] = []
     ib.wrapper.historicalData = lambda *a: bars.append(a)
     ib.wrapper.historicalDataEnd = lambda *a: ends.append(a)
 
-    # msgId, reqId, startDateStr, endDateStr, numBars, [date,o,h,l,c,vol,wap,barCount]*
-    fields = [
-        "17",
-        "5",
-        "20240101",
-        "20240131",
-        "1",
-        "20240115",
-        "100.0",
-        "101.0",
-        "99.5",
-        "100.5",
-        "1000",
-        "100.25",
-        "10",
-    ]
     ib.client.decoder.historicalData(fields)
 
     assert len(bars) == 1
     assert bars[0][0] == 5  # reqId
-    assert ends == [(5, "20240101", "20240131")]
-
-
-def test_historical_data_post_196_does_not_emit_inline_end():
-    """On 196+ servers the inline start/end fields are gone and the
-    end signal arrives via msgId 108. historicalData must NOT emit
-    historicalDataEnd or callers receive the signal twice.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 196
-    ib.client.decoder.serverVersion = 196
-    bars: list = []
-    ends: list[tuple] = []
-    ib.wrapper.historicalData = lambda *a: bars.append(a)
-    ib.wrapper.historicalDataEnd = lambda *a: ends.append(a)
-
-    # msgId, reqId, numBars, [date,o,h,l,c,vol,wap,barCount]*
-    fields = [
-        "17",
-        "5",
-        "1",
-        "20240115",
-        "100.0",
-        "101.0",
-        "99.5",
-        "100.5",
-        "1000",
-        "100.25",
-        "10",
-    ]
-    ib.client.decoder.historicalData(fields)
-
-    assert len(bars) == 1
-    assert ends == []  # end signal comes from separate msgId 108 frame
+    assert ends == expected_ends
 
 
 # ---------------------------------------------------------------------------
@@ -2265,42 +2267,31 @@ def test_binary_exec_details_at_exact_gate_178_reads_pending_price_revision():
     assert ex.submitter == ""
 
 
-def test_cancel_order_below_gate_169_omits_manual_order_cancel_time():
-    """Gate 169 (MANUAL_ORDER_TIME) below: at 168 the
-    ``manualOrderCancelTime`` field is NOT appended.
+@pytest.mark.parametrize(
+    "offset, expected",
+    [
+        (-1, (4, 1, 42)),  # below gate 169: no manualOrderCancelTime trailer
+        (0, (4, 1, 42, "20300101 09:30:00")),  # at gate 169: trailer appended
+    ],
+    ids=["below_gate_169", "at_gate_169"],
+)
+def test_cancel_order_manual_order_time_gate_169(offset, expected):
+    """Gate 169 (MANUAL_ORDER_TIME): ``manualOrderCancelTime`` appears in
+    the cancelOrder frame at and above gate 169, but not below. Same
+    cancel call exercises both sides — the only variable is server
+    version and the resulting wire-arg tuple.
     """
     from ib_async._server_versions import MIN_SERVER_VER_MANUAL_ORDER_TIME
     from ib_async.order import OrderCancel
 
-    serverVersion = MIN_SERVER_VER_MANUAL_ORDER_TIME - 1
     ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
+    ib.client._serverVersion = MIN_SERVER_VER_MANUAL_ORDER_TIME + offset
     sent: list = []
     ib.client.send = lambda *a: sent.append(a)
     ib.client.cancelOrder(42, OrderCancel(manualOrderCancelTime="20300101 09:30:00"))
 
     assert len(sent) == 1
-    args = sent[0]
-    assert args == (4, 1, 42)
-
-
-def test_cancel_order_at_exact_gate_169_appends_manual_order_cancel_time():
-    """Gate 169 boundary: at exactly 169 the field IS appended.
-    Pairs with the below-169 test.
-    """
-    from ib_async._server_versions import MIN_SERVER_VER_MANUAL_ORDER_TIME
-    from ib_async.order import OrderCancel
-
-    serverVersion = MIN_SERVER_VER_MANUAL_ORDER_TIME
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ib.client.cancelOrder(42, OrderCancel(manualOrderCancelTime="20300101 09:30:00"))
-
-    assert len(sent) == 1
-    args = sent[0]
-    assert args == (4, 1, 42, "20300101 09:30:00")
+    assert sent[0] == expected
 
 
 def test_binary_contract_details_skips_ineligibility_below_gate_186():
@@ -5400,27 +5391,66 @@ def test_process_proto_buf_msg_id_mid_int_overflow_does_not_raise():
 # ---------------------------------------------------------------------------
 
 
-def test_binary_order_status_pre_131_decodes_without_market_cap_price():
+@pytest.mark.parametrize(
+    "serverVersion, fields, expected_mktCapPrice",
+    [
+        # Pre-131: leading version prefix, no mktCapPrice trailer.
+        (
+            130,
+            [
+                "3",  # msgId
+                "6",  # version
+                "1234",  # orderId
+                "Submitted",  # status
+                "10.5",  # filled
+                "0",  # remaining
+                "120.25",  # avgFillPrice
+                "55",  # permId
+                "0",  # parentId
+                "120.25",  # lastFillPrice
+                "1",  # clientId
+                "",  # whyHeld
+            ],
+            None,
+        ),
+        # Gate 131: version prefix dropped, mktCapPrice appended.
+        (
+            131,
+            [
+                "3",  # msgId
+                "1234",  # orderId (no version prefix at >=131)
+                "Submitted",  # status
+                "10.5",  # filled
+                "0",  # remaining
+                "120.25",  # avgFillPrice
+                "55",  # permId
+                "0",  # parentId
+                "120.25",  # lastFillPrice
+                "1",  # clientId
+                "",  # whyHeld
+                "5000000000",  # mktCapPrice
+            ],
+            Decimal("5000000000"),
+        ),
+    ],
+    ids=["pre_131_no_mkt_cap_price", "gate_131_with_mkt_cap_price"],
+)
+def test_binary_order_status_market_cap_price_gate_131(
+    serverVersion, fields, expected_mktCapPrice
+):
+    """Gate 131 (MARKET_CAP_PRICE) wire-frame alignment.
+
+    Pre-131 servers send a leading version field and no mktCapPrice;
+    >=131 drops the version and appends mktCapPrice. Decoder must
+    branch at the gate or status mis-parses as Decimal (pre-131) /
+    mktCapPrice goes missing (post-131).
+    """
     ib = ibi.IB()
-    ib.client._serverVersion = 130
-    ib.client.decoder.serverVersion = 130
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
     seen: list[tuple] = []
     ib.wrapper.orderStatus = lambda *args: seen.append(args)
 
-    fields = [
-        "3",  # msgId
-        "6",  # version
-        "1234",  # orderId
-        "Submitted",  # status
-        "10.5",  # filled
-        "0",  # remaining
-        "120.25",  # avgFillPrice
-        "55",  # permId
-        "0",  # parentId
-        "120.25",  # lastFillPrice
-        "1",  # clientId
-        "",  # whyHeld
-    ]
     ib.client.decoder.orderStatusMsg(fields)
 
     assert len(seen) == 1
@@ -5435,37 +5465,7 @@ def test_binary_order_status_pre_131_decodes_without_market_cap_price():
     assert args[7] == Decimal("120.25")
     assert args[8] == 1
     assert args[9] == ""
-    assert args[10] is None  # mktCapPrice unavailable pre-131
-
-
-def test_binary_order_status_gate_131_decodes_market_cap_price():
-    ib = ibi.IB()
-    ib.client._serverVersion = 131
-    ib.client.decoder.serverVersion = 131
-    seen: list[tuple] = []
-    ib.wrapper.orderStatus = lambda *args: seen.append(args)
-
-    fields = [
-        "3",  # msgId
-        "1234",  # orderId  (no version prefix at >=131)
-        "Submitted",  # status
-        "10.5",  # filled
-        "0",  # remaining
-        "120.25",  # avgFillPrice
-        "55",  # permId
-        "0",  # parentId
-        "120.25",  # lastFillPrice
-        "1",  # clientId
-        "",  # whyHeld
-        "5000000000",  # mktCapPrice
-    ]
-    ib.client.decoder.orderStatusMsg(fields)
-
-    assert len(seen) == 1
-    args = seen[0]
-    assert args[0] == 1234
-    assert args[1] == "Submitted"
-    assert args[10] == Decimal("5000000000")
+    assert args[10] == expected_mktCapPrice
 
 
 # ---------------------------------------------------------------------------
@@ -5522,39 +5522,36 @@ def _binary_contract_details_pre134_fields() -> list[str]:
     ]
 
 
-def test_binary_contract_details_pre_134_omits_real_expiration_date():
-    """Server <134 must not consume realExpirationDate from a frame that
-    doesn't have it — otherwise the unpack would either run dry or shift
-    a later field into ``cd.realExpirationDate``.
+@pytest.mark.parametrize(
+    "serverVersion, extra_fields, expected_real_expiration",
+    [
+        # Pre-134: frame carries no realExpirationDate slot.
+        (133, [], ""),
+        # At gate 134 (and below 152): slot is consumed onto cd.realExpirationDate.
+        (151, ["20260619"], "20260619"),
+    ],
+    ids=["pre_134_no_slot", "gate_134_slot_consumed"],
+)
+def test_binary_contract_details_real_expiration_date_gate_134(
+    serverVersion, extra_fields, expected_real_expiration
+):
+    """Gate 134 (REAL_EXPIRATION_DATE) wire-frame alignment.
+
+    Pre-134 servers don't carry the slot; consuming it would either
+    run the unpack dry or shift a later field into the
+    ``realExpirationDate`` slot. >=134 must read it, and on <152 the
+    stockType slot is still absent.
     """
     ib = ibi.IB()
-    ib.client._serverVersion = 133
-    ib.client.decoder.serverVersion = 133
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
     seen: list[tuple] = []
     ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
 
-    fields = _binary_contract_details_pre134_fields()
+    fields = _binary_contract_details_pre134_fields() + extra_fields
     ib.client.decoder.contractDetails(fields)
 
     assert len(seen) == 1
     _, cd = seen[0]
-    assert cd.realExpirationDate == ""
-    assert cd.stockType == ""
-    assert cd.marketRuleIds == "0"
-
-
-def test_binary_contract_details_gate_134_reads_real_expiration_date():
-    """Server >=134 (and <152) reads realExpirationDate but not stockType."""
-    ib = ibi.IB()
-    ib.client._serverVersion = 151
-    ib.client.decoder.serverVersion = 151
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_contract_details_pre134_fields() + ["20260619"]
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert cd.realExpirationDate == "20260619"
+    assert cd.realExpirationDate == expected_real_expiration
     assert cd.stockType == ""

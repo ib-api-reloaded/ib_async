@@ -54,6 +54,7 @@ from .._pb import (
     CurrentTimeInMillis_pb2,
     CurrentTimeInMillisRequest_pb2,
     CurrentTimeRequest_pb2,
+    ErrorMessage_pb2,
     ExerciseOptionsRequest_pb2,
     LockAndExitConfig_pb2,
     MarketRule_pb2,
@@ -141,6 +142,50 @@ class UserInfoArgs:
 
     reqId: int
     whiteBrandingId: str
+
+
+@dataclass(slots=True, frozen=True)
+class ErrorMessageArgs:
+    """Args for ``Wrapper.error(reqId, errorCode, errorMsg, advancedOrderRejectJson, errorTime)``.
+
+    Wire field ``id`` is renamed to ``reqId`` because the canonical
+    binary path delivers the id to wrappers under that name. Every
+    field has a HasField-guarded default so a malformed frame still
+    produces a callable args tuple.
+    """
+
+    reqId: int
+    errorCode: int
+    errorMsg: str
+    advancedOrderRejectJson: str
+    errorTime: int
+
+
+# ---------------------------------------------------------------------------
+# ErrorMessage (msgId 4) — protobuf-form of server-pushed errors.
+# ---------------------------------------------------------------------------
+
+
+def createErrorArgs(proto: ErrorMessage_pb2.ErrorMessage) -> ErrorMessageArgs:
+    """Decode an ``ErrorMessage`` proto into the wrapper's flat error args.
+
+    Live trading hazard: rejected orders, margin warnings, and
+    connection-degraded notices all flow through here. The canonical
+    binary path's ``Wrapper.error`` carries ``reqId`` as the first
+    positional, so we keep that spelling on the args dataclass even
+    though the wire field is ``id``.
+    """
+    return ErrorMessageArgs(
+        reqId=proto.id if proto.HasField("id") else 0,
+        errorCode=proto.errorCode if proto.HasField("errorCode") else 0,
+        errorMsg=proto.errorMsg if proto.HasField("errorMsg") else "",
+        advancedOrderRejectJson=(
+            proto.advancedOrderRejectJson
+            if proto.HasField("advancedOrderRejectJson")
+            else ""
+        ),
+        errorTime=proto.errorTime if proto.HasField("errorTime") else 0,
+    )
 
 
 # ---------------------------------------------------------------------------

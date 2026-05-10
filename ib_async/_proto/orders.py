@@ -27,9 +27,11 @@ from .._pb import (
     AutoOpenOrdersRequest_pb2,
     CancelOrderRequest_pb2,
     CommissionAndFeesReport_pb2,
+    CompletedOrder_pb2,
     CompletedOrdersRequest_pb2,
     Contract_pb2,
     Execution_pb2,
+    ExecutionDetails_pb2,
     ExecutionFilter_pb2,
     ExecutionRequest_pb2,
     GlobalCancelRequest_pb2,
@@ -1319,6 +1321,62 @@ def createOpenOrder(
         else OrderState()
     )
     return orderId, contract, order, state
+
+
+# --- Envelope: CompletedOrder -------------------------------------------
+
+
+def createCompletedOrder(
+    proto: CompletedOrder_pb2.CompletedOrder,
+) -> tuple[Contract, Order, OrderState] | None:
+    """Decode a ``CompletedOrder`` envelope.
+
+    Returns ``(contract, order, orderState)`` or ``None`` when the
+    envelope is missing any of the three required sub-messages. The
+    ``None`` signal mirrors ``_protoOpenOrder``'s drop-on-malformed
+    behaviour: a half-formed completed order would poison the trade
+    registry.
+
+    Combo-leg-bearing orders read per-leg pricing off the contract
+    proto, so the contract message is fed into ``createOrder`` for
+    the ``orderComboLegs`` rehydration.
+    """
+    if not (
+        proto.HasField("contract")
+        and proto.HasField("order")
+        and proto.HasField("orderState")
+    ):
+        return None
+    contract = createContract(proto.contract)
+    order = createOrder(proto.order, contractProto=proto.contract)
+    state = createOrderState(proto.orderState)
+    return contract, order, state
+
+
+# --- Envelope: ExecutionDetails -----------------------------------------
+
+
+def createExecutionDetails(
+    proto: ExecutionDetails_pb2.ExecutionDetails,
+) -> tuple[int, Contract, Execution]:
+    """Decode an ``ExecutionDetails`` envelope.
+
+    Returns ``(reqId, contract, execution)``. ``Execution.time`` is
+    left in its IBKR wire-string form on the execution; the calling
+    decoder applies the wrapper's tz normalization because that step
+    needs access to ``Wrapper.ib.TimezoneTWS`` (decoder-instance
+    state, not pure-converter input).
+    """
+    reqId = proto.reqId if proto.HasField("reqId") else -1
+    contract = (
+        createContract(proto.contract) if proto.HasField("contract") else Contract()
+    )
+    execution = (
+        createExecution(proto.execution)
+        if proto.HasField("execution")
+        else Execution()
+    )
+    return reqId, contract, execution
 
 
 # --- Envelope: PlaceOrderRequest ----------------------------------------

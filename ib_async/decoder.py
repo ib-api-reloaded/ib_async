@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Any, Final
 
 from ._proto.safe import safe_decimal
+from ._requests import ReqIdKey
 from ._server_versions import (
     MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
     MIN_SERVER_VER_AGG_GROUP,
@@ -568,16 +569,50 @@ class Decoder:
             )
             return
         protoCls, handler = entry
+        proto: Any = None
         try:
             proto = protoCls()
             proto.ParseFromString(payload)
             handler(proto)
-        except Exception:
+        except Exception as exc:
+            # ``ParseFromString`` failures leave reqId inaccessible because
+            # the bytes never landed in a typed field, so the awaiter only
+            # clears via the connection-loss path or a user-side timeout.
+            # Handler-raise failures (proto parsed, dispatch crashed) are
+            # different — the parsed proto usually carries a reqId, so we
+            # can settle the matching future with the same exception type
+            # the binary path would surface. The connection survives the
+            # crash either way; we never re-raise here.
             self.logger.exception(
-                "Error decoding protobuf msg %d, %d bytes",
+                "Error decoding protobuf msg %d (%s), %d bytes",
                 canonicalMsgId,
+                type(exc).__name__,
                 len(payload),
             )
+            reqId: int | None = None
+            if proto is not None:
+                # Most decoded protos expose ``reqId`` but it's conditional
+                # by message type — Open/Cancel families lack it entirely.
+                # ``HasField`` distinguishes "field present" from "default
+                # 0" for proto2-style messages; on proto3 every scalar is
+                # always reported as set, so we fall back to a raw read in
+                # that case to surface anything non-zero.
+                try:
+                    if proto.HasField("reqId"):
+                        reqId = int(proto.reqId)
+                except (AttributeError, ValueError):
+                    raw = getattr(proto, "reqId", None)
+                    if isinstance(raw, int) and raw != 0:
+                        reqId = raw
+            if reqId is not None:
+                try:
+                    self.wrapper.requests.set_error(ReqIdKey(reqId), exc)
+                except Exception:
+                    self.logger.exception(
+                        "Failed to settle awaiter for reqId %s after proto msg %d crash",
+                        reqId,
+                        canonicalMsgId,
+                    )
 
     # --- protobuf message handlers ----------------------------------------
     #
@@ -591,17 +626,11 @@ class Decoder:
         # silently debug-drop and the user would never see them. Live
         # trading hazard: rejected orders, margin warnings, and
         # connection-degraded notices all flow through here.
-        reqId = proto.id if proto.HasField("id") else 0
-        errorCode = proto.errorCode if proto.HasField("errorCode") else 0
-        errorMsg = proto.errorMsg if proto.HasField("errorMsg") else ""
-        advancedOrderRejectJson = (
-            proto.advancedOrderRejectJson
-            if proto.HasField("advancedOrderRejectJson")
-            else ""
-        )
-        errorTime = proto.errorTime if proto.HasField("errorTime") else 0
+        from ._proto.rest import createErrorArgs
+
+        a = createErrorArgs(proto)
         self.wrapper.error(
-            reqId, errorCode, errorMsg, advancedOrderRejectJson, errorTime
+            a.reqId, a.errorCode, a.errorMsg, a.advancedOrderRejectJson, a.errorTime
         )
 
     def _protoOrderStatus(self, proto: Any) -> None:
@@ -643,42 +672,27 @@ class Decoder:
         self.wrapper.openOrderEnd()
 
     def _protoCompletedOrder(self, proto: Any) -> None:
-        if not (
-            proto.HasField("contract")
-            and proto.HasField("order")
-            and proto.HasField("orderState")
-        ):
-            return
-        from ._proto.contracts import createContract
-        from ._proto.orders import createOrder, createOrderState
+        from ._proto.orders import createCompletedOrder
 
-        contract = createContract(proto.contract)
-        # Pass the contract proto so combo-leg-bearing orders decode
-        # their orderComboLegs from the contract side of the wire.
-        order = createOrder(proto.order, contractProto=proto.contract)
-        state = createOrderState(proto.orderState)
+        decoded = createCompletedOrder(proto)
+        if decoded is None:
+            return
+        contract, order, state = decoded
         self.wrapper.completedOrder(contract, order, state)
 
     def _protoCompletedOrdersEnd(self, proto: Any) -> None:
         self.wrapper.completedOrdersEnd()
 
     def _protoExecutionDetails(self, proto: Any) -> None:
-        from ._proto.contracts import createContract
-        from ._proto.orders import createExecution
+        from ._proto.orders import createExecutionDetails
 
-        reqId = proto.reqId if proto.HasField("reqId") else -1
-        contract = (
-            createContract(proto.contract) if proto.HasField("contract") else Contract()
-        )
-        execution = (
-            createExecution(proto.execution)
-            if proto.HasField("execution")
-            else Execution()
-        )
+        reqId, contract, execution = createExecutionDetails(proto)
         # Wire ``Execution.time`` is a string in IBKR's
         # ``"YYYYmmdd HH:MM:SS [tz]"`` format. The converter leaves it
         # raw on the domain object; we normalize here so the proto path
-        # produces the same datetime shape as the binary path.
+        # produces the same datetime shape as the binary path. The tz
+        # source is decoder-instance state (``Wrapper.ib.TimezoneTWS``)
+        # so it can't live inside the pure converter.
         if proto.HasField("execution") and proto.execution.HasField("time"):
             execution.time = self._normalizeExecutionTime(proto.execution.time)
         self.wrapper.execDetails(reqId, contract, execution)

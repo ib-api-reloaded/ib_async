@@ -18,8 +18,6 @@ The ``useProtoBuf(canonicalMsgId)`` boolean encodes that exactly.
 
 from __future__ import annotations
 
-import struct
-
 import ib_async as ibi
 from ib_async._pb import (
     AutoOpenOrdersRequest_pb2,
@@ -32,7 +30,6 @@ from ib_async._pb import (
 from ib_async._pb_msgids import (
     CANCEL_ORDER,
     PLACE_ORDER,
-    PROTOBUF_MSG_ID,
     REQ_ALL_OPEN_ORDERS,
     REQ_AUTO_OPEN_ORDERS,
     REQ_COMPLETED_ORDERS,
@@ -41,35 +38,7 @@ from ib_async._pb_msgids import (
     REQ_GLOBAL_CANCEL,
     REQ_OPEN_ORDERS,
 )
-
-
-def _ibAtVersion(version: int):
-    ib = ibi.IB()
-    ib.client._serverVersion = version
-    # Pretend the client is connected so binary ``send()`` doesn't raise
-    # ConnectionError. We replace ``conn.sendMsg`` with a capture list
-    # in the test, so no real socket I/O happens.
-    ib.client.connState = ib.client.CONNECTED
-    return ib
-
-
-def _captureSend(ib):
-    """Replace the connection's sendMsg with a capture list that the
-    test can inspect. Returns the list of bytes written."""
-    sent: list[bytes] = []
-    ib.client.conn.sendMsg = sent.append  # type: ignore[method-assign]
-    return sent
-
-
-def _decodeProtoFrame(framed: bytes) -> tuple[int, bytes]:
-    """Strip the 4-byte length prefix, then read the 4-byte BE wire
-    msgId. Returns ``(canonicalMsgId, bodyBytes)`` where canonical is
-    ``wire - PROTOBUF_MSG_ID``."""
-    body_len = struct.unpack(">I", framed[:4])[0]
-    body = framed[4 : 4 + body_len]
-    wireMsgId = struct.unpack(">I", body[:4])[0]
-    return wireMsgId - PROTOBUF_MSG_ID, body[4:]
-
+from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 # ---------------------------------------------------------------------------
 # placeOrder — gates at 203, regression-proves clientId round-trip

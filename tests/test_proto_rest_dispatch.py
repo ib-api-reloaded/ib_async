@@ -13,8 +13,6 @@ verify the future settles with the millisecond timestamp.
 
 from __future__ import annotations
 
-import struct
-
 import ib_async as ibi
 from ib_async._pb import (
     CalculateImpliedVolatilityRequest_pb2,
@@ -52,7 +50,6 @@ from ib_async._pb_msgids import (
     CANCEL_CALC_IMPLIED_VOLAT,
     CANCEL_CALC_OPTION_PRICE,
     EXERCISE_OPTIONS,
-    PROTOBUF_MSG_ID,
     REPLACE_FA,
     REQ_CALC_IMPLIED_VOLAT,
     REQ_CALC_OPTION_PRICE,
@@ -70,27 +67,7 @@ from ib_async._pb_msgids import (
     START_API,
 )
 from ib_async._requests import CompositeKey, ReqIdKey, SingletonKey
-
-
-def _ibAtVersion(version: int):
-    ib = ibi.IB()
-    ib.client._serverVersion = version
-    ib.client.connState = ib.client.CONNECTED
-    return ib
-
-
-def _captureSend(ib):
-    sent: list[bytes] = []
-    ib.client.conn.sendMsg = sent.append  # type: ignore[method-assign]
-    return sent
-
-
-def _decodeProtoFrame(framed: bytes) -> tuple[int, bytes]:
-    body_len = struct.unpack(">I", framed[:4])[0]
-    body = framed[4 : 4 + body_len]
-    wireMsgId = struct.unpack(">I", body[:4])[0]
-    return wireMsgId - PROTOBUF_MSG_ID, body[4:]
-
+from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 # ===========================================================================
 # RECEIVE SIDE
