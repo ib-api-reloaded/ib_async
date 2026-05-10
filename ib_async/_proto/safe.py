@@ -94,3 +94,18 @@ def safe_decimal(value: str | Decimal | None) -> Decimal | None:
     if result.is_nan() or result.is_infinite():
         return None
     return result
+
+
+def wire_size_to_float(s: str) -> float:
+    """Coerce a wire-string size (Decimal-typed on the wire, float-typed
+    on the wrapper signature) to ``float``.
+
+    Goes through ``safe_decimal`` so empty / ``"nan"`` / sentinel /
+    garbage land as ``0.0`` instead of raising. The wrapper's
+    ``size == 0`` checks are semantically equivalent to "size is unset"
+    on the binary path, so dropping unparseable values to zero matches
+    that behaviour exactly. Used by tick / market-depth / historical-
+    tick converters pending the Ticker hot-path Decimal benchmark.
+    """
+    d = safe_decimal(s)
+    return float(d) if d is not None else 0.0

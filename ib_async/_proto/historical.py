@@ -76,7 +76,7 @@ from ..objects import (
 )
 from .contracts import createContractProto
 from .market_data import createTickAttribBidAsk, createTickAttribLast
-from .safe import safe_decimal
+from .safe import safe_decimal, wire_size_to_float
 
 # Frozen-slotted dataclass return shapes for converter functions. Each one
 # names the wrapper method whose positional arguments it carries so call
@@ -364,21 +364,13 @@ def createHistoricalScheduleArgs(
 # ---------------------------------------------------------------------------
 
 
-def _wireSizeToFloat(s: str) -> float:
-    """Parallel to ``market_data._wireSizeToFloat`` — wire string → float
-    via ``safe_decimal``. Sizes are float-typed on these tick records
-    pending the Ticker hot-path benchmark."""
-    d = safe_decimal(s)
-    return float(d) if d is not None else 0.0
-
-
 def createHistoricalTick(
     proto: HistoricalTick_pb2.HistoricalTick,
 ) -> HistoricalTick:
     return HistoricalTick(
         time=proto.time if proto.HasField("time") else 0,  # type: ignore[arg-type]
         price=float(proto.price) if proto.HasField("price") else 0.0,
-        size=_wireSizeToFloat(proto.size) if proto.HasField("size") else 0.0,
+        size=wire_size_to_float(proto.size) if proto.HasField("size") else 0.0,
     )
 
 
@@ -392,8 +384,8 @@ def createHistoricalTickBidAsk(
         else None,  # type: ignore[arg-type]
         priceBid=float(proto.priceBid) if proto.HasField("priceBid") else 0.0,
         priceAsk=float(proto.priceAsk) if proto.HasField("priceAsk") else 0.0,
-        sizeBid=_wireSizeToFloat(proto.sizeBid) if proto.HasField("sizeBid") else 0.0,
-        sizeAsk=_wireSizeToFloat(proto.sizeAsk) if proto.HasField("sizeAsk") else 0.0,
+        sizeBid=wire_size_to_float(proto.sizeBid) if proto.HasField("sizeBid") else 0.0,
+        sizeAsk=wire_size_to_float(proto.sizeAsk) if proto.HasField("sizeAsk") else 0.0,
     )
 
 
@@ -406,7 +398,7 @@ def createHistoricalTickLast(
         if proto.HasField("tickAttribLast")
         else None,  # type: ignore[arg-type]
         price=float(proto.price) if proto.HasField("price") else 0.0,
-        size=_wireSizeToFloat(proto.size) if proto.HasField("size") else 0.0,
+        size=wire_size_to_float(proto.size) if proto.HasField("size") else 0.0,
         exchange=proto.exchange if proto.HasField("exchange") else "",
         specialConditions=proto.specialConditions
         if proto.HasField("specialConditions")
