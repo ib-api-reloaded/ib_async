@@ -2355,8 +2355,6 @@ class IB:
             *[self.reqContractDetailsAsync(c) for c in contracts]
         )
 
-        # self._logger.warning(f"Got details: {detailsLists=}")
-
         result: list[Contract | list[Contract | None] | None] = []
         for contract, detailsList in zip(contracts, detailsLists):
             if not detailsList:

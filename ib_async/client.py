@@ -24,6 +24,7 @@ from ._server_versions import (
     MIN_SERVER_VER_CME_TAGGING_FIELDS,
     MIN_SERVER_VER_CUSTOMER_ACCOUNT,
     MIN_SERVER_VER_DURATION,
+    MIN_SERVER_VER_FA_PROFILE_DESUPPORT,
     MIN_SERVER_VER_IMBALANCE_ONLY,
     MIN_SERVER_VER_INCLUDE_OVERNIGHT,
     MIN_SERVER_VER_MANUAL_ORDER_TIME,
@@ -32,6 +33,7 @@ from ._server_versions import (
     MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS,
     MIN_SERVER_VER_POST_TO_ATS,
     MIN_SERVER_VER_PROFESSIONAL_CUSTOMER,
+    MIN_SERVER_VER_REPLACE_FA_END,
     MIN_SERVER_VER_RFQ_FIELDS,
     MIN_SERVER_VER_UNDO_RFQ_FIELDS,
 )
@@ -645,6 +647,20 @@ class Client:
         self.send(2, 2, reqId)
 
     def placeOrder(self, orderId, contract, order):
+        # IBKR API BUG FIX (applies to BOTH binary and proto paths):
+        # IBKR sometimes back-populates the 'volatility' field into live orders, but then if we try to
+        # modify an order using cached order objects, IBKR rejects modifications because 'volatility'
+        # is not allowed to be set (even though _they_ added it to our previously submitted order).
+        # Solution: if an order is NOT a VOL order, reset 'volatility' to UNSET_DOUBLE so the proto
+        # path's ``_isValidFloat`` guard skips the field and the binary path's float handler emits
+        # an empty string. MUST run before the proto branch below — the proto path's
+        # ``createOrderProto`` writes ``volatility`` whenever it differs from UNSET_DOUBLE, so
+        # without this reset a TWS-populated value would ride out on every modify and the server
+        # would reject it.
+        if not order.orderType.startswith("VOL"):
+            # ONLY volatility orders can have 'volatility' set when sending API data.
+            order.volatility = UNSET_DOUBLE
+
         # On TWS / IB Gateway server versions that support protobuf for
         # placeOrder (gate 203), emit a ``PlaceOrderRequest`` proto and
         # return; binary fallback below preserves compatibility with
@@ -659,15 +675,6 @@ class Client:
             return
 
         version = self.serverVersion()
-
-        # IBKR API BUG FIX:
-        # IBKR sometimes back-populates the 'volatility' field into live orders, but then if we try to
-        # modify an order using cached order objects, IBKR rejects modifications because 'volatility'
-        # is not allowed to be set (even though _they_ added it to our previously submitted order).
-        # Solution: if an order is NOT a VOL order, delete the 'volatility' value to prevent this error.
-        if not order.orderType.startswith("VOL"):
-            # ONLY volatility orders can have 'volatility' set when sending API data.
-            order.volatility = None
 
         # The IBKR API protocol is just a series of in-order arguments denoted by position.
         # The upstream API parses all fields based on the first value (the message type).
@@ -1163,6 +1170,14 @@ class Client:
         self.send(17, 1)
 
     def requestFA(self, faData):
+        # FA Profiles (faData == 2) were de-supported at server gate 177.
+        # IBKR's reference rejects this request locally instead of letting
+        # the server bounce it; mirror that to match wire parity.
+        if (
+            self.serverVersion() >= MIN_SERVER_VER_FA_PROFILE_DESUPPORT
+            and int(faData) == 2
+        ):
+            return
         if self.useProtoBuf(_M.REQ_FA):
             from ._proto.accounts import createFARequestProto
 
@@ -1171,6 +1186,13 @@ class Client:
         self.send(18, 1, faData)
 
     def replaceFA(self, reqId, faData, cxml):
+        # FA Profiles (faData == 2) were de-supported at server gate 177
+        # (FA_PROFILE_DESUPPORT). Reject locally before sending.
+        if (
+            self.serverVersion() >= MIN_SERVER_VER_FA_PROFILE_DESUPPORT
+            and int(faData) == 2
+        ):
+            return
         if self.useProtoBuf(_M.REPLACE_FA):
             from ._proto.accounts import createFAReplaceProto
 
@@ -1179,7 +1201,13 @@ class Client:
                 createFAReplaceProto(reqId, faData, cxml).SerializeToString(),
             )
             return
-        self.send(19, 1, faData, cxml, reqId)
+        # The trailing ``reqId`` field only exists at server gate 157+
+        # (REPLACE_FA_END). Sending it to a sub-157 server desyncs the
+        # frame — IBKR's reference gates this write conditionally.
+        fields: list[Any] = [19, 1, faData, cxml]
+        if self.serverVersion() >= MIN_SERVER_VER_REPLACE_FA_END:
+            fields.append(reqId)
+        self.send(*fields)
 
     def reqHistoricalData(
         self,
