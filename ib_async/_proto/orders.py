@@ -26,6 +26,7 @@ from .._pb import (
     CancelOrderRequest_pb2,
     CommissionAndFeesReport_pb2,
     CompletedOrdersRequest_pb2,
+    Contract_pb2,
     Execution_pb2,
     ExecutionFilter_pb2,
     ExecutionRequest_pb2,
@@ -41,8 +42,20 @@ from .._pb import (
     SoftDollarTier_pb2,
 )
 from ..contract import Contract, TagValue
-from ..objects import CommissionReport, Execution, ExecutionFilter
-from ..order import Order, OrderCondition, OrderState, OrderStatus
+from ..objects import CommissionReport, Execution, ExecutionFilter, SoftDollarTier
+from ..order import (
+    ExecutionCondition,
+    MarginCondition,
+    Order,
+    OrderComboLeg,
+    OrderCondition,
+    OrderState,
+    OrderStatus,
+    PercentChangeCondition,
+    PriceCondition,
+    TimeCondition,
+    VolumeCondition,
+)
 from ..util import UNSET_DOUBLE, UNSET_INTEGER
 from .contracts import createContract, createContractProto
 from .safe import safe_decimal
@@ -76,6 +89,22 @@ def _fillTagValueMap(items: list[TagValue] | None, target: object) -> None:
         return
     for tv in items:
         target[tv.tag] = tv.value  # type: ignore[index]
+
+
+def _parseTagValueList(source: object) -> list[TagValue]:
+    """Decode a proto ``map<string,string>`` into a domain
+    ``list[TagValue]``. Mirrors IBKR's ``decodeTagValueList``.
+
+    The source arg is a ``ScalarMap[str, str]`` from the parent proto;
+    typed as ``object`` here because the protobuf generated stubs don't
+    expose a public name we can import.
+    """
+    if not source:
+        return []
+    out: list[TagValue] = []
+    for tag, value in source.items():  # type: ignore[attr-defined]
+        out.append(TagValue(tag=tag, value=value))
+    return out
 
 
 def _isValidFloat(value: float | Decimal) -> bool:
@@ -536,18 +565,137 @@ def _createConditionProtos(
     return out
 
 
-def createOrder(proto: Order_pb2.Order) -> Order:
-    """Decode a protobuf ``Order`` into our domain dataclass."""
+_CONDITION_CLASSES: dict[int, type[OrderCondition]] = {
+    1: PriceCondition,
+    3: TimeCondition,
+    4: MarginCondition,
+    5: ExecutionCondition,
+    6: VolumeCondition,
+    7: PercentChangeCondition,
+}
+
+
+def _decodeConditions(
+    proto: Order_pb2.Order,
+) -> list[OrderCondition]:
+    """Mirror IBKR's ``decodeConditions`` — a flat repeated proto with
+    a ``type`` discriminator dispatches to the per-subclass field set.
+    Unknown ``type`` values are silently skipped (matches the reference).
+    """
+    out: list[OrderCondition] = []
+    for cp in proto.conditions:
+        condType = cp.type if cp.HasField("type") else 0
+        cls = _CONDITION_CLASSES.get(condType)
+        if cls is None:
+            continue
+        c: OrderCondition = cls()
+        # Domain ``conjunction`` is "a"/"o"; wire is bool. Default to "a"
+        # when the wire didn't ship a value — matches the dataclass
+        # default and keeps behavior stable across older proto payloads.
+        if cp.HasField("isConjunctionConnection"):
+            c.conjunction = "a" if cp.isConjunctionConnection else "o"  # type: ignore[attr-defined]
+        if cp.HasField("isMore") and hasattr(c, "isMore"):
+            c.isMore = cp.isMore  # type: ignore[attr-defined]
+        if cp.HasField("conId") and hasattr(c, "conId"):
+            c.conId = cp.conId  # type: ignore[attr-defined]
+        # Wire field is ``exchange``; domain attribute is ``exch``.
+        if cp.HasField("exchange") and hasattr(c, "exch"):
+            c.exch = cp.exchange  # type: ignore[attr-defined]
+        if cp.HasField("symbol") and hasattr(c, "symbol"):
+            c.symbol = cp.symbol  # type: ignore[attr-defined]
+        if cp.HasField("secType") and hasattr(c, "secType"):
+            c.secType = cp.secType  # type: ignore[attr-defined]
+        if cp.HasField("percent") and hasattr(c, "percent"):
+            c.percent = cp.percent  # type: ignore[attr-defined]
+        if cp.HasField("changePercent") and hasattr(c, "changePercent"):
+            c.changePercent = cp.changePercent  # type: ignore[attr-defined]
+        if cp.HasField("price") and hasattr(c, "price"):
+            c.price = cp.price  # type: ignore[attr-defined]
+        if cp.HasField("triggerMethod") and hasattr(c, "triggerMethod"):
+            c.triggerMethod = cp.triggerMethod  # type: ignore[attr-defined]
+        if cp.HasField("time") and hasattr(c, "time"):
+            c.time = cp.time  # type: ignore[attr-defined]
+        if cp.HasField("volume") and hasattr(c, "volume"):
+            c.volume = cp.volume  # type: ignore[attr-defined]
+        out.append(c)
+    return out
+
+
+def _decodeSoftDollarTier(proto: Order_pb2.Order) -> SoftDollarTier | None:
+    """Mirror IBKR's ``decodeSoftDollarTierFromOrder``. Wire field is
+    ``value``; domain attribute is the legacy spelling ``val``.
+    Returns ``None`` when the embedded message carries no fields, so
+    the caller leaves the dataclass default in place.
+    """
+    if not proto.HasField("softDollarTier"):
+        return None
+    sdt = proto.softDollarTier
+    name = sdt.name if sdt.HasField("name") else ""
+    val = sdt.value if sdt.HasField("value") else ""
+    displayName = sdt.displayName if sdt.HasField("displayName") else ""
+    if not (name or val or displayName):
+        return None
+    return SoftDollarTier(name=name, val=val, displayName=displayName)
+
+
+def _decodeOrderComboLegs(
+    contractProto: Contract_pb2.Contract | None,
+) -> list[OrderComboLeg]:
+    """Mirror IBKR's ``decodeOrderComboLegs`` — combo-leg per-leg prices
+    live on the contract proto's ``comboLegs`` list, NOT the order
+    proto. Returns an empty list when the contract proto is absent
+    (e.g. the caller didn't propagate it).
+    """
+    if contractProto is None:
+        return []
+    out: list[OrderComboLeg] = []
+    for legProto in contractProto.comboLegs:
+        leg = OrderComboLeg()
+        if legProto.HasField("perLegPrice"):
+            leg.price = legProto.perLegPrice
+        out.append(leg)
+    return out
+
+
+def createOrder(
+    proto: Order_pb2.Order,
+    contractProto: Contract_pb2.Contract | None = None,
+    orderId: int | None = None,
+) -> Order:
+    """Decode a protobuf ``Order`` into our domain dataclass.
+
+    Mirrors IBKR's ``decoder_utils.decodeOrder`` field-by-field. The
+    ``contractProto`` arg carries the matching ``Contract`` message so
+    we can mirror IBKR's ``decodeOrderComboLegs`` (per-leg prices live
+    on the contract, not the order). The ``orderId`` arg lets the
+    envelope-level decoder propagate the wrapping message's orderId
+    when the inner order proto omits it.
+
+    Domain fields that exist in IBKR's reference but are NOT on our
+    ``Order`` dataclass are intentionally dropped here (matching
+    ``createOrderProto`` on the send side):
+    ``customerAccount``, ``professionalCustomer``,
+    ``bondAccruedInterest``, ``includeOvernight``, ``manualOrderIndicator``,
+    ``submitter``, ``deactivate``, ``postOnly``, ``allowPreOpen``,
+    ``ignoreOpenAuction``, ``seekPriceImprovement``, ``whatIfType``,
+    ``hedgeMaxSize``. Adding those to the converter without matching
+    dataclass fields would silently swallow the wire data.
+    """
     order = Order()
-    if proto.HasField("clientId"):
-        order.clientId = proto.clientId
+
+    # Order ids
+    if orderId is not None:
+        order.orderId = orderId
     if proto.HasField("orderId"):
         order.orderId = proto.orderId
+    if proto.HasField("clientId"):
+        order.clientId = proto.clientId
     if proto.HasField("permId"):
         order.permId = proto.permId
     if proto.HasField("parentId"):
         order.parentId = proto.parentId
 
+    # Primary attributes
     if proto.HasField("action"):
         order.action = proto.action
     if proto.HasField("totalQuantity"):
@@ -565,57 +713,306 @@ def createOrder(proto: Order_pb2.Order) -> Order:
     if proto.HasField("tif"):
         order.tif = proto.tif
 
-    if proto.HasField("account"):
-        order.account = proto.account
-    if proto.HasField("settlingFirm"):
-        order.settlingFirm = proto.settlingFirm
-    if proto.HasField("clearingAccount"):
-        order.clearingAccount = proto.clearingAccount
-    if proto.HasField("clearingIntent"):
-        order.clearingIntent = proto.clearingIntent
-
-    if proto.HasField("allOrNone"):
-        order.allOrNone = proto.allOrNone
-    if proto.HasField("blockOrder"):
-        order.blockOrder = proto.blockOrder
-    if proto.HasField("hidden"):
-        order.hidden = proto.hidden
-    if proto.HasField("outsideRth"):
-        order.outsideRth = proto.outsideRth
-    if proto.HasField("sweepToFill"):
-        order.sweepToFill = proto.sweepToFill
-    if proto.HasField("trailingPercent"):
-        order.trailingPercent = safe_decimal(str(proto.trailingPercent))
-    if proto.HasField("trailStopPrice"):
-        order.trailStopPrice = safe_decimal(str(proto.trailStopPrice))
-    if proto.HasField("minQty"):
-        order.minQty = proto.minQty
-    if proto.HasField("goodAfterTime"):
-        order.goodAfterTime = proto.goodAfterTime
-    if proto.HasField("goodTillDate"):
-        order.goodTillDate = proto.goodTillDate
+    # Clearing / account info
     if proto.HasField("ocaGroup"):
         order.ocaGroup = proto.ocaGroup
+    if proto.HasField("account"):
+        order.account = proto.account
+    if proto.HasField("openClose"):
+        order.openClose = proto.openClose
+    if proto.HasField("origin"):
+        order.origin = proto.origin
     if proto.HasField("orderRef"):
         order.orderRef = proto.orderRef
-    if proto.HasField("rule80A"):
-        order.rule80A = proto.rule80A
-    if proto.HasField("ocaType"):
-        order.ocaType = proto.ocaType
-    if proto.HasField("triggerMethod"):
-        order.triggerMethod = proto.triggerMethod
+    if proto.HasField("outsideRth"):
+        order.outsideRth = proto.outsideRth
+    if proto.HasField("hidden"):
+        order.hidden = proto.hidden
+    if proto.HasField("discretionaryAmt"):
+        order.discretionaryAmt = proto.discretionaryAmt
+    if proto.HasField("goodAfterTime"):
+        order.goodAfterTime = proto.goodAfterTime
 
-    if proto.HasField("activeStartTime"):
-        order.activeStartTime = proto.activeStartTime
-    if proto.HasField("activeStopTime"):
-        order.activeStopTime = proto.activeStopTime
-
+    # Advisor allocation
     if proto.HasField("faGroup"):
         order.faGroup = proto.faGroup
     if proto.HasField("faMethod"):
         order.faMethod = proto.faMethod
     if proto.HasField("faPercentage"):
         order.faPercentage = proto.faPercentage
+
+    if proto.HasField("modelCode"):
+        order.modelCode = proto.modelCode
+    if proto.HasField("goodTillDate"):
+        order.goodTillDate = proto.goodTillDate
+    if proto.HasField("rule80A"):
+        order.rule80A = proto.rule80A
+    if proto.HasField("percentOffset"):
+        order.percentOffset = proto.percentOffset
+    if proto.HasField("settlingFirm"):
+        order.settlingFirm = proto.settlingFirm
+    if proto.HasField("shortSaleSlot"):
+        order.shortSaleSlot = proto.shortSaleSlot
+    if proto.HasField("designatedLocation"):
+        order.designatedLocation = proto.designatedLocation
+    if proto.HasField("exemptCode"):
+        order.exemptCode = proto.exemptCode
+
+    # Box / volatility-style auction extras
+    if proto.HasField("startingPrice"):
+        order.startingPrice = proto.startingPrice
+    if proto.HasField("stockRefPrice"):
+        order.stockRefPrice = proto.stockRefPrice
+    if proto.HasField("delta"):
+        order.delta = proto.delta
+    if proto.HasField("stockRangeLower"):
+        order.stockRangeLower = proto.stockRangeLower
+    if proto.HasField("stockRangeUpper"):
+        order.stockRangeUpper = proto.stockRangeUpper
+
+    if proto.HasField("displaySize"):
+        order.displaySize = proto.displaySize
+    if proto.HasField("blockOrder"):
+        order.blockOrder = proto.blockOrder
+    if proto.HasField("sweepToFill"):
+        order.sweepToFill = proto.sweepToFill
+    if proto.HasField("allOrNone"):
+        order.allOrNone = proto.allOrNone
+    if proto.HasField("minQty"):
+        order.minQty = proto.minQty
+    if proto.HasField("ocaType"):
+        order.ocaType = proto.ocaType
+    if proto.HasField("triggerMethod"):
+        order.triggerMethod = proto.triggerMethod
+
+    # Volatility family
+    if proto.HasField("volatility"):
+        order.volatility = proto.volatility
+    if proto.HasField("volatilityType"):
+        order.volatilityType = proto.volatilityType
+    if proto.HasField("deltaNeutralOrderType"):
+        order.deltaNeutralOrderType = proto.deltaNeutralOrderType
+    if proto.HasField("deltaNeutralAuxPrice"):
+        order.deltaNeutralAuxPrice = proto.deltaNeutralAuxPrice
+    if proto.HasField("deltaNeutralConId"):
+        order.deltaNeutralConId = proto.deltaNeutralConId
+    if proto.HasField("deltaNeutralSettlingFirm"):
+        order.deltaNeutralSettlingFirm = proto.deltaNeutralSettlingFirm
+    if proto.HasField("deltaNeutralClearingAccount"):
+        order.deltaNeutralClearingAccount = proto.deltaNeutralClearingAccount
+    if proto.HasField("deltaNeutralClearingIntent"):
+        order.deltaNeutralClearingIntent = proto.deltaNeutralClearingIntent
+    if proto.HasField("deltaNeutralOpenClose"):
+        order.deltaNeutralOpenClose = proto.deltaNeutralOpenClose
+    if proto.HasField("deltaNeutralShortSale"):
+        order.deltaNeutralShortSale = proto.deltaNeutralShortSale
+    if proto.HasField("deltaNeutralShortSaleSlot"):
+        order.deltaNeutralShortSaleSlot = proto.deltaNeutralShortSaleSlot
+    if proto.HasField("deltaNeutralDesignatedLocation"):
+        order.deltaNeutralDesignatedLocation = proto.deltaNeutralDesignatedLocation
+    if proto.HasField("continuousUpdate"):
+        order.continuousUpdate = proto.continuousUpdate
+    if proto.HasField("referencePriceType"):
+        order.referencePriceType = proto.referencePriceType
+
+    if proto.HasField("trailStopPrice"):
+        order.trailStopPrice = safe_decimal(str(proto.trailStopPrice))
+    if proto.HasField("trailingPercent"):
+        order.trailingPercent = safe_decimal(str(proto.trailingPercent))
+
+    # Order combo legs (per-leg prices) — sourced from the CONTRACT
+    # proto, not the order proto. Caller must pass ``contractProto``
+    # for these to populate; otherwise the field stays at its empty
+    # default (matches IBKR's behavior when the contract proto is
+    # absent).
+    comboLegs = _decodeOrderComboLegs(contractProto)
+    if comboLegs:
+        order.orderComboLegs = comboLegs
+
+    # Smart combo routing params (always read; absent map decodes to
+    # an empty list and replaces the dataclass-default empty list).
+    order.smartComboRoutingParams = _parseTagValueList(proto.smartComboRoutingParams)
+
+    # Scale family
+    if proto.HasField("scaleInitLevelSize"):
+        order.scaleInitLevelSize = proto.scaleInitLevelSize
+    if proto.HasField("scaleSubsLevelSize"):
+        order.scaleSubsLevelSize = proto.scaleSubsLevelSize
+    if proto.HasField("scalePriceIncrement"):
+        order.scalePriceIncrement = proto.scalePriceIncrement
+    if proto.HasField("scalePriceAdjustValue"):
+        order.scalePriceAdjustValue = proto.scalePriceAdjustValue
+    if proto.HasField("scalePriceAdjustInterval"):
+        order.scalePriceAdjustInterval = proto.scalePriceAdjustInterval
+    if proto.HasField("scaleProfitOffset"):
+        order.scaleProfitOffset = proto.scaleProfitOffset
+    if proto.HasField("scaleAutoReset"):
+        order.scaleAutoReset = proto.scaleAutoReset
+    if proto.HasField("scaleInitPosition"):
+        order.scaleInitPosition = proto.scaleInitPosition
+    if proto.HasField("scaleInitFillQty"):
+        order.scaleInitFillQty = proto.scaleInitFillQty
+    if proto.HasField("scaleRandomPercent"):
+        order.scaleRandomPercent = proto.scaleRandomPercent
+
+    # Hedge family — IBKR gates ``hedgeParam`` on the hedgeType being
+    # set (some hedge types omit the param). Mirror that gating.
+    if proto.HasField("hedgeType"):
+        order.hedgeType = proto.hedgeType
+        if proto.HasField("hedgeParam") and proto.hedgeType:
+            order.hedgeParam = proto.hedgeParam
+    # ``hedgeMaxSize`` is on the wire but NOT on the Order dataclass —
+    # intentionally dropped here (see top-level docstring for the list).
+
+    if proto.HasField("optOutSmartRouting"):
+        order.optOutSmartRouting = proto.optOutSmartRouting
+    if proto.HasField("clearingAccount"):
+        order.clearingAccount = proto.clearingAccount
+    if proto.HasField("clearingIntent"):
+        order.clearingIntent = proto.clearingIntent
+    if proto.HasField("notHeld"):
+        order.notHeld = proto.notHeld
+
+    # Algo family — paired read: only consume algoParams when
+    # algoStrategy is present (the wire convention matches IBKR's
+    # decoder so absent algoStrategy + present algoParams is a malformed
+    # payload we ignore).
+    if proto.HasField("algoStrategy"):
+        order.algoStrategy = proto.algoStrategy
+        order.algoParams = _parseTagValueList(proto.algoParams)
+    if proto.HasField("algoId"):
+        order.algoId = proto.algoId
+
+    if proto.HasField("solicited"):
+        order.solicited = proto.solicited
+    if proto.HasField("whatIf"):
+        order.whatIf = proto.whatIf
+    if proto.HasField("randomizeSize"):
+        order.randomizeSize = proto.randomizeSize
+    if proto.HasField("randomizePrice"):
+        order.randomizePrice = proto.randomizePrice
+
+    # Pegged-to-benchmark family
+    if proto.HasField("referenceContractId"):
+        order.referenceContractId = proto.referenceContractId
+    if proto.HasField("isPeggedChangeAmountDecrease"):
+        order.isPeggedChangeAmountDecrease = proto.isPeggedChangeAmountDecrease
+    if proto.HasField("peggedChangeAmount"):
+        order.peggedChangeAmount = proto.peggedChangeAmount
+    if proto.HasField("referenceChangeAmount"):
+        order.referenceChangeAmount = proto.referenceChangeAmount
+    if proto.HasField("referenceExchangeId"):
+        order.referenceExchangeId = proto.referenceExchangeId
+
+    # Conditions
+    conditions = _decodeConditions(proto)
+    if conditions:
+        order.conditions = conditions
+    if proto.HasField("conditionsIgnoreRth"):
+        order.conditionsIgnoreRth = proto.conditionsIgnoreRth
+    if proto.HasField("conditionsCancelOrder"):
+        order.conditionsCancelOrder = proto.conditionsCancelOrder
+
+    # Adjustable orders
+    if proto.HasField("adjustedOrderType"):
+        order.adjustedOrderType = proto.adjustedOrderType
+    if proto.HasField("triggerPrice"):
+        order.triggerPrice = safe_decimal(str(proto.triggerPrice))
+    if proto.HasField("lmtPriceOffset"):
+        order.lmtPriceOffset = safe_decimal(str(proto.lmtPriceOffset))
+    if proto.HasField("adjustedStopPrice"):
+        order.adjustedStopPrice = safe_decimal(str(proto.adjustedStopPrice))
+    if proto.HasField("adjustedStopLimitPrice"):
+        order.adjustedStopLimitPrice = safe_decimal(str(proto.adjustedStopLimitPrice))
+    if proto.HasField("adjustedTrailingAmount"):
+        order.adjustedTrailingAmount = safe_decimal(str(proto.adjustedTrailingAmount))
+    if proto.HasField("adjustableTrailingUnit"):
+        order.adjustableTrailingUnit = proto.adjustableTrailingUnit
+
+    # Soft-dollar tier (composite)
+    softDollarTier = _decodeSoftDollarTier(proto)
+    if softDollarTier is not None:
+        order.softDollarTier = softDollarTier
+
+    if proto.HasField("cashQty"):
+        order.cashQty = proto.cashQty
+    if proto.HasField("dontUseAutoPriceForHedge"):
+        order.dontUseAutoPriceForHedge = proto.dontUseAutoPriceForHedge
+    if proto.HasField("isOmsContainer"):
+        order.isOmsContainer = proto.isOmsContainer
+    if proto.HasField("discretionaryUpToLimitPrice"):
+        order.discretionaryUpToLimitPrice = proto.discretionaryUpToLimitPrice
+    if proto.HasField("usePriceMgmtAlgo"):
+        # Wire is int (0/1/UNSET); domain is bool. Map non-zero to True.
+        order.usePriceMgmtAlgo = bool(proto.usePriceMgmtAlgo)
+    if proto.HasField("duration"):
+        order.duration = proto.duration
+    if proto.HasField("postToAts"):
+        order.postToAts = proto.postToAts
+    if proto.HasField("autoCancelParent"):
+        order.autoCancelParent = proto.autoCancelParent
+    if proto.HasField("minTradeQty"):
+        order.minTradeQty = proto.minTradeQty
+    if proto.HasField("minCompeteSize"):
+        order.minCompeteSize = proto.minCompeteSize
+    if proto.HasField("competeAgainstBestOffset"):
+        order.competeAgainstBestOffset = proto.competeAgainstBestOffset
+    if proto.HasField("midOffsetAtWhole"):
+        order.midOffsetAtWhole = proto.midOffsetAtWhole
+    if proto.HasField("midOffsetAtHalf"):
+        order.midOffsetAtHalf = proto.midOffsetAtHalf
+
+    # Active start / stop time
+    if proto.HasField("activeStartTime"):
+        order.activeStartTime = proto.activeStartTime
+    if proto.HasField("activeStopTime"):
+        order.activeStopTime = proto.activeStopTime
+
+    # ext / autoCancel / completedOrder fields
+    if proto.HasField("extOperator"):
+        order.extOperator = proto.extOperator
+    if proto.HasField("autoCancelDate"):
+        order.autoCancelDate = proto.autoCancelDate
+    if proto.HasField("filledQuantity"):
+        order.filledQuantity = safe_decimal(proto.filledQuantity)
+    if proto.HasField("refFuturesConId"):
+        order.refFuturesConId = proto.refFuturesConId
+    if proto.HasField("shareholder"):
+        order.shareholder = proto.shareholder
+    if proto.HasField("routeMarketableToBbo"):
+        # Wire is int (0/1); domain is bool.
+        order.routeMarketableToBbo = bool(proto.routeMarketableToBbo)
+    if proto.HasField("parentPermId"):
+        order.parentPermId = proto.parentPermId
+    if proto.HasField("imbalanceOnly"):
+        order.imbalanceOnly = proto.imbalanceOnly
+
+    # Order-misc + MIFID II + advancedErrorOverride + manualOrderTime —
+    # IBKR's reference reads these in ``processOpenOrderMsg`` (the
+    # binary path) but the proto schema places them on the Order
+    # message and ``decodeOrder`` itself does NOT read them. We do,
+    # because these are first-class domain fields and dropping them
+    # silently would lose user-set order metadata on every wire round
+    # trip.
+    order.orderMiscOptions = _parseTagValueList(proto.orderMiscOptions)
+    if proto.HasField("mifid2DecisionMaker"):
+        order.mifid2DecisionMaker = proto.mifid2DecisionMaker
+    if proto.HasField("mifid2DecisionAlgo"):
+        order.mifid2DecisionAlgo = proto.mifid2DecisionAlgo
+    if proto.HasField("mifid2ExecutionTrader"):
+        order.mifid2ExecutionTrader = proto.mifid2ExecutionTrader
+    if proto.HasField("mifid2ExecutionAlgo"):
+        order.mifid2ExecutionAlgo = proto.mifid2ExecutionAlgo
+    if proto.HasField("advancedErrorOverride"):
+        order.advancedErrorOverride = proto.advancedErrorOverride
+    if proto.HasField("manualOrderTime"):
+        order.manualOrderTime = proto.manualOrderTime
+    if proto.HasField("overridePercentageConstraints"):
+        order.overridePercentageConstraints = proto.overridePercentageConstraints
+    if proto.HasField("scaleTable"):
+        order.scaleTable = proto.scaleTable
+    if proto.HasField("transmit"):
+        order.transmit = proto.transmit
 
     return order
 
@@ -810,7 +1207,17 @@ def createOpenOrder(
     contract = (
         createContract(proto.contract) if proto.HasField("contract") else Contract()
     )
-    order = createOrder(proto.order) if proto.HasField("order") else Order()
+    # Propagate the contract proto so ``createOrder`` can populate
+    # ``orderComboLegs`` (per-leg prices live on the contract proto).
+    order = (
+        createOrder(
+            proto.order,
+            contractProto=proto.contract if proto.HasField("contract") else None,
+            orderId=orderId,
+        )
+        if proto.HasField("order")
+        else Order()
+    )
     state = (
         createOrderState(proto.orderState)
         if proto.HasField("orderState")
