@@ -14,10 +14,12 @@ from ._proto.safe import safe_decimal
 from ._server_versions import (
     MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
     MIN_SERVER_VER_AGG_GROUP,
+    MIN_SERVER_VER_AUTO_CANCEL_PARENT,
     MIN_SERVER_VER_BOND_ACCRUED_INTEREST,
     MIN_SERVER_VER_BOND_TRADING_HOURS,
     MIN_SERVER_VER_CME_TAGGING_FIELDS_IN_OPEN_ORDER,
     MIN_SERVER_VER_CUSTOMER_ACCOUNT,
+    MIN_SERVER_VER_DURATION,
     MIN_SERVER_VER_ERROR_TIME,
     MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS,
     MIN_SERVER_VER_FUND_DATA_FIELDS,
@@ -28,6 +30,8 @@ from ._server_versions import (
     MIN_SERVER_VER_LAST_TRADE_DATE,
     MIN_SERVER_VER_MARKET_CAP_PRICE,
     MIN_SERVER_VER_MARKET_RULES,
+    MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS,
+    MIN_SERVER_VER_POST_TO_ATS,
     MIN_SERVER_VER_PROFESSIONAL_CUSTOMER,
     MIN_SERVER_VER_REAL_EXPIRATION_DATE,
     MIN_SERVER_VER_STOCK_TYPE,
@@ -2504,16 +2508,16 @@ class Decoder:
             *fields,
         ) = fields
 
-        if self.serverVersion >= 159:
+        if self.serverVersion >= MIN_SERVER_VER_DURATION:
             o.duration = fields.pop(0)
 
-        if self.serverVersion >= 160:
+        if self.serverVersion >= MIN_SERVER_VER_POST_TO_ATS:
             o.postToAts = fields.pop(0)
 
-        if self.serverVersion >= 162:
+        if self.serverVersion >= MIN_SERVER_VER_AUTO_CANCEL_PARENT:
             o.autoCancelParent = fields.pop(0)
 
-        if self.serverVersion >= 170:
+        if self.serverVersion >= MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS:
             (
                 o.minTradeQty,
                 o.minCompeteSize,
@@ -2753,7 +2757,7 @@ class Decoder:
             *fields,
         ) = fields
 
-        if self.serverVersion >= 170:
+        if self.serverVersion >= MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS:
             (
                 o.minTradeQty,
                 o.minCompeteSize,
