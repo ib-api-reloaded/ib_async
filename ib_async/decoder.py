@@ -702,14 +702,18 @@ class Decoder:
 
     def _protoBondContractData(self, proto: Any) -> None:
         # BondContractData uses the same proto shape as ContractData.
-        # Both the binary bond and non-bond paths land at the same
-        # ``Wrapper.contractDetails`` method — the bond-specific fields
-        # are populated on the same ``ContractDetails`` dataclass.
+        # Bond-specific fields populate on the same ``ContractDetails``
+        # dataclass; dispatch to ``Wrapper.bondContractDetails`` for
+        # symmetry with the binary path so subclasses overriding the
+        # bond callback (rather than the unified ``contractDetails``)
+        # still receive proto-arriving bond rows. Default Wrapper
+        # aliases ``bondContractDetails`` to ``contractDetails`` so
+        # subclasses without a bond override see no behavioural change.
         from ._proto.contracts import createContractDetailsFromContractData
 
         reqId = proto.reqId if proto.HasField("reqId") else -1
         details = createContractDetailsFromContractData(proto)
-        self.wrapper.contractDetails(reqId, details)
+        self.wrapper.bondContractDetails(reqId, details)
 
     def _protoContractDataEnd(self, proto: Any) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
@@ -1648,7 +1652,15 @@ class Decoder:
         if len(times) > 1:
             cd.lastTradeTime = times[1]
 
-        if len(times) > 2:
+        # Pre-188 servers pack the timezone into the third split component
+        # of ``lastTradeDateOrContractMonth``; 188+ delivers it as an
+        # explicit ``timeZoneId`` field above. Mirror IBKR's reference:
+        # the explicit field WINS when both are present, so only adopt the
+        # split-derived value below the gate.
+        if (
+            len(times) > 2
+            and self.serverVersion < MIN_SERVER_VER_BOND_TRADING_HOURS
+        ):
             cd.timeZoneId = times[2]
 
         self.parse(cd)
