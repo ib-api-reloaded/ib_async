@@ -310,6 +310,13 @@ MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
         "InitMarginReq-C",
         "InitMarginReq-S",
         "IssuerOptionValue",
+        # IBKR's ``AccountSummaryTags`` ships plain ``Leverage`` /
+        # ``ReqTEquity`` / ``ReqTMargin`` on the account-summary stream
+        # without the ``-S`` segment suffix. The ``-S`` variants below
+        # appear on the per-account stream; both forms carry monetary
+        # values so the typed Decimal view should not return ``None`` on
+        # either spelling.
+        "Leverage",
         "Leverage-S",
         "LookAheadAvailableFunds",
         "LookAheadAvailableFunds-C",
@@ -354,6 +361,11 @@ MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
         "RegTEquity-S",
         "RegTMargin",
         "RegTMargin-S",
+        # IBKR's ``AccountSummaryTags`` ships these as ``ReqTEquity`` /
+        # ``ReqTMargin``. Different streams use ``RegT*`` (above) vs
+        # ``ReqT*`` spellings; both are monetary.
+        "ReqTEquity",
+        "ReqTMargin",
         "SMA",
         "SMA-S",
         "SegmentTitle-C",

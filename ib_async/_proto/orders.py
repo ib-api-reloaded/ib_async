@@ -554,8 +554,13 @@ def _createConditionProtos(
         price = getattr(c, "price", 0)
         if price:
             cp.price = price
-        condTriggerMethod = getattr(c, "triggerMethod", 0)
-        if condTriggerMethod:
+        # ``triggerMethod`` value 0 means "Default" — a valid wire
+        # value that IBKR's reference encoder writes via
+        # ``isValidIntValue``. Only treat the UNSET_INTEGER sentinel as
+        # "skip"; a 0 must still be written so the server doesn't fall
+        # back to its own default unexpectedly.
+        condTriggerMethod = getattr(c, "triggerMethod", UNSET_INTEGER)
+        if _isValidInt(condTriggerMethod):
             cp.triggerMethod = condTriggerMethod
         time = getattr(c, "time", "")
         if time:
@@ -1328,7 +1333,10 @@ def createPlaceOrderRequestProto(
     """
     proto = PlaceOrderRequest_pb2.PlaceOrderRequest()
     proto.orderId = orderId
-    proto.contract.CopyFrom(createContractProto(contract))
+    # Pass the order so per-leg pricing (BAG-secType only) lands on the
+    # ComboLeg proto's ``perLegPrice`` field. IBKR's reference signature
+    # is ``createContractProto(contract, order)``.
+    proto.contract.CopyFrom(createContractProto(contract, order))
     proto.order.CopyFrom(createOrderProto(order))
     proto.attachedOrders.CopyFrom(_createAttachedOrdersProto(order))
     return proto

@@ -247,8 +247,19 @@ class RequestError(Exception):
 # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
 # 202 - Order cancelled - Reason:
 
+# Connection-state notifications (TWS "system messages" with reqId=-1):
+#   1100 - "Connectivity between IB and TWS has been lost."
+#   1101 - "Connectivity between IB and TWS has been restored - data lost."
+#   1102 - "Connectivity between IB and TWS has been restored - data maintained."
+# These arrive on TWS daily reset boundaries and short network hiccups; they
+# are advisory, not errors. The Watchdog in ``ibcontroller`` reacts to 1100
+# (forces a reconnect) and ``IB._onError`` reacts to 1102 (resubscribes
+# account summary). Promote them to warnings so the log level reflects their
+# informational nature; the wire path still emits ``errorEvent`` for any
+# subscriber that wants the raw stream. 1300 ("TWS socket port has been
+# reset") stays an error because the connection is actually torn down.
 _WARNING_CODES: Final[frozenset[int]] = frozenset(
-    {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167, 10349}
+    {105, 110, 165, 321, 329, 399, 404, 434, 492, 1100, 1101, 1102, 10167, 10349}
 )
 
 
@@ -317,6 +328,14 @@ class Wrapper:
     fills: dict[str, Fill] = field(init=False)
     """ execId -> Fill """
 
+    # commissionReport callbacks usually arrive AFTER their paired
+    # execDetails, but mid-connection races (especially across cross-client
+    # fills replayed at startup) can deliver the report first. Park the
+    # report by execId here; ``execDetails`` drains it onto the fill on
+    # arrival rather than silently dropping the commission. Cleared on
+    # reset alongside ``fills``.
+    _pendingCommissionReports: dict[str, CommissionReport] = field(init=False)
+
     newsTicks: list[NewsTick] = field(init=False)
 
     msgId2NewsBulletin: dict[int, NewsBulletin] = field(init=False)
@@ -377,6 +396,7 @@ class Wrapper:
         self.trades = {}
         self.permId2Trade = {}
         self.fills = {}
+        self._pendingCommissionReports = {}
         self.newsTicks = []
         self.msgId2NewsBulletin = {}
         self.pendingTickers = set()
@@ -811,17 +831,35 @@ class Wrapper:
         self.requests.set_result(SingletonKey("openOrders"))
 
     def completedOrder(self, contract: Contract, order: Order, orderState: OrderState):
-        contract = Contract.recreate(contract)
-        orderStatus = OrderStatus(orderId=order.orderId, status=orderState.status)
-        trade = Trade(contract, order, orderStatus, [], [])
+        # ``completedStatus`` carries the post-hoc terminal state TWS
+        # records for completed orders; ``status`` may be unset on this
+        # path. Fall back to ``status`` to remain backwards-compatible
+        # with older servers / decoders that only fill the latter.
+        terminalStatus = orderState.completedStatus or orderState.status
+        existing = self.permId2Trade.get(order.permId)
+        if existing is not None:
+            # An ``openOrder`` snapshot for this permId already wired up
+            # a Trade. ``completedOrder`` is the terminal-state echo at
+            # startup; reuse the existing Trade so callers don't see two
+            # objects for one order, but mirror the terminal status onto
+            # it so ``Trade.isDone()`` is honest. Don't re-emit
+            # ``cancelledEvent`` / ``filledEvent`` — those fired on the
+            # original transition (or will fire when the matching
+            # ``orderStatus`` callback arrives in the same wave).
+            if terminalStatus and existing.orderStatus.status != terminalStatus:
+                existing.orderStatus.status = terminalStatus
+            trade = existing
+        else:
+            contract = Contract.recreate(contract)
+            orderStatus = OrderStatus(orderId=order.orderId, status=terminalStatus)
+            trade = Trade(contract, order, orderStatus, [], [])
+            self.trades[order.permId] = trade
+            self.permId2Trade[order.permId] = trade
+
         # No-op if the request was already settled (e.g. a stray second
         # wave after completedOrdersEnd already fired), instead of the
         # KeyError the legacy direct-index access used to raise.
         self.requests.append(SingletonKey("completedOrders"), trade)
-
-        if order.permId not in self.permId2Trade:
-            self.trades[order.permId] = trade
-            self.permId2Trade[order.permId] = trade
 
     def completedOrdersEnd(self):
         self.requests.set_result(SingletonKey("completedOrders"))
@@ -915,7 +953,11 @@ class Wrapper:
         execId = execution.execId
         isLive = ReqIdKey(reqId) not in self.requests
         time = self.lastTime if isLive else execution.time
-        fill = Fill(contract, execution, CommissionReport(), time)
+        # If a commissionReport for this execId arrived ahead of the
+        # fill (rare cross-client / startup-replay race), drain the
+        # parked report onto this fresh Fill so the pair lands together.
+        parkedReport = self._pendingCommissionReports.pop(execId, None)
+        fill = Fill(contract, execution, parkedReport or CommissionReport(), time)
         if execId not in self.fills:
             # first time we see this execution so add it
             self.fills[execId] = fill
@@ -931,6 +973,11 @@ class Wrapper:
                     self._logger.info(f"execDetails: {fill}")
                     self.ib.execDetailsEvent.emit(trade, fill)
                     trade.fillEvent(trade, fill)
+                    # Out-of-order commissionReport arrived first; emit
+                    # the paired event now that we have the fill.
+                    if parkedReport is not None:
+                        self.ib.commissionReportEvent.emit(trade, fill, parkedReport)
+                        trade.commissionReportEvent.emit(trade, fill, parkedReport)
 
         if not isLive:
             self.requests.append(ReqIdKey(reqId), fill)
@@ -960,10 +1007,24 @@ class Wrapper:
                 # before this connection started
                 pass
         else:
-            # commission report is not for this client
-            pass
+            # Two cases land here:
+            #  - commission report is for an execId from another client
+            #    (legitimate ignore — was already silently dropped),
+            #  - report arrived ahead of its execDetails (rare startup
+            #    or cross-client replay race). Park it by execId so
+            #    ``execDetails`` can pair it on arrival rather than
+            #    losing the commission entirely.
+            self._pendingCommissionReports[commissionReport.execId] = commissionReport
 
-    def orderBound(self, reqId: int, apiClientId: int, apiOrderId: int):
+    def orderBound(self, permId: int, clientId: int, orderId: int):
+        # IBKR's contract on this callback is ``(permId, clientId,
+        # orderId)`` (see ibapi/wrapper.py). Both the binary decoder
+        # (``decoder.py`` msgId 100) and the proto decoder
+        # (``_protoOrderBound``) call us with that argument order. The
+        # body stays a no-op — the wrapper has no domain-side bookkeeping
+        # tied to manual-order binding — but the signature matches the
+        # reference contract so subclasses overriding this method see
+        # the values under their documented names.
         pass
 
     def contractDetails(self, reqId: int, contractDetails: ContractDetails):

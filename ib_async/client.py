@@ -313,6 +313,20 @@ class Client:
         """
         self.connectOptions = connectOptions.encode()
 
+    def setOptionalCapabilities(self, optCapab: str) -> None:
+        """Set the optional capabilities string sent with ``startApi``.
+
+        Mirrors IBKR ``EClient.setOptionalCapabilities``. The value is
+        included in the START_API frame (binary path field 4 / proto
+        ``optionalCapabilities``) and gated server-side by
+        ``MIN_SERVER_VER_OPTIONAL_CAPABILITIES`` (=72). Our
+        ``MinClientVersion`` is 157 so the gate is always satisfied.
+        Must be called before ``connectAsync`` to take effect — the
+        value is read inside ``startApi`` which fires once during the
+        connection handshake.
+        """
+        self.optCapab = optCapab
+
     def connect(self, host: str, port: int, clientId: int, timeout: float | None = 2.0):
         """
         Connect to a running TWS or IB gateway application.

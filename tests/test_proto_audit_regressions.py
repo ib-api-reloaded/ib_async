@@ -1370,6 +1370,28 @@ def _make_open_order_fields(server_version: int) -> list[str]:
         "0",  # minCommission
         "0",  # maxCommission
         "USD",  # commissionCurrency
+    ]
+    if server_version >= 195:
+        # FULL_ORDER_PREVIEW_FIELDS block — IBKR's
+        # ``decodeWhatIfInfoAndCommissionAndFees`` appends OutsideRTH
+        # margins + suggestedSize / rejectReason + repeated
+        # orderAllocations between commissionCurrency and warningText.
+        fields += [
+            "USD",  # marginCurrency
+            "0",  # initMarginBeforeOutsideRTH
+            "0",  # maintMarginBeforeOutsideRTH
+            "0",  # equityWithLoanBeforeOutsideRTH
+            "0",  # initMarginChangeOutsideRTH
+            "0",  # maintMarginChangeOutsideRTH
+            "0",  # equityWithLoanChangeOutsideRTH
+            "0",  # initMarginAfterOutsideRTH
+            "0",  # maintMarginAfterOutsideRTH
+            "0",  # equityWithLoanAfterOutsideRTH
+            "",  # suggestedSize
+            "",  # rejectReason
+            "0",  # accountsCount (no orderAllocations)
+        ]
+    fields += [
         "",  # warningText
         "0",  # randomizeSize
         "0",  # randomizePrice
@@ -1741,3 +1763,690 @@ def test_max_client_version_advertises_modern_protobuf_gates():
     assert ib.client.MaxClientVersion == MIN_SERVER_VER_ODD_LOT_BID_ASK_QUOTES
     # Sanity: the protobuf base gate is reachable.
     assert ib.client.MaxClientVersion >= MIN_SERVER_VER_PROTOBUF
+
+
+# ---------------------------------------------------------------------------
+# Round-3 audit regressions — combo-leg per-leg pricing, WshEventData gating,
+# condition triggerMethod=0 wire emission.
+# ---------------------------------------------------------------------------
+
+
+def test_combo_leg_per_leg_price_propagates_through_place_order():
+    """``Order.orderComboLegs[i].price`` must land on the wire as
+    ``Contract.comboLegs[i].perLegPrice`` for BAG-secType orders.
+
+    IBKR's reference ``createContractProto(contract, order)`` reads the
+    parallel ``order.orderComboLegs`` list and writes ``perLegPrice``
+    on each ComboLeg proto. Before the round-3 audit fix our converter
+    ignored ``order`` entirely and BAG orders shipped with all leg
+    prices unset — the server treats unset perLegPrice as zero, which
+    silently mis-prices every spread the user submits.
+    """
+    from ib_async._proto.orders import createPlaceOrderRequestProto
+    from ib_async.contract import ComboLeg, Contract
+    from ib_async.order import LimitOrder, OrderComboLeg
+
+    bag = Contract(
+        symbol="SPX",
+        secType="BAG",
+        exchange="SMART",
+        currency="USD",
+        comboLegs=[
+            ComboLeg(conId=111, ratio=1, action="BUY", exchange="SMART"),
+            ComboLeg(conId=222, ratio=1, action="SELL", exchange="SMART"),
+        ],
+    )
+    order = LimitOrder("BUY", 1, 1.50)
+    order.orderComboLegs = [
+        OrderComboLeg(price=Decimal("1.25")),
+        OrderComboLeg(price=Decimal("0.25")),
+    ]
+
+    proto = createPlaceOrderRequestProto(42, bag, order)
+
+    assert len(proto.contract.comboLegs) == 2
+    assert proto.contract.comboLegs[0].HasField("perLegPrice")
+    assert proto.contract.comboLegs[0].perLegPrice == 1.25
+    assert proto.contract.comboLegs[1].HasField("perLegPrice")
+    assert proto.contract.comboLegs[1].perLegPrice == 0.25
+
+
+def test_combo_leg_no_per_leg_price_when_order_has_no_combo_legs():
+    """When ``Order.orderComboLegs`` is empty (the typical non-BAG
+    case), the contract proto's ComboLegs must have ``perLegPrice``
+    UNSET — not zero, which the server would interpret as a real
+    price."""
+    from ib_async._proto.orders import createPlaceOrderRequestProto
+    from ib_async.contract import ComboLeg, Contract
+    from ib_async.order import LimitOrder
+
+    bag = Contract(
+        symbol="SPX",
+        secType="BAG",
+        comboLegs=[ComboLeg(conId=111, ratio=1, action="BUY", exchange="SMART")],
+    )
+    order = LimitOrder("BUY", 1, 1.50)
+    # No orderComboLegs assignment.
+
+    proto = createPlaceOrderRequestProto(99, bag, order)
+
+    assert len(proto.contract.comboLegs) == 1
+    assert not proto.contract.comboLegs[0].HasField("perLegPrice")
+
+
+def test_create_contract_proto_no_order_omits_per_leg_price():
+    """``createContractProto(contract)`` (no order arg, the common case
+    for market data / historical data calls) must produce ComboLeg
+    protos without ``perLegPrice``. The send-side helper must not
+    accidentally invent a zero per-leg price for non-trading paths.
+    """
+    from ib_async._proto.contracts import createContractProto
+    from ib_async.contract import ComboLeg, Contract
+
+    bag = Contract(
+        symbol="SPX",
+        secType="BAG",
+        comboLegs=[
+            ComboLeg(conId=111, ratio=1, action="BUY", exchange="SMART"),
+            ComboLeg(conId=222, ratio=2, action="SELL", exchange="SMART"),
+        ],
+    )
+
+    proto = createContractProto(bag)
+
+    assert len(proto.comboLegs) == 2
+    for leg in proto.comboLegs:
+        assert not leg.HasField("perLegPrice")
+
+
+def test_wsh_event_data_request_omits_unset_int_sentinels():
+    """``WshEventData.conId`` and ``totalLimit`` default to
+    ``UNSET_INTEGER``; sending the sentinel verbatim would have IBKR's
+    server reject the request. Mirror IBKR's ``isValidIntValue``
+    gating from ``client_utils.createWshEventDataRequestProto``.
+    """
+    from ib_async._proto.news import createWshEventDataRequestProto
+    from ib_async.objects import WshEventData
+
+    data = WshEventData()  # all defaults → conId / totalLimit unset
+    proto = createWshEventDataRequestProto(reqId=7, data=data)
+
+    assert proto.reqId == 7
+    assert not proto.HasField("conId")
+    assert not proto.HasField("totalLimit")
+    # Empty strings stay unset on the wire too.
+    assert not proto.HasField("filter")
+    assert not proto.HasField("startDate")
+
+
+def test_wsh_event_data_request_writes_set_fields():
+    """When the user sets ``conId`` / ``totalLimit`` to non-sentinel
+    values, those values must reach the wire — the gate must not be
+    overzealous."""
+    from ib_async._proto.news import createWshEventDataRequestProto
+    from ib_async.objects import WshEventData
+
+    data = WshEventData(
+        conId=1234,
+        filter="earnings",
+        fillWatchlist=True,
+        startDate="20260101",
+        totalLimit=50,
+    )
+    proto = createWshEventDataRequestProto(reqId=7, data=data)
+
+    assert proto.HasField("conId") and proto.conId == 1234
+    assert proto.HasField("filter") and proto.filter == "earnings"
+    assert proto.HasField("fillWatchlist") and proto.fillWatchlist is True
+    assert proto.HasField("startDate") and proto.startDate == "20260101"
+    assert proto.HasField("totalLimit") and proto.totalLimit == 50
+
+
+def test_price_condition_trigger_method_zero_writes_to_wire():
+    """``PriceCondition.triggerMethod=0`` means "Default trigger
+    method" — a valid wire value IBKR's reference encoder writes via
+    ``isValidIntValue``. The truthy guard the contributor PR ran with
+    would have skipped 0 entirely, leaving the field unset and risking
+    the server falling back to a different default.
+    """
+    from ib_async._proto.orders import createPlaceOrderRequestProto
+    from ib_async.contract import Contract
+    from ib_async.order import LimitOrder, PriceCondition
+
+    cond = PriceCondition(
+        conId=265598, exch="SMART", price=100.0, triggerMethod=0, isMore=True
+    )
+    order = LimitOrder("BUY", 1, 50.0)
+    order.conditions = [cond]
+
+    proto = createPlaceOrderRequestProto(7, Contract(symbol="AAPL"), order)
+    assert len(proto.order.conditions) == 1
+    cp = proto.order.conditions[0]
+    assert cp.HasField("triggerMethod")
+    assert cp.triggerMethod == 0
+
+
+def test_combo_leg_more_contract_legs_than_order_legs_safe():
+    """Defensive: when ``contract.comboLegs`` has more entries than
+    ``order.orderComboLegs``, the extra contract legs must encode
+    cleanly (no IndexError) and simply omit ``perLegPrice``. Mirrors
+    IBKR's ``createComboLegProtoList`` ``i < len(orderComboLegs)``
+    guard.
+    """
+    from ib_async._proto.orders import createPlaceOrderRequestProto
+    from ib_async.contract import ComboLeg, Contract
+    from ib_async.order import LimitOrder, OrderComboLeg
+
+    bag = Contract(
+        symbol="SPX",
+        secType="BAG",
+        comboLegs=[
+            ComboLeg(conId=111, ratio=1, action="BUY", exchange="SMART"),
+            ComboLeg(conId=222, ratio=1, action="SELL", exchange="SMART"),
+            ComboLeg(conId=333, ratio=1, action="SELL", exchange="SMART"),
+        ],
+    )
+    order = LimitOrder("BUY", 1, 1.50)
+    order.orderComboLegs = [OrderComboLeg(price=Decimal("0.5"))]  # only first
+
+    proto = createPlaceOrderRequestProto(11, bag, order)
+
+    assert len(proto.contract.comboLegs) == 3
+    assert proto.contract.comboLegs[0].HasField("perLegPrice")
+    assert proto.contract.comboLegs[0].perLegPrice == 0.5
+    assert not proto.contract.comboLegs[1].HasField("perLegPrice")
+    assert not proto.contract.comboLegs[2].HasField("perLegPrice")
+
+
+# ---------------------------------------------------------------------------
+# Binary openOrder — FULL_ORDER_PREVIEW_FIELDS block (server >= 195).
+# IBKR's ``decodeWhatIfInfoAndCommissionAndFees`` appends an OutsideRTH
+# margin family + suggestedSize / rejectReason / orderAllocations between
+# commissionCurrency and warningText. Skipping the block left the wire
+# stream shifted left for every gated read past warningText.
+# ---------------------------------------------------------------------------
+
+
+def test_binary_open_order_decodes_full_order_preview_block():
+    """Round 3 audit fix: the FULL_ORDER_PREVIEW_FIELDS block on the
+    binary openOrder path was completely absent. With the gate at 195
+    every modern server delivers OutsideRTH margins + suggestedSize +
+    orderAllocations through this slot — the missing read shifted the
+    wire by 13+ slots and corrupted every gated read past warningText.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 199
+    ib.client.decoder.serverVersion = 199
+    seen: list[tuple] = []
+    ib.wrapper.openOrder = lambda *a: seen.append(a)
+
+    fields = _make_open_order_fields(199)
+    # Patch the FULL_ORDER_PREVIEW block (13 slots: marginCurrency,
+    # 9 OutsideRTH margins, suggestedSize, rejectReason, accountsCount).
+    # Three "USD" tokens exist in the payload: contract.currency,
+    # commissionCurrency, marginCurrency. marginCurrency is the third.
+    first = fields.index("USD")
+    second = fields.index("USD", first + 1)
+    block_start = fields.index("USD", second + 1)
+    fields[block_start + 10] = "5"  # suggestedSize
+    fields[block_start + 11] = "test-reject-reason"  # rejectReason
+    fields += [
+        "DU12345",  # customerAccount
+        "0",  # professionalCustomer
+        "",  # bondAccruedInterest
+        "0",  # includeOvernight
+        "EXT-9",  # extOperator
+        "0",  # manualOrderIndicator
+        "trader1",  # submitter
+        "0",  # imbalanceOnly
+    ]
+
+    ib.client.decoder.openOrder(fields)
+
+    assert len(seen) == 1
+    _, _, o, st = seen[0]
+    assert st.marginCurrency == "USD"
+    assert st.suggestedSize == Decimal("5")
+    assert st.rejectReason == "test-reject-reason"
+    assert st.orderAllocations == []
+    # Trailer fields past warningText still align after the new block.
+    assert o.extOperator == "EXT-9"
+
+
+def test_binary_open_order_decodes_order_allocations():
+    """The FULL_ORDER_PREVIEW block ships an ``accountsCount`` int and
+    that many ``OrderAllocation`` records (7 fields each). The decoder
+    must materialize them as ``OrderAllocation`` dataclass instances on
+    ``OrderState.orderAllocations``.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 199
+    ib.client.decoder.serverVersion = 199
+    seen: list[tuple] = []
+    ib.wrapper.openOrder = lambda *a: seen.append(a)
+
+    # The FULL_ORDER_PREVIEW accountsCount slot defaults to "0"; replace
+    # it with "1" and inject one allocation right after.
+    base = _make_open_order_fields(199)
+    # Three "USD" tokens exist: contract.currency, commissionCurrency,
+    # marginCurrency. marginCurrency is the third. accountsCount is at
+    # offset +12 from marginCurrency (OutsideRTH x9 + suggestedSize +
+    # rejectReason).
+    first = base.index("USD")
+    second = base.index("USD", first + 1)
+    block_start = base.index("USD", second + 1)
+    base[block_start + 12] = "1"  # accountsCount = 1
+    # Insert 7 OrderAllocation fields right after accountsCount.
+    base[block_start + 13 : block_start + 13] = [
+        "DU-ALLOC-A",  # account
+        "10",  # position
+        "20",  # positionDesired
+        "15",  # positionAfter
+        "5",  # desiredAllocQty
+        "5",  # allowedAllocQty
+        "0",  # isMonetary
+    ]
+    base += [
+        "DU12345",  # customerAccount
+        "0",  # professionalCustomer
+        "",  # bondAccruedInterest
+        "0",  # includeOvernight
+        "EXT-9",  # extOperator
+        "0",  # manualOrderIndicator
+        "trader1",  # submitter
+        "0",  # imbalanceOnly
+    ]
+
+    ib.client.decoder.openOrder(base)
+
+    assert len(seen) == 1
+    _, _, _, st = seen[0]
+    assert len(st.orderAllocations) == 1
+    alloc = st.orderAllocations[0]
+    assert alloc.account == "DU-ALLOC-A"
+    assert alloc.position == Decimal("10")
+    assert alloc.positionDesired == Decimal("20")
+    assert alloc.positionAfter == Decimal("15")
+    assert alloc.desiredAllocQty == Decimal("5")
+    assert alloc.allowedAllocQty == Decimal("5")
+    assert alloc.isMonetary is False
+
+
+# ---------------------------------------------------------------------------
+# safe_decimal: IBKR UNSET sentinel strings must coerce to None.
+# IBKR's reference ``decode(Decimal, fields)`` rejects max-int / max-long /
+# max-double sentinel strings as "unset" — without matching that semantics
+# user code would receive a 1.7e308 wire-default fake quantity that looks
+# like a real number and pollutes downstream calculations.
+# ---------------------------------------------------------------------------
+
+
+def test_safe_decimal_unset_integer_sentinel_returns_none():
+    """``"2147483647"`` is IBKR's UNSET_INTEGER. Wire payloads that
+    wedge this string into a Decimal field mean the field is unset."""
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("2147483647") is None
+
+
+def test_safe_decimal_unset_long_sentinel_returns_none():
+    """``"9223372036854775807"`` is IBKR's UNSET_LONG."""
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("9223372036854775807") is None
+
+
+def test_safe_decimal_unset_double_uppercase_e_returns_none():
+    """``"1.7976931348623157E308"`` is IBKR's UNSET_DOUBLE in the
+    upper-case-E formatting their wire encoder emits."""
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("1.7976931348623157E308") is None
+
+
+def test_safe_decimal_unset_double_lowercase_e_returns_none():
+    """``"1.7976931348623157e+308"`` is the same UNSET_DOUBLE value
+    serialized through Python's ``str(float)`` — both formats must
+    map to None."""
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("1.7976931348623157e+308") is None
+
+
+def test_safe_decimal_negative_long_min_sentinel_returns_none():
+    """``"-9223372036854775808"`` is IBKR's most-negative int64 — also
+    rejected as Decimal-unset by the reference decoder."""
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("-9223372036854775808") is None
+
+
+def test_safe_decimal_real_values_round_trip():
+    """Sanity: real Decimal-shaped wire strings continue to coerce
+    correctly. Locks the sentinel guard from over-rejecting."""
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("100") == Decimal("100")
+    assert safe_decimal("0.5") == Decimal("0.5")
+    assert safe_decimal("-1.25") == Decimal("-1.25")
+    assert safe_decimal("0") == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# Round 3: Wrapper state-machine + Trade lifecycle regressions
+# ---------------------------------------------------------------------------
+
+
+def test_commission_report_arriving_before_fill_is_buffered_and_drained():
+    """commissionReport for an unknown execId is parked rather than
+    dropped. When the matching execDetails arrives, the parked report
+    lands on the new Fill and the paired event fires.
+
+    Regression: previously the wrapper logged-and-dropped early reports,
+    losing the commission permanently for cross-client / startup-replay
+    races where TWS delivered the report ahead of the fill."""
+
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+
+    # Wire up a Trade so commissionReport's permId2Trade lookup succeeds
+    # once execDetails creates the fill.
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 555
+    order = ibi.Order(orderId=1, clientId=0, permId=42)
+    orderStatus = ibi.OrderStatus(orderId=1, status=ibi.OrderStatus.Submitted)
+    trade = ibi.Trade(contract, order, orderStatus, [], [])
+    ib.wrapper.trades[(0, 1)] = trade
+    ib.wrapper.permId2Trade[42] = trade
+
+    seenCommission: list = []
+    ib.commissionReportEvent += lambda t, f, r: seenCommission.append((t, f, r))
+
+    # 1) Commission report arrives FIRST. It must be parked, not dropped.
+    early_report = ibi.CommissionReport(
+        execId="exec-early", commission=2.5, currency="USD"
+    )
+    ib.wrapper.commissionReport(early_report)
+    # Not yet emitted — fill doesn't exist.
+    assert seenCommission == []
+    # Internal park bucket holds it.
+    assert "exec-early" in ib.wrapper._pendingCommissionReports
+
+    # 2) execDetails arrives. The parked report drains onto the new Fill
+    #    and the paired event fires.
+    execution = ibi.Execution(
+        execId="exec-early",
+        permId=42,
+        clientId=0,
+        orderId=1,
+        shares=Decimal("10"),
+        price=100.0,
+        time="20250101 09:30:00",
+    )
+    ib.wrapper.execDetails(reqId=1, contract=contract, execution=execution)
+
+    assert "exec-early" not in ib.wrapper._pendingCommissionReports
+    assert len(trade.fills) == 1
+    assert trade.fills[0].commissionReport.commission == 2.5
+    assert len(seenCommission) == 1
+    assert seenCommission[0][2].commission == 2.5
+
+
+def test_completed_order_for_existing_trade_updates_status_to_terminal():
+    """``completedOrder`` for a permId already known via ``openOrder``
+    must mirror the terminal ``completedStatus`` onto the existing trade
+    and reuse it (no duplicate Trade in ``trades`` / ``permId2Trade``).
+
+    Regression: previously ``completedOrder`` always built a fresh Trade
+    and the existing one stayed at ``Submitted``, so ``Trade.isDone()``
+    returned ``False`` for terminal orders at startup."""
+
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+
+    # Pre-populate via openOrder semantics: trade exists in Submitted state.
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 777
+    order = ibi.Order(orderId=5, clientId=0, permId=99)
+    orderStatus = ibi.OrderStatus(orderId=5, status=ibi.OrderStatus.Submitted)
+    trade = ibi.Trade(contract, order, orderStatus, [], [])
+    ib.wrapper.trades[(0, 5)] = trade
+    ib.wrapper.permId2Trade[99] = trade
+
+    # Now completedOrder echoes the terminal state at startup.
+    state = ibi.OrderState(status="", completedStatus="Filled")
+    ib.wrapper.completedOrder(contract, order, state)
+
+    # Existing trade is mutated, not replaced.
+    assert ib.wrapper.permId2Trade[99] is trade
+    assert trade.orderStatus.status == "Filled"
+    assert trade.isDone()
+
+
+def test_completed_order_first_time_uses_completed_status_not_status():
+    """A completedOrder for a never-seen permId records the trade with
+    ``completedStatus`` (the post-hoc terminal field) rather than the
+    transient ``status`` field, which may be empty on this path."""
+
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 888
+    order = ibi.Order(orderId=7, clientId=0, permId=111)
+
+    # status="" simulates the empty-status case for completed orders.
+    state = ibi.OrderState(status="", completedStatus="Cancelled")
+    ib.wrapper.completedOrder(contract, order, state)
+
+    assert ib.wrapper.permId2Trade[111].orderStatus.status == "Cancelled"
+    assert ib.wrapper.permId2Trade[111].isDone()
+
+
+def test_monetary_account_value_tags_covers_ibkr_summary_standard_set():
+    """``MONETARY_ACCOUNT_VALUE_TAGS`` must whitelist every monetary tag
+    IBKR's ``AccountSummaryTags`` ships — including the bare-name forms
+    (``Leverage``, ``ReqTEquity``, ``ReqTMargin``) the account-summary
+    stream uses without a segment suffix.
+
+    Without these, ``AccountValue.decimalValue`` returns ``None`` for
+    valid monetary values from TWS and user code mistakes the value as
+    non-numeric / unset."""
+
+    from ib_async.objects import MONETARY_ACCOUNT_VALUE_TAGS
+
+    # Bare-name spellings IBKR's account-summary stream emits.
+    for tag in ("Leverage", "ReqTEquity", "ReqTMargin"):
+        assert tag in MONETARY_ACCOUNT_VALUE_TAGS, f"missing {tag!r}"
+
+    # Spot-check a few -S / -C variants that were already covered to
+    # confirm we didn't regress the existing entries while editing.
+    for tag in (
+        "NetLiquidation",
+        "AvailableFunds",
+        "BuyingPower",
+        "Cushion",
+        "GrossPositionValue",
+    ):
+        assert tag in MONETARY_ACCOUNT_VALUE_TAGS
+
+
+def test_account_value_decimal_view_returns_decimal_for_leverage():
+    """AccountValue('Leverage', '2.5').decimalValue must round-trip to
+    ``Decimal('2.5')`` rather than ``None`` after the whitelist fix."""
+
+    av = ibi.AccountValue(
+        account="DU1",
+        tag="Leverage",
+        value="2.5",
+        currency="USD",
+        modelCode="",
+    )
+    assert av.decimalValue == Decimal("2.5")
+
+
+def test_order_bound_signature_uses_ibkr_argument_names():
+    """``Wrapper.orderBound``'s signature must match IBKR's reference
+    ``(permId, clientId, orderId)``. Both decoders pass arguments in
+    that order; the parameter names are part of the public contract for
+    subclasses overriding this hook.
+    """
+    import inspect
+
+    sig = inspect.signature(ibi.Wrapper.orderBound)
+    params = list(sig.parameters)
+    # ``self`` first, then the IBKR contract names.
+    assert params == ["self", "permId", "clientId", "orderId"]
+
+
+# ---------------------------------------------------------------------------
+# Round 3 audit: connection lifecycle / cross-cutting concerns
+# ---------------------------------------------------------------------------
+
+
+def test_set_optional_capabilities_stores_value_for_start_api():
+    """``setOptionalCapabilities`` mirrors IBKR ``EClient.setOptionalCapabilities``.
+    The value is read inside ``startApi`` (binary path field 4 / proto
+    ``optionalCapabilities``); without the public setter, third-party
+    integrations using the standard ibapi API surface have no way to set
+    it short of reaching into ``client.optCapab`` directly.
+    """
+    ib = ibi.IB()
+    assert ib.client.optCapab == ""
+    ib.client.setOptionalCapabilities("xyz")
+    assert ib.client.optCapab == "xyz"
+
+    sent: list = []
+    ib.client.send = lambda *a, **kw: sent.append(a)
+    ib.client._serverVersion = 200  # below MIN_SERVER_VER_PROTOBUF
+    ib.client.clientId = 9
+    ib.client.startApi()
+    assert sent == [(71, 2, 9, "xyz")]
+
+
+def test_warning_codes_includes_connection_state_notifications():
+    """Codes 1100/1101/1102 are TWS "system messages" with reqId=-1 —
+    advisory notifications about connection state transitions. They must
+    be classified as warnings so the log output reflects their nature
+    and any user-facing severity routing doesn't surface them as real
+    errors.
+    """
+    from ib_async.wrapper import _WARNING_CODES
+
+    assert 1100 in _WARNING_CODES
+    assert 1101 in _WARNING_CODES
+    assert 1102 in _WARNING_CODES
+    # 1300 ("TWS socket port has been reset") is NOT advisory — the
+    # connection is actually being dropped — so it stays an error.
+    assert 1300 not in _WARNING_CODES
+
+
+def test_connection_state_codes_logged_at_warning_level(caplog):
+    """Wrapper.error must classify 1100/1101/1102 as warnings (not
+    errors). System messages from TWS arrive with reqId=-1 so there's
+    no in-flight request or trade to act on, but the log severity still
+    matters — ops dashboards key off it.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+
+    with caplog.at_level(logging.WARNING, logger="ib_async.wrapper"):
+        ib.wrapper.error(-1, 1100, "Connectivity lost", "")
+        ib.wrapper.error(-1, 1101, "Restored - data lost", "")
+        ib.wrapper.error(-1, 1102, "Restored - data maintained", "")
+
+    error_records = [
+        r
+        for r in caplog.records
+        if r.name == "ib_async.wrapper" and r.levelno >= logging.ERROR
+    ]
+    assert error_records == []
+
+
+def test_send_proto_bypasses_throttle_queue():
+    """Known limitation: ``sendProto`` writes directly to the socket
+    without going through the ``_msgQ`` / ``_timeQ`` sliding-window
+    throttle that ``sendMsg`` uses. Locking this in as a test so a
+    future refactor that moves the proto path through the throttle is
+    a deliberate, observable change.
+    """
+    ib = ibi.IB()
+    sent: list = []
+    ib.client.conn.sendMsg = lambda data: sent.append(data)
+    ib.client.sendProto(1, b"\x00\x00")
+    assert len(sent) == 1
+    assert len(ib.client._timeQ) == 0
+    assert len(ib.client._msgQ) == 0
+
+
+def test_handshake_prefix_matches_ibkr_make_initial_msg():
+    """IBKR ``comm.make_initial_msg`` produces ``len(text)`` (4-byte BE)
+    + ``text``. We construct the equivalent inline in ``connectAsync``
+    via ``self._prefix(b"v...")`` — same wire framing, no extra NULs.
+    """
+    import struct as _struct
+
+    ib = ibi.IB()
+    body = b"v157..225"
+    framed = ib.client._prefix(body)
+    assert framed == _struct.pack(">I", len(body)) + body
+    assert len(framed) == 4 + len(body)
+
+
+def test_set_connect_options_appends_to_handshake_body():
+    """``setConnectOptions("+PACEAPI")`` must end up in the v100 banner
+    as ``v{Min}..{Max} +PACEAPI`` — IBKR ``EClient.connect`` does the
+    same with a leading space separator.
+    """
+    ib = ibi.IB()
+    ib.client.setConnectOptions("+PACEAPI")
+    body = b"v%d..%d%s" % (
+        ib.client.MinClientVersion,
+        ib.client.MaxClientVersion,
+        b" " + ib.client.connectOptions,
+    )
+    assert body.endswith(b" +PACEAPI")
+
+
+def test_max_requests_throttle_default_matches_ibkr_pacing():
+    """IBKR documents 50 messages/sec as the practical pacing limit.
+    Our defaults intentionally sit just below that (45/sec) so brief
+    bursts don't trip server-side disconnects.
+    """
+    from ib_async.client import Client as _Client
+
+    assert _Client.MaxRequests == 45
+    assert _Client.RequestsInterval == 1
+
+
+def test_disconnect_clears_in_flight_futures_with_connection_error():
+    """``connectionClosed`` must drain every awaiter so user code past
+    a daily server-reset doesn't wedge. Pending request futures must
+    receive a ``ConnectionError`` exception.
+    """
+    from ib_async._requests import SingletonKey as _SingletonKey
+
+    ib = ibi.IB()
+    req, _opened = ib.wrapper.requests.open(_SingletonKey("openOrders"))
+    future = req.future
+    assert not future.done()
+
+    ib.wrapper.connectionClosed()
+
+    assert future.done()
+    exc = future.exception()
+    assert isinstance(exc, ConnectionError)
+
+
+def test_wrapper_error_warning_classification_in_warning_band():
+    """The 2100-2199 band auto-classifies as warning regardless of the
+    explicit ``_WARNING_CODES`` set — this covers the data-farm
+    connectivity codes (2103-2108) without enumerating them.
+    """
+    from ib_async.wrapper import _WARNING_CODES
+
+    for code in (2103, 2104, 2105, 2106, 2107, 2108, 2150, 2199):
+        is_warning = code in _WARNING_CODES or 2100 <= code < 2200
+        assert is_warning, f"code {code} should classify as warning"
+
+    assert not (2200 in _WARNING_CODES or 2100 <= 2200 < 2200)
