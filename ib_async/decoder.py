@@ -12,6 +12,8 @@ from ._proto.safe import safe_decimal
 from ._server_versions import (
     MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
     MIN_SERVER_VER_ERROR_TIME,
+    MIN_SERVER_VER_HISTORICAL_DATA_END,
+    MIN_SERVER_VER_SYNT_REALTIME_BARS,
 )
 from .contract import (
     ComboLeg,
@@ -478,6 +480,7 @@ class Decoder:
             105: self.wrap("wshEventData", [int, str], skip=1),
             106: self.historicalSchedule,
             107: self.wrap("userInfo", [int, str], skip=1),
+            108: self.historicalDataEnd,
         }
 
     def wrap(self, methodName, types, skip=2):
@@ -1578,7 +1581,24 @@ class Decoder:
         self.wrapper.execDetails(int(reqId), c, ex)
 
     def historicalData(self, fields):
-        _, reqId, startDateStr, endDateStr, numBars, *fields = fields
+        # Wire layout shifts at MIN_SERVER_VER_HISTORICAL_DATA_END (196):
+        #   pre-196: msgId, reqId, startDateStr, endDateStr, numBars, [bars...]
+        #            historicalDataEnd is emitted inline at the tail.
+        #   >=196:   msgId, reqId, numBars, [bars...]
+        #            startDateStr/endDateStr ship as a separate
+        #            HISTORICAL_DATA_END frame (msgId 108) which fires
+        #            wrapper.historicalDataEnd. Without the gate, on a
+        #            196+ server reqId/startDateStr/endDateStr/numBars
+        #            shift one slot left and every bar is corrupted.
+        _, *fields = fields
+        if self.serverVersion < MIN_SERVER_VER_SYNT_REALTIME_BARS:
+            _, *fields = fields  # legacy version prefix (pre-124)
+        reqId, *fields = fields
+        startDateStr = ""
+        endDateStr = ""
+        if self.serverVersion < MIN_SERVER_VER_HISTORICAL_DATA_END:
+            startDateStr, endDateStr, *fields = fields
+        numBars, *fields = fields
         get = iter(fields).__next__
 
         for _ in range(int(numBars)):
@@ -1594,6 +1614,14 @@ class Decoder:
             )
             self.wrapper.historicalData(int(reqId), bar)
 
+        if self.serverVersion < MIN_SERVER_VER_HISTORICAL_DATA_END:
+            self.wrapper.historicalDataEnd(int(reqId), startDateStr, endDateStr)
+
+    def historicalDataEnd(self, fields):
+        # Binary handler for msgId 108 — the dedicated end-of-dataset
+        # frame IBKR added at MIN_SERVER_VER_HISTORICAL_DATA_END (196).
+        # On older servers historicalData itself fires the end signal.
+        _, reqId, startDateStr, endDateStr = fields
         self.wrapper.historicalDataEnd(int(reqId), startDateStr, endDateStr)
 
     def historicalDataUpdate(self, fields):
