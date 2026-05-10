@@ -206,7 +206,13 @@ class PnLSingle:
     dailyPnL: float = nan
     unrealizedPnL: float = nan
     realizedPnL: float = nan
-    position: int = 0
+    # Wire ``position`` is a Decimal-shaped string. Earlier ib_async
+    # truncated to ``int``, silently dropping fractional positions for
+    # crypto and other FRACTIONAL_SIZE_SUPPORT (gate 163) instruments.
+    # ``Decimal | None`` matches the wire and the rest of the v3.0
+    # Decimal-native domain; ``None`` is the unset sentinel (falsy
+    # without the NaN truthy-trap).
+    position: Decimal | None = None
     value: float = nan
 
 

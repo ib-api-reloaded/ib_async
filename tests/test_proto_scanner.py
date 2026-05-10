@@ -19,6 +19,8 @@ Coverage strategy:
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 from ib_async._pb import (
@@ -265,49 +267,51 @@ def test_cancel_pnl_carries_reqId():
 # ---------------------------------------------------------------------------
 
 
-def test_pnl_single_empty_proto_yields_zero_position():
+def test_pnl_single_empty_proto_yields_none_position():
+    """v3.0: position is ``Decimal | None`` end-to-end — unset is ``None``."""
     args = createPnLSingleArgs(PnLSingle_pb2.PnLSingle())
     assert args.reqId == 0
-    assert args.pos == 0
+    assert args.pos is None
     assert args.dailyPnL == 0.0
     assert args.unrealizedPnL == 0.0
     assert args.realizedPnL == 0.0
     assert args.value == 0.0
 
 
-def test_pnl_single_garbage_position_string_coerces_to_zero():
-    """Wire ``position`` is string; if upstream sends garbage we must
-    not raise — wrapper expects ``int``, so we collapse to 0."""
+def test_pnl_single_garbage_position_string_lands_as_none():
+    """Wire ``position`` is string; garbage input must NOT raise — it
+    lands as ``None`` so user code can distinguish 'no data' from a
+    real zero position."""
     proto = PnLSingle_pb2.PnLSingle(reqId=42, position="not-a-number")
     args = createPnLSingleArgs(proto)
-    assert args.pos == 0
+    assert args.pos is None
 
 
-def test_pnl_single_empty_position_string_coerces_to_zero():
+def test_pnl_single_empty_position_string_lands_as_none():
     proto = PnLSingle_pb2.PnLSingle(reqId=42, position="")
     args = createPnLSingleArgs(proto)
-    assert args.pos == 0
+    assert args.pos is None
 
 
-def test_pnl_single_nan_position_coerces_to_zero():
+def test_pnl_single_nan_position_lands_as_none():
     proto = PnLSingle_pb2.PnLSingle(reqId=42, position="nan")
     args = createPnLSingleArgs(proto)
-    assert args.pos == 0
+    assert args.pos is None
 
 
-def test_pnl_single_fractional_position_truncates():
-    """The wrapper's ``pos: int`` typing means fractional positions
-    are not representable. Truncation (not rounding) is the
-    documented coercion."""
+def test_pnl_single_fractional_position_preserved():
+    """v3.0 preserves fractional positions for crypto /
+    FRACTIONAL_SIZE_SUPPORT instruments — earlier behaviour
+    truncated to int, silently dropping precision."""
     proto = PnLSingle_pb2.PnLSingle(reqId=42, position="100.7")
     args = createPnLSingleArgs(proto)
-    assert args.pos == 100
+    assert args.pos == Decimal("100.7")
 
 
 def test_pnl_single_negative_position_round_trips():
     proto = PnLSingle_pb2.PnLSingle(reqId=42, position="-50")
     args = createPnLSingleArgs(proto)
-    assert args.pos == -50
+    assert args.pos == Decimal("-50")
 
 
 def test_pnl_single_full_round_trip():
@@ -321,7 +325,7 @@ def test_pnl_single_full_round_trip():
     )
     args = createPnLSingleArgs(proto)
     assert args.reqId == 42
-    assert args.pos == 100
+    assert args.pos == Decimal("100")
     assert args.dailyPnL == 10.5
     assert args.unrealizedPnL == -2.5
     assert args.realizedPnL == 1.0

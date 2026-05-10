@@ -27,6 +27,7 @@ Wire-shape notes:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 from .._pb import (
     CancelFundamentalsData_pb2,
@@ -118,7 +119,7 @@ class PnLSingleArgs:
     """Args for ``Wrapper.pnlSingle(reqId, pos, dailyPnL, unrealizedPnL, realizedPnL, value)``."""
 
     reqId: int
-    pos: int
+    pos: Decimal | None
     dailyPnL: float
     unrealizedPnL: float
     realizedPnL: float
@@ -268,16 +269,13 @@ def createCancelPnLProto(reqId: int) -> CancelPnL_pb2.CancelPnL:
 def createPnLSingleArgs(proto: PnLSingle_pb2.PnLSingle) -> PnLSingleArgs:
     """``Wrapper.pnlSingle(reqId, pos, dailyPnL, unrealizedPnL, realizedPnL, value)`` args.
 
-    ``position`` is wire ``string`` (Decimal precision); the wrapper
-    takes ``pos: int``. We coerce via ``int(safe_decimal(...) or 0)``
-    so empty / nan / non-finite / non-numeric strings collapse to
-    ``0`` instead of raising. Fractional positions truncate (the
-    wrapper only ever stores into ``PnLSingle.position`` which is
-    ``int`` typed today).
+    ``position`` is wire ``string`` (Decimal precision). v3.0 preserves
+    that through to the domain ``PnLSingle.position: Decimal | None``
+    so fractional positions on crypto / FRACTIONAL_SIZE_SUPPORT
+    instruments don't silently truncate.
     """
     reqId = proto.reqId if proto.HasField("reqId") else 0
-    rawPos = proto.position if proto.HasField("position") else ""
-    pos = int(safe_decimal(rawPos) or 0)
+    pos = safe_decimal(proto.position) if proto.HasField("position") else None
     dailyPnL = proto.dailyPnL if proto.HasField("dailyPnL") else 0.0
     unrealizedPnL = proto.unrealizedPnL if proto.HasField("unrealizedPnL") else 0.0
     realizedPnL = proto.realizedPnL if proto.HasField("realizedPnL") else 0.0

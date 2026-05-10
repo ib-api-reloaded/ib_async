@@ -485,7 +485,7 @@ class Decoder:
             93: self.marketRule,
             94: self.wrap("pnl", [int, float, float, float], skip=1),
             95: self.wrap(
-                "pnlSingle", [int, float, float, float, float, float], skip=1
+                "pnlSingle", [Decimal, float, float, float, float, float], skip=1
             ),
             96: self.historicalTicks,
             97: self.historicalTicksBidAsk,
