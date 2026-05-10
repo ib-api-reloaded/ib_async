@@ -1628,9 +1628,26 @@ class Wrapper:
     def receiveFA(self, _faDataType: int, faXmlData: str):
         self.requests.set_result(SingletonKey("requestFA"), faXmlData)
 
+    def replaceFAEnd(self, _reqId: int, _text: str):
+        # No client-side waiter today; the binary path's wrap() factory
+        # silently drops this when the wrapper has no method, so we keep
+        # the proto path dispatch consistent by accepting the call as a
+        # no-op rather than raising. If a future feature wants the
+        # replace-FA reqId back, hook the registry settle here.
+        pass
+
     def currentTime(self, time: int):
         dt = datetime.fromtimestamp(time, self.defaultTimezone)
         self.requests.set_result(SingletonKey("currentTime"), dt)
+
+    def currentTimeInMillis(self, timeInMillis: int):
+        """v3.0 new capability: ms-precision server clock (proto msgId 109).
+
+        Settles the ``"currentTimeInMillis"`` singleton so
+        ``IB.reqCurrentTimeInMillisAsync`` resolves with the raw
+        millisecond timestamp.
+        """
+        self.requests.set_result(SingletonKey("currentTimeInMillis"), timeInMillis)
 
     def rerouteMktDataReq(self, reqId: int, conId: int, exchange: str):
         self.ib.rerouteMktDataReqEvent.emit(reqId, conId, exchange)

@@ -971,6 +971,14 @@ class Client:
         self.send(13, 1)
 
     def setServerLogLevel(self, logLevel):
+        if self.useProtoBuf(_M.SET_SERVER_LOGLEVEL):
+            from ._proto.rest import createSetServerLogLevelRequestProto
+
+            self.sendProto(
+                _M.SET_SERVER_LOGLEVEL,
+                createSetServerLogLevelRequestProto(logLevel).SerializeToString(),
+            )
+            return
         self.send(14, 1, logLevel)
 
     def reqAutoOpenOrders(self, bAutoBind):
@@ -1007,9 +1015,24 @@ class Client:
         self.send(17, 1)
 
     def requestFA(self, faData):
+        if self.useProtoBuf(_M.REQ_FA):
+            from ._proto.accounts import createFARequestProto
+
+            self.sendProto(
+                _M.REQ_FA, createFARequestProto(faData).SerializeToString()
+            )
+            return
         self.send(18, 1, faData)
 
     def replaceFA(self, reqId, faData, cxml):
+        if self.useProtoBuf(_M.REPLACE_FA):
+            from ._proto.accounts import createFAReplaceProto
+
+            self.sendProto(
+                _M.REPLACE_FA,
+                createFAReplaceProto(reqId, faData, cxml).SerializeToString(),
+            )
+            return
         self.send(19, 1, faData, cxml, reqId)
 
     def reqHistoricalData(
@@ -1068,6 +1091,21 @@ class Client:
     def exerciseOptions(
         self, reqId, contract, exerciseAction, exerciseQuantity, account, override
     ):
+        if self.useProtoBuf(_M.EXERCISE_OPTIONS):
+            from ._proto.rest import createExerciseOptionsRequestProto
+
+            self.sendProto(
+                _M.EXERCISE_OPTIONS,
+                createExerciseOptionsRequestProto(
+                    reqId,
+                    contract,
+                    exerciseAction,
+                    exerciseQuantity,
+                    account,
+                    override,
+                ).SerializeToString(),
+            )
+            return
         self.send(
             21,
             2,
@@ -1169,7 +1207,25 @@ class Client:
         self.send(25, 1, reqId)
 
     def reqCurrentTime(self):
+        if self.useProtoBuf(_M.REQ_CURRENT_TIME):
+            from ._proto.rest import createCurrentTimeRequestProto
+
+            self.sendProto(
+                _M.REQ_CURRENT_TIME,
+                createCurrentTimeRequestProto().SerializeToString(),
+            )
+            return
         self.send(49, 1)
+
+    def reqCurrentTimeInMillis(self):
+        """Request the IBKR server clock in milliseconds. Protobuf only —
+        no binary fallback (IBKR never shipped this on the legacy wire)."""
+        from ._proto.rest import createCurrentTimeInMillisRequestProto
+
+        self.sendProto(
+            _M.REQ_CURRENT_TIME_IN_MILLIS,
+            createCurrentTimeInMillisRequestProto().SerializeToString(),
+        )
 
     def reqRealTimeBars(
         self, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
@@ -1241,6 +1297,16 @@ class Client:
     def calculateImpliedVolatility(
         self, reqId, contract, optionPrice, underPrice, implVolOptions
     ):
+        if self.useProtoBuf(_M.REQ_CALC_IMPLIED_VOLAT):
+            from ._proto.rest import createCalculateImpliedVolatilityRequestProto
+
+            self.sendProto(
+                _M.REQ_CALC_IMPLIED_VOLAT,
+                createCalculateImpliedVolatilityRequestProto(
+                    reqId, contract, optionPrice, underPrice
+                ).SerializeToString(),
+            )
+            return
         self.send(
             54,
             3,
@@ -1255,6 +1321,16 @@ class Client:
     def calculateOptionPrice(
         self, reqId, contract, volatility, underPrice, optPrcOptions
     ):
+        if self.useProtoBuf(_M.REQ_CALC_OPTION_PRICE):
+            from ._proto.rest import createCalculateOptionPriceRequestProto
+
+            self.sendProto(
+                _M.REQ_CALC_OPTION_PRICE,
+                createCalculateOptionPriceRequestProto(
+                    reqId, contract, volatility, underPrice
+                ).SerializeToString(),
+            )
+            return
         self.send(
             55,
             3,
@@ -1267,9 +1343,27 @@ class Client:
         )
 
     def cancelCalculateImpliedVolatility(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_CALC_IMPLIED_VOLAT):
+            from ._proto.rest import createCancelCalculateImpliedVolatilityProto
+
+            self.sendProto(
+                _M.CANCEL_CALC_IMPLIED_VOLAT,
+                createCancelCalculateImpliedVolatilityProto(
+                    reqId
+                ).SerializeToString(),
+            )
+            return
         self.send(56, 1, reqId)
 
     def cancelCalculateOptionPrice(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_CALC_OPTION_PRICE):
+            from ._proto.rest import createCancelCalculateOptionPriceProto
+
+            self.sendProto(
+                _M.CANCEL_CALC_OPTION_PRICE,
+                createCancelCalculateOptionPriceProto(reqId).SerializeToString(),
+            )
+            return
         self.send(57, 1, reqId)
 
     def reqGlobalCancel(self):
@@ -1358,6 +1452,16 @@ class Client:
         self.send(70, 1, reqId)
 
     def startApi(self):
+        if self.useProtoBuf(_M.START_API):
+            from ._proto.rest import createStartApiRequestProto
+
+            self.sendProto(
+                _M.START_API,
+                createStartApiRequestProto(
+                    self.clientId, self.optCapab
+                ).SerializeToString(),
+            )
+            return
         self.send(71, 2, self.clientId, self.optCapab)
 
     def verifyAndAuthRequest(self, apiName, apiVersion, opaqueIsvKey):
@@ -1422,6 +1526,20 @@ class Client:
         underlyingSecType,
         underlyingConId,
     ):
+        if self.useProtoBuf(_M.REQ_SEC_DEF_OPT_PARAMS):
+            from ._proto.rest import createSecDefOptParamsRequestProto
+
+            self.sendProto(
+                _M.REQ_SEC_DEF_OPT_PARAMS,
+                createSecDefOptParamsRequestProto(
+                    reqId,
+                    underlyingSymbol,
+                    futFopExchange,
+                    underlyingSecType,
+                    underlyingConId,
+                ).SerializeToString(),
+            )
+            return
         self.send(
             78,
             reqId,
@@ -1432,12 +1550,38 @@ class Client:
         )
 
     def reqSoftDollarTiers(self, reqId):
+        if self.useProtoBuf(_M.REQ_SOFT_DOLLAR_TIERS):
+            from ._proto.rest import createSoftDollarTiersRequestProto
+
+            self.sendProto(
+                _M.REQ_SOFT_DOLLAR_TIERS,
+                createSoftDollarTiersRequestProto(reqId).SerializeToString(),
+            )
+            return
         self.send(79, reqId)
 
     def reqFamilyCodes(self):
+        if self.useProtoBuf(_M.REQ_FAMILY_CODES):
+            from ._proto.accounts import createFamilyCodesRequestProto
+
+            self.sendProto(
+                _M.REQ_FAMILY_CODES,
+                createFamilyCodesRequestProto().SerializeToString(),
+            )
+            return
         self.send(80)
 
     def reqMatchingSymbols(self, reqId, pattern):
+        if self.useProtoBuf(_M.REQ_MATCHING_SYMBOLS):
+            from ._proto.rest import createMatchingSymbolsRequestProto
+
+            self.sendProto(
+                _M.REQ_MATCHING_SYMBOLS,
+                createMatchingSymbolsRequestProto(
+                    reqId, pattern
+                ).SerializeToString(),
+            )
+            return
         self.send(81, reqId, pattern)
 
     def reqMktDepthExchanges(self):
@@ -1452,6 +1596,16 @@ class Client:
         self.send(82)
 
     def reqSmartComponents(self, reqId, bboExchange):
+        if self.useProtoBuf(_M.REQ_SMART_COMPONENTS):
+            from ._proto.rest import createSmartComponentsRequestProto
+
+            self.sendProto(
+                _M.REQ_SMART_COMPONENTS,
+                createSmartComponentsRequestProto(
+                    reqId, bboExchange
+                ).SerializeToString(),
+            )
+            return
         self.send(83, reqId, bboExchange)
 
     def reqNewsArticle(self, reqId, providerCode, articleId, newsArticleOptions):
@@ -1565,6 +1719,14 @@ class Client:
         self.send(90, reqId)
 
     def reqMarketRule(self, marketRuleId):
+        if self.useProtoBuf(_M.REQ_MARKET_RULE):
+            from ._proto.rest import createMarketRuleRequestProto
+
+            self.sendProto(
+                _M.REQ_MARKET_RULE,
+                createMarketRuleRequestProto(marketRuleId).SerializeToString(),
+            )
+            return
         self.send(91, marketRuleId)
 
     def reqPnL(self, reqId, account, modelCode):
@@ -1745,4 +1907,12 @@ class Client:
         self.send(103, reqId)
 
     def reqUserInfo(self, reqId):
+        if self.useProtoBuf(_M.REQ_USER_INFO):
+            from ._proto.rest import createUserInfoRequestProto
+
+            self.sendProto(
+                _M.REQ_USER_INFO,
+                createUserInfoRequestProto(reqId).SerializeToString(),
+            )
+            return
         self.send(104, reqId)

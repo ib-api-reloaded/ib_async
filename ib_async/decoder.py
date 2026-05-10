@@ -88,7 +88,7 @@ _PROTO_MSG_HANDLERS: dict[int, tuple[type, str]] = {}
 def _initProtoMsgHandlers() -> None:
     if _PROTO_MSG_HANDLERS:
         return
-    from ._pb import (
+    from ._pb import (  # FA messages (gate 211)
         AccountDataEnd_pb2,
         AccountSummary_pb2,
         AccountSummaryEnd_pb2,
@@ -101,8 +101,11 @@ def _initProtoMsgHandlers() -> None:
         CompletedOrdersEnd_pb2,
         ContractData_pb2,
         ContractDataEnd_pb2,
+        CurrentTime_pb2,
+        CurrentTimeInMillis_pb2,
         ExecutionDetails_pb2,
         ExecutionDetailsEnd_pb2,
+        FamilyCodes_pb2,
         FundamentalsData_pb2,
         HeadTimestamp_pb2,
         HistogramData_pb2,
@@ -120,9 +123,11 @@ def _initProtoMsgHandlers() -> None:
         MarketDepth_pb2,
         MarketDepthExchanges_pb2,
         MarketDepthL2_pb2,
+        MarketRule_pb2,
         NewsArticle_pb2,
         NewsBulletin_pb2,
         NewsProviders_pb2,
+        NextValidId_pb2,
         OpenOrder_pb2,
         OpenOrdersEnd_pb2,
         OrderBound_pb2,
@@ -135,10 +140,17 @@ def _initProtoMsgHandlers() -> None:
         PositionMulti_pb2,
         PositionMultiEnd_pb2,
         RealTimeBarTick_pb2,
+        ReceiveFA_pb2,
+        ReplaceFAEnd_pb2,
         RerouteMarketDataRequest_pb2,
         RerouteMarketDepthRequest_pb2,
         ScannerData_pb2,
         ScannerParameters_pb2,
+        SecDefOptParameter_pb2,
+        SecDefOptParameterEnd_pb2,
+        SmartComponents_pb2,
+        SoftDollarTiers_pb2,
+        SymbolSamples_pb2,
         TickByTickData_pb2,
         TickGeneric_pb2,
         TickNews_pb2,
@@ -148,6 +160,7 @@ def _initProtoMsgHandlers() -> None:
         TickSize_pb2,
         TickSnapshotEnd_pb2,
         TickString_pb2,
+        UserInfo_pb2,
         WshEventData_pb2,
         WshMetaData_pb2,
     )
@@ -264,6 +277,29 @@ def _initProtoMsgHandlers() -> None:
             95: (PnLSingle_pb2.PnLSingle, "_protoPnLSingle"),
             104: (WshMetaData_pb2.WshMetaData, "_protoWshMetaData"),
             105: (WshEventData_pb2.WshEventData, "_protoWshEventData"),
+            # --- REST messages (gates 211 / 212 / 213) ---
+            9: (NextValidId_pb2.NextValidId, "_protoNextValidId"),
+            16: (ReceiveFA_pb2.ReceiveFA, "_protoReceiveFA"),
+            49: (CurrentTime_pb2.CurrentTime, "_protoCurrentTime"),
+            75: (
+                SecDefOptParameter_pb2.SecDefOptParameter,
+                "_protoSecDefOptParameter",
+            ),
+            76: (
+                SecDefOptParameterEnd_pb2.SecDefOptParameterEnd,
+                "_protoSecDefOptParameterEnd",
+            ),
+            77: (SoftDollarTiers_pb2.SoftDollarTiers, "_protoSoftDollarTiers"),
+            78: (FamilyCodes_pb2.FamilyCodes, "_protoFamilyCodes"),
+            79: (SymbolSamples_pb2.SymbolSamples, "_protoSymbolSamples"),
+            82: (SmartComponents_pb2.SmartComponents, "_protoSmartComponents"),
+            93: (MarketRule_pb2.MarketRule, "_protoMarketRule"),
+            103: (ReplaceFAEnd_pb2.ReplaceFAEnd, "_protoReplaceFAEnd"),
+            107: (UserInfo_pb2.UserInfo, "_protoUserInfo"),
+            109: (
+                CurrentTimeInMillis_pb2.CurrentTimeInMillis,
+                "_protoCurrentTimeInMillis",
+            ),
         }
     )
 
@@ -887,9 +923,7 @@ class Decoder:
         from ._proto.news import createUpdateNewsBulletinArgs
 
         a = createUpdateNewsBulletinArgs(proto)
-        self.wrapper.updateNewsBulletin(
-            a.msgId, a.msgType, a.message, a.origExchange
-        )
+        self.wrapper.updateNewsBulletin(a.msgId, a.msgType, a.message, a.origExchange)
 
     def _protoNewsProviders(self, proto: Any) -> None:
         from ._proto.news import createNewsProviders
@@ -983,6 +1017,91 @@ class Decoder:
         self.wrapper.pnlSingle(
             a.reqId, a.pos, a.dailyPnL, a.unrealizedPnL, a.realizedPnL, a.value
         )
+
+    # --- REST handlers ----------------------------------------------------
+
+    def _protoNextValidId(self, proto: Any) -> None:
+        from ._proto.rest import createNextValidIdOrderId
+
+        self.wrapper.nextValidId(createNextValidIdOrderId(proto))
+
+    def _protoCurrentTime(self, proto: Any) -> None:
+        from ._proto.rest import createCurrentTimeSeconds
+
+        self.wrapper.currentTime(createCurrentTimeSeconds(proto))
+
+    def _protoCurrentTimeInMillis(self, proto: Any) -> None:
+        from ._proto.rest import createCurrentTimeInMillisMillis
+
+        self.wrapper.currentTimeInMillis(createCurrentTimeInMillisMillis(proto))
+
+    def _protoUserInfo(self, proto: Any) -> None:
+        from ._proto.rest import createUserInfoArgs
+
+        a = createUserInfoArgs(proto)
+        self.wrapper.userInfo(a.reqId, a.whiteBrandingId)
+
+    def _protoSecDefOptParameter(self, proto: Any) -> None:
+        from ._proto.rest import createSecDefOptParameterArgs
+
+        a = createSecDefOptParameterArgs(proto)
+        self.wrapper.securityDefinitionOptionParameter(
+            a.reqId,
+            a.exchange,
+            a.underlyingConId,
+            a.tradingClass,
+            a.multiplier,
+            a.expirations,
+            a.strikes,
+        )
+
+    def _protoSecDefOptParameterEnd(self, proto: Any) -> None:
+        from ._proto.rest import createSecDefOptParameterEndReqId
+
+        self.wrapper.securityDefinitionOptionParameterEnd(
+            createSecDefOptParameterEndReqId(proto)
+        )
+
+    def _protoSoftDollarTiers(self, proto: Any) -> None:
+        from ._proto.rest import createSoftDollarTiersArgs
+
+        a = createSoftDollarTiersArgs(proto)
+        self.wrapper.softDollarTiers(a.reqId, a.tiers)
+
+    def _protoSymbolSamples(self, proto: Any) -> None:
+        from ._proto.rest import createSymbolSamplesArgs
+
+        a = createSymbolSamplesArgs(proto)
+        self.wrapper.symbolSamples(a.reqId, a.contractDescriptions)
+
+    def _protoSmartComponents(self, proto: Any) -> None:
+        from ._proto.rest import createSmartComponentsArgs
+
+        a = createSmartComponentsArgs(proto)
+        self.wrapper.smartComponents(a.reqId, a.components)
+
+    def _protoMarketRule(self, proto: Any) -> None:
+        from ._proto.rest import createMarketRuleArgs
+
+        a = createMarketRuleArgs(proto)
+        self.wrapper.marketRule(a.marketRuleId, a.priceIncrements)
+
+    def _protoFamilyCodes(self, proto: Any) -> None:
+        from ._proto.accounts import createFamilyCodes
+
+        self.wrapper.familyCodes(createFamilyCodes(proto))
+
+    def _protoReceiveFA(self, proto: Any) -> None:
+        from ._proto.accounts import createReceiveFAArgs
+
+        a = createReceiveFAArgs(proto)
+        self.wrapper.receiveFA(a.faDataType, a.xml)
+
+    def _protoReplaceFAEnd(self, proto: Any) -> None:
+        from ._proto.accounts import createReplaceFAEndArgs
+
+        a = createReplaceFAEndArgs(proto)
+        self.wrapper.replaceFAEnd(a.reqId, a.text)
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""

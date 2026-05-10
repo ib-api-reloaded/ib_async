@@ -2430,6 +2430,21 @@ class IB:
             self.client.reqCurrentTime()
         return future
 
+    def reqCurrentTimeInMillisAsync(self) -> Awaitable[int]:
+        """Return the IB server clock in milliseconds since the Unix epoch.
+
+        v3.0 new capability — only meaningful on TWS / IB Gateway at
+        server version 213 or newer (the protobuf REST-messages gate).
+        Older servers reject the request; awaiting this on a sub-213
+        server times out via the user's outer ``asyncio.wait_for`` if
+        any. There's no binary fallback because IBKR never shipped this
+        message family on the legacy NUL-separated wire.
+        """
+        future, isNew = self._openSingletonRequest("currentTimeInMillis")
+        if isNew:
+            self.client.reqCurrentTimeInMillis()
+        return future
+
     def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
         future, isNew = self._openSingletonRequest("accountValues")
         if isNew:
