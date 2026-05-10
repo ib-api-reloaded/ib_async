@@ -4454,6 +4454,7 @@ def test_proto_adjusted_order_family_round_trip():
     assert decoded.adjustedTrailingAmount == D("1.5")
     assert decoded.adjustableTrailingUnit == 1
 
+
 # ---------------------------------------------------------------------------
 # Round-5: Subscription / Ticker lifecycle regressions
 # ---------------------------------------------------------------------------
@@ -4476,9 +4477,7 @@ def test_late_tick_after_cancel_is_silent_for_every_tick_handler(caplog):
     with caplog.at_level(logging.ERROR, logger="ib_async.wrapper.Wrapper"):
         ib.wrapper.priceSizeTick(unknown, 1, 100.0, 50)
         ib.wrapper.tickSize(unknown, 0, 50)
-        ib.wrapper.tickByTickAllLast(
-            unknown, 1, 0, 100.0, 50, TickAttribLast(), "", ""
-        )
+        ib.wrapper.tickByTickAllLast(unknown, 1, 0, 100.0, 50, TickAttribLast(), "", "")
         ib.wrapper.tickByTickBidAsk(
             unknown, 0, 100.0, 100.5, 50, 50, TickAttribBidAsk()
         )
@@ -4515,9 +4514,7 @@ def test_subscription_close_idempotent_across_tick_kinds():
 
     ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
     md = MktDataSub(reqId=100, contract=contract, ticker=ticker)
-    tbt = TickByTickSub(
-        reqId=101, contract=contract, ticker=ticker, tickType="Last"
-    )
+    tbt = TickByTickSub(reqId=101, contract=contract, ticker=ticker, tickType="Last")
     depth = MktDepthSub(reqId=102, contract=contract, ticker=ticker)
 
     for sub in (md, tbt, depth):
@@ -4552,9 +4549,7 @@ def test_concurrent_market_data_subscriptions_only_one_cancel_per_kind():
 
     ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
     md = MktDataSub(reqId=200, contract=contract, ticker=ticker)
-    tbt = TickByTickSub(
-        reqId=201, contract=contract, ticker=ticker, tickType="Last"
-    )
+    tbt = TickByTickSub(reqId=201, contract=contract, ticker=ticker, tickType="Last")
     ib.wrapper.subscriptions.add(md)
     ib.wrapper.subscriptions.add(tbt)
 
@@ -4632,15 +4627,9 @@ def test_singleton_request_third_caller_attaches_after_two_sharers():
     from ib_async._requests import SingletonKey
 
     ib = ibi.IB()
-    a, isNewA = ib.wrapper.requests.open(
-        SingletonKey("openOrders"), single_flight=True
-    )
-    b, isNewB = ib.wrapper.requests.open(
-        SingletonKey("openOrders"), single_flight=True
-    )
-    c, isNewC = ib.wrapper.requests.open(
-        SingletonKey("openOrders"), single_flight=True
-    )
+    a, isNewA = ib.wrapper.requests.open(SingletonKey("openOrders"), single_flight=True)
+    b, isNewB = ib.wrapper.requests.open(SingletonKey("openOrders"), single_flight=True)
+    c, isNewC = ib.wrapper.requests.open(SingletonKey("openOrders"), single_flight=True)
 
     assert isNewA is True
     assert isNewB is False
@@ -4767,23 +4756,96 @@ def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
     # (server-protocol contract — see ibapi/message.py for the names).
     ibkrCanonicalProtoIds = {
         # orders / executions
-        3, 4, 5, 11, 53, 55, 100, 101, 102,
+        3,
+        4,
+        5,
+        11,
+        53,
+        55,
+        100,
+        101,
+        102,
         # contracts
-        10, 18, 52,
+        10,
+        18,
+        52,
         # ticks + market data
-        1, 2, 12, 13, 21, 45, 46, 57, 58, 80, 81,
+        1,
+        2,
+        12,
+        13,
+        21,
+        45,
+        46,
+        57,
+        58,
+        80,
+        81,
         # accounts / positions
-        6, 7, 8, 15, 54, 61, 62, 63, 64, 71, 72, 73, 74,
+        6,
+        7,
+        8,
+        15,
+        54,
+        61,
+        62,
+        63,
+        64,
+        71,
+        72,
+        73,
+        74,
         # historical
-        17, 50, 88, 89, 90, 96, 97, 98, 99, 106, 108,
+        17,
+        50,
+        88,
+        89,
+        90,
+        96,
+        97,
+        98,
+        99,
+        106,
+        108,
         # news + scanner / fundamentals / pnl
-        14, 19, 20, 51, 83, 84, 85, 86, 87, 94, 95, 104, 105,
+        14,
+        19,
+        20,
+        51,
+        83,
+        84,
+        85,
+        86,
+        87,
+        94,
+        95,
+        104,
+        105,
         # REST / FA / soft-dollar / market-rule / smart-components / etc
-        9, 16, 49, 75, 76, 77, 78, 79, 82, 93, 103, 107, 109,
+        9,
+        16,
+        49,
+        75,
+        76,
+        77,
+        78,
+        79,
+        82,
+        93,
+        103,
+        107,
+        109,
         # commission + market-data reroutes
-        59, 91, 92,
+        59,
+        91,
+        92,
         # verify / display-group / config
-        65, 66, 67, 68, 110, 111,
+        65,
+        66,
+        67,
+        68,
+        110,
+        111,
     }
     assert ours == ibkrCanonicalProtoIds, (
         f"missing: {sorted(ibkrCanonicalProtoIds - ours)}, "
@@ -4831,9 +4893,9 @@ def test_tick_efp_binary_handler_reads_all_nine_fields():
     ]
     ib.client.decoder.interpret(fields)
 
-    assert captured == [
-        (42, 38, 12.5, "+12.50", 100.25, 30, "20251220", 0.75, 2.50)
-    ], "tickEFP must pass all nine fields through unchanged"
+    assert captured == [(42, 38, 12.5, "+12.50", 100.25, 30, "20251220", 0.75, 2.50)], (
+        "tickEFP must pass all nine fields through unchanged"
+    )
 
 
 def test_proto_dispatch_does_not_invoke_raw_proto_wrapper_hooks_we_do_not_expose():
@@ -5033,9 +5095,22 @@ def test_interpret_oversized_binary_frame_absorbs_silently():
     # 11-field tickEFP plus 5 trailing junk fields.
     ib.client.decoder.interpret(
         [
-            "47", "1", "42", "38", "12.5", "+12.50", "100.25", "30",
-            "20251220", "0.75", "2.50",
-            "junk1", "junk2", "junk3", "junk4", "junk5",
+            "47",
+            "1",
+            "42",
+            "38",
+            "12.5",
+            "+12.50",
+            "100.25",
+            "30",
+            "20251220",
+            "0.75",
+            "2.50",
+            "junk1",
+            "junk2",
+            "junk3",
+            "junk4",
+            "junk5",
         ]
     )
     # The trailing junk is silently absorbed — handler runs cleanly with
@@ -5053,8 +5128,17 @@ def test_interpret_wrong_type_binary_field_caught(caplog):
         # tickEFP wants int reqId — feed it "abc" instead.
         ib.client.decoder.interpret(
             [
-                "47", "1", "abc", "38", "12.5", "+12.50", "100.25", "30",
-                "20251220", "0.75", "2.50",
+                "47",
+                "1",
+                "abc",
+                "38",
+                "12.5",
+                "+12.50",
+                "100.25",
+                "30",
+                "20251220",
+                "0.75",
+                "2.50",
             ]
         )
     assert any("tickEFP" in rec.message for rec in caplog.records)
@@ -5104,18 +5188,14 @@ def test_interpret_fields_with_embedded_extra_empties():
     captured: list = []
     # Use updateNewsBulletin (msgId 14, wired via ``wrap([int, int, str, str])``)
     # — pure converter chain, no serverVersion-gated branches.
-    ib.wrapper.updateNewsBulletin = (
-        lambda *a: captured.append(a)
-    )  # type: ignore[method-assign]
+    ib.wrapper.updateNewsBulletin = lambda *a: captured.append(a)  # type: ignore[method-assign]
     from ib_async.decoder import Decoder
 
     ib.client.decoder = Decoder(ib.wrapper, 200)
     # msgId, version, msgId-news, msgType, newsMessage, originExch
     # Append 3 empty trailing fields (simulating split('\\0') on a NUL-runny
     # body) — extra fields must be silently absorbed by the zip().
-    ib.client.decoder.interpret(
-        ["14", "1", "5", "1", "headline", "NYSE", "", "", ""]
-    )
+    ib.client.decoder.interpret(["14", "1", "5", "1", "headline", "NYSE", "", "", ""])
     assert captured == [(5, 1, "headline", "NYSE")]
 
 
@@ -5304,3 +5384,171 @@ def test_process_proto_buf_msg_id_mid_int_overflow_does_not_raise():
     ib.client.decoder.processProtoBuf(2**31 - 1, b"")
     ib.client.decoder.processProtoBuf(0, b"")
     ib.client.decoder.processProtoBuf(-1, b"")
+
+
+# ---------------------------------------------------------------------------
+# Binary orderStatus (msgId 3) — gate 131 MARKET_CAP_PRICE.
+# Pre-131 servers send a leading version field and no mktCapPrice; >=131
+# drops the version and appends mktCapPrice. A static wrap() with skip=1
+# either parses status as Decimal (pre-131 → silent drop) or works.
+# ---------------------------------------------------------------------------
+
+
+def test_binary_order_status_pre_131_decodes_without_market_cap_price():
+    ib = ibi.IB()
+    ib.client._serverVersion = 130
+    ib.client.decoder.serverVersion = 130
+    seen: list[tuple] = []
+    ib.wrapper.orderStatus = lambda *args: seen.append(args)
+
+    fields = [
+        "3",  # msgId
+        "6",  # version
+        "1234",  # orderId
+        "Submitted",  # status
+        "10.5",  # filled
+        "0",  # remaining
+        "120.25",  # avgFillPrice
+        "55",  # permId
+        "0",  # parentId
+        "120.25",  # lastFillPrice
+        "1",  # clientId
+        "",  # whyHeld
+    ]
+    ib.client.decoder.orderStatusMsg(fields)
+
+    assert len(seen) == 1
+    args = seen[0]
+    assert args[0] == 1234
+    assert args[1] == "Submitted"
+    assert args[2] == Decimal("10.5")
+    assert args[3] == Decimal("0")
+    assert args[4] == Decimal("120.25")
+    assert args[5] == 55
+    assert args[6] == 0
+    assert args[7] == Decimal("120.25")
+    assert args[8] == 1
+    assert args[9] == ""
+    assert args[10] is None  # mktCapPrice unavailable pre-131
+
+
+def test_binary_order_status_gate_131_decodes_market_cap_price():
+    ib = ibi.IB()
+    ib.client._serverVersion = 131
+    ib.client.decoder.serverVersion = 131
+    seen: list[tuple] = []
+    ib.wrapper.orderStatus = lambda *args: seen.append(args)
+
+    fields = [
+        "3",  # msgId
+        "1234",  # orderId  (no version prefix at >=131)
+        "Submitted",  # status
+        "10.5",  # filled
+        "0",  # remaining
+        "120.25",  # avgFillPrice
+        "55",  # permId
+        "0",  # parentId
+        "120.25",  # lastFillPrice
+        "1",  # clientId
+        "",  # whyHeld
+        "5000000000",  # mktCapPrice
+    ]
+    ib.client.decoder.orderStatusMsg(fields)
+
+    assert len(seen) == 1
+    args = seen[0]
+    assert args[0] == 1234
+    assert args[1] == "Submitted"
+    assert args[10] == Decimal("5000000000")
+
+
+# ---------------------------------------------------------------------------
+# Binary contractDetails — gate 134 REAL_EXPIRATION_DATE and gate 152
+# STOCK_TYPE. With MIN_CLIENT_VER=100 a server in the 100-151 range can
+# deliver a strictly shorter frame; reading unconditionally would mis-align
+# every following gated field.
+# ---------------------------------------------------------------------------
+
+
+def _binary_contract_details_pre134_fields() -> list[str]:
+    """contractDetails wire frame as a server <134 would send it.
+    No realExpirationDate, no stockType, no minSize/sizeIncrement.
+    """
+    return [
+        "10",  # msgId placeholder
+        "8",  # version (only present pre-SIZE_RULES)
+        "7",  # reqId
+        "ESM6",  # symbol
+        "STK",  # secType
+        "20260619",  # lastTimes
+        "100.5",  # strike
+        "C",  # right
+        "GLOBEX",  # exchange
+        "USD",  # currency
+        "ESM6",  # localSymbol
+        "ES",  # marketName
+        "ES",  # tradingClass
+        "12345",  # conId
+        "0.25",  # minTick
+        "1",  # mdSizeMultiplier (gate 124-163 obsolete read)
+        "50",  # multiplier
+        "LIMIT,MKT",  # orderTypes
+        "GLOBEX",  # validExchanges
+        "1",  # priceMagnifier
+        "0",  # underConId
+        "E-mini",  # longName
+        "GLOBEX",  # primaryExchange
+        "202606",  # contractMonth
+        "Financial",  # industry
+        "Index",  # category
+        "Broad",  # subcategory
+        "US/Central",  # timeZoneId
+        "0830-1500",  # tradingHours
+        "0830-1500",  # liquidHours
+        "",  # evRule
+        "0",  # evMultiplier
+        "0",  # numSecIds
+        "0",  # aggGroup
+        "ES",  # underSymbol
+        "IND",  # underSecType
+        "0",  # marketRuleIds
+        # NB: no realExpirationDate, no stockType, no minSize trio
+    ]
+
+
+def test_binary_contract_details_pre_134_omits_real_expiration_date():
+    """Server <134 must not consume realExpirationDate from a frame that
+    doesn't have it — otherwise the unpack would either run dry or shift
+    a later field into ``cd.realExpirationDate``.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 133
+    ib.client.decoder.serverVersion = 133
+    seen: list[tuple] = []
+    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
+
+    fields = _binary_contract_details_pre134_fields()
+    ib.client.decoder.contractDetails(fields)
+
+    assert len(seen) == 1
+    _, cd = seen[0]
+    assert cd.realExpirationDate == ""
+    assert cd.stockType == ""
+    assert cd.marketRuleIds == "0"
+
+
+def test_binary_contract_details_gate_134_reads_real_expiration_date():
+    """Server >=134 (and <152) reads realExpirationDate but not stockType."""
+    ib = ibi.IB()
+    ib.client._serverVersion = 151
+    ib.client.decoder.serverVersion = 151
+    seen: list[tuple] = []
+    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
+
+    fields = _binary_contract_details_pre134_fields() + ["20260619"]
+    ib.client.decoder.contractDetails(fields)
+
+    assert len(seen) == 1
+    _, cd = seen[0]
+    assert cd.realExpirationDate == "20260619"
+    assert cd.stockType == ""
