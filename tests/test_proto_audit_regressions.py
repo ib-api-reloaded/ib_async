@@ -1722,3 +1722,22 @@ def test_req_executions_below_200_omits_parametrized_fields():
     args = sent[0]
     # Last legacy field is execFilter.side.
     assert args[-1] == "BUY"
+
+
+def test_max_client_version_advertises_modern_protobuf_gates():
+    """The handshake banner sends ``v{Min}..{Max}`` and the server
+    negotiates ``min(server, Max)``. With Max capped at 178 every
+    protobuf gate (>=201) was unreachable in production. Locks the
+    cap at 225 (latest IBKR MAX_CLIENT_VER) so a careless edit
+    can't silently regress protobuf reachability.
+    """
+    from ib_async._server_versions import (
+        MIN_SERVER_VER_ODD_LOT_BID_ASK_QUOTES,
+        MIN_SERVER_VER_PROTOBUF,
+    )
+
+    ib = ibi.IB()
+    assert ib.client.MaxClientVersion == 225
+    assert ib.client.MaxClientVersion == MIN_SERVER_VER_ODD_LOT_BID_ASK_QUOTES
+    # Sanity: the protobuf base gate is reachable.
+    assert ib.client.MaxClientVersion >= MIN_SERVER_VER_PROTOBUF
