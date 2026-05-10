@@ -1719,8 +1719,17 @@ class Wrapper:
         pass
 
     def error(
-        self, reqId: int, errorCode: int, errorString: str, advancedOrderRejectJson: str
+        self,
+        reqId: int,
+        errorCode: int,
+        errorString: str,
+        advancedOrderRejectJson: str,
+        errorTime: int = 0,
     ):
+        # ``errorTime`` is wall-clock millis since epoch on TWS/Gateway
+        # >= MIN_SERVER_VER_ERROR_TIME (194); 0 on older servers. Default
+        # at the tail so callers that don't carry it (older test code,
+        # kwarg-form invocations from before v3.0) keep working.
         # https://interactivebrokers.github.io/tws-api/message_codes.html
         # https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#api-error-codes
         # reqId == -1 is the IBKR convention for a system-level error
