@@ -345,7 +345,16 @@ class IB:
         self.timeoutEvent = Event("timeoutEvent")
 
     def __del__(self):
-        self.disconnect()
+        # ``__del__`` runs during garbage collection — exceptions
+        # raised here are converted to ``unraisable`` warnings the
+        # caller cannot catch. Swallow disconnect-time errors so a
+        # GC'd never-fully-handshaken IB (the most common test shape)
+        # does not pollute the warning stream and confuse pytest's
+        # traceback rendering.
+        try:
+            self.disconnect()
+        except Exception:
+            pass
 
     def __enter__(self):
         return self
