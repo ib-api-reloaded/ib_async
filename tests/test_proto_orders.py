@@ -399,6 +399,55 @@ def test_create_order_state_handles_empty_proto():
     assert state.status == ""
 
 
+def test_create_order_state_reads_outside_rth_margins():
+    proto = OrderState_pb2.OrderState()
+    proto.initMarginBeforeOutsideRTH = 100.5
+    proto.maintMarginAfterOutsideRTH = 200.75
+    proto.equityWithLoanChangeOutsideRTH = -50.25
+    proto.marginCurrency = "USD"
+    state = createOrderState(proto)
+    assert state.initMarginBeforeOutsideRTH == "100.5"
+    assert state.maintMarginAfterOutsideRTH == "200.75"
+    assert state.equityWithLoanChangeOutsideRTH == "-50.25"
+    assert state.marginCurrency == "USD"
+
+
+def test_create_order_state_reads_what_if_diagnostic_fields():
+    """``suggestedSize`` + ``rejectReason`` show up on what-if responses."""
+    proto = OrderState_pb2.OrderState()
+    proto.suggestedSize = "50"
+    proto.rejectReason = "Insufficient margin"
+    state = createOrderState(proto)
+    assert state.suggestedSize == Decimal("50")
+    assert state.rejectReason == "Insufficient margin"
+
+
+def test_create_order_state_reads_order_allocations():
+    """FA / model orders deliver per-account allocation snapshots."""
+    proto = OrderState_pb2.OrderState()
+    a1 = proto.orderAllocations.add()
+    a1.account = "U1234"
+    a1.position = "100"
+    a1.positionDesired = "150"
+    a1.positionAfter = "100"
+    a1.desiredAllocQty = "50"
+    a1.allowedAllocQty = "25"
+    a1.isMonetary = False
+    a2 = proto.orderAllocations.add()
+    a2.account = "U5678"
+    a2.position = "200"
+
+    state = createOrderState(proto)
+    assert len(state.orderAllocations) == 2
+    assert state.orderAllocations[0].account == "U1234"
+    assert state.orderAllocations[0].position == Decimal("100")
+    assert state.orderAllocations[0].desiredAllocQty == Decimal("50")
+    assert state.orderAllocations[0].isMonetary is False
+    assert state.orderAllocations[1].account == "U5678"
+    # Unset fields stay None on the frozen domain record.
+    assert state.orderAllocations[1].positionDesired is None
+
+
 # ---------------------------------------------------------------------------
 # Execution — wire isLiquidation/isPriceRevisionPending field renames
 # ---------------------------------------------------------------------------
@@ -444,6 +493,19 @@ def test_create_execution_garbage_decimal_lands_as_none():
     proto.shares = "not-a-number"  # malformed wire data
     ex = createExecution(proto)
     assert ex.shares is None
+
+
+def test_create_execution_reads_submitter_and_opt_exercise_type():
+    """v3.0 wire fields ``submitter`` (str) and
+    ``optExerciseOrLapseType`` (int) flow through to user code.
+    """
+    proto = Execution_pb2.Execution()
+    proto.execId = "exec-2"
+    proto.submitter = "Trader42"
+    proto.optExerciseOrLapseType = 2
+    ex = createExecution(proto)
+    assert ex.submitter == "Trader42"
+    assert ex.optExerciseOrLapseType == 2
 
 
 # ---------------------------------------------------------------------------

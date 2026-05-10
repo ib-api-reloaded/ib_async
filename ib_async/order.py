@@ -379,6 +379,21 @@ class OrderStatus:
     )
 
 
+@dataclass(slots=True, frozen=True)
+class OrderAllocation:
+    """Per-account allocation snapshot carried on an ``OrderState``
+    for FA / model orders. Mirrors IBKR's reference shape.
+    """
+
+    account: str = ""
+    position: Decimal | None = None
+    positionDesired: Decimal | None = None
+    positionAfter: Decimal | None = None
+    desiredAllocQty: Decimal | None = None
+    allowedAllocQty: Decimal | None = None
+    isMonetary: bool = False
+
+
 @dataclass
 class OrderState:
     status: str = ""
@@ -391,6 +406,18 @@ class OrderState:
     initMarginAfter: str = ""
     maintMarginAfter: str = ""
     equityWithLoanAfter: str = ""
+    # OutsideRTH variants — same str-typed margin shape, but for
+    # the after-hours session window the wire reports separately.
+    initMarginBeforeOutsideRTH: str = ""
+    maintMarginBeforeOutsideRTH: str = ""
+    equityWithLoanBeforeOutsideRTH: str = ""
+    initMarginChangeOutsideRTH: str = ""
+    maintMarginChangeOutsideRTH: str = ""
+    equityWithLoanChangeOutsideRTH: str = ""
+    initMarginAfterOutsideRTH: str = ""
+    maintMarginAfterOutsideRTH: str = ""
+    equityWithLoanAfterOutsideRTH: str = ""
+    marginCurrency: str = ""
     # Monetary fields are ``Decimal | None`` end-to-end so user code
     # treats unset as falsy without the ``Decimal('NaN')`` truthy trap.
     commission: Decimal | None = None
@@ -398,6 +425,9 @@ class OrderState:
     maxCommission: Decimal | None = None
     commissionCurrency: str = ""
     warningText: str = ""
+    suggestedSize: Decimal | None = None
+    rejectReason: str = ""
+    orderAllocations: list[OrderAllocation] = field(default_factory=list)
     completedTime: str = ""
     completedStatus: str = ""
 
