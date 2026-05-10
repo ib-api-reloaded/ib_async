@@ -1,6 +1,7 @@
 """Wrapper to handle incoming messages."""
 
 import asyncio
+import dataclasses
 import logging
 import time
 from collections import defaultdict
@@ -841,9 +842,16 @@ class Wrapper:
             else:
                 contract = Contract.recreate(contract)
                 orderStatus = OrderStatus(orderId=orderId, status=orderState.status)
+                # ``trade.order`` and ``trade.serverOrder`` must be
+                # distinct ``Order`` instances. ``trade.serverOrder`` is
+                # rebuilt wholesale on each subsequent ``openOrder``,
+                # while ``trade.order`` keeps user intent and only updates
+                # via the MUTABLE_ORDER_FIELDS allowlist. Aliasing them
+                # here would leak ``trade.order`` mutations back into the
+                # first observed snapshot until the next callback.
                 trade = Trade(
                     contract,
-                    serverOrderSnapshot,
+                    dataclasses.replace(serverOrderSnapshot),
                     orderStatus,
                     [],
                     [],

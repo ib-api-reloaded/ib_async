@@ -2256,6 +2256,7 @@ class IB:
         raiseSyncErrors: bool = False,
         fetchFields: StartupFetch = StartupFetchALL,
     ):
+        """Async sibling of :meth:`connect`."""
         clientId = int(clientId)
         self.wrapper.clientId = clientId
         timeout = timeout or None
@@ -2403,6 +2404,7 @@ class IB:
     async def reqTickersAsync(
         self, *contracts: Contract, regulatorySnapshot: bool = False
     ) -> list[Ticker]:
+        """Async sibling of :meth:`reqTickers`."""
         # Each contract gets its own snapshot subscription. Snapshot
         # MktDataSubs are registered by reqId only — they are
         # deliberately not indexed at ``(conId, "mktData")`` so that
@@ -2435,6 +2437,7 @@ class IB:
     def whatIfOrderAsync(
         self, contract: Contract, order: Order
     ) -> Awaitable[OrderState]:
+        """Async sibling of :meth:`whatIfOrder`."""
         whatIfOrder = copy.copy(order)
         whatIfOrder.whatIf = True
         orderId = self.client.getReqId()
@@ -2448,6 +2451,7 @@ class IB:
         return future
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
+        """Async sibling of :meth:`reqCurrentTime`."""
         future, isNew = self._openSingletonRequest("currentTime")
         if isNew:
             self.client.reqCurrentTime()
@@ -2469,6 +2473,7 @@ class IB:
         return future
 
     def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
+        """Async sibling of :meth:`reqAccountUpdates`."""
         future, isNew = self._openSingletonRequest("accountValues")
         if isNew:
             self.client.reqAccountUpdates(True, account)
@@ -2477,11 +2482,13 @@ class IB:
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
     ) -> Awaitable[None]:
+        """Async sibling of :meth:`reqAccountUpdatesMulti`."""
         reqId, future = self._openReqIdRequest()
         self.client.reqAccountUpdatesMulti(reqId, account, modelCode, False)
         return future
 
     async def accountSummaryAsync(self, account: str = "") -> list[AccountValue]:
+        """Async sibling of :meth:`accountSummary`."""
         if not self.wrapper.acctSummary:
             # loaded on demand since it takes ca. 250 ms
             await self.reqAccountSummaryAsync()
@@ -2494,6 +2501,7 @@ class IB:
         return list(self.wrapper.acctSummary.values())
 
     def reqAccountSummaryAsync(self) -> Awaitable[None]:
+        """Async sibling of :meth:`reqAccountSummary`."""
         reqId, future = self._openReqIdRequest()
         tags = (
             "AccountType,NetLiquidation,TotalCashValue,SettledCash,"
@@ -2512,18 +2520,21 @@ class IB:
         return future
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
+        """Async sibling of :meth:`reqOpenOrders`."""
         future, isNew = self._openSingletonRequest("openOrders")
         if isNew:
             self.client.reqOpenOrders()
         return future
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
+        """Async sibling of :meth:`reqAllOpenOrders`."""
         future, isNew = self._openSingletonRequest("openOrders")
         if isNew:
             self.client.reqAllOpenOrders()
         return future
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
+        """Async sibling of :meth:`reqCompletedOrders`."""
         future, isNew = self._openSingletonRequest("completedOrders")
         if isNew:
             self.client.reqCompletedOrders(apiOnly)
@@ -2532,12 +2543,14 @@ class IB:
     def reqExecutionsAsync(
         self, execFilter: ExecutionFilter | None = None
     ) -> Awaitable[list[Fill]]:
+        """Async sibling of :meth:`reqExecutions`."""
         execFilter = execFilter or ExecutionFilter()
         reqId, future = self._openReqIdRequest()
         self.client.reqExecutions(reqId, execFilter)
         return future
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
+        """Async sibling of :meth:`reqPositions`."""
         future, isNew = self._openSingletonRequest("positions")
         if isNew:
             self.client.reqPositions()
@@ -2546,6 +2559,7 @@ class IB:
     def reqContractDetailsAsync(
         self, contract: Contract
     ) -> Awaitable[list[ContractDetails]]:
+        """Async sibling of :meth:`reqContractDetails`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.reqContractDetails(reqId, contract)
         return future
@@ -2553,6 +2567,7 @@ class IB:
     async def reqMatchingSymbolsAsync(
         self, pattern: str
     ) -> list[ContractDescription] | None:
+        """Async sibling of :meth:`reqMatchingSymbols`."""
         reqId, future = self._openReqIdRequest()
         self.client.reqMatchingSymbols(reqId, pattern)
         return await self._awaitOrTimeout(
@@ -2562,6 +2577,7 @@ class IB:
     async def reqMarketRuleAsync(
         self, marketRuleId: int
     ) -> list[PriceIncrement] | None:
+        """Async sibling of :meth:`reqMarketRule`."""
         key = CompositeKey("marketRule", (marketRuleId,))
         req, isNew = self.wrapper.requests.open(key, single_flight=True)
         if isNew:
@@ -2581,6 +2597,7 @@ class IB:
         chartOptions: list[TagValue] = [],
         timeout: float = 60,
     ) -> BarDataList:
+        """Async sibling of :meth:`reqHistoricalData`."""
         bars = BarDataList()
         bars.contract = contract
         bars.endDateTime = endDateTime
@@ -2636,6 +2653,7 @@ class IB:
         endDateTime: datetime.datetime | datetime.date | str | None = "",
         useRTH: bool = True,
     ) -> Awaitable[HistoricalSchedule]:
+        """Async sibling of :meth:`reqHistoricalSchedule`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalData(
@@ -2664,6 +2682,7 @@ class IB:
         ignoreSize: bool = False,
         miscOptions: list[TagValue] = [],
     ) -> Awaitable[list]:
+        """Async sibling of :meth:`reqHistoricalTicks`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
@@ -2683,6 +2702,7 @@ class IB:
     async def reqHeadTimeStampAsync(
         self, contract: Contract, whatToShow: str, useRTH: bool, formatDate: int
     ) -> datetime.datetime:
+        """Async sibling of :meth:`reqHeadTimeStamp`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.reqHeadTimeStamp(reqId, contract, whatToShow, useRTH, formatDate)
         await future
@@ -2691,11 +2711,13 @@ class IB:
         return future.result()
 
     def reqSmartComponentsAsync(self, bboExchange):
+        """Async sibling of :meth:`reqSmartComponents`."""
         reqId, future = self._openReqIdRequest()
         self.client.reqSmartComponents(reqId, bboExchange)
         return future
 
     def reqMktDepthExchangesAsync(self) -> Awaitable[list[DepthMktDataDescription]]:
+        """Async sibling of :meth:`reqMktDepthExchanges`."""
         future, isNew = self._openSingletonRequest("mktDepthExchanges")
         if isNew:
             self.client.reqMktDepthExchanges()
@@ -2704,6 +2726,7 @@ class IB:
     def reqHistogramDataAsync(
         self, contract: Contract, useRTH: bool, period: str
     ) -> Awaitable[list[HistogramData]]:
+        """Async sibling of :meth:`reqHistogramData`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.reqHistogramData(reqId, contract, useRTH, period)
         return future
@@ -2714,6 +2737,7 @@ class IB:
         reportType: str,
         fundamentalDataOptions: list[TagValue] = [],
     ) -> Awaitable[str]:
+        """Async sibling of :meth:`reqFundamentalData`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.reqFundamentalData(
             reqId, contract, reportType, fundamentalDataOptions
@@ -2726,6 +2750,7 @@ class IB:
         scannerSubscriptionOptions: list[TagValue] = [],
         scannerSubscriptionFilterOptions: list[TagValue] = [],
     ) -> ScanDataList:
+        """Async sibling of :meth:`reqScannerData`."""
         dataList = self.reqScannerSubscription(
             subscription,
             scannerSubscriptionOptions or [],
@@ -2748,6 +2773,7 @@ class IB:
         return future.result()
 
     def reqScannerParametersAsync(self) -> Awaitable[str]:
+        """Async sibling of :meth:`reqScannerParameters`."""
         future, isNew = self._openSingletonRequest("scannerParams")
         if isNew:
             self.client.reqScannerParameters()
@@ -2760,6 +2786,7 @@ class IB:
         underPrice: float,
         implVolOptions: list[TagValue] = [],
     ) -> OptionComputation | None:
+        """Async sibling of :meth:`calculateImpliedVolatility`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.calculateImpliedVolatility(
             reqId, contract, optionPrice, underPrice, implVolOptions
@@ -2778,6 +2805,7 @@ class IB:
         underPrice: float,
         optPrcOptions: list[TagValue] = [],
     ) -> OptionComputation | None:
+        """Async sibling of :meth:`calculateOptionPrice`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.calculateOptionPrice(
             reqId, contract, volatility, underPrice, optPrcOptions
@@ -2796,6 +2824,7 @@ class IB:
         underlyingSecType: str,
         underlyingConId: int,
     ) -> Awaitable[list[OptionChain]]:
+        """Async sibling of :meth:`reqSecDefOptParams`."""
         reqId, future = self._openReqIdRequest()
         self.client.reqSecDefOptParams(
             reqId, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
@@ -2803,6 +2832,7 @@ class IB:
         return future
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
+        """Async sibling of :meth:`reqNewsProviders`."""
         future, isNew = self._openSingletonRequest("newsProviders")
         if isNew:
             self.client.reqNewsProviders()
@@ -2811,6 +2841,7 @@ class IB:
     def reqNewsArticleAsync(
         self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] = []
     ) -> Awaitable[NewsArticle]:
+        """Async sibling of :meth:`reqNewsArticle`."""
         reqId, future = self._openReqIdRequest()
         self.client.reqNewsArticle(reqId, providerCode, articleId, newsArticleOptions)
         return future
@@ -2824,6 +2855,7 @@ class IB:
         totalResults: int,
         historicalNewsOptions: list[TagValue] = [],
     ) -> list[HistoricalNews] | None:
+        """Async sibling of :meth:`reqHistoricalNews`."""
         reqId, future = self._openReqIdRequest()
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
@@ -2835,6 +2867,7 @@ class IB:
         )
 
     async def requestFAAsync(self, faDataType: int):
+        """Async sibling of :meth:`requestFA`."""
         key = SingletonKey("requestFA")
         future, isNew = self._openSingletonRequest("requestFA")
         if isNew:
@@ -2842,6 +2875,7 @@ class IB:
         return await self._awaitOrTimeout(key, future, 4, "requestFAAsync")
 
     async def getWshMetaDataAsync(self) -> str:
+        """Async sibling of :meth:`getWshMetaData`."""
         if self.wrapper._wshMetaReqId:
             self.cancelWshMetaData()
 
@@ -2855,6 +2889,7 @@ class IB:
         return future.result()
 
     async def getWshEventDataAsync(self, data: WshEventData) -> str:
+        """Async sibling of :meth:`getWshEventData`."""
         if self.wrapper._wshEventReqId:
             self.cancelWshEventData()
 
@@ -2869,6 +2904,7 @@ class IB:
         return future.result()
 
     def reqUserInfoAsync(self):
+        """Async sibling of :meth:`reqUserInfo`."""
         reqId, future = self._openReqIdRequest()
         self.client.reqUserInfo(reqId)
         return future
