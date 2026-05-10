@@ -826,3 +826,257 @@ def test_background_tasks_no_op_on_unrelated_error_codes():
     ib = ibi.IB()
     ib._onError(reqId=-1, errorCode=321, errorString="benign", contract=None)
     assert ib._backgroundTasks == set()
+
+
+# ---------------------------------------------------------------------------
+# R9 — cancel-async methods settle in-flight futures (#200)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "cancel_name",
+    [
+        "cancelHeadTimeStamp",
+        "cancelHistogramData",
+        "cancelContractData",
+        "cancelHistoricalTicks",
+    ],
+)
+def test_cancel_async_method_settles_in_flight_future(cancel_name: str):
+    """Each cancel-async method must call ``requests.cancel(ReqIdKey(...))``
+    so the matching ``reqXxxAsync`` future raises ``CancelledError``
+    instead of hanging forever. Prior to R9 the cancel sent the wire
+    frame and returned, never waking the awaiter — TWS does not echo
+    an End frame on cancel for any of these four request families.
+    """
+    ib = ibi.IB()
+
+    # Pre-open the in-flight registry entry the cancel must settle.
+    reqId = 12345
+    request, _isNew = ib.wrapper.requests.open(ReqIdKey(reqId))
+
+    # Stub the wire-side cancel so we don't need a real connection.
+    setattr(ib.client, cancel_name, lambda _reqId: None)
+
+    getattr(ib, cancel_name)(reqId)
+
+    assert request.future.done()
+    with pytest.raises(asyncio.CancelledError):
+        request.future.result()
+    # The registry entry is removed once settled.
+    assert ReqIdKey(reqId) not in ib.wrapper.requests
+
+
+def test_cancel_async_on_unknown_req_id_is_idempotent():
+    """``requests.cancel`` is idempotent — a cancel for a reqId that
+    was never opened (or has already settled) must not raise.
+    """
+    ib = ibi.IB()
+    ib.client.cancelHeadTimeStamp = lambda _reqId: None  # type: ignore[method-assign]
+    # Should not raise — no in-flight request for this reqId.
+    ib.cancelHeadTimeStamp(99999)
+
+
+# ---------------------------------------------------------------------------
+# R9 — reqTickersAsync try/finally cleanup on gather raise (#201)
+# ---------------------------------------------------------------------------
+
+
+async def test_req_tickers_async_closes_subs_on_gather_raise():
+    """``reqTickersAsync`` runs ``await gather(*futures)`` inside a
+    ``try`` block; the ``finally`` closes every snapshot subscription
+    that was registered for the call. Prior to R9 the cleanup lived
+    inline after gather and a per-future failure leaked the other
+    in-flight snapshot subs in the SubscriptionRegistry's reqId index.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = MIN_SERVER_VER_PROTOBUF
+    ib.client.connState = ib.client.CONNECTED
+    ib.client._apiReady = True  # getReqId / isReady gates
+    # Stub the wire send so reqMktData doesn't try to hit a real socket.
+    ib.client.conn.sendMsg = lambda _msg: None  # type: ignore[method-assign]
+
+    contracts = [ibi.Stock("AAPL"), ibi.Stock("MSFT"), ibi.Stock("GOOG")]
+    for c in contracts:
+        c.conId = abs(hash(c.symbol))  # synthetic but deterministic
+
+    # Fire reqTickersAsync as a background task so we can interrupt one
+    # of its in-flight futures mid-flight.
+    fut = asyncio.ensure_future(ib.reqTickersAsync(*contracts))
+    # Let reqTickersAsync register the subs and reach the gather.
+    await asyncio.sleep(0)
+
+    # Snapshot the three reqIds the call registered.
+    reqIds = [sub.reqId for sub in ib.wrapper.subscriptions]
+    assert len(reqIds) == 3, f"expected 3 snapshot subs, got {reqIds!r}"
+
+    # Trigger a wire-level error on the first ticker so gather raises
+    # via the registry's ``set_error``.
+    ib.wrapper.requests.set_error(
+        ReqIdKey(reqIds[0]), ConnectionError("simulated wire failure")
+    )
+
+    with pytest.raises(BaseException):
+        await fut
+
+    # The finally clause must have closed every snapshot sub, even
+    # though gather raised on the first one.
+    leftover = list(ib.wrapper.subscriptions)
+    assert leftover == [], f"reqTickersAsync leaked subs on gather raise: {leftover!r}"
+
+
+# ---------------------------------------------------------------------------
+# R13 — IBC monitorAsync survives stdout read exceptions (#215)
+# ---------------------------------------------------------------------------
+
+
+async def test_ibc_monitor_async_breaks_on_stdout_read_exception():
+    """``IBC.monitorAsync`` must catch arbitrary stdout-read failures
+    and exit the loop cleanly. Prior to R13 a transient stdout transport
+    failure (e.g. a decode raising on garbled bytes) propagated out and
+    silently killed the monitor task — the IBC process owner never knew.
+    """
+    from ib_async.ibcontroller import IBC
+
+    ibc = IBC(twsVersion=974, gateway=True)
+
+    class FlakyStdout:
+        async def readline(self):
+            raise OSError("simulated transport read failure")
+
+    class FlakyProc:
+        stdout = FlakyStdout()
+        pid = 12345
+
+        async def wait(self):
+            return 0
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            pass
+
+    ibc._proc = FlakyProc()  # type: ignore[assignment]
+
+    # monitorAsync must complete (not raise) within a reasonable time.
+    await asyncio.wait_for(ibc.monitorAsync(), timeout=2)
+
+
+async def test_ibc_monitor_async_drains_garbled_bytes_with_replace_decode():
+    """The decode in ``monitorAsync`` uses ``errors="replace"`` so
+    garbled bytes flow through as replacement characters instead of
+    crashing the loop on a UnicodeDecodeError.
+    """
+    from ib_async.ibcontroller import IBC
+
+    ibc = IBC(twsVersion=974, gateway=True)
+
+    class _GarbledStdout:
+        _lines = [b"\xff\xfe garbled \x80\x81 bytes\n", b""]  # second is EOF
+
+        async def readline(self):
+            if self._lines:
+                return self._lines.pop(0)
+            return b""
+
+    class _Proc:
+        stdout = _GarbledStdout()
+        pid = 1
+
+        async def wait(self):
+            return 0
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            pass
+
+    ibc._proc = _Proc()  # type: ignore[assignment]
+
+    # No raise on the garbled line — replacement characters substitute.
+    await asyncio.wait_for(ibc.monitorAsync(), timeout=2)
+
+
+# ---------------------------------------------------------------------------
+# R11 — Watchdog.terminateAsync (actually IBC.terminateAsync) bounded
+# by SIGTERM(20s) + SIGKILL(10s) (#217)
+# ---------------------------------------------------------------------------
+
+
+async def test_ibc_terminate_async_escalates_to_sigkill_on_timeout():
+    """``IBC.terminateAsync`` caps SIGTERM at 20s; on timeout it
+    escalates to SIGKILL with another 10s ceiling. Prior to R11 the
+    wait was unbounded, so a hung TWS during the daily reset would
+    block the Watchdog reconnect loop forever.
+    """
+    from ib_async.ibcontroller import IBC
+
+    ibc = IBC(twsVersion=974, gateway=True)
+
+    # Bookkeeping for what got called.
+    calls: dict[str, int] = {"terminate": 0, "kill": 0, "wait_for_calls": 0}
+    wait_for_timeouts: list[float] = []
+
+    class _HungProc:
+        pid = 1
+
+        async def wait(self):
+            # Real implementation would block; we never let it run
+            # because asyncio.wait_for is stubbed to raise TimeoutError.
+            await asyncio.sleep(60)
+            return 0
+
+        def terminate(self):
+            calls["terminate"] += 1
+
+        def kill(self):
+            calls["kill"] += 1
+
+    ibc._proc = _HungProc()  # type: ignore[assignment]
+    # Skip the windows branch.
+    ibc._isWindows = False
+
+    # Replace asyncio.wait_for inside the ibcontroller module so the
+    # bounded waits "fire" their timeout immediately.
+    import ib_async.ibcontroller as ibc_mod
+
+    real_wait_for = asyncio.wait_for
+
+    async def fake_wait_for(awaitable, timeout):
+        calls["wait_for_calls"] += 1
+        wait_for_timeouts.append(timeout)
+        # Cancel the awaitable so it doesn't leak.
+        if asyncio.iscoroutine(awaitable):
+            awaitable.close()
+        raise TimeoutError
+
+    ibc_mod.asyncio.wait_for = fake_wait_for  # type: ignore[assignment]
+    try:
+        await ibc.terminateAsync()
+    finally:
+        ibc_mod.asyncio.wait_for = real_wait_for  # type: ignore[assignment]
+
+    # SIGTERM was sent first.
+    assert calls["terminate"] == 1
+    # Then the first wait_for fired with a 20s timeout, hit TimeoutError
+    # and SIGKILL escalated.
+    assert calls["kill"] == 1
+    # Two wait_for invocations: 20s (SIGTERM) then 10s (SIGKILL).
+    assert calls["wait_for_calls"] == 2
+    assert wait_for_timeouts == [20, 10]
+    # _proc cleared at end so subsequent calls become no-ops.
+    assert ibc._proc is None
+
+
+async def test_ibc_terminate_async_no_op_when_no_proc():
+    """``IBC.terminateAsync`` is a no-op when ``_proc`` is None — it
+    must not raise or accidentally invoke terminate/kill on the
+    sentinel.
+    """
+    from ib_async.ibcontroller import IBC
+
+    ibc = IBC(twsVersion=974, gateway=True)
+    assert ibc._proc is None
+    await ibc.terminateAsync()  # no raise
