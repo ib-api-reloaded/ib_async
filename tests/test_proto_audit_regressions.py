@@ -672,3 +672,94 @@ def test_binary_error_msg_pre_194_keeps_legacy_version_prefix():
 
     assert len(seen) == 1
     assert seen[0] == (42, 200, "some error", "", 0)  # errorTime defaults 0
+
+
+# ---------------------------------------------------------------------------
+# historicalData gate 196 (HISTORICAL_DATA_END)
+# ---------------------------------------------------------------------------
+
+
+def test_historical_data_end_msg_id_108_routes_to_wrapper():
+    """Binary msgId 108 (HISTORICAL_DATA_END) added at server v196 was
+    not in our handlers dict — every modern TWS historical-data
+    subscription wedged forever waiting for the end signal.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 196
+    ib.client.decoder.serverVersion = 196
+    seen: list[tuple] = []
+    ib.wrapper.historicalDataEnd = lambda *a, **kw: seen.append(a)
+
+    fields = ["108", "5", "20240101", "20240131"]
+    ib.client.decoder.historicalDataEnd(fields)
+
+    assert seen == [(5, "20240101", "20240131")]
+
+
+def test_historical_data_pre_196_emits_inline_end_signal():
+    """Pre-196 servers carry startDateStr/endDateStr inline in the
+    bars frame and historicalData itself fires historicalDataEnd at
+    the tail. This must keep working on legacy servers.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 195
+    ib.client.decoder.serverVersion = 195
+    bars: list = []
+    ends: list[tuple] = []
+    ib.wrapper.historicalData = lambda *a: bars.append(a)
+    ib.wrapper.historicalDataEnd = lambda *a: ends.append(a)
+
+    # msgId, reqId, startDateStr, endDateStr, numBars, [date,o,h,l,c,vol,wap,barCount]*
+    fields = [
+        "17",
+        "5",
+        "20240101",
+        "20240131",
+        "1",
+        "20240115",
+        "100.0",
+        "101.0",
+        "99.5",
+        "100.5",
+        "1000",
+        "100.25",
+        "10",
+    ]
+    ib.client.decoder.historicalData(fields)
+
+    assert len(bars) == 1
+    assert bars[0][0] == 5  # reqId
+    assert ends == [(5, "20240101", "20240131")]
+
+
+def test_historical_data_post_196_does_not_emit_inline_end():
+    """On 196+ servers the inline start/end fields are gone and the
+    end signal arrives via msgId 108. historicalData must NOT emit
+    historicalDataEnd or callers receive the signal twice.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 196
+    ib.client.decoder.serverVersion = 196
+    bars: list = []
+    ends: list[tuple] = []
+    ib.wrapper.historicalData = lambda *a: bars.append(a)
+    ib.wrapper.historicalDataEnd = lambda *a: ends.append(a)
+
+    # msgId, reqId, numBars, [date,o,h,l,c,vol,wap,barCount]*
+    fields = [
+        "17",
+        "5",
+        "1",
+        "20240115",
+        "100.0",
+        "101.0",
+        "99.5",
+        "100.5",
+        "1000",
+        "100.25",
+        "10",
+    ]
+    ib.client.decoder.historicalData(fields)
+
+    assert len(bars) == 1
+    assert ends == []  # end signal comes from separate msgId 108 frame
