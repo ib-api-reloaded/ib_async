@@ -2867,6 +2867,98 @@ class IB:
         self.client.reqUserInfo(reqId)
         return future
 
+    # --- Public API expansion (parity with IBKR's EClient surface) ----
+
+    def setServerLogLevel(self, logLevel: int):
+        """Set the TWS / IB Gateway server-side log verbosity. 1=SYSTEM,
+        2=ERROR, 3=WARNING, 4=INFORMATION, 5=DETAIL. Fire-and-forget.
+        """
+        self.client.setServerLogLevel(logLevel)
+
+    def reqSoftDollarTiersAsync(self) -> Awaitable[list]:
+        """Fetch the soft-dollar tier list available to this account."""
+        reqId, future = self._openReqIdRequest()
+        self.client.reqSoftDollarTiers(reqId)
+        return future
+
+    def reqFamilyCodesAsync(self) -> Awaitable[list]:
+        """Fetch the FamilyCode list (FA users only)."""
+        future, isNew = self._openSingletonRequest("familyCodes")
+        if isNew:
+            self.client.reqFamilyCodes()
+        return future
+
+    def cancelHeadTimeStamp(self, reqId: int):
+        """Cancel an in-flight reqHeadTimeStamp."""
+        self.client.cancelHeadTimeStamp(reqId)
+
+    def cancelHistogramData(self, reqId: int):
+        """Cancel an in-flight reqHistogramData."""
+        self.client.cancelHistogramData(reqId)
+
+    def cancelContractData(self, reqId: int):
+        """Cancel an in-flight reqContractDetails. Protobuf-only — TWS / IBG
+        server >= 215 (MIN_SERVER_VER_CANCEL_CONTRACT_DATA)."""
+        self.client.cancelContractData(reqId)
+
+    def cancelHistoricalTicks(self, reqId: int):
+        """Cancel an in-flight reqHistoricalTicks. Protobuf-only —
+        same gate as cancelContractData (215)."""
+        self.client.cancelHistoricalTicks(reqId)
+
+    def queryDisplayGroups(self, reqId: int):
+        """Query the TWS display-group list. Server replies via
+        ``Wrapper.displayGroupList(reqId, groups)``."""
+        self.client.queryDisplayGroups(reqId)
+
+    def subscribeToGroupEvents(self, reqId: int, groupId: int):
+        """Subscribe to TWS display-group event stream. Updates flow
+        via ``Wrapper.displayGroupUpdated(reqId, contractInfo)``."""
+        self.client.subscribeToGroupEvents(reqId, groupId)
+
+    def updateDisplayGroup(self, reqId: int, contractInfo: str):
+        """Push a contract change into a TWS display group."""
+        self.client.updateDisplayGroup(reqId, contractInfo)
+
+    def unsubscribeFromGroupEvents(self, reqId: int):
+        """Unsubscribe from TWS display-group event stream."""
+        self.client.unsubscribeFromGroupEvents(reqId)
+
+    def reqConfigAsync(self) -> Awaitable:
+        """Fetch the TWS / IB Gateway runtime config. Protobuf-only —
+        server >= 219 (MIN_SERVER_VER_CONFIG). The future settles with
+        the raw ``ConfigResponse`` proto carrying nested
+        LockAndExitConfig / ApiConfig / MessageConfig / OrdersConfig
+        sub-messages."""
+        reqId, future = self._openReqIdRequest()
+        self.client.reqConfig(reqId)
+        return future
+
+    def updateConfigAsync(
+        self,
+        lockAndExit=None,
+        messages=None,
+        api=None,
+        orders=None,
+        acceptedWarnings=None,
+        resetAPIOrderSequence: bool = False,
+    ) -> Awaitable:
+        """Push a TWS / IB Gateway config update. Protobuf-only —
+        server >= 221 (MIN_SERVER_VER_UPDATE_CONFIG). The future settles
+        with the raw ``UpdateConfigResponse`` proto carrying status +
+        changed-fields list."""
+        reqId, future = self._openReqIdRequest()
+        self.client.updateConfig(
+            reqId,
+            lockAndExit=lockAndExit,
+            messages=messages,
+            api=api,
+            orders=orders,
+            acceptedWarnings=acceptedWarnings,
+            resetAPIOrderSequence=resetAPIOrderSequence,
+        )
+        return future
+
 
 if __name__ == "__main__":
     loop = util.getLoop()

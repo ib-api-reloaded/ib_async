@@ -1851,6 +1851,73 @@ class Client:
             return
         self.send(90, reqId)
 
+    def cancelContractData(self, reqId):
+        """Cancel an in-flight reqContractDetails. Protobuf-only —
+        IBKR ships no binary form (gate 215, MIN_SERVER_VER_CANCEL_CONTRACT_DATA).
+        """
+        from ._pb_msgids import CANCEL_CONTRACT_DATA
+        from ._proto.historical import createCancelContractDataProto
+
+        self.sendProto(
+            CANCEL_CONTRACT_DATA,
+            createCancelContractDataProto(reqId).SerializeToString(),
+        )
+
+    def cancelHistoricalTicks(self, reqId):
+        """Cancel an in-flight reqHistoricalTicks. Protobuf-only
+        (gate 215, MIN_SERVER_VER_CANCEL_CONTRACT_DATA shares the gate).
+        """
+        from ._pb_msgids import CANCEL_HISTORICAL_TICKS
+        from ._proto.historical import createCancelHistoricalTicksProto
+
+        self.sendProto(
+            CANCEL_HISTORICAL_TICKS,
+            createCancelHistoricalTicksProto(reqId).SerializeToString(),
+        )
+
+    def reqConfig(self, reqId):
+        """Fetch the TWS / IB Gateway runtime config. Protobuf-only
+        (gate 219, MIN_SERVER_VER_CONFIG). Server replies with
+        ``ConfigResponse`` carrying nested LockAndExitConfig /
+        ApiConfig / MessageConfig / OrdersConfig sub-messages.
+        """
+        from ._pb_msgids import REQ_CONFIG
+        from ._proto.rest import createConfigRequestProto
+
+        self.sendProto(
+            REQ_CONFIG, createConfigRequestProto(reqId).SerializeToString()
+        )
+
+    def updateConfig(
+        self,
+        reqId,
+        lockAndExit=None,
+        messages=None,
+        api=None,
+        orders=None,
+        acceptedWarnings=None,
+        resetAPIOrderSequence=False,
+    ):
+        """Push a TWS / IB Gateway config update. Protobuf-only
+        (gate 221, MIN_SERVER_VER_UPDATE_CONFIG). Server replies
+        with ``UpdateConfigResponse`` carrying status + changed-fields list.
+        """
+        from ._pb_msgids import UPDATE_CONFIG
+        from ._proto.rest import createUpdateConfigRequestProto
+
+        self.sendProto(
+            UPDATE_CONFIG,
+            createUpdateConfigRequestProto(
+                reqId,
+                lockAndExit=lockAndExit,
+                messages=messages,
+                api=api,
+                orders=orders,
+                acceptedWarnings=acceptedWarnings,
+                resetAPIOrderSequence=resetAPIOrderSequence,
+            ).SerializeToString(),
+        )
+
     def reqMarketRule(self, marketRuleId):
         if self.useProtoBuf(_M.REQ_MARKET_RULE):
             from ._proto.rest import createMarketRuleRequestProto
