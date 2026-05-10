@@ -949,9 +949,25 @@ class Client:
         self.send(11, 1, reqId, isSmartDepth)
 
     def reqNewsBulletins(self, allMsgs):
+        if self.useProtoBuf(_M.REQ_NEWS_BULLETINS):
+            from ._proto.news import createNewsBulletinsRequestProto
+
+            self.sendProto(
+                _M.REQ_NEWS_BULLETINS,
+                createNewsBulletinsRequestProto(allMsgs).SerializeToString(),
+            )
+            return
         self.send(12, 1, allMsgs)
 
     def cancelNewsBulletins(self):
+        if self.useProtoBuf(_M.CANCEL_NEWS_BULLETINS):
+            from ._proto.news import createCancelNewsBulletinsProto
+
+            self.sendProto(
+                _M.CANCEL_NEWS_BULLETINS,
+                createCancelNewsBulletinsProto().SerializeToString(),
+            )
+            return
         self.send(13, 1)
 
     def setServerLogLevel(self, logLevel):
@@ -1080,6 +1096,16 @@ class Client:
         scannerSubscriptionOptions,
         scannerSubscriptionFilterOptions,
     ):
+        if self.useProtoBuf(_M.REQ_SCANNER_SUBSCRIPTION):
+            from ._proto.scanner import createScannerSubscriptionRequestProto
+
+            self.sendProto(
+                _M.REQ_SCANNER_SUBSCRIPTION,
+                createScannerSubscriptionRequestProto(
+                    reqId, subscription
+                ).SerializeToString(),
+            )
+            return
         sub = subscription
         self.send(
             22,
@@ -1110,9 +1136,25 @@ class Client:
         )
 
     def cancelScannerSubscription(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_SCANNER_SUBSCRIPTION):
+            from ._proto.scanner import createCancelScannerSubscriptionProto
+
+            self.sendProto(
+                _M.CANCEL_SCANNER_SUBSCRIPTION,
+                createCancelScannerSubscriptionProto(reqId).SerializeToString(),
+            )
+            return
         self.send(23, 1, reqId)
 
     def reqScannerParameters(self):
+        if self.useProtoBuf(_M.REQ_SCANNER_PARAMETERS):
+            from ._proto.scanner import createScannerParametersRequestProto
+
+            self.sendProto(
+                _M.REQ_SCANNER_PARAMETERS,
+                createScannerParametersRequestProto().SerializeToString(),
+            )
+            return
         self.send(24, 1)
 
     def cancelHistoricalData(self, reqId):
@@ -1158,6 +1200,16 @@ class Client:
         self.send(51, 1, reqId)
 
     def reqFundamentalData(self, reqId, contract, reportType, fundamentalDataOptions):
+        if self.useProtoBuf(_M.REQ_FUNDAMENTAL_DATA):
+            from ._proto.scanner import createFundamentalsDataRequestProto
+
+            self.sendProto(
+                _M.REQ_FUNDAMENTAL_DATA,
+                createFundamentalsDataRequestProto(
+                    reqId, contract, reportType
+                ).SerializeToString(),
+            )
+            return
         options = fundamentalDataOptions or []
         self.send(
             52,
@@ -1176,6 +1228,14 @@ class Client:
         )
 
     def cancelFundamentalData(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_FUNDAMENTAL_DATA):
+            from ._proto.scanner import createCancelFundamentalsDataProto
+
+            self.sendProto(
+                _M.CANCEL_FUNDAMENTAL_DATA,
+                createCancelFundamentalsDataProto(reqId).SerializeToString(),
+            )
+            return
         self.send(53, 1, reqId)
 
     def calculateImpliedVolatility(
@@ -1395,9 +1455,27 @@ class Client:
         self.send(83, reqId, bboExchange)
 
     def reqNewsArticle(self, reqId, providerCode, articleId, newsArticleOptions):
+        if self.useProtoBuf(_M.REQ_NEWS_ARTICLE):
+            from ._proto.news import createNewsArticleRequestProto
+
+            self.sendProto(
+                _M.REQ_NEWS_ARTICLE,
+                createNewsArticleRequestProto(
+                    reqId, providerCode, articleId
+                ).SerializeToString(),
+            )
+            return
         self.send(84, reqId, providerCode, articleId, newsArticleOptions)
 
     def reqNewsProviders(self):
+        if self.useProtoBuf(_M.REQ_NEWS_PROVIDERS):
+            from ._proto.news import createNewsProvidersRequestProto
+
+            self.sendProto(
+                _M.REQ_NEWS_PROVIDERS,
+                createNewsProvidersRequestProto().SerializeToString(),
+            )
+            return
         self.send(85)
 
     def reqHistoricalNews(
@@ -1410,6 +1488,21 @@ class Client:
         totalResults,
         historicalNewsOptions,
     ):
+        if self.useProtoBuf(_M.REQ_HISTORICAL_NEWS):
+            from ._proto.news import createHistoricalNewsRequestProto
+
+            self.sendProto(
+                _M.REQ_HISTORICAL_NEWS,
+                createHistoricalNewsRequestProto(
+                    reqId,
+                    conId,
+                    providerCodes,
+                    startDateTime,
+                    endDateTime,
+                    totalResults,
+                ).SerializeToString(),
+            )
+            return
         self.send(
             86,
             reqId,
@@ -1475,15 +1568,48 @@ class Client:
         self.send(91, marketRuleId)
 
     def reqPnL(self, reqId, account, modelCode):
+        if self.useProtoBuf(_M.REQ_PNL):
+            from ._proto.scanner import createPnLRequestProto
+
+            self.sendProto(
+                _M.REQ_PNL,
+                createPnLRequestProto(reqId, account, modelCode).SerializeToString(),
+            )
+            return
         self.send(92, reqId, account, modelCode)
 
     def cancelPnL(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_PNL):
+            from ._proto.scanner import createCancelPnLProto
+
+            self.sendProto(
+                _M.CANCEL_PNL, createCancelPnLProto(reqId).SerializeToString()
+            )
+            return
         self.send(93, reqId)
 
     def reqPnLSingle(self, reqId, account, modelCode, conid):
+        if self.useProtoBuf(_M.REQ_PNL_SINGLE):
+            from ._proto.scanner import createPnLSingleRequestProto
+
+            self.sendProto(
+                _M.REQ_PNL_SINGLE,
+                createPnLSingleRequestProto(
+                    reqId, account, modelCode, conid
+                ).SerializeToString(),
+            )
+            return
         self.send(94, reqId, account, modelCode, conid)
 
     def cancelPnLSingle(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_PNL_SINGLE):
+            from ._proto.scanner import createCancelPnLSingleProto
+
+            self.sendProto(
+                _M.CANCEL_PNL_SINGLE,
+                createCancelPnLSingleProto(reqId).SerializeToString(),
+            )
+            return
         self.send(95, reqId)
 
     def reqHistoricalTicks(
@@ -1565,12 +1691,36 @@ class Client:
         self.send(99, apiOnly)
 
     def reqWshMetaData(self, reqId):
+        if self.useProtoBuf(_M.REQ_WSH_META_DATA):
+            from ._proto.news import createWshMetaDataRequestProto
+
+            self.sendProto(
+                _M.REQ_WSH_META_DATA,
+                createWshMetaDataRequestProto(reqId).SerializeToString(),
+            )
+            return
         self.send(100, reqId)
 
     def cancelWshMetaData(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_WSH_META_DATA):
+            from ._proto.news import createCancelWshMetaDataProto
+
+            self.sendProto(
+                _M.CANCEL_WSH_META_DATA,
+                createCancelWshMetaDataProto(reqId).SerializeToString(),
+            )
+            return
         self.send(101, reqId)
 
     def reqWshEventData(self, reqId, data: WshEventData):
+        if self.useProtoBuf(_M.REQ_WSH_EVENT_DATA):
+            from ._proto.news import createWshEventDataRequestProto
+
+            self.sendProto(
+                _M.REQ_WSH_EVENT_DATA,
+                createWshEventDataRequestProto(reqId, data).SerializeToString(),
+            )
+            return
         fields = [102, reqId, data.conId]
         if self.serverVersion() >= 171:
             fields += [
@@ -1584,6 +1734,14 @@ class Client:
         self.send(*fields, makeEmpty=False)
 
     def cancelWshEventData(self, reqId):
+        if self.useProtoBuf(_M.CANCEL_WSH_EVENT_DATA):
+            from ._proto.news import createCancelWshEventDataProto
+
+            self.sendProto(
+                _M.CANCEL_WSH_EVENT_DATA,
+                createCancelWshEventDataProto(reqId).SerializeToString(),
+            )
+            return
         self.send(103, reqId)
 
     def reqUserInfo(self, reqId):

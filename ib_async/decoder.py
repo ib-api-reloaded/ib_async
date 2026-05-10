@@ -103,11 +103,14 @@ def _initProtoMsgHandlers() -> None:
         ContractDataEnd_pb2,
         ExecutionDetails_pb2,
         ExecutionDetailsEnd_pb2,
+        FundamentalsData_pb2,
         HeadTimestamp_pb2,
         HistogramData_pb2,
         HistoricalData_pb2,
         HistoricalDataEnd_pb2,
         HistoricalDataUpdate_pb2,
+        HistoricalNews_pb2,
+        HistoricalNewsEnd_pb2,
         HistoricalSchedule_pb2,
         HistoricalTicks_pb2,
         HistoricalTicksBidAsk_pb2,
@@ -117,10 +120,15 @@ def _initProtoMsgHandlers() -> None:
         MarketDepth_pb2,
         MarketDepthExchanges_pb2,
         MarketDepthL2_pb2,
+        NewsArticle_pb2,
+        NewsBulletin_pb2,
+        NewsProviders_pb2,
         OpenOrder_pb2,
         OpenOrdersEnd_pb2,
         OrderBound_pb2,
         OrderStatus_pb2,
+        PnL_pb2,
+        PnLSingle_pb2,
         PortfolioValue_pb2,
         Position_pb2,
         PositionEnd_pb2,
@@ -129,14 +137,19 @@ def _initProtoMsgHandlers() -> None:
         RealTimeBarTick_pb2,
         RerouteMarketDataRequest_pb2,
         RerouteMarketDepthRequest_pb2,
+        ScannerData_pb2,
+        ScannerParameters_pb2,
         TickByTickData_pb2,
         TickGeneric_pb2,
+        TickNews_pb2,
         TickOptionComputation_pb2,
         TickPrice_pb2,
         TickReqParams_pb2,
         TickSize_pb2,
         TickSnapshotEnd_pb2,
         TickString_pb2,
+        WshEventData_pb2,
+        WshMetaData_pb2,
     )
 
     # Canonical IBKR ``IN`` msgIds (see ``ibapi/message.py``).
@@ -237,6 +250,20 @@ def _initProtoMsgHandlers() -> None:
                 HistoricalDataEnd_pb2.HistoricalDataEnd,
                 "_protoHistoricalDataEnd",
             ),
+            # --- news + scanner / fundamentals / PnL (gates 209 / 210) ---
+            14: (NewsBulletin_pb2.NewsBulletin, "_protoUpdateNewsBulletin"),
+            19: (ScannerParameters_pb2.ScannerParameters, "_protoScannerParameters"),
+            20: (ScannerData_pb2.ScannerData, "_protoScannerData"),
+            51: (FundamentalsData_pb2.FundamentalsData, "_protoFundamentalData"),
+            83: (NewsArticle_pb2.NewsArticle, "_protoNewsArticle"),
+            84: (TickNews_pb2.TickNews, "_protoTickNews"),
+            85: (NewsProviders_pb2.NewsProviders, "_protoNewsProviders"),
+            86: (HistoricalNews_pb2.HistoricalNews, "_protoHistoricalNews"),
+            87: (HistoricalNewsEnd_pb2.HistoricalNewsEnd, "_protoHistoricalNewsEnd"),
+            94: (PnL_pb2.PnL, "_protoPnL"),
+            95: (PnLSingle_pb2.PnLSingle, "_protoPnLSingle"),
+            104: (WshMetaData_pb2.WshMetaData, "_protoWshMetaData"),
+            105: (WshEventData_pb2.WshEventData, "_protoWshEventData"),
         }
     )
 
@@ -853,6 +880,109 @@ class Decoder:
 
         a = createHistoricalTicksLastArgs(proto)
         self.wrapper.historicalTicksLast(a.reqId, a.ticks, a.done)
+
+    # --- news + WSH handlers ---------------------------------------------
+
+    def _protoUpdateNewsBulletin(self, proto: Any) -> None:
+        from ._proto.news import createUpdateNewsBulletinArgs
+
+        a = createUpdateNewsBulletinArgs(proto)
+        self.wrapper.updateNewsBulletin(
+            a.msgId, a.msgType, a.message, a.origExchange
+        )
+
+    def _protoNewsProviders(self, proto: Any) -> None:
+        from ._proto.news import createNewsProviders
+
+        self.wrapper.newsProviders(createNewsProviders(proto))
+
+    def _protoNewsArticle(self, proto: Any) -> None:
+        from ._proto.news import createNewsArticleArgs
+
+        a = createNewsArticleArgs(proto)
+        self.wrapper.newsArticle(a.reqId, a.articleType, a.articleText)
+
+    def _protoHistoricalNews(self, proto: Any) -> None:
+        from ._proto.news import createHistoricalNewsArgs
+
+        a = createHistoricalNewsArgs(proto)
+        self.wrapper.historicalNews(
+            a.reqId, a.time, a.providerCode, a.articleId, a.headline
+        )
+
+    def _protoHistoricalNewsEnd(self, proto: Any) -> None:
+        from ._proto.news import createHistoricalNewsEndArgs
+
+        a = createHistoricalNewsEndArgs(proto)
+        self.wrapper.historicalNewsEnd(a.reqId, a.hasMore)
+
+    def _protoTickNews(self, proto: Any) -> None:
+        from ._proto.news import createTickNewsArgs
+
+        a = createTickNewsArgs(proto)
+        self.wrapper.tickNews(
+            a.reqId,
+            a.timeStamp,
+            a.providerCode,
+            a.articleId,
+            a.headline,
+            a.extraData,
+        )
+
+    def _protoWshMetaData(self, proto: Any) -> None:
+        from ._proto.news import createWshMetaDataArgs
+
+        a = createWshMetaDataArgs(proto)
+        self.wrapper.wshMetaData(a.reqId, a.dataJson)
+
+    def _protoWshEventData(self, proto: Any) -> None:
+        from ._proto.news import createWshEventDataArgs
+
+        a = createWshEventDataArgs(proto)
+        self.wrapper.wshEventData(a.reqId, a.dataJson)
+
+    # --- scanner + fundamentals + PnL handlers ----------------------------
+
+    def _protoScannerParameters(self, proto: Any) -> None:
+        from ._proto.scanner import createScannerParametersXml
+
+        self.wrapper.scannerParameters(createScannerParametersXml(proto))
+
+    def _protoScannerData(self, proto: Any) -> None:
+        from ._proto.scanner import iterScannerData
+
+        a = iterScannerData(proto)
+        for el in a.elements:
+            self.wrapper.scannerData(
+                el.reqId,
+                el.rank,
+                el.contractDetails,
+                el.distance,
+                el.benchmark,
+                el.projection,
+                el.legsStr,
+            )
+        self.wrapper.scannerDataEnd(a.reqId)
+
+    def _protoFundamentalData(self, proto: Any) -> None:
+        from ._proto.scanner import createFundamentalDataArgs
+
+        a = createFundamentalDataArgs(proto)
+        self.wrapper.fundamentalData(a.reqId, a.data)
+
+    def _protoPnL(self, proto: Any) -> None:
+        from ._proto.scanner import createPnLArgs
+
+        a = createPnLArgs(proto)
+        self.wrapper.pnl(a.reqId, a.dailyPnL, a.unrealizedPnL, a.realizedPnL)
+
+    def _protoPnLSingle(self, proto: Any) -> None:
+        from ._proto.scanner import createPnLSingleArgs
+
+        a = createPnLSingleArgs(proto)
+        self.wrapper.pnlSingle(
+            a.reqId, a.pos, a.dailyPnL, a.unrealizedPnL, a.realizedPnL, a.value
+        )
 
     def parse(self, obj):
         """Parse the object's properties according to its default types."""
