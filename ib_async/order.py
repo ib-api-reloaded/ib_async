@@ -11,7 +11,7 @@ from eventkit import Event
 
 from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry, _install_commission_alias
-from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassNonDefaults
+from .util import UNSET_DOUBLE, dataclassNonDefaults
 
 
 @dataclass
@@ -52,8 +52,11 @@ class Order:
     goodTillDate: str = ""
     rule80A: str = ""
     allOrNone: bool = False
-    minQty: int = UNSET_INTEGER
-    percentOffset: float | Decimal = UNSET_DOUBLE
+    # ``None`` is the unset sentinel for every optional numeric field —
+    # the wire encoder translates None to IBKR's UNSET_INTEGER / UNSET_DOUBLE
+    # magic values at send time, but user code never sees those.
+    minQty: int | None = None
+    percentOffset: Decimal | None = None
     overridePercentageConstraints: bool = False
     trailStopPrice: Decimal | None = None
     trailingPercent: Decimal | None = None
@@ -69,20 +72,20 @@ class Order:
     discretionaryAmt: float = 0.0
     eTradeOnly: bool = False
     firmQuoteOnly: bool = False
-    nbboPriceCap: float | Decimal = UNSET_DOUBLE
+    nbboPriceCap: Decimal | None = None
     optOutSmartRouting: bool = False
     auctionStrategy: int = 0
-    startingPrice: float | Decimal = UNSET_DOUBLE
-    stockRefPrice: float | Decimal = UNSET_DOUBLE
-    delta: float | Decimal = UNSET_DOUBLE
-    stockRangeLower: float | Decimal = UNSET_DOUBLE
-    stockRangeUpper: float | Decimal = UNSET_DOUBLE
+    startingPrice: Decimal | None = None
+    stockRefPrice: Decimal | None = None
+    delta: Decimal | None = None
+    stockRangeLower: Decimal | None = None
+    stockRangeUpper: Decimal | None = None
     randomizePrice: bool = False
     randomizeSize: bool = False
-    volatility: float | Decimal = UNSET_DOUBLE
-    volatilityType: int = UNSET_INTEGER
+    volatility: Decimal | None = None
+    volatilityType: int | None = None
     deltaNeutralOrderType: str = ""
-    deltaNeutralAuxPrice: float | Decimal = UNSET_DOUBLE
+    deltaNeutralAuxPrice: Decimal | None = None
     deltaNeutralConId: int = 0
     deltaNeutralSettlingFirm: str = ""
     deltaNeutralClearingAccount: str = ""
@@ -92,18 +95,18 @@ class Order:
     deltaNeutralShortSaleSlot: int = 0
     deltaNeutralDesignatedLocation: str = ""
     continuousUpdate: bool = False
-    referencePriceType: int = UNSET_INTEGER
-    basisPoints: float | Decimal = UNSET_DOUBLE
-    basisPointsType: int = UNSET_INTEGER
-    scaleInitLevelSize: int = UNSET_INTEGER
-    scaleSubsLevelSize: int = UNSET_INTEGER
-    scalePriceIncrement: float | Decimal = UNSET_DOUBLE
-    scalePriceAdjustValue: float | Decimal = UNSET_DOUBLE
-    scalePriceAdjustInterval: int = UNSET_INTEGER
-    scaleProfitOffset: float | Decimal = UNSET_DOUBLE
+    referencePriceType: int | None = None
+    basisPoints: Decimal | None = None
+    basisPointsType: int | None = None
+    scaleInitLevelSize: int | None = None
+    scaleSubsLevelSize: int | None = None
+    scalePriceIncrement: Decimal | None = None
+    scalePriceAdjustValue: Decimal | None = None
+    scalePriceAdjustInterval: int | None = None
+    scaleProfitOffset: Decimal | None = None
     scaleAutoReset: bool = False
-    scaleInitPosition: int = UNSET_INTEGER
-    scaleInitFillQty: int = UNSET_INTEGER
+    scaleInitPosition: int | None = None
+    scaleInitFillQty: int | None = None
     scaleRandomPercent: bool = False
     scaleTable: str = ""
     hedgeType: str = ""
@@ -143,12 +146,12 @@ class Order:
     # the ``PlaceOrderRequest.attachedOrders`` sub-message rather than
     # ``Order`` itself, but the domain dataclass keeps them here so user
     # code at the call site has a single object to populate.
-    slOrderId: int = UNSET_INTEGER
+    slOrderId: int | None = None
     slOrderType: str = ""
-    ptOrderId: int = UNSET_INTEGER
+    ptOrderId: int | None = None
     ptOrderType: str = ""
     softDollarTier: SoftDollarTier = field(default_factory=SoftDollarTier)
-    cashQty: float | Decimal = UNSET_DOUBLE
+    cashQty: Decimal | None = None
     mifid2DecisionMaker: str = ""
     mifid2DecisionAlgo: str = ""
     mifid2ExecutionTrader: str = ""
@@ -165,15 +168,30 @@ class Order:
     routeMarketableToBbo: bool = False
     parentPermId: int = 0
     usePriceMgmtAlgo: bool = False
-    duration: int = UNSET_INTEGER
-    postToAts: int = UNSET_INTEGER
+    duration: int | None = None
+    postToAts: int | None = None
     advancedErrorOverride: str = ""
     manualOrderTime: str = ""
-    minTradeQty: int = UNSET_INTEGER
-    minCompeteSize: int = UNSET_INTEGER
-    competeAgainstBestOffset: float | Decimal = UNSET_DOUBLE
-    midOffsetAtWhole: float | Decimal = UNSET_DOUBLE
-    midOffsetAtHalf: float | Decimal = UNSET_DOUBLE
+    minTradeQty: int | None = None
+    minCompeteSize: int | None = None
+    competeAgainstBestOffset: Decimal | None = None
+    midOffsetAtWhole: Decimal | None = None
+    midOffsetAtHalf: Decimal | None = None
+    # Compliance / origination fields IBKR added in the 195-198 gate
+    # window. Read on receive (binary ``openOrder`` / protobuf
+    # ``OpenOrder``), written on send (binary ``placeOrder``) when the
+    # negotiated server supports the respective gate.
+    customerAccount: str = ""
+    professionalCustomer: bool = False
+    bondAccruedInterest: Decimal | None = None
+    includeOvernight: bool = False
+    # ``manualOrderIndicator`` pairs with ``extOperator`` for CME-tagged
+    # placements. ``None`` means unset; the wire encoder skips the
+    # field at send time.
+    manualOrderIndicator: int | None = None
+    # ``submitter`` identifies the originating session for compliance
+    # logging. Empty means IBKR did not supply one for this order.
+    submitter: str = ""
 
     def __repr__(self):
         attrs = dataclassNonDefaults(self)
@@ -417,14 +435,13 @@ class OrderCancel:
     rather than scalar arguments so callers can attach the
     ``manualOrderCancelTime`` (gate 169), ``extOperator`` (gate 192),
     and ``manualOrderIndicator`` (gate 192) fields the wire protocol
-    grew for CME compliance. ``UNSET_INTEGER`` (2**31 - 1) is the
-    "manualOrderIndicator unset" sentinel — gates skip the wire field
-    when at the sentinel.
+    grew for CME compliance. ``None`` means unset — the wire encoder
+    skips the field at send time.
     """
 
     manualOrderCancelTime: str = ""
     extOperator: str = ""
-    manualOrderIndicator: int = UNSET_INTEGER
+    manualOrderIndicator: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -595,7 +612,7 @@ _install_commission_alias(OrderStateNumeric)
 
 @dataclass
 class OrderComboLeg:
-    price: float | Decimal = UNSET_DOUBLE
+    price: Decimal | None = None
 
 
 # Trade is deliberately not @dataclass(slots=True). __post_init__ assigns

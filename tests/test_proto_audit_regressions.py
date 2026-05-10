@@ -1544,7 +1544,7 @@ def test_place_order_at_192_writes_manual_order_indicator():
     assert len(args_192) == len(args_191) + 1
     # The trailer is the LAST field at server 192 (IMBALANCE_ONLY is
     # gate 199, so not written here).
-    assert args_192[-1] == UNSET_INTEGER  # default Order.manualOrderIndicator
+    assert args_192[-1] is None  # default Order.manualOrderIndicator
     # extOperator is unconditional in our send (gate 105 / EXT_OPERATOR
     # is below MIN_CLIENT_VER) — verify it appears in BOTH frames.
     assert "" in args_191  # default extOperator empty string
@@ -1564,7 +1564,7 @@ def test_place_order_at_199_writes_imbalance_only():
     # imbalanceOnly defaults False at the dataclass.
     assert args_199[-1] is False
     # gate-192 manualOrderIndicator sits one slot earlier.
-    assert args_199[-2] == UNSET_INTEGER
+    assert args_199[-2] is None
 
 
 def test_place_order_at_184_writes_customer_and_professional():
@@ -1599,8 +1599,8 @@ def test_place_order_in_rfq_window_writes_interim_fields():
     args_190, _ = _placeOrderArgs(190)
 
     # The RFQ pair at 188's tail: bondAccruedInterest="" then UNSET_INTEGER.
-    assert args_188[-2] == ""  # bondAccruedInterest default
-    assert args_188[-1] == UNSET_INTEGER  # RFQ placeholder int
+    assert args_188[-2] is None  # bondAccruedInterest default (Decimal | None)
+    assert args_188[-1] == UNSET_INTEGER  # RFQ placeholder int (literal in client.py)
 
     # Same window edges, different counts.
     assert len(args_188) == len(args_190) + 1  # +RFQ pair, -includeOvernight
@@ -2407,7 +2407,7 @@ def test_req_global_cancel_at_exact_gate_192_drops_version():
     ib.client.reqGlobalCancel()
 
     assert len(sent) == 1
-    assert sent[0] == (58, "", UNSET_INTEGER)
+    assert sent[0] == (58, "", None)
 
 
 def test_historical_data_at_pre_124_consumes_legacy_version_prefix():

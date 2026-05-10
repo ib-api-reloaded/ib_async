@@ -329,7 +329,7 @@ def createContractDetails(
     if proto.HasField("evMultiplier"):
         # Wire type is double; route through string to avoid binary-float
         # imprecision contaminating a fractional evMultiplier.
-        details.evMultiplier = safe_decimal(str(proto.evMultiplier))
+        details.evMultiplier = safe_decimal(proto.evMultiplier)
     if proto.HasField("aggGroup"):
         details.aggGroup = proto.aggGroup
     if proto.HasField("underSymbol"):
@@ -379,7 +379,7 @@ def createContractDetails(
         # Wire spelling is "puttable"; domain spelling is "putable".
         details.putable = proto.puttable
     if proto.HasField("coupon"):
-        details.coupon = safe_decimal(str(proto.coupon))
+        details.coupon = safe_decimal(proto.coupon)
     if proto.HasField("convertible"):
         details.convertible = proto.convertible
     if proto.HasField("issueDate"):

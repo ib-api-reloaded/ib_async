@@ -19,6 +19,7 @@ that exact path.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import TypeGuard
 
 from .._pb import (
     AllOpenOrdersRequest_pb2,
@@ -109,16 +110,27 @@ def _parseTagValueList(source: object) -> list[TagValue]:
     return out
 
 
-def _isValidFloat(value: float | Decimal) -> bool:
-    """IBKR's ``isValidFloatValue`` — accept anything except the
-    UNSET_DOUBLE sentinel. ``Decimal`` and ``float`` both compare
-    cleanly against the sentinel."""
+def _isValidFloat(value: float | Decimal | None) -> TypeGuard[float | Decimal]:
+    """Returns True for any value the proto wire should carry. ``None``
+    (the domain unset sentinel) and the IBKR magic ``UNSET_DOUBLE`` wire
+    value both come back False. ``Decimal`` and ``float`` compare
+    cleanly against the sentinel.
+
+    Typed as a ``TypeGuard`` so callers that gate proto writes on this
+    function narrow the value to non-None for the assignment.
+    """
+    if value is None:
+        return False
     return value != UNSET_DOUBLE
 
 
-def _isValidInt(value: int) -> bool:
-    """IBKR's ``isValidIntValue`` — accept anything except the
-    UNSET_INTEGER sentinel."""
+def _isValidInt(value: int | None) -> TypeGuard[int]:
+    """Returns True for any value the proto wire should carry. ``None``
+    (the domain unset sentinel) and the IBKR magic ``UNSET_INTEGER``
+    wire value both come back False. ``TypeGuard`` narrows for callers.
+    """
+    if value is None:
+        return False
     return value != UNSET_INTEGER
 
 
@@ -678,15 +690,16 @@ def createOrder(
     envelope-level decoder propagate the wrapping message's orderId
     when the inner order proto omits it.
 
-    Domain fields that exist in IBKR's reference but are NOT on our
-    ``Order`` dataclass are intentionally dropped here (matching
-    ``createOrderProto`` on the send side):
-    ``customerAccount``, ``professionalCustomer``,
+    Compliance / origination fields IBKR added in the 195-198 gate
+    window (``customerAccount``, ``professionalCustomer``,
     ``bondAccruedInterest``, ``includeOvernight``, ``manualOrderIndicator``,
-    ``submitter``, ``deactivate``, ``postOnly``, ``allowPreOpen``,
+    ``submitter``) land on the corresponding ``Order`` dataclass
+    fields. Other reference fields not currently modelled on
+    ``Order`` (``deactivate``, ``postOnly``, ``allowPreOpen``,
     ``ignoreOpenAuction``, ``seekPriceImprovement``, ``whatIfType``,
-    ``hedgeMaxSize``. Adding those to the converter without matching
-    dataclass fields would silently swallow the wire data.
+    ``hedgeMaxSize``) are not surfaced here because the dataclass
+    has no slot for them — silently swallowing the wire data would
+    just hide user-invisible state.
     """
     order = Order()
 
@@ -712,11 +725,12 @@ def createOrder(
     if proto.HasField("orderType"):
         order.orderType = proto.orderType
     if proto.HasField("lmtPrice"):
-        # Wire is ``double``; route through ``str`` to avoid binary-float
-        # imprecision contaminating user-set fractional prices.
-        order.lmtPrice = safe_decimal(str(proto.lmtPrice))
+        # ``safe_decimal`` routes float input through str() internally
+        # so binary-float imprecision does not contaminate user-set
+        # fractional prices.
+        order.lmtPrice = safe_decimal(proto.lmtPrice)
     if proto.HasField("auxPrice"):
-        order.auxPrice = safe_decimal(str(proto.auxPrice))
+        order.auxPrice = safe_decimal(proto.auxPrice)
     if proto.HasField("tif"):
         order.tif = proto.tif
 
@@ -755,7 +769,7 @@ def createOrder(
     if proto.HasField("rule80A"):
         order.rule80A = proto.rule80A
     if proto.HasField("percentOffset"):
-        order.percentOffset = proto.percentOffset
+        order.percentOffset = safe_decimal(proto.percentOffset)
     if proto.HasField("settlingFirm"):
         order.settlingFirm = proto.settlingFirm
     if proto.HasField("shortSaleSlot"):
@@ -767,15 +781,15 @@ def createOrder(
 
     # Box / volatility-style auction extras
     if proto.HasField("startingPrice"):
-        order.startingPrice = proto.startingPrice
+        order.startingPrice = safe_decimal(proto.startingPrice)
     if proto.HasField("stockRefPrice"):
-        order.stockRefPrice = proto.stockRefPrice
+        order.stockRefPrice = safe_decimal(proto.stockRefPrice)
     if proto.HasField("delta"):
-        order.delta = proto.delta
+        order.delta = safe_decimal(proto.delta)
     if proto.HasField("stockRangeLower"):
-        order.stockRangeLower = proto.stockRangeLower
+        order.stockRangeLower = safe_decimal(proto.stockRangeLower)
     if proto.HasField("stockRangeUpper"):
-        order.stockRangeUpper = proto.stockRangeUpper
+        order.stockRangeUpper = safe_decimal(proto.stockRangeUpper)
 
     if proto.HasField("displaySize"):
         order.displaySize = proto.displaySize
@@ -794,13 +808,13 @@ def createOrder(
 
     # Volatility family
     if proto.HasField("volatility"):
-        order.volatility = proto.volatility
+        order.volatility = safe_decimal(proto.volatility)
     if proto.HasField("volatilityType"):
         order.volatilityType = proto.volatilityType
     if proto.HasField("deltaNeutralOrderType"):
         order.deltaNeutralOrderType = proto.deltaNeutralOrderType
     if proto.HasField("deltaNeutralAuxPrice"):
-        order.deltaNeutralAuxPrice = proto.deltaNeutralAuxPrice
+        order.deltaNeutralAuxPrice = safe_decimal(proto.deltaNeutralAuxPrice)
     if proto.HasField("deltaNeutralConId"):
         order.deltaNeutralConId = proto.deltaNeutralConId
     if proto.HasField("deltaNeutralSettlingFirm"):
@@ -823,9 +837,9 @@ def createOrder(
         order.referencePriceType = proto.referencePriceType
 
     if proto.HasField("trailStopPrice"):
-        order.trailStopPrice = safe_decimal(str(proto.trailStopPrice))
+        order.trailStopPrice = safe_decimal(proto.trailStopPrice)
     if proto.HasField("trailingPercent"):
-        order.trailingPercent = safe_decimal(str(proto.trailingPercent))
+        order.trailingPercent = safe_decimal(proto.trailingPercent)
 
     # Order combo legs (per-leg prices) — sourced from the CONTRACT
     # proto, not the order proto. Caller must pass ``contractProto``
@@ -846,13 +860,13 @@ def createOrder(
     if proto.HasField("scaleSubsLevelSize"):
         order.scaleSubsLevelSize = proto.scaleSubsLevelSize
     if proto.HasField("scalePriceIncrement"):
-        order.scalePriceIncrement = proto.scalePriceIncrement
+        order.scalePriceIncrement = safe_decimal(proto.scalePriceIncrement)
     if proto.HasField("scalePriceAdjustValue"):
-        order.scalePriceAdjustValue = proto.scalePriceAdjustValue
+        order.scalePriceAdjustValue = safe_decimal(proto.scalePriceAdjustValue)
     if proto.HasField("scalePriceAdjustInterval"):
         order.scalePriceAdjustInterval = proto.scalePriceAdjustInterval
     if proto.HasField("scaleProfitOffset"):
-        order.scaleProfitOffset = proto.scaleProfitOffset
+        order.scaleProfitOffset = safe_decimal(proto.scaleProfitOffset)
     if proto.HasField("scaleAutoReset"):
         order.scaleAutoReset = proto.scaleAutoReset
     if proto.HasField("scaleInitPosition"):
@@ -924,15 +938,15 @@ def createOrder(
     if proto.HasField("adjustedOrderType"):
         order.adjustedOrderType = proto.adjustedOrderType
     if proto.HasField("triggerPrice"):
-        order.triggerPrice = safe_decimal(str(proto.triggerPrice))
+        order.triggerPrice = safe_decimal(proto.triggerPrice)
     if proto.HasField("lmtPriceOffset"):
-        order.lmtPriceOffset = safe_decimal(str(proto.lmtPriceOffset))
+        order.lmtPriceOffset = safe_decimal(proto.lmtPriceOffset)
     if proto.HasField("adjustedStopPrice"):
-        order.adjustedStopPrice = safe_decimal(str(proto.adjustedStopPrice))
+        order.adjustedStopPrice = safe_decimal(proto.adjustedStopPrice)
     if proto.HasField("adjustedStopLimitPrice"):
-        order.adjustedStopLimitPrice = safe_decimal(str(proto.adjustedStopLimitPrice))
+        order.adjustedStopLimitPrice = safe_decimal(proto.adjustedStopLimitPrice)
     if proto.HasField("adjustedTrailingAmount"):
-        order.adjustedTrailingAmount = safe_decimal(str(proto.adjustedTrailingAmount))
+        order.adjustedTrailingAmount = safe_decimal(proto.adjustedTrailingAmount)
     if proto.HasField("adjustableTrailingUnit"):
         order.adjustableTrailingUnit = proto.adjustableTrailingUnit
 
@@ -942,7 +956,7 @@ def createOrder(
         order.softDollarTier = softDollarTier
 
     if proto.HasField("cashQty"):
-        order.cashQty = proto.cashQty
+        order.cashQty = safe_decimal(proto.cashQty)
     if proto.HasField("dontUseAutoPriceForHedge"):
         order.dontUseAutoPriceForHedge = proto.dontUseAutoPriceForHedge
     if proto.HasField("isOmsContainer"):
@@ -963,11 +977,11 @@ def createOrder(
     if proto.HasField("minCompeteSize"):
         order.minCompeteSize = proto.minCompeteSize
     if proto.HasField("competeAgainstBestOffset"):
-        order.competeAgainstBestOffset = proto.competeAgainstBestOffset
+        order.competeAgainstBestOffset = safe_decimal(proto.competeAgainstBestOffset)
     if proto.HasField("midOffsetAtWhole"):
-        order.midOffsetAtWhole = proto.midOffsetAtWhole
+        order.midOffsetAtWhole = safe_decimal(proto.midOffsetAtWhole)
     if proto.HasField("midOffsetAtHalf"):
-        order.midOffsetAtHalf = proto.midOffsetAtHalf
+        order.midOffsetAtHalf = safe_decimal(proto.midOffsetAtHalf)
 
     # Active start / stop time
     if proto.HasField("activeStartTime"):
@@ -1021,6 +1035,22 @@ def createOrder(
     if proto.HasField("transmit"):
         order.transmit = proto.transmit
 
+    # Compliance / origination fields.
+    if proto.HasField("customerAccount"):
+        order.customerAccount = proto.customerAccount
+    if proto.HasField("professionalCustomer"):
+        order.professionalCustomer = proto.professionalCustomer
+    if proto.HasField("bondAccruedInterest"):
+        # Wire ships the value as a numeric string; the domain field is
+        # ``Decimal | None`` so user code can compute against it directly.
+        order.bondAccruedInterest = safe_decimal(proto.bondAccruedInterest)
+    if proto.HasField("includeOvernight"):
+        order.includeOvernight = proto.includeOvernight
+    if proto.HasField("manualOrderIndicator"):
+        order.manualOrderIndicator = proto.manualOrderIndicator
+    if proto.HasField("submitter"):
+        order.submitter = proto.submitter
+
     return order
 
 
@@ -1038,19 +1068,19 @@ def createOrderStatus(proto: OrderStatus_pb2.OrderStatus) -> OrderStatus:
     if proto.HasField("remaining"):
         status.remaining = safe_decimal(proto.remaining)
     if proto.HasField("avgFillPrice"):
-        status.avgFillPrice = safe_decimal(str(proto.avgFillPrice))
+        status.avgFillPrice = safe_decimal(proto.avgFillPrice)
     if proto.HasField("permId"):
         status.permId = proto.permId
     if proto.HasField("parentId"):
         status.parentId = proto.parentId
     if proto.HasField("lastFillPrice"):
-        status.lastFillPrice = safe_decimal(str(proto.lastFillPrice))
+        status.lastFillPrice = safe_decimal(proto.lastFillPrice)
     if proto.HasField("clientId"):
         status.clientId = proto.clientId
     if proto.HasField("whyHeld"):
         status.whyHeld = proto.whyHeld
     if proto.HasField("mktCapPrice"):
-        status.mktCapPrice = safe_decimal(str(proto.mktCapPrice))
+        status.mktCapPrice = safe_decimal(proto.mktCapPrice)
     return status
 
 
@@ -1119,11 +1149,11 @@ def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
     # Wire ``commissionAndFees`` is the IBKR-aligned canonical name
     # (broker commission + exchange + regulatory fees combined).
     if proto.HasField("commissionAndFees"):
-        state.commissionAndFees = safe_decimal(str(proto.commissionAndFees))
+        state.commissionAndFees = safe_decimal(proto.commissionAndFees)
     if proto.HasField("minCommissionAndFees"):
-        state.minCommission = safe_decimal(str(proto.minCommissionAndFees))
+        state.minCommission = safe_decimal(proto.minCommissionAndFees)
     if proto.HasField("maxCommissionAndFees"):
-        state.maxCommission = safe_decimal(str(proto.maxCommissionAndFees))
+        state.maxCommission = safe_decimal(proto.maxCommissionAndFees)
     if proto.HasField("commissionAndFeesCurrency"):
         state.commissionCurrency = proto.commissionAndFeesCurrency
     if proto.HasField("warningText"):
@@ -1193,7 +1223,7 @@ def createExecution(proto: Execution_pb2.Execution) -> Execution:
     if proto.HasField("shares"):
         ex.shares = safe_decimal(proto.shares)
     if proto.HasField("price"):
-        ex.price = safe_decimal(str(proto.price))
+        ex.price = safe_decimal(proto.price)
     if proto.HasField("permId"):
         ex.permId = proto.permId
     if proto.HasField("clientId"):
@@ -1203,13 +1233,13 @@ def createExecution(proto: Execution_pb2.Execution) -> Execution:
     if proto.HasField("cumQty"):
         ex.cumQty = safe_decimal(proto.cumQty)
     if proto.HasField("avgPrice"):
-        ex.avgPrice = safe_decimal(str(proto.avgPrice))
+        ex.avgPrice = safe_decimal(proto.avgPrice)
     if proto.HasField("orderRef"):
         ex.orderRef = proto.orderRef
     if proto.HasField("evRule"):
         ex.evRule = proto.evRule
     if proto.HasField("evMultiplier"):
-        ex.evMultiplier = safe_decimal(str(proto.evMultiplier))
+        ex.evMultiplier = safe_decimal(proto.evMultiplier)
     if proto.HasField("modelCode"):
         ex.modelCode = proto.modelCode
     if proto.HasField("lastLiquidity"):
@@ -1240,13 +1270,13 @@ def createCommissionReport(
     if proto.HasField("execId"):
         report.execId = proto.execId
     if proto.HasField("commissionAndFees"):
-        report.commissionAndFees = safe_decimal(str(proto.commissionAndFees))
+        report.commissionAndFees = safe_decimal(proto.commissionAndFees)
     if proto.HasField("currency"):
         report.currency = proto.currency
     if proto.HasField("realizedPNL"):
-        report.realizedPNL = safe_decimal(str(proto.realizedPNL))
+        report.realizedPNL = safe_decimal(proto.realizedPNL)
     if proto.HasField("bondYield"):
-        report.yield_ = safe_decimal(str(proto.bondYield))
+        report.yield_ = safe_decimal(proto.bondYield)
     if proto.HasField("yieldRedemptionDate"):
         # Historic int domain field; wire ships YYYYMMDD as string.
         try:

@@ -305,7 +305,7 @@ def createPosition(proto: Position_pb2.Position) -> Position:
         createContract(proto.contract) if proto.HasField("contract") else Contract()
     )
     position = safe_decimal(proto.position) if proto.HasField("position") else None
-    avgCost = safe_decimal(str(proto.avgCost)) if proto.HasField("avgCost") else None
+    avgCost = safe_decimal(proto.avgCost) if proto.HasField("avgCost") else None
     return Position(account, contract, position, avgCost)
 
 
@@ -346,7 +346,7 @@ def createPositionMultiArgs(
         createContract(proto.contract) if proto.HasField("contract") else Contract()
     )
     pos = safe_decimal(proto.position) if proto.HasField("position") else None
-    avgCost = safe_decimal(str(proto.avgCost)) if proto.HasField("avgCost") else None
+    avgCost = safe_decimal(proto.avgCost) if proto.HasField("avgCost") else None
     return PositionMultiArgs(
         reqId=reqId,
         account=account,
@@ -391,21 +391,19 @@ def createPortfolioItem(proto: PortfolioValue_pb2.PortfolioValue) -> PortfolioIt
     )
     position = safe_decimal(proto.position) if proto.HasField("position") else None
     marketPrice = (
-        safe_decimal(str(proto.marketPrice)) if proto.HasField("marketPrice") else None
+        safe_decimal(proto.marketPrice) if proto.HasField("marketPrice") else None
     )
     marketValue = (
-        safe_decimal(str(proto.marketValue)) if proto.HasField("marketValue") else None
+        safe_decimal(proto.marketValue) if proto.HasField("marketValue") else None
     )
     averageCost = (
-        safe_decimal(str(proto.averageCost)) if proto.HasField("averageCost") else None
+        safe_decimal(proto.averageCost) if proto.HasField("averageCost") else None
     )
     unrealizedPNL = (
-        safe_decimal(str(proto.unrealizedPNL))
-        if proto.HasField("unrealizedPNL")
-        else None
+        safe_decimal(proto.unrealizedPNL) if proto.HasField("unrealizedPNL") else None
     )
     realizedPNL = (
-        safe_decimal(str(proto.realizedPNL)) if proto.HasField("realizedPNL") else None
+        safe_decimal(proto.realizedPNL) if proto.HasField("realizedPNL") else None
     )
     account = proto.accountName if proto.HasField("accountName") else ""
     return PortfolioItem(

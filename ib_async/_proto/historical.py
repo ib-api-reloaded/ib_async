@@ -192,10 +192,10 @@ def createBarData(proto: HistoricalDataBar_pb2.HistoricalDataBar) -> BarData:
     """
     return BarData(
         date=proto.date if proto.HasField("date") else "",  # type: ignore[arg-type]
-        open=safe_decimal(str(proto.open)) if proto.HasField("open") else None,
-        high=safe_decimal(str(proto.high)) if proto.HasField("high") else None,
-        low=safe_decimal(str(proto.low)) if proto.HasField("low") else None,
-        close=safe_decimal(str(proto.close)) if proto.HasField("close") else None,
+        open=safe_decimal(proto.open) if proto.HasField("open") else None,
+        high=safe_decimal(proto.high) if proto.HasField("high") else None,
+        low=safe_decimal(proto.low) if proto.HasField("low") else None,
+        close=safe_decimal(proto.close) if proto.HasField("close") else None,
         volume=safe_decimal(proto.volume) if proto.HasField("volume") else None,
         average=safe_decimal(proto.WAP) if proto.HasField("WAP") else None,
         barCount=proto.barCount if proto.HasField("barCount") else 0,
@@ -258,16 +258,16 @@ def createRealtimeBarArgs(
 ) -> RealtimeBarArgs:
     """``Wrapper.realtimeBar(reqId, time, open_, high, low, close, volume, wap, count)`` args.
 
-    OHLC fields route through ``safe_decimal(str(...))`` to match the
+    OHLC fields route through ``safe_decimal`` to match the
     Decimal-native ``RealTimeBar`` shape; wrapper signature accepts
     ``Decimal | None``.
     """
     reqId = proto.reqId if proto.HasField("reqId") else 0
     time_ = int(proto.time) if proto.HasField("time") else 0
-    open_ = safe_decimal(str(proto.open)) if proto.HasField("open") else None
-    high = safe_decimal(str(proto.high)) if proto.HasField("high") else None
-    low = safe_decimal(str(proto.low)) if proto.HasField("low") else None
-    close = safe_decimal(str(proto.close)) if proto.HasField("close") else None
+    open_ = safe_decimal(proto.open) if proto.HasField("open") else None
+    high = safe_decimal(proto.high) if proto.HasField("high") else None
+    low = safe_decimal(proto.low) if proto.HasField("low") else None
+    close = safe_decimal(proto.close) if proto.HasField("close") else None
     volume = safe_decimal(proto.volume) if proto.HasField("volume") else None
     wap = safe_decimal(proto.WAP) if proto.HasField("WAP") else None
     count = proto.count if proto.HasField("count") else 0

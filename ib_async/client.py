@@ -792,7 +792,10 @@ class Client:
             order.scalePriceIncrement,
         ]
 
-        if 0 < order.scalePriceIncrement < UNSET_DOUBLE:
+        if (
+            order.scalePriceIncrement is not None
+            and 0 < order.scalePriceIncrement < UNSET_DOUBLE
+        ):
             fields += [
                 order.scalePriceAdjustValue,
                 order.scalePriceAdjustInterval,
@@ -905,29 +908,27 @@ class Client:
                 fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
 
         # Gates 178+ — mirror IBKR ``client.py:placeOrder`` lines 2746-2763.
-        # Fields not yet on our ``Order`` dataclass use ``getattr`` so the
-        # writes are decoupled from the sibling task that adds them.
 
         if version >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
-            fields += [getattr(order, "customerAccount", "")]
+            fields += [order.customerAccount]
 
         if version >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
-            fields += [getattr(order, "professionalCustomer", False)]
+            fields += [order.professionalCustomer]
 
         # Interim 2-field RFQ block, written ONLY for servers in
         # [RFQ_FIELDS, UNDO_RFQ_FIELDS).  IBKR writes ``("", UNSET_INTEGER)``
         # — bondAccruedInterest plus a placeholder int.
         if MIN_SERVER_VER_RFQ_FIELDS <= version < MIN_SERVER_VER_UNDO_RFQ_FIELDS:
-            fields += [getattr(order, "bondAccruedInterest", ""), UNSET_INTEGER]
+            fields += [order.bondAccruedInterest, UNSET_INTEGER]
 
         if version >= MIN_SERVER_VER_INCLUDE_OVERNIGHT:
-            fields += [getattr(order, "includeOvernight", False)]
+            fields += [order.includeOvernight]
 
         if version >= MIN_SERVER_VER_CME_TAGGING_FIELDS:
             # ``manualOrderIndicator`` rides at gate 192; ``extOperator``
             # is gate 105 (EXT_OPERATOR) and is already written above as
             # part of the unconditional block — see IBKR ref line 2674.
-            fields += [getattr(order, "manualOrderIndicator", UNSET_INTEGER)]
+            fields += [order.manualOrderIndicator]
 
         if version >= MIN_SERVER_VER_IMBALANCE_ONLY:
             fields += [order.imbalanceOnly]

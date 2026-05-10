@@ -7,7 +7,7 @@ wrapper / ticker / registry state is asserted directly. Send-side per
 gate emits NUL-separated text framing; a server at or above the gate
 emits a 4-byte BE protobuf frame.
 
-Coverage spans the Phase 3 receive msgIds (TickPrice, TickSize,
+Coverage spans the market-data and historical receive msgIds (TickPrice, TickSize,
 TickGeneric, TickString, MarketDepth, MarketDepthL2, MarketDataType,
 MktDepthExchanges, RerouteMktData/Depth, RealTimeBarTick,
 HeadTimestamp, HistogramData, HistoricalDataUpdate, HistoricalTicks*,

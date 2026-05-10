@@ -318,8 +318,8 @@ MUTABLE_ORDER_FIELDS: Final[tuple[str, ...]] = (
     "auxPrice",
     "orderType",
     "orderRef",
-    # Trailing-stop runtime state (issue #102): IBKR ratchets trailStopPrice
-    # as the market moves, and users can edit it (or lmtPriceOffset on a
+    # Trailing-stop runtime state: IBKR ratchets trailStopPrice as the
+    # market moves, and users can edit it (or lmtPriceOffset on a
     # TRAIL LIMIT) directly in TWS. Both arrive on every openOrder update.
     "trailStopPrice",
     "trailingPercent",

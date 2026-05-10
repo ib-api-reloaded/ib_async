@@ -1,16 +1,16 @@
 """End-to-end dispatch + gating tests for accounts / positions protobuf.
 
 Mirrors the orders / contracts equivalents (test_proto_decoder_dispatch
-and test_proto_client_gating) for Phase 2's message families. Receive
-side: a synthetic proto payload routes through ``processProtoBuf`` and
-lands the same wrapper state the binary path produces. Send side: per
-``useProtoBuf(canonicalMsgId)`` boolean, a server below the family gate
-keeps NUL-separated text framing while a server at or above the gate
-emits a 4-byte BE protobuf frame.
+and test_proto_client_gating) for the account / position message
+families. Receive side: a synthetic proto payload routes through
+``processProtoBuf`` and lands the same wrapper state the binary path
+produces. Send side: per ``useProtoBuf(canonicalMsgId)`` boolean, a
+server below the family gate keeps NUL-separated text framing while a
+server at or above the gate emits a 4-byte BE protobuf frame.
 
-Both directions guard against the bug-prevention checklist items the
-contributor's PR violated: source-to-target writes, HasField guards,
-no module globals, malformed input lands as ``None``.
+Both directions guard against the standard converter bug-prevention
+checklist: source-to-target writes, HasField guards, no module
+globals, malformed input lands as ``None``.
 """
 
 from __future__ import annotations
