@@ -366,6 +366,14 @@ MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
         # ``ReqT*`` spellings; both are monetary.
         "ReqTEquity",
         "ReqTMargin",
+        # ``SettledCash`` ships in IBKR's ``AccountSummaryTags.AllTags``
+        # default request and through ``reqAccountSummaryAsync`` here.
+        # The ``-C`` / ``-S`` per-segment variants arrive on the live
+        # ``updateAccountValue`` stream. All three carry monetary
+        # values and need the typed Decimal view to resolve.
+        "SettledCash",
+        "SettledCash-C",
+        "SettledCash-S",
         "SMA",
         "SMA-S",
         "SegmentTitle-C",

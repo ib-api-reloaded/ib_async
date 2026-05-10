@@ -47,6 +47,7 @@ from .._pb import (
     WshMetaData_pb2,
     WshMetaDataRequest_pb2,
 )
+from ..contract import TagValue
 from ..objects import (
     NewsArticle,
     NewsBulletin,
@@ -55,6 +56,7 @@ from ..objects import (
     WshEventData,
 )
 from ..util import UNSET_INTEGER
+from .safe import fill_tag_value_map
 
 # ---------------------------------------------------------------------------
 # Args dataclasses for converter return shapes — slotted, frozen, named.
@@ -216,12 +218,24 @@ def createNewsArticle(proto: NewsArticle_pb2.NewsArticle) -> NewsArticle:
 
 
 def createNewsArticleRequestProto(
-    reqId: int, providerCode: str, articleId: str
+    reqId: int,
+    providerCode: str,
+    articleId: str,
+    newsArticleOptions: list[TagValue] | None = None,
 ) -> NewsArticleRequest_pb2.NewsArticleRequest:
+    """Build a ``NewsArticleRequest`` envelope.
+
+    ``newsArticleOptions`` is the documented TagValue trailer the binary
+    path sends as a single concatenated string after ``articleId``. The
+    proto wire spells it ``newsArticleOptions`` (a
+    ``map<string, string>``); empty / ``None`` leaves the field unset —
+    matching IBKR's ``client_utils.createNewsArticleRequestProto``.
+    """
     proto = NewsArticleRequest_pb2.NewsArticleRequest()
     proto.reqId = reqId
     proto.providerCode = providerCode
     proto.articleId = articleId
+    fill_tag_value_map(newsArticleOptions, proto.newsArticleOptions)
     return proto
 
 
@@ -269,7 +283,16 @@ def createHistoricalNewsRequestProto(
     startDateTime: str,
     endDateTime: str,
     totalResults: int,
+    historicalNewsOptions: list[TagValue] | None = None,
 ) -> HistoricalNewsRequest_pb2.HistoricalNewsRequest:
+    """Build a ``HistoricalNewsRequest`` envelope.
+
+    ``historicalNewsOptions`` is the documented TagValue trailer the
+    binary path sends after ``totalResults``. The proto wire spells it
+    ``historicalNewsOptions`` (a ``map<string, string>``); empty /
+    ``None`` leaves the field unset — matching IBKR's
+    ``client_utils.createHistoricalNewsRequestProto``.
+    """
     proto = HistoricalNewsRequest_pb2.HistoricalNewsRequest()
     proto.reqId = reqId
     proto.conId = conId
@@ -277,6 +300,7 @@ def createHistoricalNewsRequestProto(
     proto.startDateTime = startDateTime
     proto.endDateTime = endDateTime
     proto.totalResults = totalResults
+    fill_tag_value_map(historicalNewsOptions, proto.historicalNewsOptions)
     return proto
 
 

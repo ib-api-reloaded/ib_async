@@ -46,6 +46,27 @@ def format_proto_double(value: float) -> str:
     return f"{value:.8f}".rstrip("0").rstrip(".")
 
 
+def fill_tag_value_map(items: object, target: object) -> None:
+    """Copy a domain ``list[TagValue]`` into a proto ``map<string,string>``.
+
+    Mirrors IBKR's ``client_utils.fillTagValueList`` — empty / ``None``
+    inputs leave the proto map field unset on the wire (matching the
+    binary path's "skip the options block when the list is empty"
+    behaviour). Each ``TagValue`` is unpacked positionally so any
+    ``NamedTuple`` / dataclass / 2-tuple shape works.
+
+    Both args are typed ``object`` because the protobuf generated stubs
+    expose maps as ``ScalarMap[str, str]`` from a private name we can't
+    import, and the input is a domain list whose element type lives in
+    ``contract`` (importing it here would cycle).
+    """
+    if not items:
+        return
+    for tv in items:  # type: ignore[attr-defined]
+        tag, value = tv  # NamedTuple / sequence unpack
+        target[tag] = value  # type: ignore[index]
+
+
 def safe_decimal(value: str | Decimal | None) -> Decimal | None:
     """Convert a protobuf-string Decimal field to a ``Decimal | None``.
 

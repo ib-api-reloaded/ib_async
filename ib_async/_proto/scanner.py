@@ -19,9 +19,15 @@ Wire-shape notes:
   ``int(safe_decimal(...) or 0)`` — fractional / nan / empty values
   collapse to ``0`` rather than raise.
 * ``ScannerSubscription`` send-side mirrors the full ~21-field domain
-  dataclass; the two map fields (``scannerSubscriptionFilterOptions``
-  and ``scannerSubscriptionOptions``) are intentionally left empty —
-  the binary path passes empty TagValue lists today.
+  dataclass plus both wire map fields:
+  ``scannerSubscriptionFilterOptions`` (the documented per-instrument
+  generic filter options shipped on TWS >= MIN_SERVER_VER_SCANNER_GENERIC_OPTS)
+  and ``scannerSubscriptionOptions`` (IBKR-internal, kept for parity).
+* ``FundamentalsDataRequest`` and the news-side requests (article /
+  historical news) carry trailing ``map<string, string>`` option fields
+  — these are TagValue lists on the public surface; pass-through must
+  preserve them or the proto path silently drops user-provided options
+  the binary path would have shipped.
 """
 
 from __future__ import annotations
@@ -47,11 +53,11 @@ from .._pb import (
     ScannerSubscription_pb2,
     ScannerSubscriptionRequest_pb2,
 )
-from ..contract import Contract, ContractDetails
+from ..contract import Contract, ContractDetails, TagValue
 from ..objects import ScannerSubscription
 from ..util import UNSET_DOUBLE, UNSET_INTEGER
 from .contracts import createContract, createContractProto
-from .safe import safe_decimal
+from .safe import fill_tag_value_map, safe_decimal
 
 
 def _isValidFloat(value: float) -> bool:
@@ -205,12 +211,24 @@ def createFundamentalDataArgs(
 
 
 def createFundamentalsDataRequestProto(
-    reqId: int, contract: Contract, reportType: str
+    reqId: int,
+    contract: Contract,
+    reportType: str,
+    fundamentalsDataOptions: list[TagValue] | None = None,
 ) -> FundamentalsDataRequest_pb2.FundamentalsDataRequest:
+    """Build a ``FundamentalsDataRequest`` envelope.
+
+    ``fundamentalsDataOptions`` is the documented TagValue trailer the
+    binary path sends after ``reportType``. The proto wire spells it
+    ``fundamentalsDataOptions`` (a ``map<string, string>``); empty /
+    ``None`` lists leave the field unset — matching IBKR's
+    ``client_utils.createFundamentalsDataRequestProto``.
+    """
     proto = FundamentalsDataRequest_pb2.FundamentalsDataRequest()
     proto.reqId = reqId
     proto.contract.CopyFrom(createContractProto(contract))
     proto.reportType = reportType
+    fill_tag_value_map(fundamentalsDataOptions, proto.fundamentalsDataOptions)
     return proto
 
 
@@ -315,6 +333,8 @@ def createCancelPnLSingleProto(reqId: int) -> CancelPnLSingle_pb2.CancelPnLSingl
 
 def createScannerSubscriptionProto(
     sub: ScannerSubscription,
+    scannerSubscriptionOptions: list[TagValue] | None = None,
+    scannerSubscriptionFilterOptions: list[TagValue] | None = None,
 ) -> ScannerSubscription_pb2.ScannerSubscription:
     """Translate the ~21-field domain ``ScannerSubscription`` to its proto.
 
@@ -327,6 +347,13 @@ def createScannerSubscriptionProto(
     ``_isValidFloat`` / ``_isValidInt`` so the wire field stays unset
     when the user didn't provide a filter, matching the binary path's
     ``make_field_handle_empty`` behaviour.
+
+    Both option lists are TagValue trailers IBKR's reference encoder
+    writes verbatim into the proto's ``map<string, string>`` fields. The
+    *filter* options carry the documented per-instrument generic filter
+    settings (server >= MIN_SERVER_VER_SCANNER_GENERIC_OPTS); the
+    other is IBKR-internal but accepted for parity. Empty / ``None``
+    lists leave the wire fields unset.
     """
     proto = ScannerSubscription_pb2.ScannerSubscription()
     if _isValidInt(sub.numberOfRows):
@@ -371,16 +398,34 @@ def createScannerSubscriptionProto(
         proto.scannerSettingPairs = sub.scannerSettingPairs
     if sub.stockTypeFilter:
         proto.stockTypeFilter = sub.stockTypeFilter
+    fill_tag_value_map(
+        scannerSubscriptionFilterOptions, proto.scannerSubscriptionFilterOptions
+    )
+    fill_tag_value_map(scannerSubscriptionOptions, proto.scannerSubscriptionOptions)
     return proto
 
 
 def createScannerSubscriptionRequestProto(
-    reqId: int, sub: ScannerSubscription
+    reqId: int,
+    sub: ScannerSubscription,
+    scannerSubscriptionOptions: list[TagValue] | None = None,
+    scannerSubscriptionFilterOptions: list[TagValue] | None = None,
 ) -> ScannerSubscriptionRequest_pb2.ScannerSubscriptionRequest:
-    """Build the full ``ScannerSubscriptionRequest`` envelope (reqId + nested sub)."""
+    """Build the full ``ScannerSubscriptionRequest`` envelope.
+
+    Mirrors IBKR's ``client_utils.createScannerSubscriptionRequestProto``:
+    ``reqId`` plus the nested ``ScannerSubscription`` (which carries
+    both TagValue trailer maps directly on the wire).
+    """
     proto = ScannerSubscriptionRequest_pb2.ScannerSubscriptionRequest()
     proto.reqId = reqId
-    proto.scannerSubscription.CopyFrom(createScannerSubscriptionProto(sub))
+    proto.scannerSubscription.CopyFrom(
+        createScannerSubscriptionProto(
+            sub,
+            scannerSubscriptionOptions=scannerSubscriptionOptions,
+            scannerSubscriptionFilterOptions=scannerSubscriptionFilterOptions,
+        )
+    )
     return proto
 
 

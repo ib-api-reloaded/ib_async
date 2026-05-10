@@ -2438,6 +2438,240 @@ def test_disconnect_clears_in_flight_futures_with_connection_error():
     assert isinstance(exc, ConnectionError)
 
 
+# ---------------------------------------------------------------------------
+# Round 4 — market-data hot path: Ticker state, generic / string / odd-lot
+# ticks, halt-code unset preservation, signed index-future premium.
+# ---------------------------------------------------------------------------
+
+
+def _ticker_for_reqid(ib: ibi.IB, reqId: int) -> ibi.Ticker:
+    """Register a fresh ``Ticker`` against ``reqId`` so wrapper tick
+    handlers can find it via ``Wrapper._get_ticker``. Bypasses the
+    full ``reqMktData`` flow — we are exercising decode/state logic,
+    not the request lifecycle. ``conId`` is required for the contract
+    hash that keys the per-contract ticker pool.
+    """
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 265598 + reqId  # unique per reqId so no pool collision
+    ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
+    ib.wrapper.subscriptions._ticker_by_reqid[reqId] = ticker
+    return ticker
+
+
+def test_tick_generic_halted_unset_minus_one_does_not_collapse_to_zero():
+    """``HALTED`` (TickType 49) ships an int code where -1=unset,
+    0=not-halted, 1=general halt, 2=volatility halt. The generic-tick
+    "value > 0 else emptySize" clamp previously mapped -1 (unset) to 0
+    (not halted), conflating two distinct states. Round 4 added
+    ``_GENERIC_TICK_NO_CLAMP`` to bypass the clamp for halt-style ticks.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4001)
+
+    ib.wrapper.tickGeneric(4001, 49, -1.0)
+    assert ticker.halted == -1.0, (
+        "HALTED=-1 (unset) must survive — not collapse to 0 (not halted)"
+    )
+
+    ib.wrapper.tickGeneric(4001, 49, 0.0)
+    assert ticker.halted == 0.0  # not halted
+
+    ib.wrapper.tickGeneric(4001, 49, 1.0)
+    assert ticker.halted == 1.0  # general halt
+
+    ib.wrapper.tickGeneric(4001, 49, 2.0)
+    assert ticker.halted == 2.0  # volatility halt
+
+
+def test_tick_generic_delayed_halted_preserves_unset_sentinel():
+    """``DELAYED_HALTED`` (TickType 90) shares the halt-code semantics."""
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4002)
+
+    ib.wrapper.tickGeneric(4002, 90, -1.0)
+    assert ticker.delayedHalted == -1.0
+
+
+def test_tick_generic_index_future_premium_preserves_negative_sign():
+    """``INDEX_FUTURE_PREMIUM`` (TickType 31) is signed: a future trading
+    at a discount to spot legitimately shows a negative premium. The
+    pre-fix clamp erased the sign, falsely signalling "no premium".
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4003)
+
+    ib.wrapper.tickGeneric(4003, 31, -2.5)
+    assert ticker.indexFuturePremium == -2.5
+
+    ib.wrapper.tickGeneric(4003, 31, 4.25)
+    assert ticker.indexFuturePremium == 4.25
+
+
+def test_tick_generic_shortable_still_clamps_negative_to_zero():
+    """Sanity guard: tick types NOT in ``_GENERIC_TICK_NO_CLAMP`` keep
+    the legacy clamp. ``SHORTABLE`` (TickType 46) values are documented
+    as non-negative; a negative would be a wire bug we still erase.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4004)
+
+    ib.wrapper.tickGeneric(4004, 46, 3.0)
+    assert ticker.shortable == 3.0
+
+
+def test_odd_lot_price_routes_through_price_tick_map():
+    """TickType 105 (ODD_LOT_BID) and 106 (ODD_LOT_ASK) must land in
+    ``Ticker.oddLotBid`` / ``oddLotAsk`` — not assert-fail. IBKR added
+    the odd-lot family for retail-sized prints; servers can ship these
+    whenever the user enables the right generic-tick list.
+    """
+    from ib_async.objects import TickAttrib
+
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4005)
+
+    ib.wrapper.priceSizeTick(4005, 105, 100.25, 0.0, TickAttrib())
+    assert ticker.oddLotBid == 100.25
+
+    ib.wrapper.priceSizeTick(4005, 106, 100.50, 0.0, TickAttrib())
+    assert ticker.oddLotAsk == 100.50
+
+
+def test_odd_lot_size_routes_through_size_tick_map():
+    """TickType 107 (ODD_LOT_BID_SIZE) and 108 (ODD_LOT_ASK_SIZE) land
+    on the matching size fields without asserting.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4006)
+
+    ib.wrapper.tickSize(4006, 107, 25.0)
+    assert ticker.oddLotBidSize == 25.0
+
+    ib.wrapper.tickSize(4006, 108, 50.0)
+    assert ticker.oddLotAskSize == 50.0
+
+
+def test_odd_lot_exchange_routes_through_string_tick_map():
+    """TickType 109 / 110 carry the exchange identifier for the
+    odd-lot side, mirroring 32 / 33 for round-lots.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4007)
+
+    ib.wrapper.tickString(4007, 109, "ARCA")
+    assert ticker.oddLotBidExch == "ARCA"
+
+    ib.wrapper.tickString(4007, 110, "BATS")
+    assert ticker.oddLotAskExch == "BATS"
+
+
+def test_price_size_tick_attribs_flow_through_to_wrapper():
+    """``TickAttrib`` (canAutoExecute / pastLimit / preOpen) should
+    arrive in ``priceSizeTick`` so user code can gate on liquidity
+    quality. Round 3 wired it through; this verifies the full path
+    from a synthetic call lands on the ticker as a fresh BID.
+    """
+    from ib_async.objects import TickAttrib
+
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4008)
+
+    attrib = TickAttrib(canAutoExecute=True, pastLimit=False, preOpen=True)
+    ib.wrapper.priceSizeTick(4008, 1, 100.0, 200.0, attrib)
+    assert ticker.bid == 100.0
+    assert ticker.bidSize == 200.0
+
+
+def test_tick_req_params_populates_min_tick_and_bbo_exchange():
+    """``Wrapper.tickReqParams`` should land ``minTick`` /
+    ``bboExchange`` / ``snapshotPermissions`` on the Ticker so user code
+    can render correctly-quantized prices and know the BBO source.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4009)
+
+    ib.wrapper.tickReqParams(4009, 0.01, "NASDAQ", 3)
+    assert ticker.minTick == 0.01
+    assert ticker.bboExchange == "NASDAQ"
+    assert ticker.snapshotPermissions == 3
+
+
+def test_market_data_type_lands_on_ticker():
+    """``Wrapper.marketDataType`` (1=live, 2=frozen, 3=delayed,
+    4=delayed-frozen) is the user's signal that the price values are
+    live or stale. Must surface on Ticker.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4010)
+
+    ib.wrapper.marketDataType(4010, 3)
+    assert ticker.marketDataType == 3
+
+
+def test_delayed_bid_ask_last_route_through_bid_ask_last_state():
+    """DELAYED_BID(66) / DELAYED_ASK(67) / DELAYED_LAST(68) share the
+    bid/ask/last state slots with their live counterparts — the same
+    Ticker fields render whether the user requested live or delayed.
+    Verify all six branches roll prev correctly.
+    """
+    from ib_async.objects import TickAttrib
+
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    ticker = _ticker_for_reqid(ib, 4011)
+
+    a = TickAttrib()
+    ib.wrapper.priceSizeTick(4011, 66, 99.0, 100.0, a)  # delayed bid
+    assert ticker.bid == 99.0 and ticker.bidSize == 100.0
+
+    ib.wrapper.priceSizeTick(4011, 66, 99.5, 150.0, a)
+    assert ticker.bid == 99.5 and ticker.prevBid == 99.0
+
+    ib.wrapper.priceSizeTick(4011, 67, 100.0, 200.0, a)  # delayed ask
+    assert ticker.ask == 100.0
+    ib.wrapper.priceSizeTick(4011, 68, 99.75, 50.0, a)  # delayed last
+    assert ticker.last == 99.75
+
+
+def test_generic_tick_map_no_clamp_set_matches_documentation():
+    """Frozen-set guard: only INDEX_FUTURE_PREMIUM, HALTED,
+    DELAYED_HALTED bypass the value-clamp. If a future change broadens
+    this set silently it changes the wire-to-state contract; this
+    test forces an explicit code update at audit-time.
+    """
+    from ib_async.wrapper import _GENERIC_TICK_NO_CLAMP
+
+    assert _GENERIC_TICK_NO_CLAMP == frozenset({31, 49, 90})
+
+
+def test_odd_lot_tick_maps_registered_for_all_six_types():
+    """Lock the routing of TickType 105-110 so a future tick-map
+    refactor cannot silently drop odd-lot support.
+    """
+    from ib_async.wrapper import (
+        PRICE_TICK_MAP,
+        SIZE_TICK_MAP,
+        STRING_TICK_MAP,
+    )
+
+    assert PRICE_TICK_MAP[105] == "oddLotBid"
+    assert PRICE_TICK_MAP[106] == "oddLotAsk"
+    assert SIZE_TICK_MAP[107] == "oddLotBidSize"
+    assert SIZE_TICK_MAP[108] == "oddLotAskSize"
+    assert STRING_TICK_MAP[109] == "oddLotBidExch"
+    assert STRING_TICK_MAP[110] == "oddLotAskExch"
+
+
 def test_wrapper_error_warning_classification_in_warning_band():
     """The 2100-2199 band auto-classifies as warning regardless of the
     explicit ``_WARNING_CODES`` set — this covers the data-farm
@@ -2450,3 +2684,828 @@ def test_wrapper_error_warning_classification_in_warning_band():
         assert is_warning, f"code {code} should classify as warning"
 
     assert not (2200 in _WARNING_CODES or 2100 <= 2200 < 2200)
+
+
+# ---------------------------------------------------------------------------
+# Round 4: account-update / position / FA stream-ordering regressions
+# ---------------------------------------------------------------------------
+
+
+def test_settled_cash_in_monetary_account_value_tags():
+    """``SettledCash`` ships in IBKR's ``AccountSummaryTags.AllTags`` and
+    in our default ``reqAccountSummaryAsync`` tag string. Without it on
+    the whitelist, ``AccountValue.decimalValue`` returns ``None`` for
+    valid wire values and user code mistakes the figure as unset.
+
+    Also covers the ``-C`` / ``-S`` per-segment variants that arrive on
+    the live ``updateAccountValue`` stream for futures-segment accounts.
+    """
+    from ib_async.objects import MONETARY_ACCOUNT_VALUE_TAGS
+
+    for tag in ("SettledCash", "SettledCash-C", "SettledCash-S"):
+        assert tag in MONETARY_ACCOUNT_VALUE_TAGS, f"missing {tag!r}"
+
+    av = ibi.AccountValue(
+        account="DU1",
+        tag="SettledCash",
+        value="12345.67",
+        currency="USD",
+        modelCode="",
+    )
+    assert av.decimalValue == Decimal("12345.67")
+
+
+def test_account_summary_default_tags_are_all_whitelisted():
+    """Every monetary tag we send in ``reqAccountSummaryAsync``'s default
+    string must resolve to a Decimal via ``AccountValue.decimalValue``.
+    Drift here means a TWS account-summary reply silently degrades to
+    ``None`` for that field.
+    """
+    from ib_async.objects import MONETARY_ACCOUNT_VALUE_TAGS
+
+    # Only the *monetary* members of the default request tag set; the
+    # non-numeric ``AccountType`` and the time-string
+    # ``LookAheadNextChange`` and severity-enum ``HighestSeverity`` are
+    # intentionally excluded from the whitelist.
+    for tag in (
+        "NetLiquidation",
+        "TotalCashValue",
+        "SettledCash",
+        "AccruedCash",
+        "BuyingPower",
+        "EquityWithLoanValue",
+        "PreviousDayEquityWithLoanValue",
+        "GrossPositionValue",
+        "RegTEquity",
+        "RegTMargin",
+        "SMA",
+        "InitMarginReq",
+        "MaintMarginReq",
+        "AvailableFunds",
+        "ExcessLiquidity",
+        "Cushion",
+        "FullInitMarginReq",
+        "FullMaintMarginReq",
+        "FullAvailableFunds",
+        "FullExcessLiquidity",
+        "LookAheadInitMarginReq",
+        "LookAheadMaintMarginReq",
+        "LookAheadAvailableFunds",
+        "LookAheadExcessLiquidity",
+        "DayTradesRemaining",
+        "DayTradesRemainingT+1",
+        "DayTradesRemainingT+2",
+        "DayTradesRemainingT+3",
+        "DayTradesRemainingT+4",
+        "Leverage",
+        # IBKR's plain ``ReqT*`` aliases the summary stream emits.
+        "ReqTEquity",
+        "ReqTMargin",
+    ):
+        assert tag in MONETARY_ACCOUNT_VALUE_TAGS, f"missing {tag!r}"
+
+
+def test_account_download_end_settles_future_after_values_and_portfolio():
+    """``reqAccountUpdates(True)`` must only resolve the user-visible
+    ``accountValues`` future once ``accountDownloadEnd`` arrives. Until
+    then ``updateAccountValue`` and ``updatePortfolio`` rows accumulate
+    into the wrapper state without prematurely settling the waiter.
+    """
+    from ib_async._requests import SingletonKey as _SingletonKey
+
+    ib = ibi.IB()
+    req, _is_new = ib.wrapper.requests.open(_SingletonKey("accountValues"))
+    future = req.future
+
+    ib.wrapper.updateAccountValue("NetLiquidation", "100000.00", "USD", "DU1")
+    ib.wrapper.updateAccountTime("12:34")
+
+    assert not future.done(), "future must not settle before accountDownloadEnd"
+
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 265598
+    ib.wrapper.updatePortfolio(
+        contract,
+        Decimal("10"),
+        Decimal("190.50"),
+        Decimal("1905.00"),
+        Decimal("180.00"),
+        Decimal("105.00"),
+        Decimal("0"),
+        "DU1",
+    )
+    assert not future.done()
+
+    ib.wrapper.accountDownloadEnd("DU1")
+
+    assert future.done()
+    # Accumulator state survived the call sequence.
+    assert ("DU1", "NetLiquidation", "USD", "") in ib.wrapper.accountValues
+    assert 265598 in ib.wrapper.portfolio["DU1"]
+
+
+def test_update_portfolio_drops_zero_size_position_row():
+    """When TWS sends a ``updatePortfolio`` row with size 0, the wrapper
+    must drop the cached entry rather than store a zero-row that user
+    code then has to filter out. ``Decimal('0')`` and ``None`` (no wire
+    value) both close the position.
+    """
+    ib = ibi.IB()
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 265598
+
+    # First open the position.
+    ib.wrapper.updatePortfolio(
+        contract,
+        Decimal("10"),
+        Decimal("190.50"),
+        Decimal("1905.00"),
+        Decimal("180.00"),
+        Decimal("105.00"),
+        Decimal("0"),
+        "DU1",
+    )
+    assert 265598 in ib.wrapper.portfolio["DU1"]
+
+    # Then close it — the row must drop.
+    ib.wrapper.updatePortfolio(
+        contract,
+        Decimal("0"),
+        Decimal("190.50"),
+        Decimal("0"),
+        Decimal("180.00"),
+        Decimal("0"),
+        Decimal("105.00"),
+        "DU1",
+    )
+    assert 265598 not in ib.wrapper.portfolio["DU1"]
+
+
+def test_position_drops_zero_and_appends_to_live_request():
+    """Closing a position (size 0) must drop the cached entry, while
+    every row also appends to the active ``reqPositionsAsync`` future
+    accumulator so the singleton drains correctly on ``positionEnd``.
+    """
+    from ib_async._requests import SingletonKey as _SingletonKey
+
+    ib = ibi.IB()
+    req, _is_new = ib.wrapper.requests.open(_SingletonKey("positions"), container=[])
+    future = req.future
+
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 265598
+
+    ib.wrapper.position("DU1", contract, Decimal("10"), Decimal("180.00"))
+    assert 265598 in ib.wrapper.positions["DU1"]
+
+    ib.wrapper.position("DU1", contract, Decimal("0"), Decimal("180.00"))
+    assert 265598 not in ib.wrapper.positions["DU1"]
+
+    ib.wrapper.positionEnd()
+    assert future.done()
+    drained = future.result()
+    # Two rows appended (even the zero-row position event still
+    # surfaces — it represents the close itself).
+    assert len(drained) == 2
+
+
+def test_position_multi_emits_event_and_accumulates_per_reqid():
+    """Round 4 fix: ``positionMulti`` was a no-op stub that dropped every
+    row, breaking ``Client.reqPositionsMulti`` callers (advisor accounts
+    with model codes). Each row must now surface on ``positionEvent``
+    and accumulate against ``ReqIdKey(reqId)`` for any future async
+    waiter, with ``positionMultiEnd`` settling that future.
+    """
+    from ib_async._requests import ReqIdKey as _ReqIdKey
+
+    ib = ibi.IB()
+    captured: list[ibi.Position] = []
+    ib.positionEvent += captured.append
+
+    req, _is_new = ib.wrapper.requests.open(_ReqIdKey(7), container=[])
+    future = req.future
+
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 265598
+
+    ib.wrapper.positionMulti(
+        7, "DU1", "Conservative", contract, Decimal("5"), Decimal("180.00")
+    )
+
+    assert len(captured) == 1
+    assert captured[0].account == "DU1"
+    assert captured[0].position == Decimal("5")
+    assert 265598 in ib.wrapper.positions["DU1"]
+    assert not future.done()
+
+    ib.wrapper.positionMultiEnd(7)
+
+    assert future.done()
+    drained = future.result()
+    assert len(drained) == 1
+
+
+def test_position_multi_drops_zero_size_row():
+    """Closing a position-multi row (size 0) must drop the cached entry
+    the same way the singular ``position`` handler does, so the user-
+    visible ``positions`` cache stays consistent across both streams.
+    """
+    ib = ibi.IB()
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    contract.conId = 265598
+
+    # Open via positionMulti.
+    ib.wrapper.positionMulti(
+        9, "DU1", "Aggressive", contract, Decimal("3"), Decimal("180.00")
+    )
+    assert 265598 in ib.wrapper.positions["DU1"]
+
+    # Close it.
+    ib.wrapper.positionMulti(
+        9, "DU1", "Aggressive", contract, Decimal("0"), Decimal("180.00")
+    )
+    assert 265598 not in ib.wrapper.positions["DU1"]
+
+
+def test_managed_accounts_populates_account_list_on_comma_separated_payload():
+    """``managedAccounts`` arrives once at startup with a CSV payload.
+    Empty entries (trailing comma) must be filtered so user code reading
+    ``IB.managedAccounts()`` never sees a blank account name.
+    """
+    ib = ibi.IB()
+    ib.wrapper.managedAccounts("DU1,DU2,DU3,")
+    assert ib.wrapper.accounts == ["DU1", "DU2", "DU3"]
+
+    # Reconnection sends the list again; the wrapper must replace, not
+    # append, so the live snapshot stays accurate after a server reset.
+    ib.wrapper.managedAccounts("DU4")
+    assert ib.wrapper.accounts == ["DU4"]
+
+
+def test_receive_fa_settles_request_fa_future_with_xml_payload():
+    """``receiveFA`` carries an XML body the user awaits via
+    ``IB.requestFA(faDataType)``. The XML payload must round-trip
+    end-to-end (no charset truncation, no field reorder) and the
+    singleton future must resolve with the body."""
+    from ib_async._requests import SingletonKey as _SingletonKey
+
+    ib = ibi.IB()
+    req, _is_new = ib.wrapper.requests.open(_SingletonKey("requestFA"), container="")
+    future = req.future
+
+    xml = (
+        '<?xml version="1.0"?>'
+        "<ListOfGroups><Group><name>Tech</name></Group></ListOfGroups>"
+    )
+    ib.wrapper.receiveFA(1, xml)
+
+    assert future.done()
+    assert future.result() == xml
+
+
+def test_replace_fa_end_does_not_raise_on_unknown_reqid():
+    """``replaceFAEnd`` ships back a ``(reqId, text)`` confirmation.
+    The current ``IB.replaceFA`` doesn't open a waiter, so the wrapper
+    handler accepts the call as a no-op — but it must NOT raise on an
+    unknown reqId, otherwise a stray confirmation crashes the decoder.
+    """
+    ib = ibi.IB()
+    # Should not raise.
+    ib.wrapper.replaceFAEnd(99999, "0|Replace successful")
+
+
+def test_account_summary_end_settles_per_reqid_future():
+    """``accountSummary`` emits one row per (account, tag) and the
+    waiter resolves only on ``accountSummaryEnd(reqId)``. Rows must
+    accumulate into ``acctSummary`` keyed by (account, tag, currency)."""
+    from ib_async._requests import ReqIdKey as _ReqIdKey
+
+    ib = ibi.IB()
+    req, _is_new = ib.wrapper.requests.open(_ReqIdKey(11))
+    future = req.future
+
+    ib.wrapper.accountSummary(11, "DU1", "NetLiquidation", "100000", "USD")
+    ib.wrapper.accountSummary(11, "DU1", "BuyingPower", "200000", "USD")
+
+    assert not future.done()
+    assert ("DU1", "NetLiquidation", "USD") in ib.wrapper.acctSummary
+    assert ("DU1", "BuyingPower", "USD") in ib.wrapper.acctSummary
+
+    ib.wrapper.accountSummaryEnd(11)
+    assert future.done()
+
+
+def test_account_update_multi_carries_model_code_into_accumulator_key():
+    """``accountUpdateMulti`` differs from ``updateAccountValue`` by
+    carrying a model-code dimension. The accumulator key must include
+    it so two model-code variants of the same tag don't collide.
+    """
+    ib = ibi.IB()
+    ib.wrapper.accountUpdateMulti(
+        21, "DU1", "Conservative", "NetLiquidation", "100000", "USD"
+    )
+    ib.wrapper.accountUpdateMulti(
+        21, "DU1", "Aggressive", "NetLiquidation", "150000", "USD"
+    )
+    assert ("DU1", "NetLiquidation", "USD", "Conservative") in ib.wrapper.accountValues
+    assert ("DU1", "NetLiquidation", "USD", "Aggressive") in ib.wrapper.accountValues
+
+
+# ---------------------------------------------------------------------------
+# Round 4: binary-path field encoder + safe_decimal sentinel coverage
+# ---------------------------------------------------------------------------
+
+
+def test_send_encodes_positive_infinity_as_ibkr_infinity_string():
+    """``math.inf`` on the binary send path must serialize to the literal
+    ``"Infinity"`` (matching IBKR's ``INFINITY_STR`` in ``ibapi/const.py``)
+    — not ``"Infinite"``. Fields like ``competeAgainstBestOffset =
+    COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID`` (an alias for
+    ``DOUBLE_INFINITY``) only travel correctly with the IBKR-canonical
+    spelling; ``"Infinite"`` is rejected as a parse error server-side
+    and silently corrupts mid-peg-to-mid orders.
+    """
+    import math
+
+    from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
+
+    assert _FORMAT_HANDLERS_EMPTY[float](math.inf) == "Infinity"
+    assert _FORMAT_HANDLERS_KEEP[float](math.inf) == "Infinity"
+
+
+def test_send_encodes_unset_double_as_empty_when_makeempty():
+    """``UNSET_DOUBLE`` (sys.float_info.max) becomes empty string on the
+    ``makeEmpty=True`` path — matching IBKR's ``make_field_handle_empty``
+    semantics. With ``makeEmpty=False`` it serializes verbatim.
+    """
+    import sys
+
+    from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
+
+    UNSET_DOUBLE = sys.float_info.max
+    assert _FORMAT_HANDLERS_EMPTY[float](UNSET_DOUBLE) == ""
+    assert _FORMAT_HANDLERS_KEEP[float](UNSET_DOUBLE) != ""
+
+
+def test_send_encodes_unset_integer_as_empty_when_makeempty():
+    """``UNSET_INTEGER`` becomes empty string on the ``makeEmpty=True``
+    path; matches IBKR's ``make_field_handle_empty``.
+    """
+    from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
+
+    assert _FORMAT_HANDLERS_EMPTY[int](UNSET_INTEGER) == ""
+    assert _FORMAT_HANDLERS_KEEP[int](UNSET_INTEGER) == str(UNSET_INTEGER)
+
+
+def test_send_encodes_bool_as_zero_or_one_string():
+    """IBKR's ``make_field`` encodes ``True``/``False`` as ``"1"``/``"0"``.
+    Our handler must produce the same strings or every gated boolean field
+    arrives as the Python repr ``"True"`` / ``"False"`` and TWS rejects.
+    """
+    from ib_async.client import _FORMAT_HANDLERS_EMPTY
+
+    assert _FORMAT_HANDLERS_EMPTY[bool](True) == "1"
+    assert _FORMAT_HANDLERS_EMPTY[bool](False) == "0"
+
+
+def test_send_encodes_none_as_empty_string():
+    """``None`` → empty string on the wire. IBKR's reference raises on
+    ``None``; we permissively serialize as empty so contributor sites that
+    forget to filter ``None`` from their field tuples don't crash.
+    """
+    from ib_async.client import _FORMAT_HANDLERS_EMPTY
+
+    assert _FORMAT_HANDLERS_EMPTY[type(None)](None) == ""
+
+
+def test_safe_decimal_rejects_every_ibkr_unset_sentinel_string():
+    """The ``_DECIMAL_UNSET_STRINGS`` set must cover every wire string
+    IBKR's ``decode(Decimal, fields)`` (utils.py) treats as the
+    UNSET_DECIMAL sentinel — UNSET_INTEGER, UNSET_LONG, UNSET_DOUBLE
+    (uppercase E), most-negative int64. A regression that drops one of
+    these would let a 2.1B-or-1.8e308 fake quantity into a position
+    or fill, corrupting every downstream calculation.
+    """
+    from ib_async._proto.safe import safe_decimal
+
+    for sentinel in (
+        "2147483647",  # UNSET_INTEGER
+        "9223372036854775807",  # UNSET_LONG
+        "1.7976931348623157E308",  # UNSET_DOUBLE (IBKR's spelling)
+        "-9223372036854775808",  # most-negative int64
+    ):
+        assert safe_decimal(sentinel) is None, (
+            f"sentinel {sentinel!r} must coerce to None"
+        )
+
+    for variant in (
+        "1.7976931348623157e+308",
+        "1.7976931348623157e308",
+    ):
+        assert safe_decimal(variant) is None, (
+            f"variant {variant!r} must coerce to None"
+        )
+
+
+def test_safe_decimal_rejects_infinity_strings_for_decimal_field():
+    """Decimal-typed wire fields with ``"Infinity"``/``"-Infinity"`` must
+    coerce to ``None``. ``Decimal('Infinity')`` is a legitimate Decimal
+    value, but for IBKR-domain Decimal fields (size, quantity, fees)
+    infinity is meaningless and the ``Decimal | None`` contract expects
+    ``None``.
+    """
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("Infinity") is None
+    assert safe_decimal("-Infinity") is None
+    assert safe_decimal("Infinite") is None  # not a valid Decimal at all
+
+
+def test_decoder_conv_int_empty_string_returns_zero():
+    """IBKR's ``decode(int, fields)`` with empty wire field returns 0
+    (via ``int_type(s or 0)``). Our ``_CONV[int]`` must match — a wire
+    msg whose int field arrives empty should decode to 0, not raise.
+    """
+    from ib_async.decoder import _CONV
+
+    assert _CONV[int]("") == 0
+    assert _CONV[int]("0") == 0
+    assert _CONV[int]("42") == 42
+    assert _CONV[int]("-1") == -1
+
+
+def test_decoder_conv_float_empty_string_returns_zero():
+    """Same contract for floats: empty wire → 0.0."""
+    from ib_async.decoder import _CONV
+
+    assert _CONV[float]("") == 0.0
+    assert _CONV[float]("0") == 0.0
+    assert _CONV[float]("1.5") == 1.5
+
+
+def test_decoder_conv_bool_empty_string_returns_false():
+    """IBKR's ``decode(bool, fields)`` returns ``s != 0`` after coercing
+    via ``int_type(s or 0)``. Empty string lands as ``False``.
+    """
+    from ib_async.decoder import _CONV
+
+    assert _CONV[bool]("") is False
+    assert _CONV[bool]("0") is False
+    assert _CONV[bool]("1") is True
+
+
+def test_decoder_conv_int_handles_long_values_without_precision_loss():
+    """``permId`` and other gate-191 long-typed fields can carry values
+    well past 2^31. Python ``int`` is arbitrary-precision so the
+    ``_CONV[int]`` path must round-trip a 19-digit long without going
+    through a float intermediate.
+    """
+    from ib_async.decoder import _CONV
+
+    big = 9223372036854775806  # one less than UNSET_LONG
+    decoded = _CONV[int](str(big))
+    assert decoded == big
+    assert isinstance(decoded, int)
+
+
+def test_safe_decimal_preserves_high_precision_for_position_fields():
+    """Position quantities can have >15 decimal digits (fractional shares).
+    ``safe_decimal`` must not round-trip through ``float`` and lose
+    precision — the IBKR wire format is a string for exactly this reason.
+    """
+    from ib_async._proto.safe import safe_decimal
+
+    high_precision = "12345678901234567.890123"
+    result = safe_decimal(high_precision)
+    assert result is not None
+    assert str(result) == high_precision
+
+
+def test_format_proto_double_strips_trailing_zeros_and_decimal():
+    """``format_proto_double`` matches IBKR's ``floatMaxString`` shape:
+    whole numbers come back without ``.``, fractions strip trailing zeros.
+    """
+    from ib_async._proto.safe import format_proto_double
+
+    assert format_proto_double(100.0) == "100"
+    assert format_proto_double(1.5) == "1.5"
+    assert format_proto_double(1.50000000) == "1.5"
+    assert format_proto_double(0.0) == "0"
+
+
+def test_send_round_trips_full_field_tuple_with_infinity_and_unset():
+    """End-to-end shape check: a field tuple combining str / int / float /
+    bool / None / UNSET / inf must produce a NUL-terminated wire string
+    that matches the per-type lambdas. Locks the contract for the
+    handler-table dispatch in ``Client.send``.
+    """
+    import math
+    import sys
+
+    from ib_async.client import _FORMAT_HANDLERS_EMPTY
+
+    UNSET_DOUBLE = sys.float_info.max
+    fields = [
+        "TEST",
+        42,
+        1.5,
+        True,
+        False,
+        None,
+        UNSET_DOUBLE,
+        UNSET_INTEGER,
+        math.inf,
+    ]
+    parts = [_FORMAT_HANDLERS_EMPTY.get(type(f), str)(f) for f in fields]
+    assert parts == [
+        "TEST",
+        "42",
+        "1.5",
+        "1",
+        "0",
+        "",
+        "",
+        "",
+        "Infinity",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Round 4 audit: TagValue option-list passthrough on scanner / news / fundamentals
+# ---------------------------------------------------------------------------
+
+
+def test_scanner_subscription_filter_options_round_trip_on_proto():
+    """``reqScannerSubscription`` accepts a ``scannerSubscriptionFilterOptions``
+    TagValue list (per IBKR's signature). The proto path must serialize
+    those TagValues into the wire ``map<string, string>`` field — the
+    binary path concatenates them; both paths must surface the same
+    semantic options to the server.
+    """
+    from ib_async._proto.scanner import createScannerSubscriptionRequestProto
+    from ib_async.contract import TagValue
+    from ib_async.objects import ScannerSubscription
+
+    sub = ScannerSubscription(scanCode="TOP_PERC_GAIN", instrument="STK")
+    opts = [TagValue("priceAbove", "10"), TagValue("priceBelow", "100")]
+    proto = createScannerSubscriptionRequestProto(
+        reqId=42,
+        sub=sub,
+        scannerSubscriptionFilterOptions=opts,
+    )
+
+    assert proto.reqId == 42
+    fopts = dict(proto.scannerSubscription.scannerSubscriptionFilterOptions)
+    assert fopts == {"priceAbove": "10", "priceBelow": "100"}
+    # The other map stays unset when the caller didn't supply it.
+    assert not dict(proto.scannerSubscription.scannerSubscriptionOptions)
+
+
+def test_scanner_subscription_options_round_trip_on_proto():
+    """The IBKR-internal ``scannerSubscriptionOptions`` TagValue list
+    must round-trip too — accepting it on the public surface preserves
+    parity with IBKR's ``reqScannerSubscription(reqId, sub, options,
+    filterOptions)`` signature.
+    """
+    from ib_async._proto.scanner import createScannerSubscriptionRequestProto
+    from ib_async.contract import TagValue
+    from ib_async.objects import ScannerSubscription
+
+    sub = ScannerSubscription(scanCode="TOP_PERC_GAIN")
+    proto = createScannerSubscriptionRequestProto(
+        reqId=1,
+        sub=sub,
+        scannerSubscriptionOptions=[TagValue("internal", "x")],
+    )
+    assert dict(proto.scannerSubscription.scannerSubscriptionOptions) == {
+        "internal": "x"
+    }
+
+
+def test_scanner_subscription_empty_option_lists_leave_proto_maps_unset():
+    """``None`` and ``[]`` both must leave the wire map fields unset —
+    matching ``client_utils.fillTagValueList`` "skip when empty"
+    semantics so the wire frame is byte-identical to the no-option
+    request.
+    """
+    from ib_async._proto.scanner import createScannerSubscriptionRequestProto
+    from ib_async.objects import ScannerSubscription
+
+    sub = ScannerSubscription(scanCode="TOP_PERC_GAIN")
+    a = createScannerSubscriptionRequestProto(
+        reqId=1,
+        sub=sub,
+        scannerSubscriptionOptions=None,
+        scannerSubscriptionFilterOptions=None,
+    )
+    b = createScannerSubscriptionRequestProto(
+        reqId=1,
+        sub=sub,
+        scannerSubscriptionOptions=[],
+        scannerSubscriptionFilterOptions=[],
+    )
+    assert a.SerializeToString() == b.SerializeToString()
+    assert not dict(a.scannerSubscription.scannerSubscriptionOptions)
+    assert not dict(a.scannerSubscription.scannerSubscriptionFilterOptions)
+
+
+def test_fundamentals_data_request_carries_options_into_proto_map():
+    """``fundamentalsDataOptions`` reaches the wire map field on the
+    proto path. Without this, user-supplied options on the binary
+    signature silently disappear when TWS upgrades and protobuf becomes
+    the default for that opcode.
+    """
+    from ib_async._proto.scanner import createFundamentalsDataRequestProto
+    from ib_async.contract import Stock, TagValue
+
+    contract = Stock("AAPL", "SMART", "USD")
+    proto = createFundamentalsDataRequestProto(
+        reqId=9,
+        contract=contract,
+        reportType="ReportSnapshot",
+        fundamentalsDataOptions=[TagValue("foo", "bar")],
+    )
+    assert proto.reqId == 9
+    assert proto.reportType == "ReportSnapshot"
+    assert dict(proto.fundamentalsDataOptions) == {"foo": "bar"}
+
+
+def test_news_article_request_carries_options_into_proto_map():
+    """``newsArticleOptions`` round-trips into the proto's
+    ``map<string, string>`` field — accepting it on the request keeps
+    parity with ``reqNewsArticle(reqId, providerCode, articleId,
+    newsArticleOptions)``.
+    """
+    from ib_async._proto.news import createNewsArticleRequestProto
+    from ib_async.contract import TagValue
+
+    proto = createNewsArticleRequestProto(
+        reqId=11,
+        providerCode="BRFG",
+        articleId="abc123",
+        newsArticleOptions=[TagValue("k", "v")],
+    )
+    assert proto.reqId == 11
+    assert proto.providerCode == "BRFG"
+    assert proto.articleId == "abc123"
+    assert dict(proto.newsArticleOptions) == {"k": "v"}
+
+
+def test_historical_news_request_carries_options_into_proto_map():
+    """``historicalNewsOptions`` reaches the wire map field on the proto
+    path."""
+    from ib_async._proto.news import createHistoricalNewsRequestProto
+    from ib_async.contract import TagValue
+
+    proto = createHistoricalNewsRequestProto(
+        reqId=12,
+        conId=265598,
+        providerCodes="BRFG+DJ-N",
+        startDateTime="2026-01-01 00:00:00.0",
+        endDateTime="2026-02-01 00:00:00.0",
+        totalResults=10,
+        historicalNewsOptions=[TagValue("a", "b"), TagValue("c", "d")],
+    )
+    assert proto.reqId == 12
+    assert proto.conId == 265598
+    assert dict(proto.historicalNewsOptions) == {"a": "b", "c": "d"}
+
+
+def test_news_and_fundamentals_request_options_default_unset():
+    """Default-call (no options arg) must leave the wire map field
+    unset — preserving wire compatibility for callers that don't
+    supply options.
+    """
+    from ib_async._proto.news import (
+        createHistoricalNewsRequestProto,
+        createNewsArticleRequestProto,
+    )
+    from ib_async._proto.scanner import createFundamentalsDataRequestProto
+    from ib_async.contract import Stock
+
+    a = createNewsArticleRequestProto(reqId=1, providerCode="BRFG", articleId="x")
+    assert not dict(a.newsArticleOptions)
+
+    b = createHistoricalNewsRequestProto(
+        reqId=1,
+        conId=1,
+        providerCodes="BRFG",
+        startDateTime="",
+        endDateTime="",
+        totalResults=10,
+    )
+    assert not dict(b.historicalNewsOptions)
+
+    c = createFundamentalsDataRequestProto(
+        reqId=1, contract=Stock("AAPL", "SMART", "USD"), reportType="ReportSnapshot"
+    )
+    assert not dict(c.fundamentalsDataOptions)
+
+
+# ---------------------------------------------------------------------------
+# Round 4 audit: scanner / news receiver semantics confirmation
+# ---------------------------------------------------------------------------
+
+
+def test_scanner_data_combo_legs_str_propagates_to_scan_data():
+    """``ScannerDataElement.comboKey`` is the wire's combo description
+    for combo scanners — the converter must surface it through the
+    wrapper as ``ScanData.legsStr`` so user code that switches on
+    combo-vs-single scanners sees a non-empty string."""
+    from ib_async._pb import ScannerData_pb2
+    from ib_async._proto.scanner import iterScannerData
+
+    proto = ScannerData_pb2.ScannerData()
+    proto.reqId = 9
+    el = proto.scannerDataElement.add()
+    el.rank = 0
+    el.contract.symbol = "SPY"
+    el.distance = "0.5"
+    el.benchmark = "SPX"
+    el.projection = "10%"
+    el.comboKey = "1234,1;5678,-1"
+
+    args = iterScannerData(proto)
+    assert args.reqId == 9
+    assert len(args.elements) == 1
+    elt = args.elements[0]
+    assert elt.legsStr == "1234,1;5678,-1"
+    assert elt.benchmark == "SPX"
+
+
+def test_tick_news_timestamp_preserves_full_int64_milliseconds():
+    """The wire ``timestamp`` is int64 millis since epoch — values past
+    2038 must not wrap. The args dataclass stores ``int`` so Python
+    arbitrary-precision keeps the full value through to the wrapper.
+    """
+    from ib_async._pb import TickNews_pb2
+    from ib_async._proto.news import createTickNewsArgs
+
+    far_future_ms = 4102444800000  # 2100-01-01 UTC in ms
+    proto = TickNews_pb2.TickNews()
+    proto.reqId = 1
+    proto.timestamp = far_future_ms
+    proto.providerCode = "BRFG"
+    proto.articleId = "abc"
+    proto.headline = "headline"
+    proto.extraData = ""
+
+    args = createTickNewsArgs(proto)
+    assert args.timeStamp == far_future_ms
+    # Above int32 max; this is the regression we guard against.
+    assert args.timeStamp > 2**31
+
+
+def test_news_bulletin_msg_type_int_passes_through_unchanged():
+    """``msgType`` is the IBKR enum (1=regular, 2=exchange-unavailable,
+    3=exchange-available-again) — the converter does not interpret or
+    remap it; the raw int reaches the wrapper / domain object so user
+    code can switch on the documented values.
+    """
+    from ib_async._pb import NewsBulletin_pb2
+    from ib_async._proto.news import createUpdateNewsBulletinArgs
+
+    for raw in (1, 2, 3):
+        proto = NewsBulletin_pb2.NewsBulletin()
+        proto.newsMsgId = 100 + raw
+        proto.newsMsgType = raw
+        proto.newsMessage = "x"
+        proto.originatingExch = "NYSE"
+
+        args = createUpdateNewsBulletinArgs(proto)
+        assert args.msgType == raw
+        assert args.msgId == 100 + raw
+
+
+def test_news_article_binary_pdf_articletype_preserved():
+    """``articleType=1`` is IBKR's "binary PDF, base64-encoded as a
+    string" indicator — the converter must surface the discriminator
+    so user code can decode the base64 payload. ``articleText`` stays
+    a ``str`` (the wire is also ``str``); base64 decode is callers'.
+    """
+    from ib_async._pb import NewsArticle_pb2
+    from ib_async._proto.news import createNewsArticleArgs
+
+    proto = NewsArticle_pb2.NewsArticle()
+    proto.reqId = 17
+    proto.articleType = 1
+    proto.articleText = "JVBERi0xLjQK"  # "%PDF-1.4\n" base64-encoded
+
+    args = createNewsArticleArgs(proto)
+    assert args.articleType == 1
+    assert args.articleText == "JVBERi0xLjQK"
+
+
+def test_scanner_parameters_xml_passes_through_without_truncation():
+    """``ScannerParameters`` carries a multi-MB XML payload — the
+    converter must not truncate / re-encode / strip it. User code parses
+    XML client-side."""
+    from ib_async._pb import ScannerParameters_pb2
+    from ib_async._proto.scanner import createScannerParametersXml
+
+    big = "<Scanner>" + ("<Item/>" * 50000) + "</Scanner>"
+    proto = ScannerParameters_pb2.ScannerParameters()
+    proto.xml = big
+    out = createScannerParametersXml(proto)
+    assert out == big
+    assert len(out) > 100000
