@@ -1224,8 +1224,6 @@ class Wrapper:
             self._logger.debug(f"priceSizeTick: Unknown reqId: {reqId}")
             return
 
-        # self._logger.error(f"WHAT R U DOING: {tickType=} {price=} {size=}")
-
         # Allow overwriting IBKR's default "empty price" of -1 when there is no qty/size on a side.
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tickType in {1, 66}:
@@ -1266,16 +1264,10 @@ class Wrapper:
             # an IBKR data problem or a logic problem somewhere here?
             # More research: IBKR also shows the bad value in their own app, so there is a data bug in their own server logic somewhere.
 
-            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: BEFORE {ticker=}")
-            # self._logger.error(f"[{tickType=}] SETTING {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
-
             ticker.prevLast = ticker.last
             ticker.prevLastSize = ticker.lastSize
             ticker.last = price
             ticker.lastSize = size
-
-            # self._logger.error(f"[{tickType=}] SET {ticker.prevLast=} = {ticker.last=}; {ticker.prevLastSize=} = {ticker.lastSize=}")
-            # self._logger.error(f"[{tickType=}] updating last price size: {price=} {size=} :: AFTER {ticker=}")
         else:
             assert tickType in PRICE_TICK_MAP, (
                 f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
@@ -1297,10 +1289,6 @@ class Wrapper:
             return
 
         price = self.defaultEmptyPrice
-
-        # self._logger.error(
-        #     f"tickSize with tickType {tickType}: " f"processing value: {size!r}"
-        # )
 
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tickType in {0, 69}:

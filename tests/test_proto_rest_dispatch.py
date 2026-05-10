@@ -310,24 +310,26 @@ def test_start_api_uses_protobuf_at_gate():
 def test_request_fa_uses_protobuf_at_gate():
     ib = _ibAtVersion(211)
     sent = _captureSend(ib)
-    ib.client.requestFA(2)
+    # faData=1 (Groups). faData=2 (Profiles) is desupported at server >=177
+    # per MIN_SERVER_VER_FA_PROFILE_DESUPPORT and is rejected client-side.
+    ib.client.requestFA(1)
     canonical, body = _decodeProtoFrame(sent[0])
     assert canonical == REQ_FA
     proto = FARequest_pb2.FARequest()
     proto.ParseFromString(body)
-    assert proto.faDataType == 2
+    assert proto.faDataType == 1
 
 
 def test_replace_fa_uses_protobuf_at_gate():
     ib = _ibAtVersion(211)
     sent = _captureSend(ib)
-    ib.client.replaceFA(7, 2, "<xml/>")
+    ib.client.replaceFA(7, 1, "<xml/>")
     canonical, body = _decodeProtoFrame(sent[0])
     assert canonical == REPLACE_FA
     proto = FAReplace_pb2.FAReplace()
     proto.ParseFromString(body)
     assert proto.reqId == 7
-    assert proto.faDataType == 2
+    assert proto.faDataType == 1
     assert proto.xml == "<xml/>"
 
 
