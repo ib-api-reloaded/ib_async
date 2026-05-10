@@ -3102,9 +3102,7 @@ def test_safe_decimal_rejects_every_ibkr_unset_sentinel_string():
         "1.7976931348623157e+308",
         "1.7976931348623157e308",
     ):
-        assert safe_decimal(variant) is None, (
-            f"variant {variant!r} must coerce to None"
-        )
+        assert safe_decimal(variant) is None, f"variant {variant!r} must coerce to None"
 
 
 def test_safe_decimal_rejects_infinity_strings_for_decimal_field():
@@ -3509,3 +3507,936 @@ def test_scanner_parameters_xml_passes_through_without_truncation():
     out = createScannerParametersXml(proto)
     assert out == big
     assert len(out) > 100000
+
+
+# ---------------------------------------------------------------------------
+# Round-5 audit regressions
+# ---------------------------------------------------------------------------
+
+
+def test_proto_bond_contract_data_dispatches_to_bond_wrapper_method():
+    """BondContractData (msgId 18) must dispatch to
+    ``Wrapper.bondContractDetails`` — NOT to ``contractDetails``.
+
+    The base ``Wrapper`` aliases ``bondContractDetails = contractDetails``
+    so default behaviour is unchanged, but a subclass overriding the
+    bond callback alone must still see proto-arriving bond rows. The
+    binary path already routes msgId 18 to ``bondContractDetails`` via
+    its handler table; the proto path now matches.
+    """
+    ib = ibi.IB()
+
+    # Capture which wrapper method got the row.
+    bond_calls: list[tuple[int, str]] = []
+    plain_calls: list[tuple[int, str]] = []
+
+    original_bond = ib.wrapper.bondContractDetails
+    original_plain = ib.wrapper.contractDetails
+
+    def bond_spy(reqId, details):
+        bond_calls.append((reqId, details.contract.symbol if details.contract else ""))
+        return original_bond(reqId, details)
+
+    def plain_spy(reqId, details):
+        plain_calls.append((reqId, details.contract.symbol if details.contract else ""))
+        return original_plain(reqId, details)
+
+    # Monkey-patch the bound methods on the instance — overrides the
+    # alias chain so we can tell which dispatch site fired.
+    ib.wrapper.bondContractDetails = bond_spy  # type: ignore[method-assign]
+    ib.wrapper.contractDetails = plain_spy  # type: ignore[method-assign]
+
+    proto = ContractData_pb2.ContractData()
+    proto.reqId = 42
+    proto.contract.symbol = "TBOND"
+    proto.contract.secType = "BOND"
+    proto.contractDetails.marketName = "BOND"
+
+    # msgId 18 = BondContractData (proto-side).
+    ib.client.decoder.processProtoBuf(18, proto.SerializeToString())
+
+    assert bond_calls == [(42, "TBOND")]
+    assert plain_calls == []
+
+
+def test_proto_contract_data_dispatches_to_plain_wrapper_method():
+    """Sanity twin: msgId 10 (ContractData, non-bond) still routes to
+    ``Wrapper.contractDetails`` — only the BOND msgId 18 reroutes."""
+    ib = ibi.IB()
+
+    bond_calls: list[int] = []
+    plain_calls: list[int] = []
+
+    original_plain = ib.wrapper.contractDetails
+
+    def bond_spy(reqId, details):
+        bond_calls.append(reqId)
+
+    def plain_spy(reqId, details):
+        plain_calls.append(reqId)
+        return original_plain(reqId, details)
+
+    ib.wrapper.bondContractDetails = bond_spy  # type: ignore[method-assign]
+    ib.wrapper.contractDetails = plain_spy  # type: ignore[method-assign]
+
+    proto = ContractData_pb2.ContractData()
+    proto.reqId = 7
+    proto.contract.symbol = "AAPL"
+    proto.contract.secType = "STK"
+    proto.contractDetails.marketName = "NASDAQ"
+
+    # msgId 10 = ContractData (proto-side, non-bond).
+    ib.client.decoder.processProtoBuf(10, proto.SerializeToString())
+
+    assert plain_calls == [7]
+    assert bond_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Round-5 audit regressions — complex order-type wire encoding.
+# ---------------------------------------------------------------------------
+
+
+def test_binary_bond_contract_details_explicit_timezone_wins_at_gate_188():
+    """Gate 188: when the wire ships an explicit ``timeZoneId`` block AND
+    the legacy 3-part split-string in ``lastTradeDateOrContractMonth``,
+    the explicit field MUST win — mirrors IBKR's reference where the
+    explicit decode happens AFTER ``readLastTradeDate`` so the second
+    write wins. Our decoder reads the explicit block first then splits
+    the legacy string; without the gate guard the split would clobber
+    the freshly-decoded explicit value with a stale third component.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 188
+    ib.client.decoder.serverVersion = 188
+    seen: list[tuple] = []
+    ib.wrapper.bondContractDetails = lambda reqId, cd: seen.append((reqId, cd))
+
+    fields = _binary_bond_contract_details_fields(include_trading_hours=True)
+    # Replace lastTimes (slot 6) with a 3-part legacy string carrying
+    # an OLD timezone. The new explicit block ships ``US/Eastern``.
+    fields[6] = "20300515-09:30:00-Asia/Tokyo"
+    ib.client.decoder.bondContractDetails(fields)
+
+    assert len(seen) == 1
+    _, cd = seen[0]
+    # Explicit block wins — NOT the stale split[2].
+    assert cd.timeZoneId == "US/Eastern"
+    # Maturity + lastTradeTime still come from the split.
+    assert cd.maturity == "20300515"
+    assert cd.lastTradeTime == "09:30:00"
+
+
+def test_binary_bond_contract_details_pre_188_split_still_populates_timezone():
+    """Below gate 188 there is no explicit timezone block, so the
+    legacy 3-part split-string must still populate ``timeZoneId``.
+    Regression lock: the gate guard added to fix the post-188 clobber
+    must NOT also disable pre-188 split-derived population.
+    """
+    ib = ibi.IB()
+    ib.client._serverVersion = 187
+    ib.client.decoder.serverVersion = 187
+    seen: list[tuple] = []
+    ib.wrapper.bondContractDetails = lambda reqId, cd: seen.append((reqId, cd))
+
+    fields = _binary_bond_contract_details_fields(include_trading_hours=False)
+    fields[6] = "20300515-09:30:00-Asia/Tokyo"
+    ib.client.decoder.bondContractDetails(fields)
+
+    assert len(seen) == 1
+    _, cd = seen[0]
+    assert cd.maturity == "20300515"
+    assert cd.lastTradeTime == "09:30:00"
+    assert cd.timeZoneId == "Asia/Tokyo"
+
+
+def test_proto_price_condition_full_round_trip():
+    """``PriceCondition`` carries every ContractCondition + Operator
+    field — connector, isMore, conId, exch, price, triggerMethod —
+    onto the flat OrderCondition wire proto. Encode-then-decode must
+    reconstruct the exact subclass with every field intact.
+    """
+    from ib_async._pb import Order_pb2
+    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
+    from ib_async.order import PriceCondition
+
+    cond = PriceCondition(
+        conId=265598,
+        exch="SMART",
+        price=125.5,
+        triggerMethod=2,  # "Last"
+        isMore=False,
+    )
+    cond.Or()  # conjunction = "o"
+
+    protos = _createConditionProtos([cond])
+    assert len(protos) == 1
+    cp = protos[0]
+    assert cp.type == 1
+    assert cp.isConjunctionConnection is False  # Or
+    assert cp.isMore is False
+    assert cp.conId == 265598
+    assert cp.exchange == "SMART"
+    assert cp.price == 125.5
+    assert cp.triggerMethod == 2
+
+    # Round-trip through a parent Order proto so ``_decodeConditions``
+    # sees the same wire shape the server would deliver.
+    parent = Order_pb2.Order()
+    parent.conditions.append(cp)
+    decoded = _decodeConditions(parent)
+    assert len(decoded) == 1
+    out = decoded[0]
+    assert isinstance(out, PriceCondition)
+    assert out.conjunction == "o"
+    assert out.isMore is False
+    assert out.conId == 265598
+    assert out.exch == "SMART"
+    assert out.price == 125.5
+    assert out.triggerMethod == 2
+
+
+def test_proto_execution_condition_no_is_more_field():
+    """``ExecutionCondition`` is the only condition that does NOT
+    carry ``isMore`` — its dataclass omits the attribute, the wire
+    encoder must skip the optional field, and the decoder must
+    reconstruct the object without trying to set ``isMore`` on it.
+    """
+    from ib_async._pb import Order_pb2
+    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
+    from ib_async.order import ExecutionCondition
+
+    cond = ExecutionCondition(secType="STK", exch="NASDAQ", symbol="AAPL")
+    protos = _createConditionProtos([cond])
+    cp = protos[0]
+    assert cp.type == 5
+    # isMore must NOT be set on the wire proto for ExecutionCondition.
+    assert not cp.HasField("isMore")
+    assert cp.secType == "STK"
+    assert cp.exchange == "NASDAQ"
+    assert cp.symbol == "AAPL"
+
+    parent = Order_pb2.Order()
+    parent.conditions.append(cp)
+    decoded = _decodeConditions(parent)
+    assert isinstance(decoded[0], ExecutionCondition)
+    assert decoded[0].secType == "STK"
+    assert decoded[0].exch == "NASDAQ"
+    assert decoded[0].symbol == "AAPL"
+    # No isMore attribute pollution from the generic decode loop.
+    assert not hasattr(decoded[0], "isMore")
+
+
+def test_proto_volume_and_percent_change_conditions_round_trip():
+    """``VolumeCondition`` and ``PercentChangeCondition`` extend
+    ``ContractCondition`` — they carry conId + exch on top of the
+    operator-condition fields and a per-subclass scalar (volume /
+    changePercent). Both must round-trip cleanly.
+    """
+    from ib_async._pb import Order_pb2
+    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
+    from ib_async.order import PercentChangeCondition, VolumeCondition
+
+    vol = VolumeCondition(conId=11, exch="SMART", isMore=True, volume=100_000)
+    pct = PercentChangeCondition(
+        conId=22, exch="SMART", isMore=False, changePercent=2.5
+    )
+    protos = _createConditionProtos([vol, pct])
+    assert protos[0].type == 6 and protos[0].volume == 100_000
+    assert protos[1].type == 7 and protos[1].changePercent == 2.5
+
+    parent = Order_pb2.Order()
+    parent.conditions.extend(protos)
+    decoded = _decodeConditions(parent)
+    assert isinstance(decoded[0], VolumeCondition)
+    assert decoded[0].volume == 100_000
+    assert decoded[0].conId == 11
+    assert decoded[0].exch == "SMART"
+    assert decoded[0].isMore is True
+    assert isinstance(decoded[1], PercentChangeCondition)
+    assert decoded[1].changePercent == 2.5
+    assert decoded[1].conId == 22
+    assert decoded[1].isMore is False
+
+
+def test_proto_margin_and_time_conditions_round_trip():
+    """``MarginCondition`` (percent) and ``TimeCondition`` (time
+    string) extend only ``OperatorCondition`` — they carry isMore +
+    their value, no conId / exchange. Must round-trip to their exact
+    domain subclass.
+    """
+    from ib_async._pb import Order_pb2
+    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
+    from ib_async.order import MarginCondition, TimeCondition
+
+    margin = MarginCondition(isMore=True, percent=25)
+    timec = TimeCondition(isMore=False, time="20260101 09:30:00 US/Eastern")
+    protos = _createConditionProtos([margin, timec])
+    assert protos[0].type == 4 and protos[0].percent == 25
+    assert protos[1].type == 3 and protos[1].time == "20260101 09:30:00 US/Eastern"
+
+    parent = Order_pb2.Order()
+    parent.conditions.extend(protos)
+    decoded = _decodeConditions(parent)
+    assert isinstance(decoded[0], MarginCondition)
+    assert decoded[0].percent == 25
+    assert decoded[0].isMore is True
+    assert isinstance(decoded[1], TimeCondition)
+    assert decoded[1].time == "20260101 09:30:00 US/Eastern"
+    assert decoded[1].isMore is False
+
+
+def test_proto_hedge_param_decode_requires_hedge_type():
+    """Decoder pairing rule: ``hedgeParam`` is only consumed when a
+    matching ``hedgeType`` is present, mirroring IBKR's binary path
+    which gates the param read on a non-empty hedgeType. A
+    malformed wire frame with a stray hedgeParam (no hedgeType)
+    must NOT surface that param onto the domain object.
+    """
+    from ib_async._pb import Order_pb2
+    from ib_async._proto.orders import createOrder
+
+    proto = Order_pb2.Order()
+    proto.hedgeParam = "stale"  # No hedgeType set on the wire.
+    decoded = createOrder(proto)
+    # Decoder gates hedgeParam on the hedgeType being present.
+    assert decoded.hedgeType == ""
+    # hedgeParam must not survive without its pairing hedgeType.
+    assert decoded.hedgeParam != "stale"
+
+
+def test_proto_algo_params_paired_with_algo_strategy():
+    """``algoParams`` is meaningful only with a non-empty
+    ``algoStrategy``. The decoder must consume algoParams only when
+    algoStrategy is present — mirrors IBKR's binary path which
+    gates the params length read on a non-empty strategy.
+    """
+    from ib_async._pb import Order_pb2
+    from ib_async._proto.orders import createOrder
+
+    # algoStrategy missing, algoParams populated — decoder must not
+    # surface params.
+    proto = Order_pb2.Order()
+    proto.algoParams["foo"] = "bar"
+    decoded = createOrder(proto)
+    assert decoded.algoStrategy == ""
+    assert not decoded.algoParams
+
+
+def test_proto_combo_leg_full_field_set_round_trip():
+    """ComboLeg carries 8 fields — conId, ratio, action, exchange,
+    openClose, shortSaleSlot, designatedLocation, exemptCode. Plus
+    the parallel ``perLegPrice`` from the matching ``OrderComboLeg``.
+    All must round-trip on encode + decode.
+    """
+    from ib_async._proto.contracts import createComboLeg, createComboLegProto
+    from ib_async.contract import ComboLeg
+
+    leg = ComboLeg(
+        conId=12345,
+        ratio=2,
+        action="BUY",
+        exchange="SMART",
+        openClose=1,
+        shortSaleSlot=2,
+        designatedLocation="ARCA",
+        exemptCode=3,
+    )
+    proto = createComboLegProto(leg, perLegPrice=1.25)
+    # Verify EVERY field landed on the wire — domain spelling
+    # (``shortSaleSlot``) maps to wire spelling (``shortSalesSlot``).
+    assert proto.conId == 12345
+    assert proto.ratio == 2
+    assert proto.action == "BUY"
+    assert proto.exchange == "SMART"
+    assert proto.openClose == 1
+    assert proto.shortSalesSlot == 2
+    assert proto.designatedLocation == "ARCA"
+    assert proto.exemptCode == 3
+    assert proto.perLegPrice == 1.25
+
+    # Round-trip the contract-side leg back; perLegPrice rides on the
+    # ComboLeg proto but lives on a parallel ``OrderComboLeg`` on the
+    # domain side, so ``createComboLeg`` does not surface it.
+    rebuilt = createComboLeg(proto)
+    assert rebuilt.conId == 12345
+    assert rebuilt.ratio == 2
+    assert rebuilt.action == "BUY"
+    assert rebuilt.exchange == "SMART"
+    assert rebuilt.openClose == 1
+    assert rebuilt.shortSaleSlot == 2  # NOT shortSalesSlot
+    assert rebuilt.designatedLocation == "ARCA"
+    assert rebuilt.exemptCode == 3
+
+
+def test_proto_combo_leg_default_exempt_code_minus_one_not_written():
+    """``ComboLeg.exemptCode`` defaults to ``-1`` in the domain
+    dataclass — that sentinel means "use server default" and must
+    NOT round-trip as a real wire value. Encoder skips it; decoder
+    leaves the dataclass default in place when the wire is silent.
+    """
+    from ib_async._pb import ComboLeg_pb2
+    from ib_async._proto.contracts import createComboLeg, createComboLegProto
+    from ib_async.contract import ComboLeg
+
+    leg = ComboLeg(conId=7, ratio=1, action="BUY", exchange="SMART")
+    proto = createComboLegProto(leg)
+    # exemptCode default -1 must NOT land on the wire.
+    assert not proto.HasField("exemptCode")
+
+    # Empty proto round-trips back to default -1.
+    empty = ComboLeg_pb2.ComboLeg()
+    rebuilt = createComboLeg(empty)
+    assert rebuilt.exemptCode == -1
+
+
+def test_proto_scale_family_default_unset_skipped():
+    """Scale family (10 fields) must use UNSET-sentinel guards — the
+    UNSET_DOUBLE / UNSET_INTEGER defaults must NOT land on the wire
+    when the user has not opted into a scale order.
+    """
+    from ib_async._proto.orders import createOrderProto
+    from ib_async.order import LimitOrder
+
+    order = LimitOrder("BUY", 1, 50.0)
+    proto = createOrderProto(order)
+    assert not proto.HasField("scaleInitLevelSize")
+    assert not proto.HasField("scaleSubsLevelSize")
+    assert not proto.HasField("scalePriceIncrement")
+    assert not proto.HasField("scalePriceAdjustValue")
+    assert not proto.HasField("scalePriceAdjustInterval")
+    assert not proto.HasField("scaleProfitOffset")
+    assert not proto.HasField("scaleInitPosition")
+    assert not proto.HasField("scaleInitFillQty")
+    # scaleAutoReset and scaleRandomPercent are bools — default False
+    # is falsy and must be skipped.
+    assert not proto.HasField("scaleAutoReset")
+    assert not proto.HasField("scaleRandomPercent")
+
+
+def test_proto_what_if_flag_round_trip():
+    """``Order.whatIf`` is a bool — must round-trip True intact.
+    Skipped on encode when False (default) since IBKR's reference
+    encoder uses truthy semantics for the bool.
+    """
+    from ib_async._proto.orders import createOrder, createOrderProto
+    from ib_async.order import LimitOrder
+
+    order = LimitOrder("BUY", 1, 50.0)
+    order.whatIf = True
+    proto = createOrderProto(order)
+    assert proto.HasField("whatIf") and proto.whatIf is True
+
+    decoded = createOrder(proto)
+    assert decoded.whatIf is True
+
+    # Default False must NOT land on the wire.
+    order2 = LimitOrder("BUY", 1, 50.0)
+    proto2 = createOrderProto(order2)
+    assert not proto2.HasField("whatIf")
+
+
+def test_proto_smart_combo_routing_params_round_trip():
+    """``smartComboRoutingParams`` is a TagValue list — only meaningful
+    on BAG-secType orders. The proto encoder writes them onto the
+    Order map; round-trip must preserve all entries.
+    """
+    from ib_async._proto.orders import createOrder, createOrderProto
+    from ib_async.objects import TagValue
+    from ib_async.order import LimitOrder
+
+    order = LimitOrder("BUY", 1, 50.0)
+    order.smartComboRoutingParams = [
+        TagValue(tag="NonGuaranteed", value="1"),
+        TagValue(tag="LeavesDeltaAfterSubmit", value="100"),
+    ]
+    proto = createOrderProto(order)
+    assert dict(proto.smartComboRoutingParams) == {
+        "NonGuaranteed": "1",
+        "LeavesDeltaAfterSubmit": "100",
+    }
+
+    decoded = createOrder(proto)
+    pairs = {tv.tag: tv.value for tv in decoded.smartComboRoutingParams}
+    assert pairs == {"NonGuaranteed": "1", "LeavesDeltaAfterSubmit": "100"}
+
+
+def test_proto_pegged_to_benchmark_family_round_trip():
+    """The peg-to-benchmark family — ``referenceContractId``,
+    ``peggedChangeAmount``, ``referenceChangeAmount``,
+    ``referenceExchangeId``, ``isPeggedChangeAmountDecrease`` —
+    must round-trip through the proto encoder + decoder for a
+    PEG BENCH order.
+    """
+    from ib_async._proto.orders import createOrder, createOrderProto
+    from ib_async.order import LimitOrder
+
+    order = LimitOrder("BUY", 1, 50.0)
+    order.orderType = "PEG BENCH"
+    order.referenceContractId = 999
+    order.peggedChangeAmount = 1.25
+    order.referenceChangeAmount = 0.5
+    order.referenceExchangeId = "SMART"
+    order.isPeggedChangeAmountDecrease = True
+    proto = createOrderProto(order)
+    assert proto.referenceContractId == 999
+    assert proto.peggedChangeAmount == 1.25
+    assert proto.referenceChangeAmount == 0.5
+    assert proto.referenceExchangeId == "SMART"
+    assert proto.isPeggedChangeAmountDecrease is True
+
+    decoded = createOrder(proto)
+    assert decoded.referenceContractId == 999
+    assert decoded.peggedChangeAmount == 1.25
+    assert decoded.referenceChangeAmount == 0.5
+    assert decoded.referenceExchangeId == "SMART"
+    assert decoded.isPeggedChangeAmountDecrease is True
+
+
+def test_proto_adjusted_order_family_round_trip():
+    """The adjusted-order family — ``adjustedOrderType``,
+    ``triggerPrice``, ``lmtPriceOffset``, ``adjustedStopPrice``,
+    ``adjustedStopLimitPrice``, ``adjustedTrailingAmount``,
+    ``adjustableTrailingUnit`` — must round-trip every field that
+    travels via the proto encoder + decoder. ``Decimal | None`` fields
+    must come back as Decimal.
+    """
+    from decimal import Decimal as D
+
+    from ib_async._proto.orders import createOrder, createOrderProto
+    from ib_async.order import LimitOrder
+
+    order = LimitOrder("BUY", 1, 50.0)
+    order.adjustedOrderType = "STP"
+    order.triggerPrice = D("99.5")
+    order.lmtPriceOffset = D("0.25")
+    order.adjustedStopPrice = D("95.0")
+    order.adjustedStopLimitPrice = D("94.5")
+    order.adjustedTrailingAmount = D("1.5")
+    order.adjustableTrailingUnit = 1
+    proto = createOrderProto(order)
+    assert proto.adjustedOrderType == "STP"
+    assert proto.triggerPrice == 99.5
+    assert proto.lmtPriceOffset == 0.25
+    assert proto.adjustedStopPrice == 95.0
+    assert proto.adjustedStopLimitPrice == 94.5
+    assert proto.adjustedTrailingAmount == 1.5
+    assert proto.adjustableTrailingUnit == 1
+
+    decoded = createOrder(proto)
+    assert decoded.adjustedOrderType == "STP"
+    assert decoded.triggerPrice == D("99.5")
+    assert decoded.lmtPriceOffset == D("0.25")
+    assert decoded.adjustedStopPrice == D("95.0")
+    assert decoded.adjustedStopLimitPrice == D("94.5")
+    assert decoded.adjustedTrailingAmount == D("1.5")
+    assert decoded.adjustableTrailingUnit == 1
+
+# ---------------------------------------------------------------------------
+# Round-5: Subscription / Ticker lifecycle regressions
+# ---------------------------------------------------------------------------
+
+
+def test_late_tick_after_cancel_is_silent_for_every_tick_handler(caplog):
+    """Every tick handler that looks up a Ticker by reqId must be silent
+    when the reqId is unknown — TWS keeps emitting a few ticks for ~1-2
+    seconds after :meth:`IB.cancelMktData` / ``cancelTickByTickData``
+    lands, and a noisy ``error`` line per stray tick floods user logs.
+    The handlers downgrade these to ``debug`` so a real reqId mismatch
+    is still surfaced under verbose logging without spamming default
+    output.
+    """
+    from ib_async.objects import TickAttribBidAsk, TickAttribLast
+
+    ib = ibi.IB()
+    unknown = 99999  # never registered
+
+    with caplog.at_level(logging.ERROR, logger="ib_async.wrapper.Wrapper"):
+        ib.wrapper.priceSizeTick(unknown, 1, 100.0, 50)
+        ib.wrapper.tickSize(unknown, 0, 50)
+        ib.wrapper.tickByTickAllLast(
+            unknown, 1, 0, 100.0, 50, TickAttribLast(), "", ""
+        )
+        ib.wrapper.tickByTickBidAsk(
+            unknown, 0, 100.0, 100.5, 50, 50, TickAttribBidAsk()
+        )
+        ib.wrapper.tickByTickMidPoint(unknown, 0, 100.25)
+        ib.wrapper.tickGeneric(unknown, 49, 0)  # halted, in NO_CLAMP
+        ib.wrapper.tickString(unknown, 32, "X")
+        ib.wrapper.tickReqParams(unknown, 0.01, "", 0)
+        ib.wrapper.marketDataType(unknown, 1)
+        ib.wrapper.updateMktDepthL2(unknown, 0, "", 0, 0, 100.0, 10)
+        ib.wrapper.tickOptionComputation(
+            unknown, 10, 0, 0.2, 0.5, 1.0, 0.0, 0.05, 0.1, -0.05, 100.0
+        )
+
+    assert caplog.records == []
+
+
+def test_subscription_close_idempotent_across_tick_kinds():
+    """Closing a Subscription twice (e.g. user double-cancel + reconnect
+    teardown) must not raise and must not re-issue the cancel."""
+    from unittest.mock import MagicMock
+
+    from ib_async._subscriptions import (
+        MktDataSub,
+        MktDepthSub,
+        TickByTickSub,
+    )
+
+    ib = ibi.IB()
+    ib.client = MagicMock()
+    ib.client.isConnected.return_value = True
+
+    contract = ibi.Stock("ABC", "SMART", "USD")
+    contract.conId = 555
+
+    ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
+    md = MktDataSub(reqId=100, contract=contract, ticker=ticker)
+    tbt = TickByTickSub(
+        reqId=101, contract=contract, ticker=ticker, tickType="Last"
+    )
+    depth = MktDepthSub(reqId=102, contract=contract, ticker=ticker)
+
+    for sub in (md, tbt, depth):
+        ib.wrapper.subscriptions.add(sub)
+
+    md.close()
+    md.close()  # double-close is a no-op
+    tbt.close()
+    tbt.close()
+    depth.close()
+    depth.close()
+
+    assert ib.client.cancelMktData.call_count == 1
+    assert ib.client.cancelTickByTickData.call_count == 1
+    assert ib.client.cancelMktDepth.call_count == 1
+    assert len(ib.wrapper.subscriptions) == 0
+
+
+def test_concurrent_market_data_subscriptions_only_one_cancel_per_kind():
+    """Two distinct kinds (mktData + tickByTick "Last") on the same
+    contract get distinct reqIds and the registry tracks them
+    independently. Cancelling one must not cancel the other."""
+    from unittest.mock import MagicMock
+
+    from ib_async._subscriptions import MktDataSub, TickByTickSub
+
+    ib = ibi.IB()
+    ib.client = MagicMock()
+
+    contract = ibi.Stock("XYZ", "SMART", "USD")
+    contract.conId = 777
+
+    ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
+    md = MktDataSub(reqId=200, contract=contract, ticker=ticker)
+    tbt = TickByTickSub(
+        reqId=201, contract=contract, ticker=ticker, tickType="Last"
+    )
+    ib.wrapper.subscriptions.add(md)
+    ib.wrapper.subscriptions.add(tbt)
+
+    md.close()
+
+    assert ib.client.cancelMktData.call_count == 1
+    assert ib.client.cancelTickByTickData.call_count == 0
+    assert ib.wrapper.subscriptions.get_sub(200) is None
+    assert ib.wrapper.subscriptions.get_sub(201) is tbt
+    # Shared Ticker still routes ticks for the surviving subscription.
+    assert ib.wrapper.subscriptions.get_ticker(201) is ticker
+
+
+def test_market_depth_l2_delete_out_of_bounds_is_silent_no_op():
+    """``updateMktDepthL2`` operation 2 (delete) at a position not in
+    the dict must be a silent no-op — TWS occasionally sends a delete
+    for a level that was already removed by a prior reset event."""
+    from ib_async._subscriptions import MktDepthSub
+
+    ib = ibi.IB()
+    contract = ibi.Stock("ABC", "SMART", "USD")
+    contract.conId = 888
+
+    ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
+    sub = MktDepthSub(reqId=300, contract=contract, ticker=ticker)
+    ib.wrapper.subscriptions.add(sub)
+
+    # Insert level 0 on bid side, then try to delete level 5 (never set).
+    ib.wrapper.updateMktDepthL2(300, 0, "", 0, 1, 100.0, 10)
+    ib.wrapper.updateMktDepthL2(300, 5, "", 2, 1, 0.0, 0)
+
+    assert len(ticker.domBids) == 1
+    assert ticker.domBids[0].price == 100.0
+    # Delete-of-existing should still work after the no-op delete.
+    ib.wrapper.updateMktDepthL2(300, 0, "", 2, 1, 0.0, 0)
+    assert ticker.domBids == []
+
+
+def test_pnl_single_subscription_mutates_in_place_for_user_references():
+    """A user reference to ``PnLSingleSub.pnlSingle`` must observe live
+    updates — the ``pnlSingle`` callback updates the existing object in
+    place rather than replacing it."""
+    from decimal import Decimal as D
+
+    from ib_async._subscriptions import PnLSingleSub
+    from ib_async.objects import PnLSingle
+
+    ib = ibi.IB()
+    pnlSingle = PnLSingle(account="DU1", modelCode="", conId=42)
+    sub = PnLSingleSub(
+        reqId=400,
+        contract=ibi.contract.Contract(),
+        pnlSingle=pnlSingle,
+        account="DU1",
+        modelCode="",
+        conId=42,
+    )
+    ib.wrapper.subscriptions.add(sub)
+
+    user_held = sub.pnlSingle  # user reference
+
+    ib.wrapper.pnlSingle(400, D("100"), 1.0, 2.0, 3.0, 1234.5)
+
+    assert user_held is pnlSingle
+    assert user_held.position == D("100")
+    assert user_held.dailyPnL == 1.0
+    assert user_held.unrealizedPnL == 2.0
+    assert user_held.realizedPnL == 3.0
+    assert user_held.value == 1234.5
+
+
+def test_singleton_request_third_caller_attaches_after_two_sharers():
+    """Single-flight refcount tracks every attached caller, not just
+    the first attach. A third caller attaches to the same future."""
+    from ib_async._requests import SingletonKey
+
+    ib = ibi.IB()
+    a, isNewA = ib.wrapper.requests.open(
+        SingletonKey("openOrders"), single_flight=True
+    )
+    b, isNewB = ib.wrapper.requests.open(
+        SingletonKey("openOrders"), single_flight=True
+    )
+    c, isNewC = ib.wrapper.requests.open(
+        SingletonKey("openOrders"), single_flight=True
+    )
+
+    assert isNewA is True
+    assert isNewB is False
+    assert isNewC is False
+    assert a is b is c
+    assert a.refcount == 3
+
+
+def test_ticker_post_init_resets_every_float_field_to_defaults_unset():
+    """Round 4 added six odd-lot float fields. ``__post_init__`` must
+    reset every float-typed Ticker field to ``defaults.unset`` so a
+    user with a non-NaN ``IBDefaults.unset`` (e.g. ``-1.0``) sees
+    consistent unset semantics across the entire Ticker shape."""
+    from ib_async.objects import IBDefaults
+    from ib_async.ticker import Ticker
+
+    sentinel = -1.0
+    defaults = IBDefaults(unset=sentinel)
+    contract = ibi.Stock("ABC", "SMART", "USD")
+    contract.conId = 1
+    ticker = Ticker(contract=contract, defaults=defaults)
+
+    # Spot-check the six fields that were added in round 4 plus a few
+    # baseline fields, to lock the post_init coverage in place.
+    for field_name in (
+        "oddLotBid",
+        "oddLotAsk",
+        "oddLotBidSize",
+        "oddLotAskSize",
+        "bid",
+        "ask",
+        "last",
+        "volume",
+        "creditmanMarkPrice",
+        "etfNavBid",
+    ):
+        assert getattr(ticker, field_name) == sentinel, field_name
+
+
+def test_late_data_after_set_result_does_not_corrupt_user_container():
+    """A stray data row arriving after ``set_result`` must not append
+    to the now-resolved future's container — the registry pop guards
+    the accumulator from late writes."""
+    from ib_async._requests import ReqIdKey
+    from ib_async.objects import BarData
+
+    ib = ibi.IB()
+    req, _ = ib.wrapper.requests.open(ReqIdKey(500))
+    container = req.container
+    bar1 = BarData(date="20251020 15:00:00", open=1, high=2, low=0, close=1, volume=10)
+    ib.wrapper.historicalData(500, bar1)
+
+    ib.wrapper.historicalDataEnd(500, "", "")
+    snapshot_len = len(container)
+
+    # Stray late bar — must NOT mutate the user-held container.
+    bar2 = BarData(date="20251020 15:01:00", open=1, high=2, low=0, close=1, volume=20)
+    ib.wrapper.historicalData(500, bar2)
+
+    assert len(container) == snapshot_len
+    assert ReqIdKey(500) not in ib.wrapper.requests
+
+
+def test_disconnect_during_callback_reentry_does_not_raise():
+    """A user callback during ``connectionClosed`` event handling that
+    mutates ``self.trades`` must not trip
+    ``RuntimeError: dictionary changed size during iteration`` — the
+    handler iterates over a snapshot of the trades dict."""
+    from ib_async.order import Order, OrderStatus, Trade
+
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+
+    def add_trade_during_status_emit(t):
+        # User code mutating ``self.trades`` during the iteration —
+        # historically a RuntimeError.
+        if len(ib.wrapper.trades) < 3:
+            new_order = Order(orderId=len(ib.wrapper.trades) + 100, clientId=0)
+            new_contract = ibi.Stock("XYZ", "SMART", "USD")
+            new_contract.conId = 99
+            new_trade = Trade(
+                new_contract,
+                new_order,
+                OrderStatus(orderId=new_order.orderId, status=OrderStatus.Submitted),
+            )
+            ib.wrapper.trades[(0, new_order.orderId)] = new_trade
+
+    contract = ibi.Stock("ABC", "SMART", "USD")
+    contract.conId = 1
+    order = Order(orderId=1, clientId=0)
+    trade = Trade(
+        contract,
+        order,
+        OrderStatus(orderId=1, status=OrderStatus.Submitted),
+    )
+    trade.statusEvent += add_trade_during_status_emit
+    ib.wrapper.trades[(0, 1)] = trade
+
+    # Must not raise.
+    ib.wrapper.connectionClosed()
+
+
+# ---------------------------------------------------------------------------
+# Round 5 audit: rare message handlers + raw-proto wrapper-surface coverage
+# ---------------------------------------------------------------------------
+
+
+def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
+    """``_PROTO_MSG_HANDLERS`` must mirror every msgId in IBKR's
+    reference ``Decoder.msgId2handleInfoProtoBuf`` map.
+
+    IBKR's set of canonical proto-encoded message ids is fixed by the
+    server protocol — adding a new one requires a server upgrade. Locking
+    the set here means any future drift in their map (or accidental
+    deletion of one of ours) trips the regression instead of silently
+    debug-dropping the new wire frame.
+    """
+    from ib_async.decoder import _PROTO_MSG_HANDLERS, _initProtoMsgHandlers
+
+    _initProtoMsgHandlers()
+    ours = set(_PROTO_MSG_HANDLERS.keys())
+
+    # Canonical ``IN`` ids from ibapi/decoder.py:msgId2handleInfoProtoBuf
+    # (server-protocol contract — see ibapi/message.py for the names).
+    ibkrCanonicalProtoIds = {
+        # orders / executions
+        3, 4, 5, 11, 53, 55, 100, 101, 102,
+        # contracts
+        10, 18, 52,
+        # ticks + market data
+        1, 2, 12, 13, 21, 45, 46, 57, 58, 80, 81,
+        # accounts / positions
+        6, 7, 8, 15, 54, 61, 62, 63, 64, 71, 72, 73, 74,
+        # historical
+        17, 50, 88, 89, 90, 96, 97, 98, 99, 106, 108,
+        # news + scanner / fundamentals / pnl
+        14, 19, 20, 51, 83, 84, 85, 86, 87, 94, 95, 104, 105,
+        # REST / FA / soft-dollar / market-rule / smart-components / etc
+        9, 16, 49, 75, 76, 77, 78, 79, 82, 93, 103, 107, 109,
+        # commission + market-data reroutes
+        59, 91, 92,
+        # verify / display-group / config
+        65, 66, 67, 68, 110, 111,
+    }
+    assert ours == ibkrCanonicalProtoIds, (
+        f"missing: {sorted(ibkrCanonicalProtoIds - ours)}, "
+        f"extra: {sorted(ours - ibkrCanonicalProtoIds)}"
+    )
+
+
+def test_tick_efp_binary_handler_reads_all_nine_fields():
+    """``tickEFP`` (msgId 47) wire format carries 9 payload fields after
+    msgId+version: reqId, tickType, basisPoints, formattedBasisPoints,
+    totalDividends, holdDays, futureLastTradeDate, dividendImpact,
+    dividendsToLastTradeDate. The binary dispatch must forward all
+    nine to ``Wrapper.tickEFP`` — dropping any of them silently truncates
+    EFP ticks (used for SSF / index futures).
+
+    ``tickEFP`` is binary-only; IBKR's ``msgId2handleInfoProtoBuf`` does
+    not include it, so no proto path needs cross-checking.
+    """
+    ib = ibi.IB()
+    captured: list[tuple] = []
+    ib.wrapper.tickEFP = lambda *args: captured.append(args)  # type: ignore[method-assign]
+
+    # ``Decoder`` caches the bound wrapper method at construction time
+    # (one ``getattr`` per ``wrap(...)`` call) so we rebuild the handler
+    # table after stubbing the wrapper method, mirroring what subclass
+    # users would do at startup.
+    from ib_async.decoder import Decoder
+
+    ib.client.decoder = Decoder(ib.wrapper, ib.client.serverVersion or 0)
+
+    # msgId, version, then the 9 EFP fields. ``Decoder.interpret`` is fed
+    # post-split string fields (the wire ``\0``-split happens upstream).
+    fields = [
+        "47",  # msgId
+        "1",  # version
+        "42",  # reqId
+        "38",  # tickType (BID_EFP_COMPUTATION)
+        "12.5",  # basisPoints
+        "+12.50",  # formattedBasisPoints
+        "100.25",  # totalDividends (per IBKR docs: implied future price)
+        "30",  # holdDays
+        "20251220",  # futureLastTradeDate
+        "0.75",  # dividendImpact
+        "2.50",  # dividendsToLastTradeDate
+    ]
+    ib.client.decoder.interpret(fields)
+
+    assert captured == [
+        (42, 38, 12.5, "+12.50", 100.25, 30, "20251220", 0.75, 2.50)
+    ], "tickEFP must pass all nine fields through unchanged"
+
+
+def test_proto_dispatch_does_not_invoke_raw_proto_wrapper_hooks_we_do_not_expose():
+    """Locks current behaviour: for the ~78 message families where IBKR
+    invokes a ``Wrapper.xxxProtoBuf(proto)`` hook BEFORE the decoded
+    callback, we currently invoke only the decoded callback — the raw
+    hook is intentionally absent. A future change exposing the full
+    raw-proto callback surface should update this regression first.
+
+    The two raw-proto hooks we DO expose
+    (``configResponseProtoBuf`` / ``updateConfigResponseProtoBuf``) are
+    exempt because their messages carry nested oneofs with no flat
+    domain equivalent.
+    """
+    ib = ibi.IB()
+
+    # Sentinel attribute presence: today these hooks are absent. If a
+    # future PR begins exposing the full raw-proto surface, update this
+    # locked-list rather than silently shipping new public API.
+    assert not hasattr(ib.wrapper, "tickPriceProtoBuf")
+    assert not hasattr(ib.wrapper, "orderStatusProtoBuf")
+    assert not hasattr(ib.wrapper, "commissionAndFeesReportProtoBuf")
+    assert not hasattr(ib.wrapper, "historicalDataProtoBuf")
+    assert not hasattr(ib.wrapper, "tickByTickDataProtoBuf")
+
+    # The two we DO expose are still present (regression for round 2).
+    assert hasattr(ib.wrapper, "configResponseProtoBuf")
+    assert hasattr(ib.wrapper, "updateConfigResponseProtoBuf")

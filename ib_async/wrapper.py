@@ -1185,7 +1185,12 @@ class Wrapper:
         # for backwards compat with callers that pre-date v3.0.
         ticker = self._get_ticker(reqId)
         if not ticker:
-            self._logger.error(f"priceSizeTick: Unknown reqId: {reqId}")
+            # Stray tick after :meth:`IB.cancelMktData` is normal — TWS
+            # still emits a handful of ticks for ~1-2 seconds after the
+            # cancel lands. Log at debug so a real reqId mismatch is
+            # still surfaced under verbose logging without spamming
+            # default-level output.
+            self._logger.debug(f"priceSizeTick: Unknown reqId: {reqId}")
             return
 
         # self._logger.error(f"WHAT R U DOING: {tickType=} {price=} {size=}")
@@ -1256,7 +1261,8 @@ class Wrapper:
     def tickSize(self, reqId: int, tickType: int, size: float):
         ticker = self._get_ticker(reqId)
         if not ticker:
-            self._logger.error(f"tickSize: Unknown reqId: {reqId}")
+            # Stray size tick after cancel; see :meth:`priceSizeTick`.
+            self._logger.debug(f"tickSize: Unknown reqId: {reqId}")
             return
 
         price = self.defaultEmptyPrice
@@ -1326,7 +1332,8 @@ class Wrapper:
     ):
         ticker = self._get_ticker(reqId)
         if not ticker:
-            self._logger.error(f"tickByTickAllLast: Unknown reqId: {reqId}")
+            # Stray tick after :meth:`IB.cancelTickByTickData`.
+            self._logger.debug(f"tickByTickAllLast: Unknown reqId: {reqId}")
             return
 
         if price == -1 and size == 0:
@@ -1363,7 +1370,8 @@ class Wrapper:
     ):
         ticker = self._get_ticker(reqId)
         if not ticker:
-            self._logger.error(f"tickByTickBidAsk: Unknown reqId: {reqId}")
+            # Stray tick after :meth:`IB.cancelTickByTickData`.
+            self._logger.debug(f"tickByTickBidAsk: Unknown reqId: {reqId}")
             return
 
         if bidPrice != ticker.bid:
@@ -1392,7 +1400,8 @@ class Wrapper:
     def tickByTickMidPoint(self, reqId: int, time: int, midPoint: float):
         ticker = self._get_ticker(reqId)
         if not ticker:
-            self._logger.error(f"tickByTickMidPoint: Unknown reqId: {reqId}")
+            # Stray tick after :meth:`IB.cancelTickByTickData`.
+            self._logger.debug(f"tickByTickMidPoint: Unknown reqId: {reqId}")
             return
 
         tick = TickByTickMidPoint(self.lastTime, midPoint)
@@ -1621,7 +1630,10 @@ class Wrapper:
             # reply from calculateImpliedVolatility or calculateOptionPrice
             self.requests.set_result(ReqIdKey(reqId), comp)
         else:
-            self._logger.error(f"tickOptionComputation: Unknown reqId: {reqId}")
+            # Neither a live mktData ticker nor an in-flight calc request.
+            # Most often a stray late tick after :meth:`IB.cancelMktData`;
+            # debug-level keeps the cancel race quiet.
+            self._logger.debug(f"tickOptionComputation: Unknown reqId: {reqId}")
 
     def deltaNeutralValidation(self, reqId: int, dnc: DeltaNeutralContract):
         pass
