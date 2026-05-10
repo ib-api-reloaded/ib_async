@@ -359,6 +359,40 @@ def test_contract_details_splits_last_trade_date_for_bond():
     assert details.timeZoneId == "US/Eastern"
 
 
+def test_open_order_missing_contract_drops_silently():
+    """OpenOrder wire frame with no ``contract`` field must NOT
+    deliver a half-formed openOrder to user code. IBKR's reference
+    returns silently in this case (decoder.py:406-418); we now do
+    the same. Prior behavior built an empty Contract()/Order() and
+    polluted the trade registry.
+    """
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+
+    proto = OpenOrder_pb2.OpenOrder()
+    proto.orderId = 999
+    # No contract / order / orderState set.
+    ib.client.decoder.processProtoBuf(5, proto.SerializeToString())
+
+    # No trade landed in the registry.
+    assert (0, 999) not in ib.wrapper.trades
+
+
+def test_open_order_missing_order_drops_silently():
+    """Same gate: missing ``order`` field also drops."""
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+
+    proto = OpenOrder_pb2.OpenOrder()
+    proto.orderId = 999
+    proto.contract.symbol = "AAPL"
+    proto.contract.secType = "STK"
+    # No order / orderState.
+    ib.client.decoder.processProtoBuf(5, proto.SerializeToString())
+
+    assert (0, 999) not in ib.wrapper.trades
+
+
 def test_contract_details_split_skipped_when_field_empty():
     """No split when wire ``lastTradeDateOrContractMonth`` is empty —
     domain fields stay at their defaults rather than crashing on a

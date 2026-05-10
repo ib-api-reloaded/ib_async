@@ -543,6 +543,17 @@ class Decoder:
         )
 
     def _protoOpenOrder(self, proto: Any) -> None:
+        # An OpenOrder frame missing any of contract / order / orderState
+        # is malformed — the binary path delivers an empty-fielded openOrder
+        # to user code in that case, which can poison the trade registry
+        # with a half-formed Order. Match IBKR's reference behaviour and
+        # drop the frame silently.
+        if not (
+            proto.HasField("contract")
+            and proto.HasField("order")
+            and proto.HasField("orderState")
+        ):
+            return
         from ._proto.orders import createOpenOrder
 
         orderId, contract, order, state = createOpenOrder(proto)
@@ -552,18 +563,18 @@ class Decoder:
         self.wrapper.openOrderEnd()
 
     def _protoCompletedOrder(self, proto: Any) -> None:
+        if not (
+            proto.HasField("contract")
+            and proto.HasField("order")
+            and proto.HasField("orderState")
+        ):
+            return
         from ._proto.contracts import createContract
         from ._proto.orders import createOrder, createOrderState
 
-        contract = (
-            createContract(proto.contract) if proto.HasField("contract") else Contract()
-        )
-        order = createOrder(proto.order) if proto.HasField("order") else Order()
-        state = (
-            createOrderState(proto.orderState)
-            if proto.HasField("orderState")
-            else OrderState()
-        )
+        contract = createContract(proto.contract)
+        order = createOrder(proto.order)
+        state = createOrderState(proto.orderState)
         self.wrapper.completedOrder(contract, order, state)
 
     def _protoCompletedOrdersEnd(self, proto: Any) -> None:
