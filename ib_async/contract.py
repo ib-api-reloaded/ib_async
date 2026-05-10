@@ -87,6 +87,7 @@ class Contract:
     conId: int = 0
     symbol: str = ""
     lastTradeDateOrContractMonth: str = ""
+    lastTradeDate: str = ""
     strike: float = 0.0
     right: str = ""
     multiplier: str = ""
