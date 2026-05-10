@@ -47,6 +47,7 @@ from ..order import (
     ExecutionCondition,
     MarginCondition,
     Order,
+    OrderAllocation,
     OrderComboLeg,
     OrderCondition,
     OrderState,
@@ -1050,15 +1051,42 @@ def createOrderStatus(proto: OrderStatus_pb2.OrderStatus) -> OrderStatus:
 # --- OrderState ----------------------------------------------------------
 
 
+def _decodeOrderAllocations(proto: OrderState_pb2.OrderState) -> list[OrderAllocation]:
+    """Decode the repeated ``orderAllocations`` sub-messages on an
+    OrderState into a list of frozen domain ``OrderAllocation`` records.
+    Mirrors IBKR's ``decodeOrderAllocations``; absent / empty repeated
+    field returns ``[]``.
+    """
+    out: list[OrderAllocation] = []
+    for a in proto.orderAllocations:
+        out.append(
+            OrderAllocation(
+                account=a.account if a.HasField("account") else "",
+                position=safe_decimal(a.position) if a.HasField("position") else None,
+                positionDesired=safe_decimal(a.positionDesired)
+                if a.HasField("positionDesired")
+                else None,
+                positionAfter=safe_decimal(a.positionAfter)
+                if a.HasField("positionAfter")
+                else None,
+                desiredAllocQty=safe_decimal(a.desiredAllocQty)
+                if a.HasField("desiredAllocQty")
+                else None,
+                allowedAllocQty=safe_decimal(a.allowedAllocQty)
+                if a.HasField("allowedAllocQty")
+                else None,
+                isMonetary=a.isMonetary if a.HasField("isMonetary") else False,
+            )
+        )
+    return out
+
+
 def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
     """Decode an ``OrderState`` proto.
 
     Handles the wire's ``commissionAndFees`` family rebadged from the
     binary path's ``commission`` (the wire field includes IBKR fees;
     the domain field name kept ``commission`` for backwards compat).
-    Margin / equity ``*OutsideRTH`` variants and ``orderAllocations``
-    are wire-only — our domain dataclass does not yet model them, so
-    those fields are intentionally dropped.
     """
     state = OrderState()
     if proto.HasField("status"):
@@ -1093,6 +1121,34 @@ def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
         state.commissionCurrency = proto.commissionAndFeesCurrency
     if proto.HasField("warningText"):
         state.warningText = proto.warningText
+    if proto.HasField("marginCurrency"):
+        state.marginCurrency = proto.marginCurrency
+    # OutsideRTH margin variants — strings on the wire matching the
+    # in-RTH shape; the binary path delivers them through the same
+    # str-coerced field family.
+    if proto.HasField("initMarginBeforeOutsideRTH"):
+        state.initMarginBeforeOutsideRTH = str(proto.initMarginBeforeOutsideRTH)
+    if proto.HasField("maintMarginBeforeOutsideRTH"):
+        state.maintMarginBeforeOutsideRTH = str(proto.maintMarginBeforeOutsideRTH)
+    if proto.HasField("equityWithLoanBeforeOutsideRTH"):
+        state.equityWithLoanBeforeOutsideRTH = str(proto.equityWithLoanBeforeOutsideRTH)
+    if proto.HasField("initMarginChangeOutsideRTH"):
+        state.initMarginChangeOutsideRTH = str(proto.initMarginChangeOutsideRTH)
+    if proto.HasField("maintMarginChangeOutsideRTH"):
+        state.maintMarginChangeOutsideRTH = str(proto.maintMarginChangeOutsideRTH)
+    if proto.HasField("equityWithLoanChangeOutsideRTH"):
+        state.equityWithLoanChangeOutsideRTH = str(proto.equityWithLoanChangeOutsideRTH)
+    if proto.HasField("initMarginAfterOutsideRTH"):
+        state.initMarginAfterOutsideRTH = str(proto.initMarginAfterOutsideRTH)
+    if proto.HasField("maintMarginAfterOutsideRTH"):
+        state.maintMarginAfterOutsideRTH = str(proto.maintMarginAfterOutsideRTH)
+    if proto.HasField("equityWithLoanAfterOutsideRTH"):
+        state.equityWithLoanAfterOutsideRTH = str(proto.equityWithLoanAfterOutsideRTH)
+    if proto.HasField("suggestedSize"):
+        state.suggestedSize = safe_decimal(proto.suggestedSize)
+    if proto.HasField("rejectReason"):
+        state.rejectReason = proto.rejectReason
+    state.orderAllocations = _decodeOrderAllocations(proto)
     if proto.HasField("completedTime"):
         state.completedTime = proto.completedTime
     if proto.HasField("completedStatus"):
@@ -1108,10 +1164,7 @@ def createExecution(proto: Execution_pb2.Execution) -> Execution:
 
     Wire fields ``isLiquidation`` (bool) and ``isPriceRevisionPending``
     (bool) map to domain ``liquidation`` (int) and
-    ``pendingPriceRevision`` (bool). New wire fields ``submitter`` and
-    ``optExerciseOrLapseType`` aren't on the domain dataclass yet and
-    are intentionally dropped here; user code reading those will
-    notice they're missing rather than getting silent garbage.
+    ``pendingPriceRevision`` (bool).
     """
     ex = Execution()
     if proto.HasField("orderId"):
@@ -1156,6 +1209,10 @@ def createExecution(proto: Execution_pb2.Execution) -> Execution:
         ex.lastLiquidity = proto.lastLiquidity
     if proto.HasField("isPriceRevisionPending"):
         ex.pendingPriceRevision = proto.isPriceRevisionPending
+    if proto.HasField("submitter"):
+        ex.submitter = proto.submitter
+    if proto.HasField("optExerciseOrLapseType"):
+        ex.optExerciseOrLapseType = proto.optExerciseOrLapseType
     return ex
 
 

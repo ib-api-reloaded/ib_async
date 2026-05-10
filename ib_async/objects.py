@@ -76,6 +76,8 @@ class Execution:
     modelCode: str = ""
     lastLiquidity: int = 0
     pendingPriceRevision: bool = False
+    submitter: str = ""
+    optExerciseOrLapseType: int = 0
 
 
 @dataclass
