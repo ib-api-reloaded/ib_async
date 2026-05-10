@@ -13,6 +13,7 @@ from typing import Any, Final
 from ._proto.safe import safe_decimal
 from ._server_versions import (
     MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
+    MIN_SERVER_VER_AGG_GROUP,
     MIN_SERVER_VER_BOND_ACCRUED_INTEREST,
     MIN_SERVER_VER_BOND_TRADING_HOURS,
     MIN_SERVER_VER_CME_TAGGING_FIELDS_IN_OPEN_ORDER,
@@ -25,9 +26,14 @@ from ._server_versions import (
     MIN_SERVER_VER_INCLUDE_OVERNIGHT,
     MIN_SERVER_VER_INELIGIBILITY_REASONS,
     MIN_SERVER_VER_LAST_TRADE_DATE,
+    MIN_SERVER_VER_MARKET_CAP_PRICE,
+    MIN_SERVER_VER_MARKET_RULES,
     MIN_SERVER_VER_PROFESSIONAL_CUSTOMER,
+    MIN_SERVER_VER_REAL_EXPIRATION_DATE,
+    MIN_SERVER_VER_STOCK_TYPE,
     MIN_SERVER_VER_SUBMITTER,
     MIN_SERVER_VER_SYNT_REALTIME_BARS,
+    MIN_SERVER_VER_UNDERLYING_INFO,
 )
 from .contract import (
     ComboLeg,
@@ -395,23 +401,7 @@ class Decoder:
         self.handlers = {
             1: self.priceSizeTick,
             2: self.wrap("tickSize", [int, int, float]),
-            3: self.wrap(
-                "orderStatus",
-                [
-                    int,
-                    str,
-                    Decimal,
-                    Decimal,
-                    Decimal,
-                    int,
-                    int,
-                    Decimal,
-                    int,
-                    str,
-                    Decimal,
-                ],
-                skip=1,
-            ),
+            3: self.orderStatusMsg,
             4: self.errorMsg,
             5: self.openOrder,
             6: self.wrap("updateAccountValue", [str, str, str, str]),
@@ -1391,6 +1381,52 @@ class Decoder:
             int(errorTime or 0),
         )
 
+    def orderStatusMsg(self, fields):
+        # Wire layout:
+        #   pre-131:  msgId, version, orderId, status, filled, remaining,
+        #             avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld
+        #   >=131:    msgId, orderId, status, filled, remaining,
+        #             avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld,
+        #             mktCapPrice
+        # IBKR drops the legacy version prefix at MIN_SERVER_VER_MARKET_CAP_PRICE
+        # (131) and appends mktCapPrice. A static wrap() with skip=1 + 11 typed
+        # slots either parses status as a Decimal (pre-131) or works (>=131);
+        # the pre-131 case fails silently inside the wrap try/except, dropping
+        # every orderStatus update from very-old servers.
+        _, *fields = fields
+        if self.serverVersion < MIN_SERVER_VER_MARKET_CAP_PRICE:
+            _, *fields = fields  # legacy version prefix
+        (
+            orderId,
+            status,
+            filled,
+            remaining,
+            avgFillPrice,
+            permId,
+            parentId,
+            lastFillPrice,
+            clientId,
+            whyHeld,
+            *fields,
+        ) = fields
+        mktCapPrice: Decimal | None = None
+        if self.serverVersion >= MIN_SERVER_VER_MARKET_CAP_PRICE:
+            mktCapPriceStr, *fields = fields
+            mktCapPrice = safe_decimal(mktCapPriceStr)
+        self.wrapper.orderStatus(
+            int(orderId),
+            status,
+            safe_decimal(filled),
+            safe_decimal(remaining),
+            safe_decimal(avgFillPrice),
+            int(permId),
+            int(parentId),
+            safe_decimal(lastFillPrice),
+            int(clientId),
+            whyHeld,
+            mktCapPrice,
+        )
+
     def updatePortfolio(self, fields):
         c = Contract()
         (
@@ -1491,15 +1527,20 @@ class Decoder:
                 tag, value, *fields = fields
                 cd.secIdList += [TagValue(tag, value)]
 
-        (
-            cd.aggGroup,
-            cd.underSymbol,
-            cd.underSecType,
-            cd.marketRuleIds,
-            cd.realExpirationDate,
-            cd.stockType,
-            *fields,
-        ) = fields
+        # IBKR adds these fields one gate at a time across server versions
+        # 121-152. The min client version we declare is 100, so a server in
+        # the 100-151 range can deliver a strictly shorter frame; reading
+        # unconditionally would shift every subsequent gated field left.
+        if self.serverVersion >= MIN_SERVER_VER_AGG_GROUP:
+            cd.aggGroup, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_UNDERLYING_INFO:
+            cd.underSymbol, cd.underSecType, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_MARKET_RULES:
+            cd.marketRuleIds, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_REAL_EXPIRATION_DATE:
+            cd.realExpirationDate, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_STOCK_TYPE:
+            cd.stockType, *fields = fields
 
         if self.serverVersion == 163:
             cd.suggestedSizeIncrement, *fields = fields
@@ -1667,10 +1708,7 @@ class Decoder:
         # explicit ``timeZoneId`` field above. Mirror IBKR's reference:
         # the explicit field WINS when both are present, so only adopt the
         # split-derived value below the gate.
-        if (
-            len(times) > 2
-            and self.serverVersion < MIN_SERVER_VER_BOND_TRADING_HOURS
-        ):
+        if len(times) > 2 and self.serverVersion < MIN_SERVER_VER_BOND_TRADING_HOURS:
             cd.timeZoneId = times[2]
 
         self.parse(cd)
