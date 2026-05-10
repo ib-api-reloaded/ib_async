@@ -513,3 +513,56 @@ def test_update_config_response_proto_routes_to_wrapper_proto_method():
 
     assert len(seen) == 1
     assert seen[0].status == "OK"
+
+
+# ---------------------------------------------------------------------------
+# UNSET sentinel guards (_isValidFloat / _isValidInt)
+# ---------------------------------------------------------------------------
+
+
+def test_is_valid_float_rejects_unset_sentinel():
+    """The UNSET_DOUBLE sentinel must NOT pass through into the wire
+    encoding; ``createOrderProto`` and friends gate every optional
+    double field on ``_isValidFloat`` to skip the sentinel.
+    """
+    from sys import float_info
+
+    from ib_async._proto.orders import _isValidFloat
+
+    UNSET_DOUBLE = float_info.max
+    assert _isValidFloat(UNSET_DOUBLE) is False
+    assert _isValidFloat(0.0) is True
+    assert _isValidFloat(-0.0) is True
+    assert _isValidFloat(1.5) is True
+    assert _isValidFloat(-1.5) is True
+    # Decimal compares cleanly against the float sentinel.
+    assert _isValidFloat(Decimal("0")) is True
+    assert _isValidFloat(Decimal("1.5")) is True
+
+
+def test_is_valid_int_rejects_unset_sentinel():
+    """The UNSET_INTEGER sentinel (2**31 - 1) must be skipped by
+    ``createOrderProto`` and friends so wire frames don't carry it.
+    """
+    from ib_async._proto.orders import _isValidInt
+
+    UNSET_INTEGER = 2**31 - 1
+    assert _isValidInt(UNSET_INTEGER) is False
+    assert _isValidInt(0) is True
+    assert _isValidInt(-1) is True
+    assert _isValidInt(1) is True
+    assert _isValidInt(2**31 - 2) is True  # one less than sentinel
+    assert _isValidInt(-(2**31)) is True
+
+
+def test_is_valid_float_handles_nan_safely():
+    """Float NaN compares != to anything including itself, so the
+    sentinel guard returns True for NaN. This is the correct
+    behaviour: we want NaN values to be rejected at the
+    safe_decimal layer, not at the sentinel guard. Lock the
+    contract so a future "fix" doesn't accidentally reverse it.
+    """
+    from ib_async._proto.orders import _isValidFloat
+
+    nan = float("nan")
+    assert _isValidFloat(nan) is True  # NaN != UNSET_DOUBLE (NaN != anything)
