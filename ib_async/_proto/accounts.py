@@ -105,7 +105,7 @@ class PositionArgs:
 
     account: str
     contract: Contract
-    position: Decimal | None
+    posSize: Decimal | None
     avgCost: Decimal | None
 
 
@@ -126,7 +126,7 @@ class UpdatePortfolioArgs:
     """Args for ``Wrapper.updatePortfolio(contract, posSize, marketPrice, marketValue, averageCost, unrealizedPNL, realizedPNL, account)``."""
 
     contract: Contract
-    position: Decimal | None
+    posSize: Decimal | None
     marketPrice: Decimal | None
     marketValue: Decimal | None
     averageCost: Decimal | None
@@ -317,7 +317,7 @@ def createPositionArgs(
     return PositionArgs(
         account=pos.account,
         contract=pos.contract,
-        position=pos.position,
+        posSize=pos.position,
         avgCost=pos.avgCost,
     )
 
@@ -428,7 +428,7 @@ def createUpdatePortfolioArgs(
     item = createPortfolioItem(proto)
     return UpdatePortfolioArgs(
         contract=item.contract,
-        position=item.position,
+        posSize=item.position,
         marketPrice=item.marketPrice,
         marketValue=item.marketValue,
         averageCost=item.averageCost,
