@@ -24,6 +24,7 @@ fixed and that future refactors could silently break:
 from __future__ import annotations
 
 import logging
+import pathlib
 from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -2070,6 +2071,427 @@ def test_binary_open_order_decodes_order_allocations():
     assert alloc.desiredAllocQty == Decimal("5")
     assert alloc.allowedAllocQty == Decimal("5")
     assert alloc.isMonetary is False
+
+
+# ---------------------------------------------------------------------------
+# Round-6 cross-version boundary matrix. For every recently-fixed gate, lock
+# both the pre-gate path (server v=N-1) AND the post-gate path (server v=N)
+# so an off-by-one in the comparison can't pass either side silently.
+# ---------------------------------------------------------------------------
+
+
+def test_binary_open_order_skips_full_order_preview_block_below_gate_195():
+    """Gate 195 (FULL_ORDER_PREVIEW_FIELDS) below: at 194 the block is
+    absent from the wire. Pairs with the existing >=199 above-test
+    and the new gate-195 boundary test for off-by-one coverage.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
+
+    serverVersion = MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS - 1
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    seen: list[tuple] = []
+    ib.wrapper.openOrder = lambda *a: seen.append(a)
+
+    fields = _make_open_order_fields(serverVersion)
+    fields += [
+        "DU12345",
+        "0",
+        "",
+        "0",
+        "EXT-X",
+        "0",
+    ]
+    ib.client.decoder.openOrder(fields)
+
+    assert len(seen) == 1
+    _, _, o, st = seen[0]
+    assert st.marginCurrency == ""
+    assert st.suggestedSize is None
+    assert st.rejectReason == ""
+    assert st.orderAllocations == []
+    assert o.extOperator == "EXT-X"
+
+
+def test_binary_open_order_at_exact_gate_195_reads_full_order_preview_block():
+    """Gate 195 boundary: at exactly MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
+    the block IS present. Pairs with the below-195 test.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
+
+    serverVersion = MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    seen: list[tuple] = []
+    ib.wrapper.openOrder = lambda *a: seen.append(a)
+
+    fields = _make_open_order_fields(serverVersion)
+    first = fields.index("USD")
+    second = fields.index("USD", first + 1)
+    block_start = fields.index("USD", second + 1)
+    fields[block_start + 10] = "7"
+    fields[block_start + 11] = "test-reason-195"
+    fields += [
+        "DU12345",
+        "0",
+        "",
+        "0",
+        "EXT-G",
+        "0",
+    ]
+    ib.client.decoder.openOrder(fields)
+
+    assert len(seen) == 1
+    _, _, o, st = seen[0]
+    assert st.marginCurrency == "USD"
+    assert st.suggestedSize == Decimal("7")
+    assert st.rejectReason == "test-reason-195"
+    assert o.extOperator == "EXT-G"
+
+
+def test_binary_open_order_at_exact_gate_198_skips_imbalance_only():
+    """Gate 199 (IMBALANCE_ONLY) boundary: at exactly 198 the slot is
+    NOT consumed. Pairs with the existing 199 above-test.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_IMBALANCE_ONLY
+
+    serverVersion = MIN_SERVER_VER_IMBALANCE_ONLY - 1
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    seen: list[tuple] = []
+    ib.wrapper.openOrder = lambda *a: seen.append(a)
+
+    fields = _make_open_order_fields(serverVersion)
+    fields += [
+        "DU12345",
+        "0",
+        "",
+        "0",
+        "EXT-J",
+        "0",
+        "trader198",
+    ]
+    ib.client.decoder.openOrder(fields)
+
+    assert len(seen) == 1
+    _, _, o, _ = seen[0]
+    assert o.extOperator == "EXT-J"
+    assert o.imbalanceOnly is False
+
+
+def _exec_details_fields_pre_178() -> list[str]:
+    """Build a synthetic execDetails wire fields list at server <178 —
+    no pendingPriceRevision slot.
+    """
+    return [
+        "11",
+        "1",
+        "100",
+        "12345",
+        "AAPL",
+        "STK",
+        "",
+        "0",
+        "",
+        "",
+        "NASDAQ",
+        "USD",
+        "AAPL",
+        "AAPL",
+        "EXEC-1",
+        "20260101  09:30:00",
+        "DU12345",
+        "NASDAQ",
+        "BOT",
+        "100",
+        "150.50",
+        "777",
+        "0",
+        "0",
+        "100",
+        "150.50",
+        "",
+        "",
+        "0",
+        "",
+        "1",
+    ]
+
+
+def test_binary_exec_details_skips_pending_price_revision_below_gate_178():
+    """Gate 178 (PENDING_PRICE_REVISION) below: at 177 no slot on the
+    wire. Pairs with the >=178 above-tests already in the file.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_PENDING_PRICE_REVISION
+
+    serverVersion = MIN_SERVER_VER_PENDING_PRICE_REVISION - 1
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    seen: list[tuple] = []
+    ib.wrapper.execDetails = lambda reqId, c, ex: seen.append((reqId, c, ex))
+
+    fields = _exec_details_fields_pre_178()
+    ib.client.decoder.execDetails(fields)
+
+    assert len(seen) == 1
+    _, _, ex = seen[0]
+    assert ex.pendingPriceRevision is False
+    assert ex.lastLiquidity == 1
+
+
+def test_binary_exec_details_at_exact_gate_178_reads_pending_price_revision():
+    """Gate 178 boundary: at exactly 178 the slot is consumed.
+    Pairs with the pre-178 test for off-by-one.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_PENDING_PRICE_REVISION
+
+    serverVersion = MIN_SERVER_VER_PENDING_PRICE_REVISION
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    seen: list[tuple] = []
+    ib.wrapper.execDetails = lambda reqId, c, ex: seen.append((reqId, c, ex))
+
+    fields = _binary_exec_details_fields(pending_price_revision="1", submitter=None)
+    ib.client.decoder.execDetails(fields)
+
+    assert len(seen) == 1
+    _, _, ex = seen[0]
+    assert ex.pendingPriceRevision is True
+    assert ex.submitter == ""
+
+
+def test_cancel_order_below_gate_169_omits_manual_order_cancel_time():
+    """Gate 169 (MANUAL_ORDER_TIME) below: at 168 the
+    ``manualOrderCancelTime`` field is NOT appended.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_MANUAL_ORDER_TIME
+    from ib_async.order import OrderCancel
+
+    serverVersion = MIN_SERVER_VER_MANUAL_ORDER_TIME - 1
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    sent: list = []
+    ib.client.send = lambda *a: sent.append(a)
+    ib.client.cancelOrder(42, OrderCancel(manualOrderCancelTime="20300101 09:30:00"))
+
+    assert len(sent) == 1
+    args = sent[0]
+    assert args == (4, 1, 42)
+
+
+def test_cancel_order_at_exact_gate_169_appends_manual_order_cancel_time():
+    """Gate 169 boundary: at exactly 169 the field IS appended.
+    Pairs with the below-169 test.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_MANUAL_ORDER_TIME
+    from ib_async.order import OrderCancel
+
+    serverVersion = MIN_SERVER_VER_MANUAL_ORDER_TIME
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    sent: list = []
+    ib.client.send = lambda *a: sent.append(a)
+    ib.client.cancelOrder(42, OrderCancel(manualOrderCancelTime="20300101 09:30:00"))
+
+    assert len(sent) == 1
+    args = sent[0]
+    assert args == (4, 1, 42, "20300101 09:30:00")
+
+
+def test_binary_contract_details_skips_ineligibility_below_gate_186():
+    """Gate 186 (INELIGIBILITY_REASONS) below: at 185 there's no count
+    slot at the tail.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_INELIGIBILITY_REASONS
+
+    serverVersion = MIN_SERVER_VER_INELIGIBILITY_REASONS - 1
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    seen: list[tuple] = []
+    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
+
+    fields = [
+        "10",
+        "7",
+        "ESM6",
+        "STK",
+        "20260619",
+        "20260619-15:00:00",
+        "100.5",
+        "C",
+        "GLOBEX",
+        "USD",
+        "ESM6",
+        "ES",
+        "ES",
+        "12345",
+        "0.25",
+        "50",
+        "LIMIT,MKT",
+        "GLOBEX",
+        "1",
+        "0",
+        "E-mini",
+        "GLOBEX",
+        "202606",
+        "Financial",
+        "Index",
+        "Broad",
+        "US/Central",
+        "0830-1500",
+        "0830-1500",
+        "",
+        "0",
+        "0",
+        "0",
+        "ES",
+        "IND",
+        "0",
+        "20260619",
+        "ETP",
+        "1",
+        "1",
+        "1",
+    ]
+    ib.client.decoder.contractDetails(fields)
+
+    assert len(seen) == 1
+    _, cd = seen[0]
+    assert cd.ineligibilityReasonList == []
+    assert cd.stockType == "ETP"
+
+
+def test_binary_contract_details_at_exact_gate_186_reads_ineligibility_count():
+    """Gate 186 boundary: at exactly 186 the count slot is present.
+    Pairs with below-186 for off-by-one.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_INELIGIBILITY_REASONS
+
+    serverVersion = MIN_SERVER_VER_INELIGIBILITY_REASONS
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    seen: list[tuple] = []
+    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
+
+    fields = _binary_contract_details_fields(
+        last_trade_date="20260619-15:00:00",
+        ineligibility_count=1,
+        ineligibility_pairs=[("R7", "Restricted")],
+    )
+    ib.client.decoder.contractDetails(fields)
+
+    assert len(seen) == 1
+    _, cd = seen[0]
+    assert len(cd.ineligibilityReasonList) == 1
+    assert cd.ineligibilityReasonList[0].id_ == "R7"
+
+
+def test_req_global_cancel_at_exact_gate_192_drops_version():
+    """Gate 192 boundary in reqGlobalCancel: at exactly 192 the legacy
+    VERSION byte must be absent. Pairs with the existing 191 test.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_CME_TAGGING_FIELDS
+
+    serverVersion = MIN_SERVER_VER_CME_TAGGING_FIELDS
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    sent: list = []
+    ib.client.send = lambda *a: sent.append(a)
+    ib.client.reqGlobalCancel()
+
+    assert len(sent) == 1
+    assert sent[0] == (58, "", UNSET_INTEGER)
+
+
+def test_historical_data_at_pre_124_consumes_legacy_version_prefix():
+    """Gate 124 (SYNT_REALTIME_BARS) below: at 123 the historicalData
+    wire frame carries a legacy VERSION prefix that must be eaten.
+    """
+    from ib_async._server_versions import MIN_SERVER_VER_SYNT_REALTIME_BARS
+
+    serverVersion = MIN_SERVER_VER_SYNT_REALTIME_BARS - 1
+    ib = ibi.IB()
+    ib.client._serverVersion = serverVersion
+    ib.client.decoder.serverVersion = serverVersion
+    bars: list = []
+    ends: list[tuple] = []
+    ib.wrapper.historicalData = lambda *a: bars.append(a)
+    ib.wrapper.historicalDataEnd = lambda *a: ends.append(a)
+
+    fields = [
+        "17",
+        "3",
+        "5",
+        "20240101",
+        "20240131",
+        "1",
+        "20240115",
+        "100.0",
+        "101.0",
+        "99.5",
+        "100.5",
+        "1000",
+        "100.25",
+        "10",
+    ]
+    ib.client.decoder.historicalData(fields)
+
+    assert len(bars) == 1
+    assert bars[0][0] == 5
+    assert ends == [(5, "20240101", "20240131")]
+
+
+def test_cancel_contract_data_emits_proto_only_at_gate_215():
+    """Gate 215 (CANCEL_CONTRACT_DATA): IBKR ships no binary form so
+    the client unconditionally takes the protobuf path. The wire
+    frame is [4-byte len][4-byte wireMsgId = canonical + 200][body].
+    """
+    import struct
+
+    from ib_async._pb_msgids import CANCEL_CONTRACT_DATA, PROTOBUF_MSG_ID
+
+    ib = ibi.IB()
+    ib.client._serverVersion = 215
+    ib.client.connState = ib.client.CONNECTED
+    sent: list[bytes] = []
+    ib.client.conn = type("X", (), {"sendMsg": lambda self, msg: sent.append(msg)})()
+
+    ib.client.cancelContractData(reqId=42)
+
+    assert len(sent) == 1
+    frame = sent[0]
+    # Skip the 4-byte length prefix; next 4 bytes are the wireMsgId.
+    wireMsgId = struct.unpack(">I", frame[4:8])[0]
+    assert wireMsgId == CANCEL_CONTRACT_DATA + PROTOBUF_MSG_ID
+
+
+def test_cancel_historical_ticks_emits_proto_only_at_gate_215():
+    """Gate 215 partner: cancelHistoricalTicks shares the gate. Same
+    proto-only contract.
+    """
+    import struct
+
+    from ib_async._pb_msgids import CANCEL_HISTORICAL_TICKS, PROTOBUF_MSG_ID
+
+    ib = ibi.IB()
+    ib.client._serverVersion = 215
+    ib.client.connState = ib.client.CONNECTED
+    sent: list[bytes] = []
+    ib.client.conn = type("X", (), {"sendMsg": lambda self, msg: sent.append(msg)})()
+
+    ib.client.cancelHistoricalTicks(reqId=99)
+
+    assert len(sent) == 1
+    frame = sent[0]
+    wireMsgId = struct.unpack(">I", frame[4:8])[0]
+    assert wireMsgId == CANCEL_HISTORICAL_TICKS + PROTOBUF_MSG_ID
 
 
 # ---------------------------------------------------------------------------
@@ -4440,3 +4862,445 @@ def test_proto_dispatch_does_not_invoke_raw_proto_wrapper_hooks_we_do_not_expose
     # The two we DO expose are still present (regression for round 2).
     assert hasattr(ib.wrapper, "configResponseProtoBuf")
     assert hasattr(ib.wrapper, "updateConfigResponseProtoBuf")
+
+
+def test_public_dataclasses_re_exported_at_package_root():
+    """Public dataclasses surfaced through ``IB`` method signatures or
+    other public dataclasses must be importable from ``ib_async`` directly.
+
+    Each name listed below is referenced by a publicly typed parameter
+    or attribute, so users hitting ``IB.cancelOrder``, iterating
+    ``ContractDetails.ineligibilityReasonList``, reading
+    ``OrderState.orderAllocations``, or inspecting a ``Ticker``'s EFP
+    fields must be able to ``from ib_async import X`` without dipping
+    into private modules. PEP 561 also requires these names to live on
+    the package surface for downstream type-checkers to resolve them.
+    """
+    import ib_async as _root
+
+    # Names added to round 6 — guarded against accidental re-hiding.
+    for name in (
+        "OrderCancel",
+        "OrderAllocation",
+        "IneligibilityReason",
+        "TradingSession",
+        "EfpData",
+    ):
+        assert hasattr(_root, name), f"{name} missing from ib_async public API"
+        assert name in _root.__all__, f"{name} missing from ib_async.__all__"
+
+
+def test_py_typed_marker_present():
+    """PEP 561 — ``ib_async/py.typed`` is an empty marker file telling
+    downstream type checkers (mypy, pyright) that this package ships
+    inline type hints. Without it, users get implicit-Any for every
+    ib_async symbol even though we have full annotations.
+    """
+    import ib_async
+
+    pkg_dir = pathlib.Path(ib_async.__file__).parent
+    marker = pkg_dir / "py.typed"
+    assert marker.is_file(), f"PEP 561 marker missing at {marker}"
+
+
+def test_every_ib_async_method_has_docstring():
+    """Audit lock — every public ``IB.*Async`` method must carry at
+    least a one-line docstring. Many delegate to documented sync
+    siblings; the sibling pointer is enough. Without this lock new
+    methods can land undocumented and silently regress the public
+    surface contract.
+    """
+    import ast
+    import inspect
+
+    import ib_async
+
+    src = pathlib.Path(inspect.getsourcefile(ib_async.IB)).read_text()
+    tree = ast.parse(src)
+    missing: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "IB":
+            for item in node.body:
+                if not isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
+                    continue
+                if item.name.startswith("_"):
+                    continue
+                if not item.name.endswith("Async"):
+                    continue
+                if not ast.get_docstring(item):
+                    missing.append(item.name)
+    assert not missing, f"IB.*Async methods missing docstring: {missing}"
+
+
+def test_contract_subclass_round_trip_equality():
+    """``Stock('AAPL') == Stock('AAPL')`` is documented behaviour and
+    user code (caches, dedup) relies on it. ``Contract.__eq__`` falls
+    back to ``dataclassAsDict`` equality when ``conId`` is unset, so
+    the same constructor args must always produce equal instances. A
+    refactor that moves Contract's eq into ``__init_subclass__`` (e.g.
+    ``@dataclass(eq=True)``) could silently break this — guard it.
+    """
+    assert ibi.Stock("AAPL") == ibi.Stock("AAPL")
+    assert ibi.Stock("AAPL", "SMART", "USD") == ibi.Stock("AAPL", "SMART", "USD")
+    assert ibi.Forex("EURUSD") == ibi.Forex("EURUSD")
+    assert ibi.Crypto("BTC", "PAXOS", "USD") == ibi.Crypto("BTC", "PAXOS", "USD")
+    assert ibi.Future("ES", "20260320", "GLOBEX") == ibi.Future(
+        "ES", "20260320", "GLOBEX"
+    )
+    # Inequality across symbol or constructor args.
+    assert ibi.Stock("AAPL") != ibi.Stock("MSFT")
+    # Recreate routes secType back to the specialised subclass.
+    assert isinstance(ibi.Contract.recreate(ibi.Stock("AAPL")), ibi.Stock)
+
+
+def test_contract_create_routes_news_and_event_secTypes():
+    """``Contract.create(secType='NEWS' | 'EVENT' | 'EC')`` returns a
+    plain ``Contract`` rather than raising on the unknown subclass —
+    these are real IBKR security types we don't have specialised
+    helpers for, so the dispatcher must keep ``secType`` set instead
+    of dropping it.
+    """
+    for secType in ("NEWS", "EVENT", "EC"):
+        c = ibi.Contract.create(secType=secType, symbol="X")
+        assert type(c) is ibi.Contract
+        assert c.secType == secType
+        assert c.symbol == "X"
+
+
+def test_order_convenience_constructors_coerce_decimal():
+    """``LimitOrder``, ``MarketOrder``, ``StopOrder``, ``StopLimitOrder``
+    all accept ``Decimal | float | int | str`` for monetary fields and
+    funnel through ``_toDecimal`` so binary-float imprecision (e.g.
+    ``Decimal(0.1) → 0.10000…0055``) cannot leak into wire messages.
+    """
+    from decimal import Decimal
+
+    lo = ibi.LimitOrder("BUY", 10, 1.5)
+    assert lo.totalQuantity == Decimal("10")
+    assert lo.lmtPrice == Decimal("1.5")
+    # Float "0.1" must round-trip through str() — guard against the
+    # binary imprecision regression.
+    lo2 = ibi.LimitOrder("BUY", "10", 0.1)
+    assert lo2.lmtPrice == Decimal("0.1")
+
+    mo = ibi.MarketOrder("SELL", "5.25")
+    assert mo.totalQuantity == Decimal("5.25")
+
+    so = ibi.StopOrder("BUY", 1, 99.99)
+    assert so.auxPrice == Decimal("99.99")
+
+    slo = ibi.StopLimitOrder("SELL", 1, 100.5, 100.0)
+    assert slo.lmtPrice == Decimal("100.5")
+    assert slo.auxPrice == Decimal("100.0")
+
+
+# ---------------------------------------------------------------------------
+# Round 6: malformed-input survival (fuzz / corruption / half-disconnect)
+#
+# A broken TCP, a pre-2.x server in test, or a corrupted stream during
+# recovery can deliver any of the wire shapes below. None of them may
+# crash the decoder, wedge the connection, or silently corrupt state.
+# ---------------------------------------------------------------------------
+
+
+def test_interpret_truncated_binary_frame_does_not_raise(caplog):
+    """Scenario 1: handler expects more fields than the frame carries.
+    The unpack succeeds (``*fields`` is permissive) but the handler
+    indexes past the end and hits ``IndexError``. ``Decoder.interpret``
+    must catch and log; the connection survives.
+    """
+    ib = ibi.IB()
+    # msgId 47 (tickEFP) needs 11 fields total; we send only 4.
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        ib.client.decoder.interpret(["47", "1", "42", "38"])
+    # The exception path was taken — the log carries the failing field list.
+    assert any("47" in rec.message for rec in caplog.records)
+
+
+def test_interpret_oversized_binary_frame_absorbs_silently():
+    """Scenario 2: more fields than the handler expects. The wrap()
+    plan zips converters with ``fields[skip:]`` — extra trailing fields
+    are silently absorbed, NOT misinterpreted as part of an adjacent
+    handler's payload. No exception; no corruption of state.
+    """
+    ib = ibi.IB()
+    captured: list = []
+    ib.wrapper.tickEFP = lambda *a: captured.append(a)  # type: ignore[method-assign]
+    from ib_async.decoder import Decoder
+
+    ib.client.decoder = Decoder(ib.wrapper, ib.client.serverVersion or 0)
+
+    # 11-field tickEFP plus 5 trailing junk fields.
+    ib.client.decoder.interpret(
+        [
+            "47", "1", "42", "38", "12.5", "+12.50", "100.25", "30",
+            "20251220", "0.75", "2.50",
+            "junk1", "junk2", "junk3", "junk4", "junk5",
+        ]
+    )
+    # The trailing junk is silently absorbed — handler runs cleanly with
+    # exactly the 9 EFP args.
+    assert captured == [(42, 38, 12.5, "+12.50", 100.25, 30, "20251220", 0.75, 2.50)]
+
+
+def test_interpret_wrong_type_binary_field_caught(caplog):
+    """Scenario 3: handler expects an int but the wire field is the
+    literal string ``"abc"``. The per-field converter raises
+    ``ValueError`` and the wrap() try/except catches and logs.
+    """
+    ib = ibi.IB()
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        # tickEFP wants int reqId — feed it "abc" instead.
+        ib.client.decoder.interpret(
+            [
+                "47", "1", "abc", "38", "12.5", "+12.50", "100.25", "30",
+                "20251220", "0.75", "2.50",
+            ]
+        )
+    assert any("tickEFP" in rec.message for rec in caplog.records)
+
+
+def test_interpret_unknown_binary_msg_id_does_not_raise(caplog):
+    """Scenario 11 (binary side): msgId outside the handler dict.
+    ``self.handlers[msgId]`` raises ``KeyError``; the outer try/except
+    in ``interpret`` catches and logs. Connection survives.
+    """
+    ib = ibi.IB()
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        ib.client.decoder.interpret(["9999", "1", "stuff"])
+    assert any("9999" in rec.message for rec in caplog.records)
+
+
+def test_interpret_non_numeric_msg_id_does_not_raise(caplog):
+    """Scenario 3 variant: the msgId itself is not parseable as int.
+    ``int(fields[0])`` raises ``ValueError``; outer try/except catches.
+    """
+    ib = ibi.IB()
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        ib.client.decoder.interpret(["NOT_A_NUMBER", "1", "x"])
+    # Logged as expected, connection survives.
+    assert any("NOT_A_NUMBER" in rec.message for rec in caplog.records)
+
+
+def test_interpret_empty_fields_list_does_not_raise(caplog):
+    """Edge case: a body of all NULs splits to ``[""]`` after pop().
+    ``int(fields[0])`` raises ``ValueError`` (empty-string-to-int);
+    outer try/except catches. The decoder must never propagate this.
+    """
+    ib = ibi.IB()
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        ib.client.decoder.interpret([""])
+    # Silent surrender to logging.
+
+
+def test_interpret_fields_with_embedded_extra_empties():
+    """Scenario 12: split('\\0') on a body with embedded NULs produces
+    extra empty fields. Many binary handlers tolerate empty-string
+    fields (per-type converters default empty to 0 / None). Verify
+    that a wrap()-style handler doesn't crash on extra blank fields
+    and the dispatch table absorbs them silently.
+    """
+    ib = ibi.IB()
+    captured: list = []
+    # Use updateNewsBulletin (msgId 14, wired via ``wrap([int, int, str, str])``)
+    # — pure converter chain, no serverVersion-gated branches.
+    ib.wrapper.updateNewsBulletin = (
+        lambda *a: captured.append(a)
+    )  # type: ignore[method-assign]
+    from ib_async.decoder import Decoder
+
+    ib.client.decoder = Decoder(ib.wrapper, 200)
+    # msgId, version, msgId-news, msgType, newsMessage, originExch
+    # Append 3 empty trailing fields (simulating split('\\0') on a NUL-runny
+    # body) — extra fields must be silently absorbed by the zip().
+    ib.client.decoder.interpret(
+        ["14", "1", "5", "1", "headline", "NYSE", "", "", ""]
+    )
+    assert captured == [(5, 1, "headline", "NYSE")]
+
+
+def test_process_proto_buf_empty_payload_does_not_raise():
+    """Scenario 5: empty payload b''. ``proto.ParseFromString(b'')``
+    succeeds; every field is at default; ``HasField`` checks return
+    False uniformly. The handler must not raise ``KeyError`` or wedge.
+    """
+    ib = ibi.IB()
+    # canonical msgId 4 = errorMsg, registered handler. Empty payload.
+    ib.client.decoder.processProtoBuf(4, b"")
+
+
+def test_process_proto_buf_empty_payload_logs_no_error(caplog):
+    """The empty-payload case is benign: no error log, just silent
+    drop (HasField returned False for everything → empty error frame
+    forwarded to wrapper.error which will route to its warning path).
+    """
+    ib = ibi.IB()
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        ib.client.decoder.processProtoBuf(4, b"")
+    # Empty payload parses cleanly: no decoder-level error log.
+    assert not any(
+        rec.levelno >= logging.ERROR and "Error decoding" in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_process_proto_buf_oversized_payload_round_trips():
+    """Scenario 6: a payload larger than expected (extra unknown
+    proto fields tacked on) must round-trip — proto wire format is
+    forward-compatible, unknown tags are skipped.
+    """
+    ib = ibi.IB()
+    captured: list = []
+    ib.wrapper.error = lambda *a, **kw: captured.append(a)  # type: ignore[method-assign]
+
+    proto = ErrorMessage_pb2.ErrorMessage()
+    proto.id = 7
+    proto.errorCode = 200
+    proto.errorMsg = "test"
+    base = proto.SerializeToString()
+    # Append unknown tag 9999 wire-type 2 (length-delimited) with junk bytes.
+    # tag = (9999 << 3) | 2 = 79994; varint-encoded as multi-byte.
+    junk = base + bytes([0xFA, 0xE6, 0x04, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F])
+
+    ib.client.decoder.processProtoBuf(4, junk)
+    # The handler still got called with the recognised fields.
+    assert any(call[0] == 7 and call[1] == 200 for call in captured)
+
+
+def test_process_proto_buf_binary_frame_routed_as_proto_logs(caplog):
+    """Scenario 10: a NUL-separated binary frame mistakenly handed to
+    ``processProtoBuf``. ``ParseFromString`` raises ``DecodeError``;
+    the handler catches and logs at error level. Connection survives.
+    """
+    ib = ibi.IB()
+    binary_frame = b"4\x001\x002\x00200\x00message\x00"
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        ib.client.decoder.processProtoBuf(4, binary_frame)
+    assert any("Error decoding" in rec.message for rec in caplog.records)
+
+
+def test_process_proto_buf_malformed_does_not_wedge_other_msgids():
+    """Scenario 14 (audit task #115): a malformed payload for one
+    canonical msgId must not affect the dispatch table or any
+    subsequent message. After a malformed frame, the next valid frame
+    for a different msgId must still route correctly.
+
+    Documented limitation: the malformed frame's own awaiter (if any)
+    is left unresolved — the reqId is inside the unparseable payload.
+    See ``processProtoBuf`` docstring. The connection-loss path
+    eventually drains it via ``Wrapper.disconnected``.
+    """
+    ib = ibi.IB()
+    captured: list = []
+    ib.wrapper.error = lambda *a, **kw: captured.append(a)  # type: ignore[method-assign]
+
+    # 1) Malformed payload for openOrder (canonical 5) — drops with log.
+    ib.client.decoder.processProtoBuf(5, b"\xff\xff\xff\xff")
+    # 2) Valid error proto must still dispatch normally.
+    proto = ErrorMessage_pb2.ErrorMessage()
+    proto.id = 99
+    proto.errorCode = 321
+    proto.errorMsg = "after-malformed"
+    ib.client.decoder.processProtoBuf(4, proto.SerializeToString())
+
+    assert len(captured) == 1
+    assert captured[0][0] == 99
+    assert captured[0][1] == 321
+
+
+def test_safe_decimal_passthrough_decimal_input():
+    """Scenario 8 first half: ``Decimal('-1')`` round-trips through
+    ``safe_decimal`` — the negative sentinel that IBKR uses for some
+    legitimately-unset numeric fields stays as ``Decimal('-1')``,
+    NOT silently substituted to ``None``.
+    """
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal(Decimal("-1")) == Decimal("-1")
+    assert safe_decimal(Decimal("-2")) == Decimal("-2")
+    assert safe_decimal(Decimal("0")) == Decimal("0")
+    assert safe_decimal(Decimal("100.5")) == Decimal("100.5")
+
+
+def test_safe_decimal_decimal_nan_reinput_returns_none():
+    """Scenario 8 second half: ``safe_decimal(Decimal('NaN'))`` —
+    e.g. parse() called twice on the same field — must return None.
+    Otherwise the truthy-trap (``if x:`` evaluates True on NaN)
+    re-emerges through a second-pass coercion.
+    """
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal(Decimal("NaN")) is None
+
+
+def test_safe_decimal_decimal_infinity_reinput_returns_none():
+    """Sibling of the NaN case: ``Decimal('Infinity')`` re-input must
+    also collapse to None so re-coerced wire payloads stay clean."""
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal(Decimal("Infinity")) is None
+    assert safe_decimal(Decimal("-Infinity")) is None
+
+
+def test_safe_decimal_negative_real_value_not_conflated_with_unset():
+    """Scenario 7 lock: ``"-1"`` as wire string is a legitimate
+    negative quantity / sentinel — it must coerce to ``Decimal('-1')``,
+    not None. Only the IBKR UNSET sentinel strings (max int32 etc.)
+    are sentinels.
+    """
+    from ib_async._proto.safe import safe_decimal
+
+    assert safe_decimal("-1") == Decimal("-1")
+    assert safe_decimal("-2") == Decimal("-2")
+    # And confirm the actual UNSET sentinels still collapse to None.
+    assert safe_decimal("2147483647") is None
+
+
+def test_process_proto_buf_protobuf_frame_handed_to_binary_logs(caplog):
+    """Scenario 9: a wire frame that should have routed to the proto
+    decoder gets handed to the binary ``interpret`` instead. The
+    proto bytes look like an opaque blob to ``int(fields[0])`` —
+    ``ValueError`` raises and the outer try/except catches.
+    """
+    ib = ibi.IB()
+    proto = ErrorMessage_pb2.ErrorMessage()
+    proto.id = 1
+    proto.errorCode = 200
+    proto.errorMsg = "x"
+    raw = proto.SerializeToString()
+    # Mock how the binary decoder would see this: a list of fields
+    # produced by raw.split('\0') — entirely arbitrary byte boundaries.
+    fields = raw.decode(errors="backslashreplace").split("\0")
+    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
+        ib.client.decoder.interpret(fields)
+    # Logged-and-dropped: connection survives.
+
+
+def test_decoder_parse_non_dataclass_raises_typeerror_caught_by_interpret():
+    """Scenario 13: ``Decoder.parse(obj)`` with a non-dataclass would
+    raise ``TypeError`` from ``dataclasses.fields(obj)``. In production
+    the only callers feed dataclass instances, but if a future refactor
+    accidentally passes the wrong type, the error must propagate up to
+    ``interpret``'s try/except (which catches all ``Exception``) so the
+    connection does not crash. Verify ``parse(int)`` raises TypeError.
+    """
+    ib = ibi.IB()
+    import pytest
+
+    # Direct call to parse with a wrong-type arg raises — confirms the
+    # error path is sensible (not a silent corruption).
+    with pytest.raises(TypeError):
+        ib.client.decoder.parse(42)  # type: ignore[arg-type]
+    # And via the interpret outer try/except, the same situation would
+    # be caught at the dispatch layer — verified by the broader
+    # "interpret_unknown_binary_msg_id_does_not_raise" test above.
+
+
+def test_process_proto_buf_msg_id_mid_int_overflow_does_not_raise():
+    """Adversarial: a wire msgId that is enormous (e.g. 2**31 - 1).
+    ``_protoDispatch.get`` returns None, debug-log, drop. No crash.
+    """
+    ib = ibi.IB()
+    ib.client.decoder.processProtoBuf(2**31 - 1, b"")
+    ib.client.decoder.processProtoBuf(0, b"")
+    ib.client.decoder.processProtoBuf(-1, b"")

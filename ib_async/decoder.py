@@ -554,6 +554,16 @@ class Decoder:
         message can't kill the connection. Any awaiter-fail behaviour
         (the registry-level ``set_error`` path) lives in the wrapper
         methods themselves, the same way it does on the binary path.
+
+        Limitation: when ``ParseFromString`` itself fails (truncated /
+        corrupted payload) the reqId lives inside the unparsed bytes,
+        so we have no way to look up the awaiting future and surface
+        an error there. The malformed frame is logged and dropped; the
+        awaiter eventually clears via the connection-loss path
+        (``Wrapper.disconnected`` drains every pending awaiter) or its
+        own ``asyncio.wait_for`` timeout if the user wrapped it. A
+        live connection with a single malformed frame in the middle
+        survives, but the matching request never receives a result.
         """
         entry = self._protoDispatch.get(canonicalMsgId)
         if entry is None:
