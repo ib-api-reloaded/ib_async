@@ -354,6 +354,16 @@ class Decoder:
         # so the heavy ``_pb`` imports don't fire at module-load time
         # for callers that only use the binary path.
         _initProtoMsgHandlers()
+        # Pre-resolve the bound handler method for every protobuf
+        # canonical msgId. ``processProtoBuf`` is on the receive
+        # hot path (every wire frame post-201 server) so eliminating
+        # the per-call ``getattr(self, handlerName)`` is worth the
+        # one-time cost at construction. The cache also lets us skip
+        # the second dict lookup on every dispatch.
+        self._protoDispatch: dict[int, tuple[type, Any]] = {
+            msgId: (protoCls, getattr(self, handlerName))
+            for msgId, (protoCls, handlerName) in _PROTO_MSG_HANDLERS.items()
+        }
         self.handlers = {
             1: self.priceSizeTick,
             2: self.wrap("tickSize", [int, int, float]),
@@ -516,7 +526,7 @@ class Decoder:
         (the registry-level ``set_error`` path) lives in the wrapper
         methods themselves, the same way it does on the binary path.
         """
-        entry = _PROTO_MSG_HANDLERS.get(canonicalMsgId)
+        entry = self._protoDispatch.get(canonicalMsgId)
         if entry is None:
             self.logger.debug(
                 "protobuf msg %d, %d bytes (no handler)",
@@ -524,11 +534,11 @@ class Decoder:
                 len(payload),
             )
             return
-        protoCls, handlerName = entry
+        protoCls, handler = entry
         try:
             proto = protoCls()
             proto.ParseFromString(payload)
-            getattr(self, handlerName)(proto)
+            handler(proto)
         except Exception:
             self.logger.exception(
                 "Error decoding protobuf msg %d, %d bytes",
