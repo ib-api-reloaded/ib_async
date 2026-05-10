@@ -57,6 +57,7 @@ from ib_async._proto.historical import (
     createHeadTimestampRequestProto,
     createHistogramDataArgs,
     createHistogramDataRequestProto,
+    createHistoricalDataBars,
     createHistoricalDataEndArgs,
     createHistoricalDataRequestProto,
     createHistoricalDataUpdateArgs,
@@ -70,7 +71,6 @@ from ib_async._proto.historical import (
     createHistoricalTicksRequestProto,
     createRealtimeBarArgs,
     createRealTimeBarsRequestProto,
-    iterHistoricalDataBars,
 )
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def test_bar_data_full_round_trip_through_str_routing():
 
 
 def test_iter_historical_data_bars_empty():
-    args = iterHistoricalDataBars(HistoricalData_pb2.HistoricalData())
+    args = createHistoricalDataBars(HistoricalData_pb2.HistoricalData())
     assert args.reqId == -1
     assert args.bars == []
 
@@ -135,7 +135,7 @@ def test_iter_historical_data_bars_round_trip():
     a.date, a.open, a.close, a.barCount = "20260509", 150.0, 151.0, 100
     b = proto.historicalDataBars.add()
     b.date, b.open, b.close, b.barCount = "20260510", 151.0, 152.0, 110
-    args = iterHistoricalDataBars(proto)
+    args = createHistoricalDataBars(proto)
     assert args.reqId == 7
     assert len(args.bars) == 2
     assert args.bars[0].open == Decimal("150")

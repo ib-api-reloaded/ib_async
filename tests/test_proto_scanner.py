@@ -51,12 +51,12 @@ from ib_async._proto.scanner import (
     createPnLRequestProto,
     createPnLSingleArgs,
     createPnLSingleRequestProto,
+    createScannerDataArgs,
     createScannerDataElementArgs,
     createScannerParametersRequestProto,
     createScannerParametersXml,
     createScannerSubscriptionProto,
     createScannerSubscriptionRequestProto,
-    iterScannerData,
 )
 from ib_async.contract import Contract
 from ib_async.objects import ScannerSubscription
@@ -67,7 +67,7 @@ from ib_async.objects import ScannerSubscription
 
 
 def test_scanner_data_empty_proto_yields_zero_reqId_and_empty_elements():
-    args = iterScannerData(ScannerData_pb2.ScannerData())
+    args = createScannerDataArgs(ScannerData_pb2.ScannerData())
     assert args.reqId == 0
     assert args.elements == []
 
@@ -76,7 +76,7 @@ def test_scanner_data_with_zero_elements_returns_empty_list():
     """reqId set, no repeated elements — the decoder will only emit
     ``scannerDataEnd`` and we must not synthesise a ghost element."""
     proto = ScannerData_pb2.ScannerData(reqId=42)
-    args = iterScannerData(proto)
+    args = createScannerDataArgs(proto)
     assert args.reqId == 42
     assert args.elements == []
 
@@ -126,7 +126,7 @@ def test_scanner_data_full_round_trip_with_one_element():
     el.contract.symbol = "AAPL"
     el.contract.secType = "STK"
 
-    args = iterScannerData(proto)
+    args = createScannerDataArgs(proto)
     assert args.reqId == 42
     assert len(args.elements) == 1
     only = args.elements[0]
@@ -150,7 +150,7 @@ def test_scanner_data_multiple_elements_decode_independently():
     b = proto.scannerDataElement.add()
     b.rank = 1
     b.contract.symbol = "MSFT"
-    args = iterScannerData(proto)
+    args = createScannerDataArgs(proto)
     assert [
         e.contractDetails.contract.symbol
         for e in args.elements

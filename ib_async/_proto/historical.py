@@ -207,7 +207,7 @@ def createBarData(proto: HistoricalDataBar_pb2.HistoricalDataBar) -> BarData:
 # ---------------------------------------------------------------------------
 
 
-def iterHistoricalDataBars(
+def createHistoricalDataBars(
     proto: HistoricalData_pb2.HistoricalData,
 ) -> HistoricalDataBars:
     """Decode a HistoricalData proto into ``HistoricalDataBars(reqId, bars)``.

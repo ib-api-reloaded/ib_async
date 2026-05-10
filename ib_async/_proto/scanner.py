@@ -172,7 +172,7 @@ def createScannerDataElementArgs(
     )
 
 
-def iterScannerData(proto: ScannerData_pb2.ScannerData) -> ScannerDataArgs:
+def createScannerDataArgs(proto: ScannerData_pb2.ScannerData) -> ScannerDataArgs:
     """Decode the whole ``ScannerData`` batch in one shot.
 
     Returns a ``ScannerDataArgs`` carrying ``reqId`` plus a list of
