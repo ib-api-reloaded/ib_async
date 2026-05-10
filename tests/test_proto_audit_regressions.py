@@ -1144,8 +1144,12 @@ def test_binary_bond_contract_details_reads_trading_hours_at_gate_188():
     assert cd.timeZoneId == "US/Eastern"
     assert cd.tradingHours == "0930-1600"
     assert cd.liquidHours == "0930-1600"
-    # Sanity: aggGroup did not shift onto evMultiplier slot.
-    assert cd.aggGroup == 0
+    # Sanity: aggGroup did not shift onto evMultiplier slot. Wire ``"0"``
+    # collapses to ``None`` (the universal unset marker on the public
+    # ``int | None`` dataclass field) so callers gating on
+    # ``if details.aggGroup:`` stay falsy without the UNSET_INTEGER
+    # sentinel leaking.
+    assert cd.aggGroup is None
 
 
 def test_binary_bond_contract_details_skips_trading_hours_below_gate_188():
@@ -1163,10 +1167,11 @@ def test_binary_bond_contract_details_skips_trading_hours_below_gate_188():
 
     assert len(seen) == 1
     _, cd = seen[0]
-    # Defaults — no shift.
+    # Defaults — no shift. ``aggGroup`` wire ``"0"`` collapses to
+    # ``None`` (universal unset marker on the public dataclass).
     assert cd.tradingHours == ""
     assert cd.liquidHours == ""
-    assert cd.aggGroup == 0
+    assert cd.aggGroup is None
 
 
 # ---------------------------------------------------------------------------

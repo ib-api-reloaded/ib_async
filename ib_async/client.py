@@ -1038,11 +1038,15 @@ class Client:
             execFilter.side,
         ]
         # ``lastNDays`` and ``specificDates`` arrived at gate 200
-        # (PARAMETRIZED_DAYS_OF_EXECUTIONS).  The dataclass fields don't
-        # exist on ``ExecutionFilter`` yet — sibling task adds them —
-        # so ``getattr`` keeps the wire write decoupled.
+        # (PARAMETRIZED_DAYS_OF_EXECUTIONS).  ``getattr`` keeps the wire
+        # write decoupled from the dataclass shape. ``lastNDays`` is
+        # ``int | None`` on the public surface; the wire wants IBKR's
+        # ``UNSET_INTEGER`` sentinel for "no filter" (the binary path's
+        # format handler maps that sentinel to empty string under
+        # ``makeEmpty``).
         if self.serverVersion() >= MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS:
-            fields += [getattr(execFilter, "lastNDays", UNSET_INTEGER)]
+            lastNDays = getattr(execFilter, "lastNDays", None)
+            fields += [lastNDays if lastNDays is not None else UNSET_INTEGER]
             specificDates = getattr(execFilter, "specificDates", None) or []
             fields += [len(specificDates)]
             for specificDate in specificDates:

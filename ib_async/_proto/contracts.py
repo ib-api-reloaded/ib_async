@@ -35,7 +35,7 @@ from ..contract import (
     IneligibilityReason,
     TagValue,
 )
-from ..util import UNSET_DOUBLE
+from ..util import UNSET_DOUBLE, UNSET_INTEGER
 from .safe import format_proto_double, safe_decimal
 
 if TYPE_CHECKING:
@@ -331,7 +331,11 @@ def createContractDetails(
         # imprecision contaminating a fractional evMultiplier.
         details.evMultiplier = safe_decimal(proto.evMultiplier)
     if proto.HasField("aggGroup"):
-        details.aggGroup = proto.aggGroup
+        # Wire ``0`` (and IBKR's ``UNSET_INTEGER`` sentinel) collapse to
+        # ``None`` so user code gating on ``if details.aggGroup:`` stays
+        # falsy without surfacing the sentinel's magic int.
+        if proto.aggGroup != 0 and proto.aggGroup != UNSET_INTEGER:
+            details.aggGroup = proto.aggGroup
     if proto.HasField("underSymbol"):
         details.underSymbol = proto.underSymbol
     if proto.HasField("underSecType"):

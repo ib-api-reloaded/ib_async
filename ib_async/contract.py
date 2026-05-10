@@ -582,7 +582,7 @@ class ContractDetails:
     evRule: str = ""
     evMultiplier: Decimal | None = None
     mdSizeMultiplier: int = 1  # obsolete
-    aggGroup: int = 0
+    aggGroup: int | None = None
     underSymbol: str = ""
     underSecType: str = ""
     marketRuleIds: str = ""

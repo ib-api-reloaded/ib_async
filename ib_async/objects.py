@@ -14,7 +14,7 @@ from eventkit import Event
 
 from ._proto.safe import safe_decimal
 from .contract import Contract, ScanData, TagValue
-from .util import EPOCH, UNSET_DOUBLE, UNSET_INTEGER
+from .util import EPOCH
 
 nan = float("nan")
 
@@ -25,21 +25,28 @@ class ScannerSubscription:
     instrument: str = ""
     locationCode: str = ""
     scanCode: str = ""
-    abovePrice: float = UNSET_DOUBLE
-    belowPrice: float = UNSET_DOUBLE
-    aboveVolume: int = UNSET_INTEGER
-    marketCapAbove: float = UNSET_DOUBLE
-    marketCapBelow: float = UNSET_DOUBLE
+    # Numeric filter fields default to ``None`` for "no filter". Earlier
+    # ib_async used IBKR's ``UNSET_DOUBLE`` / ``UNSET_INTEGER`` sentinels
+    # which leaked into user-code equality checks (``if sub.abovePrice:``
+    # would be silently truthy on the sentinel). ``None`` is the universal
+    # unset marker; the send-side gates each field through ``is not None``
+    # so the wire stays unset when no filter is provided. Decimal-typed
+    # numerics match the v3.0 direction (Decimal-native domain).
+    abovePrice: Decimal | None = None
+    belowPrice: Decimal | None = None
+    aboveVolume: int | None = None
+    marketCapAbove: Decimal | None = None
+    marketCapBelow: Decimal | None = None
     moodyRatingAbove: str = ""
     moodyRatingBelow: str = ""
     spRatingAbove: str = ""
     spRatingBelow: str = ""
     maturityDateAbove: str = ""
     maturityDateBelow: str = ""
-    couponRateAbove: float = UNSET_DOUBLE
-    couponRateBelow: float = UNSET_DOUBLE
+    couponRateAbove: Decimal | None = None
+    couponRateBelow: Decimal | None = None
     excludeConvertible: bool = False
-    averageOptionVolumeAbove: int = UNSET_INTEGER
+    averageOptionVolumeAbove: int | None = None
     scannerSettingPairs: str = ""
     stockTypeFilter: str = ""
 
@@ -154,7 +161,7 @@ class ExecutionFilter:
     secType: str = ""
     exchange: str = ""
     side: str = ""
-    lastNDays: int = UNSET_INTEGER
+    lastNDays: int | None = None
     specificDates: list[int] = field(default_factory=list)
 
 
@@ -230,7 +237,7 @@ class DepthMktDataDescription:
     secType: str = ""
     listingExch: str = ""
     serviceDataType: str = ""
-    aggGroup: int = UNSET_INTEGER
+    aggGroup: int | None = None
 
 
 @dataclass
@@ -285,14 +292,14 @@ class HistoricalSchedule:
 
 @dataclass
 class WshEventData:
-    conId: int = UNSET_INTEGER
+    conId: int | None = None
     filter: str = ""
     fillWatchlist: bool = False
     fillPortfolio: bool = False
     fillCompetitors: bool = False
     startDate: str = ""
     endDate: str = ""
-    totalLimit: int = UNSET_INTEGER
+    totalLimit: int | None = None
 
 
 # IBKR streams every account-update tag through a single
