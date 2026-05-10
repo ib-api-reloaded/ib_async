@@ -66,6 +66,7 @@ from ib_async.objects import (
     RealTimeBar,
     ScanDataList,
     SoftDollarTier,
+    TickAttrib,
     TickAttribBidAsk,
     TickAttribLast,
     TickByTickAllLast,
@@ -1070,7 +1071,17 @@ class Wrapper:
             self.requests.set_result(ReqIdKey(reqId))
 
     # additional wrapper method provided by Client
-    def priceSizeTick(self, reqId: int, tickType: int, price: float, size: float):
+    def priceSizeTick(
+        self,
+        reqId: int,
+        tickType: int,
+        price: float,
+        size: float,
+        attrib: TickAttrib | None = None,
+    ):
+        # ``attrib`` carries canAutoExecute / pastLimit / preOpen flags
+        # decoded from the wire ``attrMask`` bitfield. Default ``None``
+        # for backwards compat with callers that pre-date v3.0.
         ticker = self._get_ticker(reqId)
         if not ticker:
             self._logger.error(f"priceSizeTick: Unknown reqId: {reqId}")

@@ -66,7 +66,16 @@ from .._pb import (
     TickString_pb2,
 )
 from ..contract import Contract
-from ..objects import DepthMktDataDescription, TickAttribBidAsk, TickAttribLast
+from ..objects import (
+    DepthMktDataDescription,
+    TickAttrib,
+    TickAttribBidAsk,
+    TickAttribLast,
+)
+from .._server_versions import (
+    MIN_SERVER_VER_PAST_LIMIT,
+    MIN_SERVER_VER_PRE_OPEN_BID_ASK,
+)
 from .contracts import createContractProto
 from .safe import safe_decimal
 
@@ -77,12 +86,18 @@ from .safe import safe_decimal
 
 @dataclass(slots=True, frozen=True)
 class PriceSizeTickArgs:
-    """``Wrapper.priceSizeTick(reqId, tickType, price, size)`` args."""
+    """``Wrapper.priceSizeTick(reqId, tickType, price, size, attrib)`` args.
+
+    ``attrib`` carries the canAutoExecute / pastLimit / preOpen flags
+    decoded from the wire ``attrMask`` bitfield. See
+    ``decodeTickAttribFromMask`` for the bit layout.
+    """
 
     reqId: int
     tickType: int
     price: float
     size: float
+    attrib: TickAttrib
 
 
 @dataclass(slots=True, frozen=True)
@@ -246,21 +261,45 @@ def _wireSizeToFloat(s: str) -> float:
 # ---------------------------------------------------------------------------
 
 
+def decodeTickAttribFromMask(attrMask: int, serverVersion: int) -> TickAttrib:
+    """Decode the wire ``attrMask`` bitfield into a ``TickAttrib`` dataclass.
+
+    Bit layout (mirrors IBKR's ``processTickPriceMsg``):
+
+    - pre-PAST_LIMIT (109): ``canAutoExecute = (attrMask == 1)``
+    - PAST_LIMIT (109)+:    ``canAutoExecute = bit 0``, ``pastLimit = bit 1``
+    - PRE_OPEN_BID_ASK (132)+: ``preOpen = bit 2``
+    """
+    attrib = TickAttrib()
+    if serverVersion >= MIN_SERVER_VER_PAST_LIMIT:
+        attrib.canAutoExecute = bool(attrMask & 1)
+        attrib.pastLimit = bool(attrMask & 2)
+        if serverVersion >= MIN_SERVER_VER_PRE_OPEN_BID_ASK:
+            attrib.preOpen = bool(attrMask & 4)
+    else:
+        attrib.canAutoExecute = attrMask == 1
+    return attrib
+
+
 def createPriceSizeTickArgs(
     proto: TickPrice_pb2.TickPrice,
+    serverVersion: int = 0,
 ) -> PriceSizeTickArgs:
-    """``Wrapper.priceSizeTick(reqId, tickType, price, size)`` args.
+    """``Wrapper.priceSizeTick(reqId, tickType, price, size, attrib)`` args.
 
-    The wire ``attrMask`` (canAutoExecute / pastLimit / preOpen) is
-    discarded here to match the binary path, which silently drops the
-    same bitfield. (Surfacing it would require a wrapper signature
-    change beyond Phase 3 scope.)
+    The wire ``attrMask`` decodes into a ``TickAttrib`` carrying
+    ``canAutoExecute`` / ``pastLimit`` / ``preOpen`` flags so user code
+    can gate trading decisions on the IBKR liquidity-quality bits.
     """
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
     price = float(proto.price) if proto.HasField("price") else 0.0
     size = _wireSizeToFloat(proto.size) if proto.HasField("size") else 0.0
-    return PriceSizeTickArgs(reqId=reqId, tickType=tickType, price=price, size=size)
+    attrMask = proto.attrMask if proto.HasField("attrMask") else 0
+    attrib = decodeTickAttribFromMask(attrMask, serverVersion)
+    return PriceSizeTickArgs(
+        reqId=reqId, tickType=tickType, price=price, size=size, attrib=attrib
+    )
 
 
 # ---------------------------------------------------------------------------
