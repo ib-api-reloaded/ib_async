@@ -48,8 +48,22 @@ from .._pb import (
 )
 from ..contract import Contract, ContractDetails
 from ..objects import ScannerSubscription
+from ..util import UNSET_DOUBLE, UNSET_INTEGER
 from .contracts import createContract, createContractProto
 from .safe import safe_decimal
+
+
+def _isValidFloat(value: float) -> bool:
+    """IBKR's ``isValidFloatValue`` — accept anything except the
+    ``UNSET_DOUBLE`` sentinel. Used to gate scanner numeric filters so
+    the wire stays unset when the user didn't provide a filter."""
+    return value != UNSET_DOUBLE
+
+
+def _isValidInt(value: int) -> bool:
+    """IBKR's ``isValidIntValue`` — accept anything except the
+    ``UNSET_INTEGER`` sentinel."""
+    return value != UNSET_INTEGER
 
 # ---------------------------------------------------------------------------
 # Args dataclasses (slotted, frozen — operator-mandated, not tuples)
@@ -305,33 +319,59 @@ def createScannerSubscriptionProto(
 ) -> ScannerSubscription_pb2.ScannerSubscription:
     """Translate the ~21-field domain ``ScannerSubscription`` to its proto.
 
-    Every domain field is wired through. The two map fields
-    (``scannerSubscriptionFilterOptions`` and
-    ``scannerSubscriptionOptions``) stay empty for now — the binary
-    path also passes empty TagValue lists today.
+    The numeric filter fields (``abovePrice`` / ``belowPrice`` /
+    ``marketCapAbove`` etc.) default to ``UNSET_DOUBLE`` /
+    ``UNSET_INTEGER`` on the domain dataclass — writing those sentinels
+    straight to the wire would have IBKR's server interpret e.g.
+    ``abovePrice=1.79e308`` as a real filter and reject the
+    subscription or return zero results. Each numeric is gated through
+    ``_isValidFloat`` / ``_isValidInt`` so the wire field stays unset
+    when the user didn't provide a filter, matching the binary path's
+    ``make_field_handle_empty`` behaviour.
     """
     proto = ScannerSubscription_pb2.ScannerSubscription()
-    proto.numberOfRows = sub.numberOfRows
-    proto.instrument = sub.instrument
-    proto.locationCode = sub.locationCode
-    proto.scanCode = sub.scanCode
-    proto.abovePrice = sub.abovePrice
-    proto.belowPrice = sub.belowPrice
-    proto.aboveVolume = sub.aboveVolume
-    proto.marketCapAbove = sub.marketCapAbove
-    proto.marketCapBelow = sub.marketCapBelow
-    proto.moodyRatingAbove = sub.moodyRatingAbove
-    proto.moodyRatingBelow = sub.moodyRatingBelow
-    proto.spRatingAbove = sub.spRatingAbove
-    proto.spRatingBelow = sub.spRatingBelow
-    proto.maturityDateAbove = sub.maturityDateAbove
-    proto.maturityDateBelow = sub.maturityDateBelow
-    proto.couponRateAbove = sub.couponRateAbove
-    proto.couponRateBelow = sub.couponRateBelow
-    proto.excludeConvertible = sub.excludeConvertible
-    proto.averageOptionVolumeAbove = sub.averageOptionVolumeAbove
-    proto.scannerSettingPairs = sub.scannerSettingPairs
-    proto.stockTypeFilter = sub.stockTypeFilter
+    if _isValidInt(sub.numberOfRows):
+        proto.numberOfRows = sub.numberOfRows
+    if sub.instrument:
+        proto.instrument = sub.instrument
+    if sub.locationCode:
+        proto.locationCode = sub.locationCode
+    if sub.scanCode:
+        proto.scanCode = sub.scanCode
+    if _isValidFloat(sub.abovePrice):
+        proto.abovePrice = sub.abovePrice
+    if _isValidFloat(sub.belowPrice):
+        proto.belowPrice = sub.belowPrice
+    if _isValidInt(sub.aboveVolume):
+        proto.aboveVolume = sub.aboveVolume
+    if _isValidFloat(sub.marketCapAbove):
+        proto.marketCapAbove = sub.marketCapAbove
+    if _isValidFloat(sub.marketCapBelow):
+        proto.marketCapBelow = sub.marketCapBelow
+    if sub.moodyRatingAbove:
+        proto.moodyRatingAbove = sub.moodyRatingAbove
+    if sub.moodyRatingBelow:
+        proto.moodyRatingBelow = sub.moodyRatingBelow
+    if sub.spRatingAbove:
+        proto.spRatingAbove = sub.spRatingAbove
+    if sub.spRatingBelow:
+        proto.spRatingBelow = sub.spRatingBelow
+    if sub.maturityDateAbove:
+        proto.maturityDateAbove = sub.maturityDateAbove
+    if sub.maturityDateBelow:
+        proto.maturityDateBelow = sub.maturityDateBelow
+    if _isValidFloat(sub.couponRateAbove):
+        proto.couponRateAbove = sub.couponRateAbove
+    if _isValidFloat(sub.couponRateBelow):
+        proto.couponRateBelow = sub.couponRateBelow
+    if sub.excludeConvertible:
+        proto.excludeConvertible = sub.excludeConvertible
+    if _isValidInt(sub.averageOptionVolumeAbove):
+        proto.averageOptionVolumeAbove = sub.averageOptionVolumeAbove
+    if sub.scannerSettingPairs:
+        proto.scannerSettingPairs = sub.scannerSettingPairs
+    if sub.stockTypeFilter:
+        proto.stockTypeFilter = sub.stockTypeFilter
     return proto
 
 

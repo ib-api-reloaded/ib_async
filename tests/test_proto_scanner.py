@@ -58,7 +58,6 @@ from ib_async._proto.scanner import (
 )
 from ib_async.contract import Contract
 from ib_async.objects import ScannerSubscription
-from ib_async.util import UNSET_DOUBLE, UNSET_INTEGER
 
 # ---------------------------------------------------------------------------
 # ScannerData / element decode
@@ -446,18 +445,34 @@ def test_scanner_subscription_request_envelope_carries_reqId_and_nested_sub():
     assert decoded.scannerSubscription.scanCode == "TOP_PERC_GAIN"
 
 
-def test_scanner_subscription_request_default_sub_round_trips_sentinels():
-    """Defensive — the UNSET sentinel ints/floats from objects.py must
-    survive proto round-trip without truncation. They're large but
-    fit ``int32`` / ``double`` ranges."""
+def test_scanner_subscription_request_default_sub_strips_unset_sentinels():
+    """Critical safety: a default ``ScannerSubscription`` carries
+    ``UNSET_INTEGER`` / ``UNSET_DOUBLE`` sentinels. These must NOT be
+    written to the wire — the IBKR server would interpret e.g.
+    ``abovePrice=1.79e308`` as a real filter and reject the
+    subscription or return zero results. The converter strips every
+    sentinel-valued numeric so the proto field stays unset."""
     sub = ScannerSubscription()
     proto = createScannerSubscriptionRequestProto(1, sub)
     decoded = ScannerSubscriptionRequest_pb2.ScannerSubscriptionRequest()
     decoded.ParseFromString(proto.SerializeToString())
     assert decoded.reqId == 1
-    # The proto declares numberOfRows int32; UNSET_INTEGER = 2**31-1 fits.
-    assert decoded.scannerSubscription.aboveVolume == UNSET_INTEGER
-    assert decoded.scannerSubscription.abovePrice == UNSET_DOUBLE
+    # Proto3 default for unset int32 is 0; default for double is 0.0.
+    # Neither is the UNSET sentinel — the converter dropped the write.
+    assert decoded.scannerSubscription.aboveVolume == 0
+    assert decoded.scannerSubscription.abovePrice == 0.0
+    assert not decoded.scannerSubscription.HasField("aboveVolume")
+    assert not decoded.scannerSubscription.HasField("abovePrice")
+
+
+def test_scanner_subscription_request_real_filter_round_trips():
+    """User-supplied numeric filters DO write to the wire."""
+    sub = ScannerSubscription(abovePrice=10.5, aboveVolume=1000)
+    proto = createScannerSubscriptionRequestProto(1, sub)
+    decoded = ScannerSubscriptionRequest_pb2.ScannerSubscriptionRequest()
+    decoded.ParseFromString(proto.SerializeToString())
+    assert decoded.scannerSubscription.abovePrice == 10.5
+    assert decoded.scannerSubscription.aboveVolume == 1000
 
 
 def test_cancel_scanner_subscription_carries_reqId():
