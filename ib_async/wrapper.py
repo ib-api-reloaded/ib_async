@@ -1932,10 +1932,20 @@ class Wrapper:
     def configResponseProtoBuf(self, configResponseProto: Any):
         """Carries nested config sub-messages (LockAndExitConfig,
         ApiConfig, MessageConfig, OrdersConfig). Raw proto delivery —
-        no domain dataclass equivalent exists."""
-        pass
+        no domain dataclass equivalent exists. Settles the matching
+        ReqIdKey if the proto carries a reqId so
+        ``IB.reqConfigAsync`` resolves end-to-end."""
+        if configResponseProto.HasField("reqId"):
+            self.requests.set_result(
+                ReqIdKey(configResponseProto.reqId), configResponseProto
+            )
 
     def updateConfigResponseProtoBuf(self, updateConfigResponseProto: Any):
         """Carries config-update result + changed-fields list. Raw
-        proto delivery — no domain dataclass equivalent exists."""
-        pass
+        proto delivery — no domain dataclass equivalent exists.
+        Settles the matching ReqIdKey if the proto carries a reqId so
+        ``IB.updateConfigAsync`` resolves end-to-end."""
+        if updateConfigResponseProto.HasField("reqId"):
+            self.requests.set_result(
+                ReqIdKey(updateConfigResponseProto.reqId), updateConfigResponseProto
+            )
