@@ -683,7 +683,7 @@ class Wrapper:
         self.requests.set_result(ReqIdKey(reqId))
 
     def accountSummary(
-        self, _reqId: int, account: str, tag: str, value: str, currency: str
+        self, reqId: int, account: str, tag: str, value: str, currency: str
     ):
         key = (account, tag, currency)
         acctVal = AccountValue(account, tag, value, currency, "")
