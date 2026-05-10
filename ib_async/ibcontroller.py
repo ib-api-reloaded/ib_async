@@ -180,7 +180,20 @@ class IBC:
         else:
             with suppress(ProcessLookupError):
                 self._proc.terminate()
-                await self._proc.wait()
+                # Cap the wait so a hung TWS during the daily reset does
+                # not block the Watchdog reconnect loop forever. If SIGTERM
+                # didn't take, escalate to SIGKILL and wait once more
+                # (still bounded). Total ceiling: ~30s.
+                try:
+                    await asyncio.wait_for(self._proc.wait(), timeout=20)
+                except TimeoutError:
+                    self._logger.warning(
+                        "TWS/Gateway did not exit after SIGTERM; sending SIGKILL"
+                    )
+                    with suppress(ProcessLookupError):
+                        self._proc.kill()
+                    with suppress(asyncio.TimeoutError):
+                        await asyncio.wait_for(self._proc.wait(), timeout=10)
         self._proc = None
 
     async def monitorAsync(self):

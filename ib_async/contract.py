@@ -141,7 +141,7 @@ class Contract:
 
     @staticmethod
     def recreate(c) -> "Contract":
-        """Comply an existing generic Contract into its most specific type."""
+        """Convert an existing generic Contract into its most specific type."""
         return Contract.create(**util.dataclassAsDict(c))
 
     def isHashable(self) -> bool:
