@@ -4,7 +4,7 @@ import asyncio
 import dataclasses
 import logging
 import time
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -288,6 +288,15 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
     {105, 110, 165, 321, 329, 399, 404, 434, 492, 1100, 1101, 1102, 10167, 10349}
 )
 
+# Cap on the size of ``_pendingCommissionReports``. A commissionReport
+# whose execId never gets a paired execDetails on this client (e.g.
+# cross-client fills, or a startup-replay race that never resolves)
+# would otherwise grow this dict without bound for the lifetime of the
+# connection. The cap evicts the oldest parked report on overflow,
+# bounding worst-case memory at roughly one CommissionReport instance
+# per slot.
+_MAX_PENDING_COMMISSION_REPORTS: Final[int] = 1024
+
 
 # Order fields that TWS may legitimately update at runtime via openOrder
 # callbacks for an order we already track. Why a whitelist instead of a full
@@ -358,9 +367,12 @@ class Wrapper:
     # execDetails, but mid-connection races (especially across cross-client
     # fills replayed at startup) can deliver the report first. Park the
     # report by execId here; ``execDetails`` drains it onto the fill on
-    # arrival rather than silently dropping the commission. Cleared on
-    # reset alongside ``fills``.
-    _pendingCommissionReports: dict[str, CommissionReport] = field(init=False)
+    # arrival rather than silently dropping the commission. Bounded
+    # FIFO (oldest entry evicted past the cap) so an unbounded stream of
+    # cross-client / orphan reports never paired by an execDetails on
+    # this client cannot grow this dict without limit. Cleared on reset
+    # alongside ``fills``.
+    _pendingCommissionReports: "OrderedDict[str, CommissionReport]" = field(init=False)
 
     newsTicks: list[NewsTick] = field(init=False)
 
@@ -422,7 +434,7 @@ class Wrapper:
         self.trades = {}
         self.permId2Trade = {}
         self.fills = {}
-        self._pendingCommissionReports = {}
+        self._pendingCommissionReports = OrderedDict()
         self.newsTicks = []
         self.msgId2NewsBulletin = {}
         self.pendingTickers = set()
@@ -1061,8 +1073,13 @@ class Wrapper:
             #  - report arrived ahead of its execDetails (rare startup
             #    or cross-client replay race). Park it by execId so
             #    ``execDetails`` can pair it on arrival rather than
-            #    losing the commission entirely.
+            #    losing the commission entirely. Bounded FIFO: evict
+            #    the oldest entry once we exceed the cap so an
+            #    unbounded stream of orphan reports cannot grow this
+            #    dict without limit.
             self._pendingCommissionReports[commissionReport.execId] = commissionReport
+            if len(self._pendingCommissionReports) > _MAX_PENDING_COMMISSION_REPORTS:
+                self._pendingCommissionReports.popitem(last=False)
 
     def orderBound(self, permId: int, clientId: int, orderId: int):
         # IBKR's contract on this callback is ``(permId, clientId,
