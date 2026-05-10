@@ -34,13 +34,16 @@ from .._pb import (
     OpenOrdersRequest_pb2,
     Order_pb2,
     OrderCancel_pb2,
+    OrderCondition_pb2,
     OrderState_pb2,
     OrderStatus_pb2,
     PlaceOrderRequest_pb2,
+    SoftDollarTier_pb2,
 )
-from ..contract import Contract
+from ..contract import Contract, TagValue
 from ..objects import CommissionReport, Execution, ExecutionFilter
-from ..order import Order, OrderState, OrderStatus
+from ..order import Order, OrderCondition, OrderState, OrderStatus
+from ..util import UNSET_DOUBLE, UNSET_INTEGER
 from .contracts import createContract, createContractProto
 from .safe import safe_decimal
 
@@ -60,13 +63,53 @@ def _decimalToWireString(value: Decimal | None) -> str:
 # --- Order ---------------------------------------------------------------
 
 
+def _fillTagValueMap(items: list[TagValue] | None, target: object) -> None:
+    """Copy a domain ``list[TagValue]`` into a proto ``map<string,string>``.
+
+    Mirrors IBKR's ``fillTagValueList`` helper. Empty / ``None`` lists
+    leave the target untouched so the field stays unset on the wire.
+    The target arg is a ``ScalarMap[str, str]`` from the parent proto;
+    typed as ``object`` here because the protobuf generated stubs don't
+    expose a public name we can import.
+    """
+    if not items:
+        return
+    for tv in items:
+        target[tv.tag] = tv.value  # type: ignore[index]
+
+
+def _isValidFloat(value: float | Decimal) -> bool:
+    """IBKR's ``isValidFloatValue`` — accept anything except the
+    UNSET_DOUBLE sentinel. ``Decimal`` and ``float`` both compare
+    cleanly against the sentinel."""
+    return value != UNSET_DOUBLE
+
+
+def _isValidInt(value: int) -> bool:
+    """IBKR's ``isValidIntValue`` — accept anything except the
+    UNSET_INTEGER sentinel."""
+    return value != UNSET_INTEGER
+
+
 def createOrderProto(order: Order) -> Order_pb2.Order:
     """Encode a domain ``Order`` into its protobuf representation.
 
-    Reads every field from the SOURCE order — never from the
-    freshly-empty target proto. Empty / zero / ``None`` source values
-    are skipped so the wire message stays sparse and the server's
-    "field not set" semantics distinguish from "field set to default".
+    Mirrors IBKR's ``client_utils.createOrderProto`` field-by-field so
+    the wire payload carries every order parameter the server expects.
+    The previous implementation only wrote ~30 of ~140 fields — most
+    catastrophically dropping ``transmit`` (domain default ``True``),
+    which made every outbound protobuf-path order land as a
+    non-transmitted staged order on the broker.
+
+    Domain fields that exist in IBKR's reference but are NOT on our
+    ``Order`` dataclass (``customerAccount``, ``professionalCustomer``,
+    ``bondAccruedInterest``, ``includeOvernight``,
+    ``manualOrderIndicator``, ``submitter``, ``deactivate``, ``postOnly``,
+    ``allowPreOpen``, ``ignoreOpenAuction``, ``seekPriceImprovement``,
+    ``whatIfType``, ``hedgeMaxSize``) are silently skipped — adding them
+    here without dataclass support would invent fields user code can
+    never set. Order proto schema gaps: none — every IBKR-reference
+    field maps to an Order_pb2 field at this proto version.
     """
     proto = Order_pb2.Order()
 
@@ -120,11 +163,16 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.outsideRth = order.outsideRth
     if order.sweepToFill:
         proto.sweepToFill = order.sweepToFill
+    if _isValidFloat(order.percentOffset):
+        proto.percentOffset = float(order.percentOffset)
     if order.trailingPercent is not None:
         proto.trailingPercent = float(order.trailingPercent)
     if order.trailStopPrice is not None:
         proto.trailStopPrice = float(order.trailStopPrice)
-    if order.minQty:
+    # ``minQty`` defaults to UNSET_INTEGER in our domain — guarding with
+    # ``if order.minQty:`` would always write the sentinel value to the
+    # wire (UNSET_INTEGER is truthy). Use the explicit unset check.
+    if _isValidInt(order.minQty):
         proto.minQty = order.minQty
     if order.goodAfterTime:
         proto.goodAfterTime = order.goodAfterTime
@@ -155,7 +203,337 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     if order.faPercentage:
         proto.faPercentage = order.faPercentage
 
+    # Volatility family (defaults to UNSET sentinels — must guard
+    # explicitly against the sentinel rather than truthy-zero).
+    if _isValidFloat(order.volatility):
+        proto.volatility = float(order.volatility)
+    if _isValidInt(order.volatilityType):
+        proto.volatilityType = order.volatilityType
+    if order.continuousUpdate:
+        proto.continuousUpdate = order.continuousUpdate
+    if _isValidInt(order.referencePriceType):
+        proto.referencePriceType = order.referencePriceType
+
+    # Delta-neutral family
+    if order.deltaNeutralOrderType:
+        proto.deltaNeutralOrderType = order.deltaNeutralOrderType
+    if _isValidFloat(order.deltaNeutralAuxPrice):
+        proto.deltaNeutralAuxPrice = float(order.deltaNeutralAuxPrice)
+    if order.deltaNeutralConId:
+        proto.deltaNeutralConId = order.deltaNeutralConId
+    if order.deltaNeutralOpenClose:
+        proto.deltaNeutralOpenClose = order.deltaNeutralOpenClose
+    if order.deltaNeutralShortSale:
+        proto.deltaNeutralShortSale = order.deltaNeutralShortSale
+    if order.deltaNeutralShortSaleSlot:
+        proto.deltaNeutralShortSaleSlot = order.deltaNeutralShortSaleSlot
+    if order.deltaNeutralDesignatedLocation:
+        proto.deltaNeutralDesignatedLocation = order.deltaNeutralDesignatedLocation
+
+    # Scale family — all default to UNSET sentinels.
+    if _isValidInt(order.scaleInitLevelSize):
+        proto.scaleInitLevelSize = order.scaleInitLevelSize
+    if _isValidInt(order.scaleSubsLevelSize):
+        proto.scaleSubsLevelSize = order.scaleSubsLevelSize
+    if _isValidFloat(order.scalePriceIncrement):
+        proto.scalePriceIncrement = float(order.scalePriceIncrement)
+    if _isValidFloat(order.scalePriceAdjustValue):
+        proto.scalePriceAdjustValue = float(order.scalePriceAdjustValue)
+    if _isValidInt(order.scalePriceAdjustInterval):
+        proto.scalePriceAdjustInterval = order.scalePriceAdjustInterval
+    if _isValidFloat(order.scaleProfitOffset):
+        proto.scaleProfitOffset = float(order.scaleProfitOffset)
+    if order.scaleAutoReset:
+        proto.scaleAutoReset = order.scaleAutoReset
+    if _isValidInt(order.scaleInitPosition):
+        proto.scaleInitPosition = order.scaleInitPosition
+    if _isValidInt(order.scaleInitFillQty):
+        proto.scaleInitFillQty = order.scaleInitFillQty
+    if order.scaleRandomPercent:
+        proto.scaleRandomPercent = order.scaleRandomPercent
+    if order.scaleTable:
+        proto.scaleTable = order.scaleTable
+
+    # Hedge
+    if order.hedgeType:
+        proto.hedgeType = order.hedgeType
+    if order.hedgeParam:
+        proto.hedgeParam = order.hedgeParam
+
+    # Algo
+    if order.algoStrategy:
+        proto.algoStrategy = order.algoStrategy
+    _fillTagValueMap(order.algoParams, proto.algoParams)
+    if order.algoId:
+        proto.algoId = order.algoId
+
+    # Smart combo routing
+    _fillTagValueMap(order.smartComboRoutingParams, proto.smartComboRoutingParams)
+
+    # CRITICAL: ``transmit`` defaults to True in the domain. If we don't
+    # write it through, the server treats absent==False and stages every
+    # order without transmitting. The bool-truthy guard mirrors IBKR's
+    # reference and lets users override to False (proto3 default-False
+    # then leaves the field unset, which the server reads as not
+    # transmitted — the desired behavior for staged-order workflows).
+    if order.whatIf:
+        proto.whatIf = order.whatIf
+    if order.transmit:
+        proto.transmit = order.transmit
+    if order.overridePercentageConstraints:
+        proto.overridePercentageConstraints = order.overridePercentageConstraints
+
+    # Open / close + origin
+    if order.openClose:
+        proto.openClose = order.openClose
+    if order.origin:
+        proto.origin = order.origin
+    if order.shortSaleSlot:
+        proto.shortSaleSlot = order.shortSaleSlot
+    if order.designatedLocation:
+        proto.designatedLocation = order.designatedLocation
+    # ``exemptCode`` defaults to ``-1`` in our domain (a real wire value
+    # meaning "not exempt"). IBKR's reference uses ``isValidIntValue``;
+    # since ``-1`` is not the UNSET_INTEGER sentinel the field is
+    # always written, which matches IBKR's behavior.
+    if _isValidInt(order.exemptCode):
+        proto.exemptCode = order.exemptCode
+
+    # Delta-neutral clearing
+    if order.deltaNeutralSettlingFirm:
+        proto.deltaNeutralSettlingFirm = order.deltaNeutralSettlingFirm
+    if order.deltaNeutralClearingAccount:
+        proto.deltaNeutralClearingAccount = order.deltaNeutralClearingAccount
+    if order.deltaNeutralClearingIntent:
+        proto.deltaNeutralClearingIntent = order.deltaNeutralClearingIntent
+
+    # Discretionary + smart-routing opt-out
+    if order.discretionaryAmt:
+        proto.discretionaryAmt = order.discretionaryAmt
+    if order.optOutSmartRouting:
+        proto.optOutSmartRouting = order.optOutSmartRouting
+
+    # Box / volatility-style auction extras (UNSET_DOUBLE defaults)
+    if _isValidFloat(order.startingPrice):
+        proto.startingPrice = float(order.startingPrice)
+    if _isValidFloat(order.stockRefPrice):
+        proto.stockRefPrice = float(order.stockRefPrice)
+    if _isValidFloat(order.delta):
+        proto.delta = float(order.delta)
+    if _isValidFloat(order.stockRangeLower):
+        proto.stockRangeLower = float(order.stockRangeLower)
+    if _isValidFloat(order.stockRangeUpper):
+        proto.stockRangeUpper = float(order.stockRangeUpper)
+
+    if order.notHeld:
+        proto.notHeld = order.notHeld
+
+    # Misc options bag
+    _fillTagValueMap(order.orderMiscOptions, proto.orderMiscOptions)
+
+    if order.solicited:
+        proto.solicited = order.solicited
+    if order.randomizeSize:
+        proto.randomizeSize = order.randomizeSize
+    if order.randomizePrice:
+        proto.randomizePrice = order.randomizePrice
+
+    # Pegged-to-benchmark family
+    if order.referenceContractId:
+        proto.referenceContractId = order.referenceContractId
+    if order.peggedChangeAmount:
+        proto.peggedChangeAmount = order.peggedChangeAmount
+    if order.isPeggedChangeAmountDecrease:
+        proto.isPeggedChangeAmountDecrease = order.isPeggedChangeAmountDecrease
+    if order.referenceChangeAmount:
+        proto.referenceChangeAmount = order.referenceChangeAmount
+    if order.referenceExchangeId:
+        proto.referenceExchangeId = order.referenceExchangeId
+
+    # Adjustable orders
+    if order.adjustedOrderType:
+        proto.adjustedOrderType = order.adjustedOrderType
+    if order.triggerPrice is not None:
+        proto.triggerPrice = float(order.triggerPrice)
+    if order.adjustedStopPrice is not None:
+        proto.adjustedStopPrice = float(order.adjustedStopPrice)
+    if order.adjustedStopLimitPrice is not None:
+        proto.adjustedStopLimitPrice = float(order.adjustedStopLimitPrice)
+    if order.adjustedTrailingAmount is not None:
+        proto.adjustedTrailingAmount = float(order.adjustedTrailingAmount)
+    if order.adjustableTrailingUnit:
+        proto.adjustableTrailingUnit = order.adjustableTrailingUnit
+    if order.lmtPriceOffset is not None:
+        proto.lmtPriceOffset = float(order.lmtPriceOffset)
+
+    # Conditions
+    conditionProtos = _createConditionProtos(order.conditions)
+    if conditionProtos:
+        proto.conditions.extend(conditionProtos)
+    if order.conditionsCancelOrder:
+        proto.conditionsCancelOrder = order.conditionsCancelOrder
+    if order.conditionsIgnoreRth:
+        proto.conditionsIgnoreRth = order.conditionsIgnoreRth
+
+    if order.modelCode:
+        proto.modelCode = order.modelCode
+    if order.extOperator:
+        proto.extOperator = order.extOperator
+
+    # Soft-dollar tier (composite). Only emit when the domain object
+    # carries actual data — its ``__bool__`` is False on a default
+    # instance.
+    if order.softDollarTier:
+        sdt = SoftDollarTier_pb2.SoftDollarTier()
+        if order.softDollarTier.name:
+            sdt.name = order.softDollarTier.name
+        # Domain field is ``val`` (legacy spelling); proto field is ``value``.
+        if order.softDollarTier.val:
+            sdt.value = order.softDollarTier.val
+        if order.softDollarTier.displayName:
+            sdt.displayName = order.softDollarTier.displayName
+        proto.softDollarTier.CopyFrom(sdt)
+
+    # Cash-quantity orders
+    if _isValidFloat(order.cashQty):
+        proto.cashQty = float(order.cashQty)
+
+    # MIFID II
+    if order.mifid2DecisionMaker:
+        proto.mifid2DecisionMaker = order.mifid2DecisionMaker
+    if order.mifid2DecisionAlgo:
+        proto.mifid2DecisionAlgo = order.mifid2DecisionAlgo
+    if order.mifid2ExecutionTrader:
+        proto.mifid2ExecutionTrader = order.mifid2ExecutionTrader
+    if order.mifid2ExecutionAlgo:
+        proto.mifid2ExecutionAlgo = order.mifid2ExecutionAlgo
+
+    if order.dontUseAutoPriceForHedge:
+        proto.dontUseAutoPriceForHedge = order.dontUseAutoPriceForHedge
+    if order.isOmsContainer:
+        proto.isOmsContainer = order.isOmsContainer
+    if order.discretionaryUpToLimitPrice:
+        proto.discretionaryUpToLimitPrice = order.discretionaryUpToLimitPrice
+
+    # ``usePriceMgmtAlgo`` is wire-int (0/1/UNSET) but our domain types
+    # it as ``bool``. Mirror IBKR's convention: write 1/0 when the bool
+    # is set to a truthy/falsy value. Domain default ``False`` would
+    # otherwise leave the field absent and mean "use server default".
+    if order.usePriceMgmtAlgo:
+        proto.usePriceMgmtAlgo = 1
+
+    # ``duration`` and ``postToAts`` default to UNSET_INTEGER.
+    if _isValidInt(order.duration):
+        proto.duration = order.duration
+    if _isValidInt(order.postToAts):
+        proto.postToAts = order.postToAts
+
+    if order.advancedErrorOverride:
+        proto.advancedErrorOverride = order.advancedErrorOverride
+    if order.manualOrderTime:
+        proto.manualOrderTime = order.manualOrderTime
+
+    # Mid-price competition family (UNSET sentinels)
+    if _isValidInt(order.minTradeQty):
+        proto.minTradeQty = order.minTradeQty
+    if _isValidInt(order.minCompeteSize):
+        proto.minCompeteSize = order.minCompeteSize
+    if _isValidFloat(order.competeAgainstBestOffset):
+        proto.competeAgainstBestOffset = float(order.competeAgainstBestOffset)
+    if _isValidFloat(order.midOffsetAtWhole):
+        proto.midOffsetAtWhole = float(order.midOffsetAtWhole)
+    if _isValidFloat(order.midOffsetAtHalf):
+        proto.midOffsetAtHalf = float(order.midOffsetAtHalf)
+
+    # Auto-cancel + parent-perm wiring
+    if order.autoCancelDate:
+        proto.autoCancelDate = order.autoCancelDate
+    if order.autoCancelParent:
+        proto.autoCancelParent = order.autoCancelParent
+    if order.parentPermId:
+        proto.parentPermId = order.parentPermId
+
+    # Misc bool / id extras
+    if order.shareholder:
+        proto.shareholder = order.shareholder
+    if order.imbalanceOnly:
+        proto.imbalanceOnly = order.imbalanceOnly
+    # ``routeMarketableToBbo`` is wire-int (0/1) but domain-bool. Same
+    # 1/0 mapping as ``usePriceMgmtAlgo``.
+    if order.routeMarketableToBbo:
+        proto.routeMarketableToBbo = 1
+    if order.refFuturesConId:
+        proto.refFuturesConId = order.refFuturesConId
+    # ``filledQuantity`` is wire-string (Decimal). Encode same as
+    # ``totalQuantity``.
+    if order.filledQuantity is not None:
+        proto.filledQuantity = _decimalToWireString(order.filledQuantity)
+
     return proto
+
+
+def _createConditionProtos(
+    conditions: list[OrderCondition] | None,
+) -> list[OrderCondition_pb2.OrderCondition]:
+    """Encode our domain ``OrderCondition`` subclasses into the wire
+    proto's flat ``OrderCondition`` shape.
+
+    The wire proto carries every possible condition field on a single
+    flat message and uses ``type`` + ``isMore`` etc. to pick which
+    fields are meaningful — mirrors how IBKR's reference
+    ``createConditionsProto`` writes them. Subclass-specific fields
+    that aren't on a given condition are simply not set.
+    """
+    if not conditions:
+        return []
+    out: list[OrderCondition_pb2.OrderCondition] = []
+    for c in conditions:
+        cp = OrderCondition_pb2.OrderCondition()
+        # ``OrderCondition`` is the abstract base — subclass-specific
+        # fields (``condType`` / ``isMore`` / ``price`` / ...) are read
+        # via ``getattr`` so mypy doesn't complain about the base
+        # missing them, and a hand-rolled subclass without one of these
+        # attrs simply skips it instead of crashing.
+        condType = getattr(c, "condType", 0)
+        if condType:
+            cp.type = condType
+        # ``conjunction`` is "a" / "o" in the domain; wire is bool.
+        cp.isConjunctionConnection = getattr(c, "conjunction", "a") == "a"
+        isMore = getattr(c, "isMore", None)
+        if isMore is not None:
+            cp.isMore = isMore
+        conId = getattr(c, "conId", 0)
+        if conId:
+            cp.conId = conId
+        exch = getattr(c, "exch", "")
+        if exch:
+            cp.exchange = exch
+        symbol = getattr(c, "symbol", "")
+        if symbol:
+            cp.symbol = symbol
+        secType = getattr(c, "secType", "")
+        if secType:
+            cp.secType = secType
+        percent = getattr(c, "percent", 0)
+        if percent:
+            cp.percent = percent
+        changePercent = getattr(c, "changePercent", 0)
+        if changePercent:
+            cp.changePercent = changePercent
+        price = getattr(c, "price", 0)
+        if price:
+            cp.price = price
+        condTriggerMethod = getattr(c, "triggerMethod", 0)
+        if condTriggerMethod:
+            cp.triggerMethod = condTriggerMethod
+        time = getattr(c, "time", "")
+        if time:
+            cp.time = time
+        volume = getattr(c, "volume", 0)
+        if volume:
+            cp.volume = volume
+        out.append(cp)
+    return out
 
 
 def createOrder(proto: Order_pb2.Order) -> Order:

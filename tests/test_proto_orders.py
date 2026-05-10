@@ -183,6 +183,146 @@ def test_market_order_does_not_coerce_unset_fields_to_zero():
 
 
 # ---------------------------------------------------------------------------
+# CRITICAL safety regressions — order-payload field coverage
+#
+# Earlier ``createOrderProto`` only wrote ~30 of ~140 IBKR ``Order.proto``
+# fields. The most catastrophic gap was ``transmit`` (domain default
+# ``True``): every protobuf-path order landed on the broker as a staged,
+# non-transmitted order. These tests pin every previously-missing field
+# we now write, so a future refactor can't silently drop them again.
+# ---------------------------------------------------------------------------
+
+
+def test_transmit_round_trips_true_correctly():
+    """Critical safety: ``order.transmit=True`` (the domain default) must
+    cause ``proto.transmit=True`` so the server actually transmits the
+    order. proto3 default-False on absent transmit would leave every
+    protobuf-path order as a non-transmitted staged order."""
+    order = LimitOrder("BUY", 100, 50.5)  # transmit defaults to True
+    assert order.transmit is True
+    proto = createOrderProto(order)
+    assert proto.transmit is True
+    assert proto.HasField("transmit")
+
+
+def test_transmit_explicit_false_round_trips():
+    """User explicitly setting transmit=False must round-trip too —
+    this is how staged-order workflows work in some clients. proto3
+    default-False on absent transmit also reads as not-transmitted on
+    the server, so HasField False is fine for this case."""
+    order = LimitOrder("BUY", 100, 50.5)
+    order.transmit = False
+    proto = createOrderProto(order)
+    assert proto.transmit is False
+
+
+def test_whatIf_round_trips_when_set():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.whatIf = True
+    proto = createOrderProto(order)
+    assert proto.HasField("whatIf")
+    assert proto.whatIf is True
+
+
+def test_whatIf_unset_stays_off_the_wire():
+    # Default ``whatIf=False`` must NOT be written — the server reads
+    # absence as "real order, not a what-if margin check".
+    order = LimitOrder("BUY", 100, 50.5)
+    proto = createOrderProto(order)
+    assert not proto.HasField("whatIf")
+
+
+def test_algo_strategy_and_params_round_trip():
+    from ib_async.contract import TagValue
+
+    order = LimitOrder("BUY", 100, 50.5)
+    order.algoStrategy = "Adaptive"
+    order.algoParams = [TagValue("adaptivePriority", "Normal")]
+    order.algoId = "algo-123"
+    proto = createOrderProto(order)
+    assert proto.HasField("algoStrategy")
+    assert proto.algoStrategy == "Adaptive"
+    assert proto.HasField("algoId")
+    assert proto.algoId == "algo-123"
+    assert dict(proto.algoParams) == {"adaptivePriority": "Normal"}
+
+
+def test_cashQty_round_trips():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.cashQty = 5000.0
+    proto = createOrderProto(order)
+    assert proto.HasField("cashQty")
+    assert proto.cashQty == 5000.0
+
+
+def test_cashQty_unset_sentinel_stays_off_the_wire():
+    # Default is UNSET_DOUBLE; must NOT be written or the server sees
+    # a garbage giant cash amount.
+    order = LimitOrder("BUY", 100, 50.5)
+    proto = createOrderProto(order)
+    assert not proto.HasField("cashQty")
+
+
+def test_manualOrderTime_round_trips():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.manualOrderTime = "20300101 09:30:00"
+    proto = createOrderProto(order)
+    assert proto.HasField("manualOrderTime")
+    assert proto.manualOrderTime == "20300101 09:30:00"
+
+
+def test_triggerPrice_round_trips_via_decimal():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.triggerPrice = Decimal("49.50")
+    proto = createOrderProto(order)
+    assert proto.HasField("triggerPrice")
+    assert proto.triggerPrice == 49.5
+
+
+def test_adjustedStopPrice_round_trips_via_decimal():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.adjustedStopPrice = Decimal("48.25")
+    proto = createOrderProto(order)
+    assert proto.HasField("adjustedStopPrice")
+    assert proto.adjustedStopPrice == 48.25
+
+
+def test_lmtPriceOffset_round_trips_via_decimal():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.lmtPriceOffset = Decimal("0.05")
+    proto = createOrderProto(order)
+    assert proto.HasField("lmtPriceOffset")
+    assert proto.lmtPriceOffset == 0.05
+
+
+def test_volatility_round_trips():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.volatility = 0.25
+    order.volatilityType = 1
+    proto = createOrderProto(order)
+    assert proto.HasField("volatility")
+    assert proto.volatility == 0.25
+    assert proto.HasField("volatilityType")
+    assert proto.volatilityType == 1
+
+
+def test_minQty_unset_sentinel_stays_off_the_wire():
+    """Domain ``minQty`` defaults to ``UNSET_INTEGER`` — a previously
+    truthy-guard would write the sentinel value (~2.1B) to the wire."""
+    order = LimitOrder("BUY", 100, 50.5)
+    proto = createOrderProto(order)
+    assert not proto.HasField("minQty")
+
+
+def test_minQty_real_value_round_trips():
+    order = LimitOrder("BUY", 100, 50.5)
+    order.minQty = 50
+    proto = createOrderProto(order)
+    assert proto.HasField("minQty")
+    assert proto.minQty == 50
+
+
+# ---------------------------------------------------------------------------
 # OrderStatus — Decimal | None coercion + falsy-unset semantics
 # ---------------------------------------------------------------------------
 

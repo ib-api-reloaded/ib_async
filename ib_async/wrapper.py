@@ -938,12 +938,14 @@ class Wrapper:
         self.requests.set_result(ReqIdKey(reqId))
 
     def commissionReport(self, commissionReport: CommissionReport):
-        if commissionReport.yield_ is None:
-            commissionReport.yield_ = self.defaults.unset
-
-        if commissionReport.realizedPNL is None:
-            commissionReport.realizedPNL = self.defaults.unset
-
+        # ``commissionReport.yield_`` and ``realizedPNL`` are
+        # ``Decimal | None`` for v3.0 — ``None`` IS the unset sentinel
+        # so we don't substitute ``defaults.unset`` (which is
+        # ``float('nan')`` and would (a) violate the field type and
+        # (b) reintroduce the ``Decimal('NaN')`` truthy trap). Future
+        # IBDefaults plumbing for Decimal-typed fields lands as a
+        # separate piece of work — see the operator's IBDefaults.unset
+        # follow-up note.
         fill = self.fills.get(commissionReport.execId)
         if fill:
             report = dataclassUpdate(fill.commissionReport, commissionReport)

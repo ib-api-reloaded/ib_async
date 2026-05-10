@@ -582,6 +582,12 @@ class Decoder:
             if proto.HasField("execution")
             else Execution()
         )
+        # Wire ``Execution.time`` is a string in IBKR's
+        # ``"YYYYmmdd HH:MM:SS [tz]"`` format. The converter leaves it
+        # raw on the domain object; we normalize here so the proto path
+        # produces the same datetime shape as the binary path.
+        if proto.HasField("execution") and proto.execution.HasField("time"):
+            execution.time = self._normalizeExecutionTime(proto.execution.time)
         self.wrapper.execDetails(reqId, contract, execution)
 
     def _protoExecutionDetailsEnd(self, proto: Any) -> None:
@@ -619,6 +625,31 @@ class Decoder:
     def _protoContractDataEnd(self, proto: Any) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
         self.wrapper.contractDetailsEnd(reqId)
+
+    def _normalizeExecutionTime(self, timeStr: str) -> datetime:
+        """Parse an IBKR execution-time wire string into a tz-aware
+        ``datetime`` in the wrapper's default timezone.
+
+        Used by both the binary ``execDetails`` decoder and the protobuf
+        ``_protoExecutionDetails`` handler so executions across both
+        wire formats land with consistent timestamps. Without this, the
+        protobuf path would leave ``ex.time`` at the dataclass default
+        (epoch) and the wrapper's ``Fill`` would stamp ``self.lastTime``
+        (the local clock at receive time) — wrong for any reconciliation
+        or end-of-day analytics.
+        """
+        parsed = parseIBDatetime(timeStr)
+        if isinstance(parsed, datetime):
+            time = parsed
+        else:
+            # 8-char "YYYYmmdd" wire value lacks a time-of-day; combine with
+            # midnight so downstream tz operations have a usable datetime.
+            time = datetime.combine(parsed, datetime.min.time())
+        if not time.tzinfo:
+            tz = self.wrapper.ib.TimezoneTWS
+            if tz:
+                time = time.replace(tzinfo=ZoneInfo(str(tz)))
+        return time.astimezone(self.wrapper.defaultTimezone)
 
     def _protoOrderBound(self, proto: Any) -> None:
         permId = proto.permId if proto.HasField("permId") else 0
@@ -1406,19 +1437,7 @@ class Decoder:
 
         self.parse(c)
         self.parse(ex)
-        parsed = parseIBDatetime(timeStr)
-        if isinstance(parsed, datetime):
-            time = parsed
-        else:
-            # 8-char "YYYYmmdd" wire value lacks a time-of-day; combine with
-            # midnight so downstream tz operations have a usable datetime.
-            time = datetime.combine(parsed, datetime.min.time())
-        if not time.tzinfo:
-            tz = self.wrapper.ib.TimezoneTWS
-            if tz:
-                time = time.replace(tzinfo=ZoneInfo(str(tz)))
-
-        ex.time = time.astimezone(self.wrapper.defaultTimezone)
+        ex.time = self._normalizeExecutionTime(timeStr)
         self.wrapper.execDetails(int(reqId), c, ex)
 
     def historicalData(self, fields):
