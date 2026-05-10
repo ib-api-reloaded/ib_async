@@ -2010,7 +2010,8 @@ class Decoder:
         get = iter(fields).__next__
 
         histogram = [
-            HistogramData(price=float(get()), count=int(get())) for _ in range(int(n))
+            HistogramData(price=float(get()), size=safe_decimal(get()))
+            for _ in range(int(n))
         ]
 
         self.wrapper.histogramData(int(reqId), histogram)
