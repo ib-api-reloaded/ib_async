@@ -883,8 +883,8 @@ class Decoder:
     def _protoPriceSizeTick(self, proto: Any) -> None:
         from ._proto.market_data import createPriceSizeTickArgs
 
-        a = createPriceSizeTickArgs(proto)
-        self.wrapper.priceSizeTick(a.reqId, a.tickType, a.price, a.size)
+        a = createPriceSizeTickArgs(proto, self.serverVersion)
+        self.wrapper.priceSizeTick(a.reqId, a.tickType, a.price, a.size, a.attrib)
 
     def _protoTickSize(self, proto: Any) -> None:
         from ._proto.market_data import createTickSizeArgs
@@ -1331,11 +1331,22 @@ class Decoder:
                 setattr(obj, name, bool(int(v)))
 
     def priceSizeTick(self, fields):
-        _, _, reqId, tickType, price, size, _ = fields
+        # Wire layout: [msgId, version, reqId, tickType, price, size, attrMask]
+        # The trailing attrMask was previously discarded — silently dropping
+        # canAutoExecute / pastLimit / preOpen flags user code needs to gate
+        # liquidity-quality decisions on. v3.0 surfaces them via TickAttrib.
+        from ._proto.market_data import decodeTickAttribFromMask
+
+        _, _, reqId, tickType, price, size, attrMask = fields
 
         if price:
+            attrib = decodeTickAttribFromMask(int(attrMask or 0), self.serverVersion)
             self.wrapper.priceSizeTick(
-                int(reqId), int(tickType), float(price), float(size or 0)
+                int(reqId),
+                int(tickType),
+                float(price),
+                float(size or 0),
+                attrib,
             )
 
     def errorMsg(self, fields):
