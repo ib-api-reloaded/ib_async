@@ -6,11 +6,16 @@ IB_PROTO_SOURCE environment variable, defaulting to
 ``*_pb2.py`` / ``*_pb2.pyi`` modules into ``ib_async/_pb/``, which is
 gitignored.
 
-Run via ``make protos`` or ``uv run python scripts/generate_protos.py``.
+Generated bindings are NEVER committed to the repo. They are
+deterministic outputs of ``protoc`` and travel as build artifacts:
 
-The generated bindings are deterministic outputs of ``protoc`` and are
-not committed to the repository — every build environment regenerates
-them from the schemas that match the TWS API version we target.
+* **Local dev:** run ``uv run python scripts/generate_protos.py``
+  after ``uv sync`` so the package can import its own bindings.
+* **Release build:** the build backend invokes this script before
+  packaging so the generated modules are bundled into the wheel and
+  sdist. End users do not need ``protoc`` / ``grpcio-tools`` to
+  install or run the released package — only the runtime
+  ``protobuf`` dependency, which is declared in ``pyproject.toml``.
 
 Behaviour:
   1. Wipe and recreate ``ib_async/_pb/`` so stale bindings cannot

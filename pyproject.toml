@@ -46,7 +46,20 @@ docs = [
 ]
 
 [tool.poetry]
-include = ["ib_async/py.typed"]
+# ``ib_async/_pb/`` holds protobuf bindings generated from IBKR's
+# upstream ``.proto`` schemas by ``scripts/generate_protos.py``. The
+# directory is gitignored — generated artifacts never enter version
+# control — so the Makefile / release workflow regenerates them
+# locally before invoking ``uv build``. The glob below tells
+# poetry-core to bundle whatever ``_pb/*`` files exist on disk into
+# the sdist and wheel so end users of ``pip install ib_async`` get
+# the bindings without needing ``protoc`` or ``grpcio-tools``.
+include = [
+    "ib_async/py.typed",
+    { path = "ib_async/_pb/**/*.py", format = ["sdist", "wheel"] },
+    { path = "ib_async/_pb/**/*.pyi", format = ["sdist", "wheel"] },
+    { path = "ib_async/_pb/py.typed", format = ["sdist", "wheel"] },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.11"
