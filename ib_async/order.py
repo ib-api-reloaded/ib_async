@@ -138,6 +138,15 @@ class Order:
     conditionsCancelOrder: bool = False
     conditionsIgnoreRth: bool = False
     extOperator: str = ""
+    # Attached-order (stop-loss / profit-take) cross-references — IBKR
+    # reference ``ibapi/order.py`` carries them; the wire ships them on
+    # the ``PlaceOrderRequest.attachedOrders`` sub-message rather than
+    # ``Order`` itself, but the domain dataclass keeps them here so user
+    # code at the call site has a single object to populate.
+    slOrderId: int = UNSET_INTEGER
+    slOrderType: str = ""
+    ptOrderId: int = UNSET_INTEGER
+    ptOrderType: str = ""
     softDollarTier: SoftDollarTier = field(default_factory=SoftDollarTier)
     cashQty: float | Decimal = UNSET_DOUBLE
     mifid2DecisionMaker: str = ""

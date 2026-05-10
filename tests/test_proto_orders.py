@@ -22,9 +22,12 @@ from __future__ import annotations
 from decimal import Decimal
 
 from ib_async._pb import (
+    AttachedOrders_pb2,
     CommissionAndFeesReport_pb2,
     Contract_pb2,
     Execution_pb2,
+    ExecutionFilter_pb2,
+    ExecutionRequest_pb2,
     OpenOrder_pb2,
     Order_pb2,
     OrderState_pb2,
@@ -35,6 +38,8 @@ from ib_async._proto.orders import (
     createCancelOrderRequestProto,
     createCommissionReport,
     createExecution,
+    createExecutionFilterProto,
+    createExecutionRequestProto,
     createOpenOrder,
     createOrder,
     createOrderProto,
@@ -43,6 +48,7 @@ from ib_async._proto.orders import (
     createPlaceOrderRequestProto,
 )
 from ib_async.contract import Stock
+from ib_async.objects import ExecutionFilter
 from ib_async.order import LimitOrder, MarketOrder, Order
 
 # ---------------------------------------------------------------------------
@@ -1122,3 +1128,101 @@ def test_create_order_conditions_decode_each_subclass():
     assert order.conditions[5].changePercent == 5.5
     assert order.conditions[5].conId == 11
     assert order.conditions[5].exch == "ARCA"
+
+
+# ---------------------------------------------------------------------------
+# Attached-order cross-references — slOrderId / slOrderType / ptOrderId /
+# ptOrderType ride on PlaceOrderRequest.attachedOrders, not on Order
+# itself. The fields default to UNSET_INTEGER / "" so unset domain
+# instances must NOT write sentinel values to the wire.
+# ---------------------------------------------------------------------------
+
+
+def test_attached_orders_round_trip_through_place_order_request():
+    order = LimitOrder(
+        "BUY",
+        100,
+        50.0,
+        slOrderId=11,
+        slOrderType="STP",
+        ptOrderId=22,
+        ptOrderType="LMT",
+    )
+    proto = createPlaceOrderRequestProto(7, Stock("AAPL", "SMART", "USD"), order)
+    raw = proto.SerializeToString()
+    parsed = PlaceOrderRequest_pb2.PlaceOrderRequest()
+    parsed.ParseFromString(raw)
+    assert parsed.HasField("attachedOrders")
+    ao = parsed.attachedOrders
+    assert ao.slOrderId == 11
+    assert ao.slOrderType == "STP"
+    assert ao.ptOrderId == 22
+    assert ao.ptOrderType == "LMT"
+
+
+def test_attached_orders_unset_fields_stay_unset_on_wire():
+    order = LimitOrder("BUY", 100, 50.0)
+    proto = createPlaceOrderRequestProto(7, Stock("AAPL", "SMART", "USD"), order)
+    ao = proto.attachedOrders
+    # UNSET_INTEGER / empty-string defaults must NOT bleed through —
+    # otherwise the broker sees bogus order ids.
+    assert not ao.HasField("slOrderId")
+    assert not ao.HasField("slOrderType")
+    assert not ao.HasField("ptOrderId")
+    assert not ao.HasField("ptOrderType")
+
+
+def test_attached_orders_pb_message_round_trips_independently():
+    proto = AttachedOrders_pb2.AttachedOrders()
+    proto.slOrderId = 5
+    proto.slOrderType = "STP"
+    proto.ptOrderId = 6
+    proto.ptOrderType = "LMT"
+    raw = proto.SerializeToString()
+    parsed = AttachedOrders_pb2.AttachedOrders()
+    parsed.ParseFromString(raw)
+    assert parsed.slOrderId == 5
+    assert parsed.ptOrderType == "LMT"
+
+
+# ---------------------------------------------------------------------------
+# ExecutionFilter — lastNDays + specificDates ship past
+# MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS (200).
+# ---------------------------------------------------------------------------
+
+
+def test_execution_filter_carries_last_n_days_and_specific_dates():
+    f = ExecutionFilter(lastNDays=5, specificDates=[20260101, 20260102])
+    assert f.lastNDays == 5
+    assert f.specificDates == [20260101, 20260102]
+
+
+def test_execution_filter_proto_round_trips_last_n_days_and_specific_dates():
+    f = ExecutionFilter(lastNDays=7, specificDates=[20260301, 20260302])
+    proto = createExecutionFilterProto(f)
+    raw = proto.SerializeToString()
+    parsed = ExecutionFilter_pb2.ExecutionFilter()
+    parsed.ParseFromString(raw)
+    assert parsed.lastNDays == 7
+    assert list(parsed.specificDates) == [20260301, 20260302]
+
+
+def test_execution_filter_proto_skips_unset_last_n_days():
+    f = ExecutionFilter()
+    proto = createExecutionFilterProto(f)
+    # UNSET_INTEGER must NOT write through — otherwise the server
+    # sees a sentinel-valued day count.
+    assert not proto.HasField("lastNDays")
+    assert len(proto.specificDates) == 0
+
+
+def test_execution_request_proto_carries_filter_with_new_fields():
+    f = ExecutionFilter(clientId=3, lastNDays=2, specificDates=[20260101])
+    proto = createExecutionRequestProto(99, f)
+    raw = proto.SerializeToString()
+    parsed = ExecutionRequest_pb2.ExecutionRequest()
+    parsed.ParseFromString(raw)
+    assert parsed.reqId == 99
+    assert parsed.executionFilter.clientId == 3
+    assert parsed.executionFilter.lastNDays == 2
+    assert list(parsed.executionFilter.specificDates) == [20260101]

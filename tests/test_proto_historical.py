@@ -19,6 +19,7 @@ from decimal import Decimal
 
 import ib_async as ibi
 from ib_async._pb import (
+    CancelContractData_pb2,
     CancelHeadTimestamp_pb2,
     CancelHistogramData_pb2,
     CancelHistoricalData_pb2,
@@ -46,6 +47,7 @@ from ib_async._pb import (
 )
 from ib_async._proto.historical import (
     createBarData,
+    createCancelContractDataProto,
     createCancelHeadTimestampProto,
     createCancelHistogramDataProto,
     createCancelHistoricalDataProto,
@@ -485,3 +487,13 @@ def test_cancel_historical_ticks_round_trip():
     decoded = CancelHistoricalTicks_pb2.CancelHistoricalTicks()
     decoded.ParseFromString(proto.SerializeToString())
     assert decoded.reqId == 7
+
+
+def test_cancel_contract_data_proto_round_trip():
+    """Proto-only message family (no binary-protocol counterpart). The
+    encoder writes the reqId and the wire round-trips it cleanly."""
+    proto = createCancelContractDataProto(42)
+    decoded = CancelContractData_pb2.CancelContractData()
+    decoded.ParseFromString(proto.SerializeToString())
+    assert decoded.reqId == 42
+    assert decoded.HasField("reqId")

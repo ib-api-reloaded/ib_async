@@ -2,6 +2,8 @@
 
 import dataclasses
 import logging
+import sys
+import types
 import typing
 from collections.abc import Callable
 from datetime import datetime
@@ -11,8 +13,19 @@ from typing import Any, Final
 from ._proto.safe import safe_decimal
 from ._server_versions import (
     MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
+    MIN_SERVER_VER_BOND_ACCRUED_INTEREST,
+    MIN_SERVER_VER_BOND_TRADING_HOURS,
+    MIN_SERVER_VER_CME_TAGGING_FIELDS_IN_OPEN_ORDER,
+    MIN_SERVER_VER_CUSTOMER_ACCOUNT,
     MIN_SERVER_VER_ERROR_TIME,
+    MIN_SERVER_VER_FUND_DATA_FIELDS,
     MIN_SERVER_VER_HISTORICAL_DATA_END,
+    MIN_SERVER_VER_IMBALANCE_ONLY,
+    MIN_SERVER_VER_INCLUDE_OVERNIGHT,
+    MIN_SERVER_VER_INELIGIBILITY_REASONS,
+    MIN_SERVER_VER_LAST_TRADE_DATE,
+    MIN_SERVER_VER_PROFESSIONAL_CUSTOMER,
+    MIN_SERVER_VER_SUBMITTER,
     MIN_SERVER_VER_SYNT_REALTIME_BARS,
 )
 from .contract import (
@@ -21,6 +34,7 @@ from .contract import (
     ContractDescription,
     ContractDetails,
     DeltaNeutralContract,
+    IneligibilityReason,
 )
 from .objects import (
     BarData,
@@ -67,6 +81,11 @@ _CONV: Final[dict[type, Callable[[str], Any]]] = {
 # cache populates lazily on first parse() of each class so we pay the
 # dataclasses.fields() introspection once per class instead of per call.
 _PARSE_FIELDS: dict[type, tuple[tuple[str, type, Any], ...]] = {}
+
+# Sentinel module-like object used when a class's ``__module__`` is missing
+# from ``sys.modules`` — keeps ``vars()`` from raising on dataclasses defined
+# in synthetic modules (test fixtures, dynamically generated classes).
+_NULL_MOD = types.ModuleType("_null_mod")
 
 # tickByTick subtypes 1 and 2 share the same payload shape; both are
 # "all-last" trades (1 = trades, 2 = all trades including odd lots).
@@ -1266,10 +1285,29 @@ class Decoder:
             # class annotations so ``Decimal | None`` fields (whose
             # ``field.default`` is ``None``) are recognised. Subsequent
             # ``parse()`` calls of this class hit the cached plan.
-            hints = typing.get_type_hints(cls)
+            #
+            # ``typing.get_type_hints(cls)`` evaluates the entire class
+            # annotation block, including ``ClassVar`` entries. Compat
+            # shims attached at import time (see ``ib_async/__init__.py``
+            # binding ``cls.tuple = dataclassAsTuple``) overwrite class
+            # attributes whose names collide with builtins used inside
+            # those ClassVar annotations (``ClassVar[tuple[str, ...]]``).
+            # When that happens the bulk evaluation raises with a confusing
+            # ``'function' object is not subscriptable`` and ``parse()``
+            # would crash for every Order/OrderState wire frame. We
+            # resolve hints per-dataclass-field instead — ClassVars are
+            # not in ``dataclasses.fields()`` so the broken annotations
+            # are never touched.
+            module_globals = vars(sys.modules.get(cls.__module__, None) or _NULL_MOD)
             plan: list[tuple[str, type, Any]] = []
             for field in dataclasses.fields(obj):
-                typ = _resolveCoerceType(hints.get(field.name))
+                raw = field.type
+                if isinstance(raw, str):
+                    try:
+                        raw = eval(raw, module_globals)
+                    except Exception:
+                        continue
+                typ = _resolveCoerceType(raw)
                 if typ is not None:
                     plan.append((field.name, typ, field.default))
             entries = tuple(plan)
@@ -1375,6 +1413,16 @@ class Decoder:
             c.symbol,
             c.secType,
             lastTimes,
+            *fields,
+        ) = fields
+        # Gate 182 (MIN_SERVER_VER_LAST_TRADE_DATE): IBKR appends a separate
+        # ``lastTradeDate`` slot after the legacy ``lastTradeDateOrContractMonth``
+        # block. Without this read every subsequent ContractDetails field shifts
+        # one slot left on a 182+ server (strike lands as right, right as
+        # exchange, etc.), corrupting the entire decode.
+        if self.serverVersion >= MIN_SERVER_VER_LAST_TRADE_DATE:
+            c.lastTradeDate, *fields = fields
+        (
             c.strike,
             c.right,
             c.exchange,
@@ -1439,6 +1487,50 @@ class Decoder:
                 *fields,
             ) = fields
 
+        # Gate 179 (MIN_SERVER_VER_FUND_DATA_FIELDS): for FUND secType only,
+        # the wire frame carries a 16-field fund-family block. The protobuf
+        # path already reads these (see ``_proto/contracts.py`` at f11c4ba);
+        # without the binary read every following gated field (ineligibility
+        # reasons) shifts left and the FUND fields themselves are lost.
+        if (
+            self.serverVersion >= MIN_SERVER_VER_FUND_DATA_FIELDS
+            and c.secType == "FUND"
+        ):
+            (
+                cd.fundName,
+                cd.fundFamily,
+                cd.fundType,
+                cd.fundFrontLoad,
+                cd.fundBackLoad,
+                cd.fundBackLoadTimeInterval,
+                cd.fundManagementFee,
+                cd.fundClosed,
+                cd.fundClosedForNewInvestors,
+                cd.fundClosedForNewMoney,
+                cd.fundNotifyAmount,
+                cd.fundMinimumInitialPurchase,
+                cd.fundSubsequentMinimumPurchase,
+                cd.fundBlueSkyStates,
+                cd.fundBlueSkyTerritories,
+                cd.fundDistributionPolicyIndicator,
+                cd.fundAssetType,
+                *fields,
+            ) = fields
+
+        # Gate 186 (MIN_SERVER_VER_INELIGIBILITY_REASONS): variable-length list
+        # prefixed by its count. Each entry is two strings: ``id_`` and
+        # ``description``. When count==0 only the count slot is present.
+        if self.serverVersion >= MIN_SERVER_VER_INELIGIBILITY_REASONS:
+            ineligibilityCount, *fields = fields
+            n = int(ineligibilityCount or 0)
+            if n > 0:
+                cd.ineligibilityReasonList = []
+                for _ in range(n):
+                    rid, rdesc, *fields = fields
+                    cd.ineligibilityReasonList.append(
+                        IneligibilityReason(id_=rid, description=rdesc)
+                    )
+
         times = lastTimes.split("-" if "-" in lastTimes else None)
 
         if len(times) > 0:
@@ -1497,6 +1589,22 @@ class Decoder:
             cd.nextOptionPartial,
             cd.notes,
             cd.longName,
+            *fields,
+        ) = fields
+
+        # Gate 188 (MIN_SERVER_VER_BOND_TRADING_HOURS): IBKR inserts a
+        # timezone + hours block between ``longName`` and ``evRule``.
+        # Without these reads on a 188+ server, ``evRule`` lands as
+        # ``timeZoneId`` and every following field shifts left.
+        if self.serverVersion >= MIN_SERVER_VER_BOND_TRADING_HOURS:
+            (
+                cd.timeZoneId,
+                cd.tradingHours,
+                cd.liquidHours,
+                *fields,
+            ) = fields
+
+        (
             cd.evRule,
             cd.evMultiplier,
             numSecIds,
@@ -1574,6 +1682,13 @@ class Decoder:
         ) = fields
         if self.serverVersion >= 178:
             ex.pendingPriceRevision, *fields = fields
+
+        # Gate 198 (MIN_SERVER_VER_SUBMITTER): IBKR appends the submitting
+        # user identity past the pending-price-revision flag. Domain field
+        # ``Execution.submitter`` already exists; without this read the
+        # value is silently dropped on every modern fill.
+        if self.serverVersion >= MIN_SERVER_VER_SUBMITTER:
+            ex.submitter, *fields = fields
 
         self.parse(c)
         self.parse(ex)
@@ -2280,6 +2395,34 @@ class Decoder:
                 *fields,
             ) = fields
 
+        # Trailing wire fields IBKR appends past gate 170. Most landing
+        # slots have no Order dataclass field yet — they are consumed and
+        # discarded so subsequent gated reads don't shift left. Order
+        # dataclass field expansion is task #163; only ``extOperator`` and
+        # ``imbalanceOnly`` (already on Order) are surfaced here.
+        if self.serverVersion >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _customerAccount, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _professionalCustomer, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_BOND_ACCRUED_INTEREST:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _bondAccruedInterest, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_INCLUDE_OVERNIGHT:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _includeOvernight, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_CME_TAGGING_FIELDS_IN_OPEN_ORDER:
+            # ``extOperator`` lives on Order; ``manualOrderIndicator`` does not
+            # yet — consumed and discarded. Order dataclass field expansion is
+            # task #163.
+            o.extOperator, _manualOrderIndicator, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_SUBMITTER:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _submitter, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_IMBALANCE_ONLY:
+            o.imbalanceOnly, *fields = fields
+
         self.parse(c)
         self.parse(o)
         self.parse(st)
@@ -2491,6 +2634,19 @@ class Decoder:
                 o.midOffsetAtHalf,
                 *fields,
             ) = fields
+
+        # Trailing wire fields IBKR's ``processCompletedOrderMsg`` appends past
+        # gate 170. Order dataclass field expansion is task #163 — these slots
+        # are consumed and discarded so subsequent gated reads stay aligned.
+        if self.serverVersion >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _customerAccount, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _professionalCustomer, *fields = fields
+        if self.serverVersion >= MIN_SERVER_VER_SUBMITTER:
+            # Consumed but not surfaced; Order dataclass field expansion is task #163
+            _submitter, *fields = fields
 
         self.parse(c)
         self.parse(o)

@@ -19,8 +19,19 @@ from ._pb_msgids import (
     PROTOBUF_MSG_IDS,
 )
 from ._server_versions import (
+    MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
+    MIN_SERVER_VER_AUTO_CANCEL_PARENT,
     MIN_SERVER_VER_CME_TAGGING_FIELDS,
+    MIN_SERVER_VER_CUSTOMER_ACCOUNT,
+    MIN_SERVER_VER_DURATION,
+    MIN_SERVER_VER_IMBALANCE_ONLY,
+    MIN_SERVER_VER_INCLUDE_OVERNIGHT,
     MIN_SERVER_VER_MANUAL_ORDER_TIME,
+    MIN_SERVER_VER_MANUAL_ORDER_TIME_EXERCISE_OPTIONS,
+    MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS,
+    MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS,
+    MIN_SERVER_VER_POST_TO_ATS,
+    MIN_SERVER_VER_PROFESSIONAL_CUSTOMER,
     MIN_SERVER_VER_RFQ_FIELDS,
     MIN_SERVER_VER_UNDO_RFQ_FIELDS,
 )
@@ -804,22 +815,22 @@ class Client:
             order.usePriceMgmtAlgo,
         ]
 
-        if version >= 158:
+        if version >= MIN_SERVER_VER_DURATION:
             fields += [order.duration]
 
-        if version >= 160:
+        if version >= MIN_SERVER_VER_POST_TO_ATS:
             fields += [order.postToAts]
 
-        if version >= 162:
+        if version >= MIN_SERVER_VER_AUTO_CANCEL_PARENT:
             fields += [order.autoCancelParent]
 
-        if version >= 166:
+        if version >= MIN_SERVER_VER_ADVANCED_ORDER_REJECT:
             fields += [order.advancedErrorOverride]
 
-        if version >= 169:
+        if version >= MIN_SERVER_VER_MANUAL_ORDER_TIME:
             fields += [order.manualOrderTime]
 
-        if version >= 170:
+        if version >= MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS:
             if contract.exchange == "IBKRATS":
                 fields += [order.minTradeQty]
             if order.orderType in {"PEG BEST", "PEGBEST"}:
@@ -828,6 +839,34 @@ class Client:
                     fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
             elif order.orderType in {"PEG MID", "PEGMID"}:
                 fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
+
+        # Gates 178+ — mirror IBKR ``client.py:placeOrder`` lines 2746-2763.
+        # Fields not yet on our ``Order`` dataclass use ``getattr`` so the
+        # writes are decoupled from the sibling task that adds them.
+
+        if version >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
+            fields += [getattr(order, "customerAccount", "")]
+
+        if version >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
+            fields += [getattr(order, "professionalCustomer", False)]
+
+        # Interim 2-field RFQ block, written ONLY for servers in
+        # [RFQ_FIELDS, UNDO_RFQ_FIELDS).  IBKR writes ``("", UNSET_INTEGER)``
+        # — bondAccruedInterest plus a placeholder int.
+        if MIN_SERVER_VER_RFQ_FIELDS <= version < MIN_SERVER_VER_UNDO_RFQ_FIELDS:
+            fields += [getattr(order, "bondAccruedInterest", ""), UNSET_INTEGER]
+
+        if version >= MIN_SERVER_VER_INCLUDE_OVERNIGHT:
+            fields += [getattr(order, "includeOvernight", False)]
+
+        if version >= MIN_SERVER_VER_CME_TAGGING_FIELDS:
+            # ``manualOrderIndicator`` rides at gate 192; ``extOperator``
+            # is gate 105 (EXT_OPERATOR) and is already written above as
+            # part of the unconditional block — see IBKR ref line 2674.
+            fields += [getattr(order, "manualOrderIndicator", UNSET_INTEGER)]
+
+        if version >= MIN_SERVER_VER_IMBALANCE_ONLY:
+            fields += [order.imbalanceOnly]
 
         self.send(*fields)
 
@@ -904,7 +943,7 @@ class Client:
             proto = createExecutionRequestProto(reqId, execFilter)
             self.sendProto(_M.REQ_EXECUTIONS, proto.SerializeToString())
             return
-        self.send(
+        fields: list[Any] = [
             7,
             3,
             reqId,
@@ -915,7 +954,18 @@ class Client:
             execFilter.secType,
             execFilter.exchange,
             execFilter.side,
-        )
+        ]
+        # ``lastNDays`` and ``specificDates`` arrived at gate 200
+        # (PARAMETRIZED_DAYS_OF_EXECUTIONS).  The dataclass fields don't
+        # exist on ``ExecutionFilter`` yet — sibling task adds them —
+        # so ``getattr`` keeps the wire write decoupled.
+        if self.serverVersion() >= MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS:
+            fields += [getattr(execFilter, "lastNDays", UNSET_INTEGER)]
+            specificDates = getattr(execFilter, "specificDates", None) or []
+            fields += [len(specificDates)]
+            for specificDate in specificDates:
+                fields += [specificDate]
+        self.send(*fields)
 
     def reqIds(self, numIds):
         self.send(8, 1, numIds)
@@ -1124,7 +1174,16 @@ class Client:
         self.send(*fields)
 
     def exerciseOptions(
-        self, reqId, contract, exerciseAction, exerciseQuantity, account, override
+        self,
+        reqId,
+        contract,
+        exerciseAction,
+        exerciseQuantity,
+        account,
+        override,
+        manualOrderTime: str = "",
+        customerAccount: str = "",
+        professionalCustomer: bool = False,
     ):
         if self.useProtoBuf(_M.EXERCISE_OPTIONS):
             from ._proto.rest import createExerciseOptionsRequestProto
@@ -1138,10 +1197,13 @@ class Client:
                     exerciseQuantity,
                     account,
                     override,
+                    manualOrderTime=manualOrderTime,
+                    customerAccount=customerAccount,
+                    professionalCustomer=professionalCustomer,
                 ).SerializeToString(),
             )
             return
-        self.send(
+        fields: list[Any] = [
             21,
             2,
             reqId,
@@ -1160,7 +1222,18 @@ class Client:
             exerciseQuantity,
             account,
             override,
-        )
+        ]
+        # Gated trailers mirror IBKR ``client.py:exerciseOptions`` lines
+        # 1775-1786.  Each field is only written when the connected
+        # server actually understands it — sending an extra trailer to a
+        # pre-180 server desyncs the wire frame.
+        if self.serverVersion() >= MIN_SERVER_VER_MANUAL_ORDER_TIME_EXERCISE_OPTIONS:
+            fields += [manualOrderTime]
+        if self.serverVersion() >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
+            fields += [customerAccount]
+        if self.serverVersion() >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
+            fields += [professionalCustomer]
+        self.send(*fields)
 
     def reqScannerSubscription(
         self,
