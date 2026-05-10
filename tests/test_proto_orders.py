@@ -23,6 +23,7 @@ from decimal import Decimal
 
 from ib_async._pb import (
     CommissionAndFeesReport_pb2,
+    Contract_pb2,
     Execution_pb2,
     OpenOrder_pb2,
     Order_pb2,
@@ -556,3 +557,506 @@ def test_cancel_order_request_skips_unset_optional_fields():
     # Empty optionals stay unset on the wire.
     assert not proto.orderCancel.HasField("manualOrderCancelTime")
     assert not proto.orderCancel.HasField("extOperator")
+
+
+# ---------------------------------------------------------------------------
+# Parity with IBKR's ``decoder_utils.decodeOrder`` — every field IBKR
+# reads, we read.
+#
+# Wire fields IBKR's reference reads that our domain ``Order`` dataclass
+# does NOT carry (and therefore the converter intentionally drops):
+# ``customerAccount``, ``professionalCustomer``, ``bondAccruedInterest``,
+# ``includeOvernight``, ``manualOrderIndicator``, ``submitter``,
+# ``deactivate``, ``postOnly``, ``allowPreOpen``, ``ignoreOpenAuction``,
+# ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``. Adding
+# those to the converter without dataclass support would silently
+# swallow the wire data; instead we drop the wire field intentionally
+# until the dataclass grows the matching attribute.
+# ---------------------------------------------------------------------------
+
+
+def test_create_order_reads_every_field_decoder_utils_reads():
+    """Mirror IBKR's ``decoder_utils.decodeOrder`` field list.
+
+    Every wire field IBKR's reference reads (and that maps to a real
+    domain attribute) MUST round-trip here. If this test fails because
+    a field IBKR newly reads landed unread, the converter is silently
+    losing wire state — fail loud.
+    """
+    from ib_async._pb import OrderCondition_pb2
+
+    proto = Order_pb2.Order()
+    proto.orderId = 11
+    proto.action = "BUY"
+    proto.totalQuantity = "100"
+    proto.orderType = "LMT"
+    proto.lmtPrice = 50.5
+    proto.auxPrice = 0.10
+    proto.tif = "GTC"
+    proto.ocaGroup = "grp-1"
+    proto.account = "DU111"
+    proto.openClose = "O"
+    proto.origin = 1
+    proto.orderRef = "ref-1"
+    proto.clientId = 7
+    proto.permId = 9999
+    proto.outsideRth = True
+    proto.hidden = True
+    proto.discretionaryAmt = 0.5
+    proto.goodAfterTime = "20300101 09:30:00"
+    proto.faGroup = "fa-grp"
+    proto.faMethod = "PctChange"
+    proto.faPercentage = "10"
+    proto.modelCode = "model"
+    proto.goodTillDate = "20301231 16:00:00"
+    proto.rule80A = "I"
+    proto.percentOffset = 0.25
+    proto.settlingFirm = "sf"
+    proto.shortSaleSlot = 1
+    proto.designatedLocation = "loc"
+    proto.exemptCode = -1
+    proto.startingPrice = 49.0
+    proto.stockRefPrice = 50.0
+    proto.delta = 0.6
+    proto.stockRangeLower = 48.0
+    proto.stockRangeUpper = 52.0
+    proto.displaySize = 10
+    proto.blockOrder = True
+    proto.sweepToFill = True
+    proto.allOrNone = True
+    proto.minQty = 5
+    proto.ocaType = 2
+    proto.parentId = 12345
+    proto.triggerMethod = 1
+    proto.volatility = 0.3
+    proto.volatilityType = 1
+    proto.deltaNeutralOrderType = "MKT"
+    proto.deltaNeutralAuxPrice = 0.05
+    proto.deltaNeutralConId = 99
+    proto.deltaNeutralSettlingFirm = "dnsf"
+    proto.deltaNeutralClearingAccount = "dnca"
+    proto.deltaNeutralClearingIntent = "dnci"
+    proto.deltaNeutralOpenClose = "C"
+    proto.deltaNeutralShortSale = True
+    proto.deltaNeutralShortSaleSlot = 2
+    proto.deltaNeutralDesignatedLocation = "dnloc"
+    proto.continuousUpdate = True
+    proto.referencePriceType = 1
+    proto.trailStopPrice = 49.5
+    proto.trailingPercent = 0.05
+    proto.smartComboRoutingParams["leg"] = "1"
+    proto.scaleInitLevelSize = 100
+    proto.scaleSubsLevelSize = 200
+    proto.scalePriceIncrement = 0.5
+    proto.scalePriceAdjustValue = 0.1
+    proto.scalePriceAdjustInterval = 60
+    proto.scaleProfitOffset = 1.0
+    proto.scaleAutoReset = True
+    proto.scaleInitPosition = 0
+    proto.scaleInitFillQty = 10
+    proto.scaleRandomPercent = True
+    proto.hedgeType = "D"
+    proto.hedgeParam = "0.5"
+    proto.optOutSmartRouting = True
+    proto.clearingAccount = "ca"
+    proto.clearingIntent = "ci"
+    proto.notHeld = True
+    proto.algoStrategy = "Adaptive"
+    proto.algoParams["adaptivePriority"] = "Normal"
+    proto.solicited = True
+    proto.whatIf = True
+    proto.randomizeSize = True
+    proto.randomizePrice = True
+    proto.referenceContractId = 7
+    proto.isPeggedChangeAmountDecrease = True
+    proto.peggedChangeAmount = 0.05
+    proto.referenceChangeAmount = 0.1
+    proto.referenceExchangeId = "NASDAQ"
+    # Conditions: one PriceCondition (type=1).
+    cond = OrderCondition_pb2.OrderCondition()
+    cond.type = 1
+    cond.isConjunctionConnection = True
+    cond.isMore = True
+    cond.conId = 12345
+    cond.exchange = "SMART"
+    cond.price = 99.5
+    cond.triggerMethod = 0
+    proto.conditions.append(cond)
+    proto.conditionsIgnoreRth = True
+    proto.conditionsCancelOrder = True
+    proto.adjustedOrderType = "STP"
+    proto.triggerPrice = 48.0
+    proto.lmtPriceOffset = 0.05
+    proto.adjustedStopPrice = 47.5
+    proto.adjustedStopLimitPrice = 47.0
+    proto.adjustedTrailingAmount = 0.10
+    proto.adjustableTrailingUnit = 1
+    proto.softDollarTier.name = "tier-name"
+    proto.softDollarTier.value = "tier-value"
+    proto.softDollarTier.displayName = "Tier Display"
+    proto.cashQty = 5000.0
+    proto.dontUseAutoPriceForHedge = True
+    proto.isOmsContainer = True
+    proto.discretionaryUpToLimitPrice = True
+    proto.usePriceMgmtAlgo = 1
+    proto.duration = 86400
+    proto.postToAts = 30
+    proto.autoCancelParent = True
+    proto.minTradeQty = 10
+    proto.minCompeteSize = 100
+    proto.competeAgainstBestOffset = 0.01
+    proto.midOffsetAtWhole = 0.005
+    proto.midOffsetAtHalf = 0.0025
+    proto.autoCancelDate = "20301231"
+    proto.filledQuantity = "50"
+    proto.refFuturesConId = 8888
+    proto.shareholder = "Shareholder"
+    proto.routeMarketableToBbo = 1
+    proto.parentPermId = 1234567890
+    proto.imbalanceOnly = True
+    proto.activeStartTime = "20300101 09:30:00 US/Eastern"
+    proto.activeStopTime = "20300101 16:00:00 US/Eastern"
+
+    order = createOrder(proto)
+
+    # Identifiers
+    assert order.orderId == 11
+    assert order.clientId == 7
+    assert order.permId == 9999
+    assert order.parentId == 12345
+    # Primary
+    assert order.action == "BUY"
+    assert order.totalQuantity == Decimal("100")
+    assert order.orderType == "LMT"
+    assert order.lmtPrice == Decimal("50.5")
+    assert order.auxPrice == Decimal("0.1")
+    assert order.tif == "GTC"
+    # Routing / clearing
+    assert order.ocaGroup == "grp-1"
+    assert order.account == "DU111"
+    assert order.openClose == "O"
+    assert order.origin == 1
+    assert order.orderRef == "ref-1"
+    assert order.outsideRth is True
+    assert order.hidden is True
+    assert order.discretionaryAmt == 0.5
+    assert order.goodAfterTime == "20300101 09:30:00"
+    # FA
+    assert order.faGroup == "fa-grp"
+    assert order.faMethod == "PctChange"
+    assert order.faPercentage == "10"
+    assert order.modelCode == "model"
+    assert order.goodTillDate == "20301231 16:00:00"
+    assert order.rule80A == "I"
+    assert order.percentOffset == 0.25
+    assert order.settlingFirm == "sf"
+    assert order.shortSaleSlot == 1
+    assert order.designatedLocation == "loc"
+    assert order.exemptCode == -1
+    # Box / vol auction
+    assert order.startingPrice == 49.0
+    assert order.stockRefPrice == 50.0
+    assert order.delta == 0.6
+    assert order.stockRangeLower == 48.0
+    assert order.stockRangeUpper == 52.0
+    assert order.displaySize == 10
+    assert order.blockOrder is True
+    assert order.sweepToFill is True
+    assert order.allOrNone is True
+    assert order.minQty == 5
+    assert order.ocaType == 2
+    assert order.triggerMethod == 1
+    # Volatility / delta-neutral
+    assert order.volatility == 0.3
+    assert order.volatilityType == 1
+    assert order.deltaNeutralOrderType == "MKT"
+    assert order.deltaNeutralAuxPrice == 0.05
+    assert order.deltaNeutralConId == 99
+    assert order.deltaNeutralSettlingFirm == "dnsf"
+    assert order.deltaNeutralClearingAccount == "dnca"
+    assert order.deltaNeutralClearingIntent == "dnci"
+    assert order.deltaNeutralOpenClose == "C"
+    assert order.deltaNeutralShortSale is True
+    assert order.deltaNeutralShortSaleSlot == 2
+    assert order.deltaNeutralDesignatedLocation == "dnloc"
+    assert order.continuousUpdate is True
+    assert order.referencePriceType == 1
+    # Trail
+    assert order.trailStopPrice == Decimal("49.5")
+    assert order.trailingPercent == Decimal("0.05")
+    # Smart combo routing
+    assert len(order.smartComboRoutingParams) == 1
+    assert order.smartComboRoutingParams[0].tag == "leg"
+    assert order.smartComboRoutingParams[0].value == "1"
+    # Scale
+    assert order.scaleInitLevelSize == 100
+    assert order.scaleSubsLevelSize == 200
+    assert order.scalePriceIncrement == 0.5
+    assert order.scalePriceAdjustValue == 0.1
+    assert order.scalePriceAdjustInterval == 60
+    assert order.scaleProfitOffset == 1.0
+    assert order.scaleAutoReset is True
+    assert order.scaleInitPosition == 0
+    assert order.scaleInitFillQty == 10
+    assert order.scaleRandomPercent is True
+    # Hedge
+    assert order.hedgeType == "D"
+    assert order.hedgeParam == "0.5"
+    # Misc
+    assert order.optOutSmartRouting is True
+    assert order.clearingAccount == "ca"
+    assert order.clearingIntent == "ci"
+    assert order.notHeld is True
+    # Algo
+    assert order.algoStrategy == "Adaptive"
+    assert len(order.algoParams) == 1
+    assert order.algoParams[0].tag == "adaptivePriority"
+    assert order.algoParams[0].value == "Normal"
+    # Booleans
+    assert order.solicited is True
+    assert order.whatIf is True
+    assert order.randomizeSize is True
+    assert order.randomizePrice is True
+    # Pegged-to-benchmark
+    assert order.referenceContractId == 7
+    assert order.isPeggedChangeAmountDecrease is True
+    assert order.peggedChangeAmount == 0.05
+    assert order.referenceChangeAmount == 0.1
+    assert order.referenceExchangeId == "NASDAQ"
+    # Conditions
+    assert len(order.conditions) == 1
+    pc = order.conditions[0]
+    from ib_async.order import PriceCondition
+
+    assert isinstance(pc, PriceCondition)
+    assert pc.conjunction == "a"
+    assert pc.isMore is True
+    assert pc.conId == 12345
+    assert pc.exch == "SMART"
+    assert pc.price == 99.5
+    assert order.conditionsIgnoreRth is True
+    assert order.conditionsCancelOrder is True
+    # Adjustable
+    assert order.adjustedOrderType == "STP"
+    assert order.triggerPrice == Decimal("48")
+    assert order.lmtPriceOffset == Decimal("0.05")
+    assert order.adjustedStopPrice == Decimal("47.5")
+    assert order.adjustedStopLimitPrice == Decimal("47")
+    assert order.adjustedTrailingAmount == Decimal("0.1")
+    assert order.adjustableTrailingUnit == 1
+    # Soft-dollar tier
+    assert order.softDollarTier.name == "tier-name"
+    assert order.softDollarTier.val == "tier-value"
+    assert order.softDollarTier.displayName == "Tier Display"
+    # Cash + bool extras
+    assert order.cashQty == 5000.0
+    assert order.dontUseAutoPriceForHedge is True
+    assert order.isOmsContainer is True
+    assert order.discretionaryUpToLimitPrice is True
+    # Wire is int(1); domain is bool.
+    assert order.usePriceMgmtAlgo is True
+    assert order.duration == 86400
+    assert order.postToAts == 30
+    assert order.autoCancelParent is True
+    # Mid-price competition
+    assert order.minTradeQty == 10
+    assert order.minCompeteSize == 100
+    assert order.competeAgainstBestOffset == 0.01
+    assert order.midOffsetAtWhole == 0.005
+    assert order.midOffsetAtHalf == 0.0025
+    # Completed-order
+    assert order.autoCancelDate == "20301231"
+    assert order.filledQuantity == Decimal("50")
+    assert order.refFuturesConId == 8888
+    assert order.shareholder == "Shareholder"
+    # Wire int(1) -> domain bool True.
+    assert order.routeMarketableToBbo is True
+    assert order.parentPermId == 1234567890
+    assert order.imbalanceOnly is True
+    # Active start / stop time
+    assert order.activeStartTime == "20300101 09:30:00 US/Eastern"
+    assert order.activeStopTime == "20300101 16:00:00 US/Eastern"
+
+
+def test_create_order_minimal_proto_leaves_unset_fields_at_defaults():
+    """A proto with ONLY commonly-set fields produces an Order whose
+    other fields stay at the dataclass defaults — ``None`` for
+    ``Decimal | None``, ``False``/``0``/``""`` for primitives,
+    ``[]`` for repeated fields. If a converter ever spuriously
+    populates an unset field with a sentinel value, this test fails.
+    """
+    proto = Order_pb2.Order()
+    proto.action = "BUY"
+    proto.totalQuantity = "100"
+    proto.lmtPrice = 50.5
+    proto.orderType = "LMT"
+
+    order = createOrder(proto)
+    # Set fields land
+    assert order.action == "BUY"
+    assert order.totalQuantity == Decimal("100")
+    assert order.lmtPrice == Decimal("50.5")
+    assert order.orderType == "LMT"
+    # Decimal | None unset stays None
+    assert order.auxPrice is None
+    assert order.trailStopPrice is None
+    assert order.trailingPercent is None
+    assert order.triggerPrice is None
+    assert order.lmtPriceOffset is None
+    assert order.adjustedStopPrice is None
+    assert order.adjustedStopLimitPrice is None
+    assert order.adjustedTrailingAmount is None
+    assert order.filledQuantity is None
+    # Primitives stay at their dataclass defaults
+    assert order.tif == ""
+    assert order.account == ""
+    assert order.outsideRth is False
+    assert order.hidden is False
+    assert order.allOrNone is False
+    assert order.transmit is True  # dataclass default
+    assert order.whatIf is False
+    assert order.solicited is False
+    assert order.usePriceMgmtAlgo is False
+    assert order.routeMarketableToBbo is False
+    # Repeated fields stay empty
+    assert order.algoStrategy == ""
+    assert order.algoParams == []
+    assert order.smartComboRoutingParams == []
+    assert order.orderMiscOptions == []
+    assert order.conditions == []
+    assert order.orderComboLegs == []
+    # Soft-dollar tier stays at default-empty (falsy)
+    assert not order.softDollarTier
+
+
+def test_create_order_combo_legs_sourced_from_contract_proto():
+    """``orderComboLegs`` per-leg prices live on the CONTRACT proto, not
+    the order proto. ``createOrder`` must read them from the contract
+    proto when supplied."""
+    from ib_async._pb import ComboLeg_pb2
+
+    contractProto = Contract_pb2.Contract()
+    leg = ComboLeg_pb2.ComboLeg()
+    leg.perLegPrice = 1.25
+    contractProto.comboLegs.append(leg)
+
+    orderProto = Order_pb2.Order()
+    orderProto.action = "BUY"
+
+    order = createOrder(orderProto, contractProto=contractProto)
+    assert len(order.orderComboLegs) == 1
+    assert order.orderComboLegs[0].price == 1.25
+
+
+def test_create_order_combo_legs_default_empty_when_no_contract_proto():
+    """Without a contract proto, ``orderComboLegs`` stays at its
+    dataclass default empty list — the order proto alone does NOT
+    carry per-leg prices."""
+    proto = Order_pb2.Order()
+    proto.action = "BUY"
+    order = createOrder(proto)
+    assert order.orderComboLegs == []
+
+
+def test_open_order_envelope_propagates_combo_legs_to_order():
+    """End-to-end: an OpenOrder envelope with combo legs on its
+    contract message must surface those legs on the decoded
+    ``Order.orderComboLegs``."""
+    from ib_async._pb import ComboLeg_pb2
+
+    proto = OpenOrder_pb2.OpenOrder()
+    proto.orderId = 1
+    proto.contract.symbol = "AAPL"
+    leg = ComboLeg_pb2.ComboLeg()
+    leg.perLegPrice = 2.5
+    proto.contract.comboLegs.append(leg)
+    proto.order.action = "BUY"
+
+    _orderId, _contract, order, _state = createOpenOrder(proto)
+    assert len(order.orderComboLegs) == 1
+    assert order.orderComboLegs[0].price == 2.5
+
+
+def test_create_order_conditions_decode_each_subclass():
+    """Each OrderCondition subclass (price/time/margin/exec/volume/pct)
+    must round-trip the subclass-specific fields. IBKR's reference
+    dispatches on ``type``; we mirror that table."""
+    from ib_async._pb import OrderCondition_pb2
+    from ib_async.order import (
+        ExecutionCondition,
+        MarginCondition,
+        PercentChangeCondition,
+        PriceCondition,
+        TimeCondition,
+        VolumeCondition,
+    )
+
+    proto = Order_pb2.Order()
+
+    # type=1 PriceCondition
+    c1 = OrderCondition_pb2.OrderCondition()
+    c1.type = 1
+    c1.price = 100.0
+    c1.conId = 1
+    c1.exchange = "SMART"
+    c1.triggerMethod = 1
+    c1.isMore = True
+    proto.conditions.append(c1)
+    # type=3 TimeCondition
+    c3 = OrderCondition_pb2.OrderCondition()
+    c3.type = 3
+    c3.time = "20300101 09:30:00"
+    c3.isMore = False
+    proto.conditions.append(c3)
+    # type=4 MarginCondition
+    c4 = OrderCondition_pb2.OrderCondition()
+    c4.type = 4
+    c4.percent = 25
+    c4.isMore = True
+    proto.conditions.append(c4)
+    # type=5 ExecutionCondition
+    c5 = OrderCondition_pb2.OrderCondition()
+    c5.type = 5
+    c5.secType = "STK"
+    c5.exchange = "NYSE"
+    c5.symbol = "AAPL"
+    proto.conditions.append(c5)
+    # type=6 VolumeCondition
+    c6 = OrderCondition_pb2.OrderCondition()
+    c6.type = 6
+    c6.volume = 1000
+    c6.conId = 7
+    c6.exchange = "NASDAQ"
+    proto.conditions.append(c6)
+    # type=7 PercentChangeCondition
+    c7 = OrderCondition_pb2.OrderCondition()
+    c7.type = 7
+    c7.changePercent = 5.5
+    c7.conId = 11
+    c7.exchange = "ARCA"
+    proto.conditions.append(c7)
+
+    order = createOrder(proto)
+    assert len(order.conditions) == 6
+    assert isinstance(order.conditions[0], PriceCondition)
+    assert order.conditions[0].price == 100.0
+    assert order.conditions[0].conId == 1
+    assert order.conditions[0].exch == "SMART"
+    assert order.conditions[0].triggerMethod == 1
+    assert isinstance(order.conditions[1], TimeCondition)
+    assert order.conditions[1].time == "20300101 09:30:00"
+    assert order.conditions[1].isMore is False
+    assert isinstance(order.conditions[2], MarginCondition)
+    assert order.conditions[2].percent == 25
+    assert isinstance(order.conditions[3], ExecutionCondition)
+    assert order.conditions[3].secType == "STK"
+    assert order.conditions[3].exch == "NYSE"
+    assert order.conditions[3].symbol == "AAPL"
+    assert isinstance(order.conditions[4], VolumeCondition)
+    assert order.conditions[4].volume == 1000
+    assert order.conditions[4].conId == 7
+    assert order.conditions[4].exch == "NASDAQ"
+    assert isinstance(order.conditions[5], PercentChangeCondition)
+    assert order.conditions[5].changePercent == 5.5
+    assert order.conditions[5].conId == 11
+    assert order.conditions[5].exch == "ARCA"

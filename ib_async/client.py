@@ -1219,7 +1219,20 @@ class Client:
 
     def reqCurrentTimeInMillis(self):
         """Request the IBKR server clock in milliseconds. Protobuf only —
-        no binary fallback (IBKR never shipped this on the legacy wire)."""
+        no binary fallback (IBKR never shipped this on the legacy wire).
+
+        Raises ``ValueError`` on servers below
+        ``MIN_SERVER_VER_PROTOBUF_REST_MESSAGES_3`` (213). The wire
+        frame would otherwise leave with the protobuf +200 sentinel
+        for a server that has no idea what to do with it, leaving
+        the awaiter wedged forever.
+        """
+        if not self.useProtoBuf(_M.REQ_CURRENT_TIME_IN_MILLIS):
+            raise ValueError(
+                "reqCurrentTimeInMillis requires TWS / IB Gateway server "
+                "version >= 213 (protobuf REST messages); current server "
+                f"version is {self._serverVersion}."
+            )
         from ._proto.rest import createCurrentTimeInMillisRequestProto
 
         self.sendProto(

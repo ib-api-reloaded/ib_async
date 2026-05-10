@@ -591,7 +591,9 @@ class Decoder:
         from ._proto.orders import createOrder, createOrderState
 
         contract = createContract(proto.contract)
-        order = createOrder(proto.order)
+        # Pass the contract proto so combo-leg-bearing orders decode
+        # their orderComboLegs from the contract side of the wire.
+        order = createOrder(proto.order, contractProto=proto.contract)
         state = createOrderState(proto.orderState)
         self.wrapper.completedOrder(contract, order, state)
 

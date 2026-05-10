@@ -258,6 +258,20 @@ def test_req_current_time_in_millis_always_protobuf():
     proto.ParseFromString(body)
 
 
+def test_req_current_time_in_millis_rejects_pre_213_server():
+    """A pre-213 server has no idea what the protobuf +200 sentinel
+    means. Better to raise on the caller's stack than ship a malformed
+    frame and leave the awaiter wedged forever.
+    """
+    import pytest
+
+    ib = _ibAtVersion(212)
+    sent = _captureSend(ib)
+    with pytest.raises(ValueError, match="version >= 213"):
+        ib.client.reqCurrentTimeInMillis()
+    assert sent == []
+
+
 def test_req_user_info_uses_protobuf_at_gate():
     ib = _ibAtVersion(212)
     sent = _captureSend(ib)
