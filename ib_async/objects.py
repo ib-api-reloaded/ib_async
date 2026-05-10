@@ -801,7 +801,7 @@ class IBDefaults:
     emptyPrice: Any = -1
     emptySize: Any = 0
 
-    # optionally replace ib_async default for all instance variable values before popualted from API updates
+    # optionally replace ib_async default for all instance variable values before populated from API updates
     unset: Any = nan
 
     # optionally change the timezone used for log history events in objects (no impact on orders or data processing)

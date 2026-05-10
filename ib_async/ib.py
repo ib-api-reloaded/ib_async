@@ -169,7 +169,7 @@ class IB:
 
     Events:
         * ``connectedEvent`` ():
-          Is emitted after connecting and synchronzing with TWS/gateway.
+          Is emitted after connecting and synchronizing with TWS/gateway.
 
         * ``disconnectedEvent`` ():
           Is emitted after disconnecting from TWS/gateway.
@@ -1237,7 +1237,7 @@ class IB:
         If the returned list is empty then the contract is not known;
         If the list has multiple values then the contract is ambiguous.
 
-        The fully qualified contract is available in the the
+        The fully qualified contract is available in the
         ContractDetails.contract attribute.
 
         This method is blocking.
@@ -1361,7 +1361,7 @@ class IB:
             durationStr: Time span of all the bars. Examples:
                 '60 S', '30 D', '13 W', '6 M', '10 Y'.
             barSizeSetting: Time period of one bar. Must be one of:
-                '1 secs', '5 secs', '10 secs' 15 secs', '30 secs',
+                '1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
                 '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
                 '20 mins', '30 mins',
                 '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
@@ -1476,7 +1476,7 @@ class IB:
                 result can contain a bit more to accommodate all ticks in
                 the latest second.
             whatToShow: One of 'Bid_Ask', 'Midpoint' or 'Trades'.
-            useRTH: If True then only show data from within Regular
+            useRth: If True then only show data from within Regular
                 Trading Hours, if False then show all data.
             ignoreSize: Ignore bid/ask ticks that only update the size.
             miscOptions: Unknown.
@@ -1970,7 +1970,7 @@ class IB:
             contract: Option contract.
             volatility: Option volatility to use in calculation.
             underPrice: Price of the underlier to use in calculation
-            implVolOptions: Unknown
+            optPrcOptions: Unknown
         """
         return self._run(
             self.calculateOptionPriceAsync(
@@ -2192,7 +2192,7 @@ class IB:
             self.client.reqWshEventData(reqId, data)
 
     def cancelWshEventData(self):
-        """Cancel active WHS event data."""
+        """Cancel active WSH event data."""
         reqId = self.wrapper._wshEventReqId
         if not reqId:
             self._logger.warning("reqWshEventData not active")

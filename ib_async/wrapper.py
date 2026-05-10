@@ -1171,10 +1171,16 @@ class Wrapper:
         bars.updateEvent.emit(bars, hasNewBar)
 
     def headTimestamp(self, reqId: int, headTimestamp: str):
+        # ``parseIBDatetime`` raises ``ValueError`` for malformed wire strings
+        # and ``ZoneInfoNotFoundError`` (a subclass of ``KeyError``) for
+        # unrecognised timezone names. Catching only ``ValueError`` left an
+        # awaiter hanging when IBKR shipped a timezone the host doesn't know;
+        # we widen to ``Exception`` so any parse failure surfaces as the
+        # request error instead of silently dropping the frame.
         try:
             dt = self._normalizeDatetime(parseIBDatetime(headTimestamp))
             self.requests.set_result(ReqIdKey(reqId), dt)
-        except ValueError as exc:
+        except Exception as exc:
             self.requests.set_error(ReqIdKey(reqId), exc)
 
     def historicalTicks(self, reqId: int, ticks: list[HistoricalTick], done: bool):
