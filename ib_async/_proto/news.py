@@ -54,6 +54,7 @@ from ..objects import (
     NewsTick,
     WshEventData,
 )
+from ..util import UNSET_INTEGER
 
 # ---------------------------------------------------------------------------
 # Args dataclasses for converter return shapes — slotted, frozen, named.
@@ -372,14 +373,27 @@ def createWshEventDataRequestProto(
     """
     proto = WshEventDataRequest_pb2.WshEventDataRequest()
     proto.reqId = reqId
-    proto.conId = data.conId
-    proto.filter = data.filter
-    proto.fillWatchlist = data.fillWatchlist
-    proto.fillPortfolio = data.fillPortfolio
-    proto.fillCompetitors = data.fillCompetitors
-    proto.startDate = data.startDate
-    proto.endDate = data.endDate
-    proto.totalLimit = data.totalLimit
+    # ``conId`` and ``totalLimit`` default to ``None`` on the domain
+    # ``WshEventData`` dataclass — the universal unset marker. Writing
+    # the field with no user-supplied value would have IBKR's server
+    # interpret a sentinel as a real contract id and reject the
+    # subscription. Skip the write when the domain value is ``None``.
+    if data.conId is not None:
+        proto.conId = data.conId
+    if data.filter:
+        proto.filter = data.filter
+    if data.fillWatchlist:
+        proto.fillWatchlist = data.fillWatchlist
+    if data.fillPortfolio:
+        proto.fillPortfolio = data.fillPortfolio
+    if data.fillCompetitors:
+        proto.fillCompetitors = data.fillCompetitors
+    if data.startDate:
+        proto.startDate = data.startDate
+    if data.endDate:
+        proto.endDate = data.endDate
+    if data.totalLimit != UNSET_INTEGER:
+        proto.totalLimit = data.totalLimit
     return proto
 
 

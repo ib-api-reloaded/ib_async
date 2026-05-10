@@ -66,6 +66,7 @@ def _isValidInt(value: int) -> bool:
     ``UNSET_INTEGER`` sentinel."""
     return value != UNSET_INTEGER
 
+
 # ---------------------------------------------------------------------------
 # Args dataclasses (slotted, frozen — operator-mandated, not tuples)
 # ---------------------------------------------------------------------------

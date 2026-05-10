@@ -457,9 +457,15 @@ class IB:
         return self.client.isReady()
 
     def _onError(self, reqId, errorCode, errorString, contract):
-        if errorCode == 1102:
-            # "Connectivity between IB and Trader Workstation has been
-            # restored": Resubscribe to account summary.
+        if errorCode in (1101, 1102):
+            # 1101 - "Connectivity between IB and TWS has been restored -
+            #        data lost." Subscriptions on the TWS side were dropped;
+            #        the caller must resubscribe to get fresh values.
+            # 1102 - "Connectivity between IB and TWS has been restored -
+            #        data maintained." Subscriptions survived but the
+            #        account-summary feed is restarted regardless.
+            # Either way, resync the cached account summary so downstream
+            # consumers see a fresh snapshot. Mirrors IBKR sample behavior.
             asyncio.ensure_future(self.reqAccountSummaryAsync())
 
     run = staticmethod(util.run)

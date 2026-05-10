@@ -18,6 +18,7 @@ from ._server_versions import (
     MIN_SERVER_VER_CME_TAGGING_FIELDS_IN_OPEN_ORDER,
     MIN_SERVER_VER_CUSTOMER_ACCOUNT,
     MIN_SERVER_VER_ERROR_TIME,
+    MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS,
     MIN_SERVER_VER_FUND_DATA_FIELDS,
     MIN_SERVER_VER_HISTORICAL_DATA_END,
     MIN_SERVER_VER_IMBALANCE_ONLY,
@@ -55,7 +56,7 @@ from .objects import (
     TickAttribBidAsk,
     TickAttribLast,
 )
-from .order import Order, OrderComboLeg, OrderCondition, OrderState
+from .order import Order, OrderAllocation, OrderComboLeg, OrderCondition, OrderState
 from .util import UNSET_DOUBLE, ZoneInfo, parseIBDatetime
 from .wrapper import Wrapper
 
@@ -2340,6 +2341,61 @@ class Decoder:
             st.minCommission,
             st.maxCommission,
             st.commissionCurrency,
+            *fields,
+        ) = fields
+
+        # FULL_ORDER_PREVIEW_FIELDS block — IBKR's reference appends the
+        # OutsideRTH margin family, suggestedSize / rejectReason, and the
+        # repeated orderAllocations between commissionCurrency and
+        # warningText starting at server 195. Without this gating block
+        # the wire stream shifts left and every gated read past warningText
+        # reads from the wrong slot, silently corrupting the rest of the
+        # decode. ``decodeWhatIfInfoAndCommissionAndFees`` mirror.
+        if self.serverVersion >= MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS:
+            (
+                st.marginCurrency,
+                st.initMarginBeforeOutsideRTH,
+                st.maintMarginBeforeOutsideRTH,
+                st.equityWithLoanBeforeOutsideRTH,
+                st.initMarginChangeOutsideRTH,
+                st.maintMarginChangeOutsideRTH,
+                st.equityWithLoanChangeOutsideRTH,
+                st.initMarginAfterOutsideRTH,
+                st.maintMarginAfterOutsideRTH,
+                st.equityWithLoanAfterOutsideRTH,
+                suggestedSize,
+                st.rejectReason,
+                *fields,
+            ) = fields
+            st.suggestedSize = safe_decimal(suggestedSize)
+            accountsCount = int(fields.pop(0))
+            if accountsCount > 0:
+                allocations: list[OrderAllocation] = []
+                for _ in range(accountsCount):
+                    (
+                        allocAccount,
+                        allocPosition,
+                        allocPositionDesired,
+                        allocPositionAfter,
+                        allocDesiredAllocQty,
+                        allocAllowedAllocQty,
+                        allocIsMonetary,
+                        *fields,
+                    ) = fields
+                    allocations.append(
+                        OrderAllocation(
+                            account=allocAccount,
+                            position=safe_decimal(allocPosition),
+                            positionDesired=safe_decimal(allocPositionDesired),
+                            positionAfter=safe_decimal(allocPositionAfter),
+                            desiredAllocQty=safe_decimal(allocDesiredAllocQty),
+                            allowedAllocQty=safe_decimal(allocAllowedAllocQty),
+                            isMonetary=bool(int(allocIsMonetary or 0)),
+                        )
+                    )
+                st.orderAllocations = allocations
+
+        (
             st.warningText,
             o.randomizeSize,
             o.randomizePrice,

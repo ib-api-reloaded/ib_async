@@ -65,16 +65,16 @@ from .._pb import (
     TickSnapshotEnd_pb2,
     TickString_pb2,
 )
+from .._server_versions import (
+    MIN_SERVER_VER_PAST_LIMIT,
+    MIN_SERVER_VER_PRE_OPEN_BID_ASK,
+)
 from ..contract import Contract
 from ..objects import (
     DepthMktDataDescription,
     TickAttrib,
     TickAttribBidAsk,
     TickAttribLast,
-)
-from .._server_versions import (
-    MIN_SERVER_VER_PAST_LIMIT,
-    MIN_SERVER_VER_PRE_OPEN_BID_ASK,
 )
 from .contracts import createContractProto
 from .safe import safe_decimal

@@ -15,6 +15,8 @@ sparse.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .._pb import (
     ComboLeg_pb2,
     Contract_pb2,
@@ -33,7 +35,11 @@ from ..contract import (
     IneligibilityReason,
     TagValue,
 )
+from ..util import UNSET_DOUBLE
 from .safe import format_proto_double, safe_decimal
+
+if TYPE_CHECKING:
+    from ..order import Order
 
 # --- ComboLeg -------------------------------------------------------------
 
@@ -60,7 +66,17 @@ def createComboLeg(proto: ComboLeg_pb2.ComboLeg) -> ComboLeg:
     return leg
 
 
-def createComboLegProto(leg: ComboLeg) -> ComboLeg_pb2.ComboLeg:
+def createComboLegProto(
+    leg: ComboLeg, perLegPrice: float | None = None
+) -> ComboLeg_pb2.ComboLeg:
+    """Encode a domain ``ComboLeg`` plus the matching order's per-leg
+    price into the wire proto.
+
+    ``perLegPrice`` lives on the ``Order.orderComboLegs`` parallel list
+    in our domain model — IBKR's reference encodes it on the
+    ``ComboLeg`` proto's ``perLegPrice`` field. Pass ``None`` (or skip
+    the arg) when there is no order pricing context.
+    """
     proto = ComboLeg_pb2.ComboLeg()
     # Read every field from the SOURCE leg, never from the freshly-empty
     # target proto (the contributor's PR had this swapped, which made
@@ -85,6 +101,11 @@ def createComboLegProto(leg: ComboLeg) -> ComboLeg_pb2.ComboLeg:
     # real value.
     if leg.exemptCode != -1:
         proto.exemptCode = leg.exemptCode
+    # ``perLegPrice`` is BAG-secType-only and rides on the contract proto
+    # alongside the leg, NOT the order proto. Mirror IBKR's
+    # ``createComboLegProto(comboLeg, perLegPrice)`` reference.
+    if perLegPrice is not None and perLegPrice != UNSET_DOUBLE:
+        proto.perLegPrice = float(perLegPrice)
     return proto
 
 
@@ -173,7 +194,20 @@ def createContract(proto: Contract_pb2.Contract) -> Contract:
     return contract
 
 
-def createContractProto(contract: Contract) -> Contract_pb2.Contract:
+def createContractProto(
+    contract: Contract, order: Order | None = None
+) -> Contract_pb2.Contract:
+    """Encode a domain ``Contract`` (and optional ``Order`` for combo
+    pricing context) into the wire proto.
+
+    When ``order`` is provided AND the contract carries combo legs, the
+    parallel ``order.orderComboLegs`` list supplies a ``perLegPrice``
+    per leg. IBKR's reference helper signature is
+    ``createContractProto(contract, order)``; only the place-order path
+    has order context. All other call sites (market data, historical
+    data, etc.) pass ``None`` and the wire proto omits ``perLegPrice``
+    on every leg.
+    """
     proto = Contract_pb2.Contract()
     if contract.conId:
         proto.conId = contract.conId
@@ -215,8 +249,22 @@ def createContractProto(contract: Contract) -> Contract_pb2.Contract:
         proto.includeExpired = contract.includeExpired
     if contract.comboLegsDescrip:
         proto.comboLegsDescrip = contract.comboLegsDescrip
-    for leg in contract.comboLegs:
-        proto.comboLegs.append(createComboLegProto(leg))
+    # Per-leg pricing rides on ComboLeg.perLegPrice; the parallel list
+    # ``order.orderComboLegs`` carries it on the order side. Match IBKR's
+    # reference ``createComboLegProtoList`` — when there are more contract
+    # legs than order legs, the extras get no per-leg price (i.e. unset
+    # on the wire), which is the same behaviour the binary path produced.
+    orderLegs = (
+        order.orderComboLegs if order is not None and order.orderComboLegs else []
+    )
+    for i, leg in enumerate(contract.comboLegs):
+        perLegPrice: float | None = None
+        if i < len(orderLegs):
+            raw = orderLegs[i].price
+            # ``Decimal`` legs survive ``float()``; ``UNSET_DOUBLE`` (the
+            # dataclass default) is filtered inside ``createComboLegProto``.
+            perLegPrice = float(raw) if raw is not None else None
+        proto.comboLegs.append(createComboLegProto(leg, perLegPrice))
     if contract.deltaNeutralContract is not None:
         proto.deltaNeutralContract.CopyFrom(
             createDeltaNeutralContractProto(contract.deltaNeutralContract)
