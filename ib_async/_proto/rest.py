@@ -446,7 +446,12 @@ def createStartApiRequestProto(
 ) -> StartApiRequest_pb2.StartApiRequest:
     proto = StartApiRequest_pb2.StartApiRequest()
     proto.clientId = clientId
-    proto.optionalCapabilities = optionalCapabilities
+    # Written only when non-empty. With proto3 ``optional`` semantics an
+    # explicit empty-string assignment serializes as a present-but-empty
+    # field (``HasField`` returns True), which the TWS gateway rejects on
+    # the startApi frame and silently closes the socket.
+    if optionalCapabilities:
+        proto.optionalCapabilities = optionalCapabilities
     return proto
 
 
