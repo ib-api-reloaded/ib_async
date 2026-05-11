@@ -44,11 +44,9 @@ def _seedPlacedTrade(ib: ibi.IB, *, orderId: int, total: str = "100"):
         totalQuantity=Decimal(total),
         action="BUY",
         orderType="LMT",
-        lmtPrice=Decimal("100"),
+        lmtPrice=Decimal(100),
     )
-    orderStatus = ibi.OrderStatus(
-        orderId=orderId, status=ibi.OrderStatus.PendingSubmit
-    )
+    orderStatus = ibi.OrderStatus(orderId=orderId, status=ibi.OrderStatus.PendingSubmit)
     trade = ibi.Trade(contract, order, orderStatus, [], [])
     ib.wrapper.trades[(ib.wrapper.clientId, orderId)] = trade
     return contract, trade
@@ -64,7 +62,7 @@ def test_trade_filled_returns_decimal_zero_when_no_fills():
     user code can do arithmetic without nullable guards."""
     trade = ibi.Trade()
     result = trade.filled()
-    assert result == Decimal("0")
+    assert result == Decimal(0)
     assert isinstance(result, Decimal)
 
 
@@ -74,23 +72,23 @@ def test_trade_remaining_zero_when_total_quantity_unset():
     answer without a known total."""
     trade = ibi.Trade()
     assert trade.order.totalQuantity is None
-    assert trade.remaining() == Decimal("0")
+    assert trade.remaining() == Decimal(0)
     assert isinstance(trade.remaining(), Decimal)
 
 
 def test_trade_remaining_equals_total_when_no_fills():
     """Pre-fill state: ``filled()`` is 0, so ``remaining()`` mirrors
     ``order.totalQuantity`` exactly."""
-    trade = ibi.Trade(order=ibi.Order(totalQuantity=Decimal("250")))
-    assert trade.filled() == Decimal("0")
-    assert trade.remaining() == Decimal("250")
+    trade = ibi.Trade(order=ibi.Order(totalQuantity=Decimal(250)))
+    assert trade.filled() == Decimal(0)
+    assert trade.remaining() == Decimal(250)
 
 
 def test_trade_filled_sums_partial_fills_to_total():
     """Multiple partial fills summing to ``totalQuantity`` give
     ``filled() == total`` and ``remaining() == 0``."""
     contract = ibi.Stock("AAPL")
-    order = ibi.Order(totalQuantity=Decimal("100"))
+    order = ibi.Order(totalQuantity=Decimal(100))
     fills = [
         ibi.Fill(
             contract,
@@ -101,8 +99,8 @@ def test_trade_filled_sums_partial_fills_to_total():
         for i, s in enumerate(["30", "30", "40"])
     ]
     trade = ibi.Trade(contract, order, ibi.OrderStatus(), fills, [])
-    assert trade.filled() == Decimal("100")
-    assert trade.remaining() == Decimal("0")
+    assert trade.filled() == Decimal(100)
+    assert trade.remaining() == Decimal(0)
 
 
 def test_trade_filled_skips_fills_with_none_shares():
@@ -111,11 +109,11 @@ def test_trade_filled_skips_fills_with_none_shares():
     ``trade.filled() != trade.filled()``.
     """
     contract = ibi.Stock("AAPL")
-    order = ibi.Order(totalQuantity=Decimal("100"))
+    order = ibi.Order(totalQuantity=Decimal(100))
     fills = [
         ibi.Fill(
             contract,
-            ibi.Execution(execId="e0", shares=Decimal("40")),
+            ibi.Execution(execId="e0", shares=Decimal(40)),
             ibi.CommissionReport(),
             ibi.util.EPOCH,
         ),
@@ -127,14 +125,14 @@ def test_trade_filled_skips_fills_with_none_shares():
         ),
         ibi.Fill(
             contract,
-            ibi.Execution(execId="e2", shares=Decimal("20")),
+            ibi.Execution(execId="e2", shares=Decimal(20)),
             ibi.CommissionReport(),
             ibi.util.EPOCH,
         ),
     ]
     trade = ibi.Trade(contract, order, ibi.OrderStatus(), fills, [])
     result = trade.filled()
-    assert result == Decimal("60")
+    assert result == Decimal(60)
     assert result == result  # NaN-poison guard
 
 
@@ -145,23 +143,23 @@ def test_trade_filled_skips_leg_fills_for_bag_contract():
     """
     bag = ibi.Contract(secType="BAG", symbol="SPREAD", conId=1)
     leg = ibi.Stock("AAPL")
-    order = ibi.Order(totalQuantity=Decimal("10"))
+    order = ibi.Order(totalQuantity=Decimal(10))
 
     bagFill = ibi.Fill(
         bag,
-        ibi.Execution(execId="e-bag", shares=Decimal("10")),
+        ibi.Execution(execId="e-bag", shares=Decimal(10)),
         ibi.CommissionReport(),
         ibi.util.EPOCH,
     )
     legFill = ibi.Fill(
         leg,
-        ibi.Execution(execId="e-leg", shares=Decimal("10")),
+        ibi.Execution(execId="e-leg", shares=Decimal(10)),
         ibi.CommissionReport(),
         ibi.util.EPOCH,
     )
     trade = ibi.Trade(bag, order, ibi.OrderStatus(), [bagFill, legFill], [])
-    assert trade.filled() == Decimal("10")
-    assert trade.remaining() == Decimal("0")
+    assert trade.filled() == Decimal(10)
+    assert trade.remaining() == Decimal(0)
 
 
 def test_trade_remaining_propagates_overfill_negative():
@@ -170,18 +168,18 @@ def test_trade_remaining_propagates_overfill_negative():
     code can detect the inconsistency.
     """
     contract = ibi.Stock("AAPL")
-    order = ibi.Order(totalQuantity=Decimal("100"))
+    order = ibi.Order(totalQuantity=Decimal(100))
     fills = [
         ibi.Fill(
             contract,
-            ibi.Execution(execId="e0", shares=Decimal("110")),
+            ibi.Execution(execId="e0", shares=Decimal(110)),
             ibi.CommissionReport(),
             ibi.util.EPOCH,
         ),
     ]
     trade = ibi.Trade(contract, order, ibi.OrderStatus(), fills, [])
-    assert trade.filled() == Decimal("110")
-    assert trade.remaining() == Decimal("-10")
+    assert trade.filled() == Decimal(110)
+    assert trade.remaining() == Decimal(-10)
 
 
 # ---------------------------------------------------------------------------
@@ -205,12 +203,12 @@ def test_orderStatus_idempotent_replay_does_not_double_emit():
         ib.wrapper.orderStatus(
             orderId=1,
             status="Filled",
-            filled=Decimal("100"),
-            remaining=Decimal("0"),
-            avgFillPrice=Decimal("100"),
+            filled=Decimal(100),
+            remaining=Decimal(0),
+            avgFillPrice=Decimal(100),
             permId=42,
             parentId=0,
-            lastFillPrice=Decimal("100"),
+            lastFillPrice=Decimal(100),
             clientId=0,
             whyHeld="",
         )
@@ -233,12 +231,12 @@ def test_orderStatus_status_transitions_emit_correct_terminal_event():
     ib.wrapper.orderStatus(
         orderId=2,
         status="Cancelled",
-        filled=Decimal("0"),
-        remaining=Decimal("100"),
-        avgFillPrice=Decimal("0"),
+        filled=Decimal(0),
+        remaining=Decimal(100),
+        avgFillPrice=Decimal(0),
         permId=43,
         parentId=0,
-        lastFillPrice=Decimal("0"),
+        lastFillPrice=Decimal(0),
         clientId=0,
         whyHeld="",
     )
@@ -258,12 +256,12 @@ def test_orderStatus_unknown_orderId_logs_and_does_not_raise(caplog):
         ib.wrapper.orderStatus(
             orderId=9999,
             status="Filled",
-            filled=Decimal("1"),
-            remaining=Decimal("0"),
-            avgFillPrice=Decimal("100"),
+            filled=Decimal(1),
+            remaining=Decimal(0),
+            avgFillPrice=Decimal(100),
             permId=0,
             parentId=0,
-            lastFillPrice=Decimal("100"),
+            lastFillPrice=Decimal(100),
             clientId=0,
             whyHeld="",
         )
@@ -282,28 +280,28 @@ def test_orderStatus_lastFillPrice_reflects_most_recent_not_aggregate():
     ib.wrapper.orderStatus(
         orderId=7,
         status="Submitted",
-        filled=Decimal("30"),
-        remaining=Decimal("70"),
-        avgFillPrice=Decimal("100"),
+        filled=Decimal(30),
+        remaining=Decimal(70),
+        avgFillPrice=Decimal(100),
         permId=48,
         parentId=0,
-        lastFillPrice=Decimal("100"),
+        lastFillPrice=Decimal(100),
         clientId=0,
         whyHeld="",
     )
     ib.wrapper.orderStatus(
         orderId=7,
         status="Submitted",
-        filled=Decimal("70"),
-        remaining=Decimal("30"),
+        filled=Decimal(70),
+        remaining=Decimal(30),
         avgFillPrice=Decimal("100.5"),
         permId=48,
         parentId=0,
-        lastFillPrice=Decimal("101"),
+        lastFillPrice=Decimal(101),
         clientId=0,
         whyHeld="",
     )
-    assert trade.orderStatus.lastFillPrice == Decimal("101")
+    assert trade.orderStatus.lastFillPrice == Decimal(101)
     assert trade.orderStatus.avgFillPrice == Decimal("100.5")
 
 
@@ -320,17 +318,17 @@ def test_orderStatus_alone_progresses_state_no_openOrder_needed():
     ib.wrapper.orderStatus(
         orderId=12,
         status="Submitted",
-        filled=Decimal("10"),
-        remaining=Decimal("90"),
-        avgFillPrice=Decimal("100"),
+        filled=Decimal(10),
+        remaining=Decimal(90),
+        avgFillPrice=Decimal(100),
         permId=52,
         parentId=0,
-        lastFillPrice=Decimal("100"),
+        lastFillPrice=Decimal(100),
         clientId=0,
         whyHeld="",
     )
-    assert trade.orderStatus.filled == Decimal("10")
-    assert trade.orderStatus.remaining == Decimal("90")
+    assert trade.orderStatus.filled == Decimal(10)
+    assert trade.orderStatus.remaining == Decimal(90)
     assert trade.orderStatus.status == "Submitted"
 
 
@@ -350,12 +348,8 @@ def test_openOrder_order_and_serverOrder_are_distinct_instances():
     contract = ibi.Stock("AAPL", "SMART", "USD")
     contract.conId = 1234
 
-    twsOrder = ibi.Order(
-        orderId=10, clientId=0, permId=99, lmtPrice=Decimal("100")
-    )
-    ib.wrapper.openOrder(
-        10, contract, twsOrder, ibi.OrderState(status="Submitted")
-    )
+    twsOrder = ibi.Order(orderId=10, clientId=0, permId=99, lmtPrice=Decimal(100))
+    ib.wrapper.openOrder(10, contract, twsOrder, ibi.OrderState(status="Submitted"))
 
     trade = ib.wrapper.trades[(0, 10)]
     assert trade.serverOrder is not None
@@ -374,15 +368,11 @@ def test_permId_stable_across_repeated_openOrder_callbacks():
     contract, trade = _seedPlacedTrade(ib, orderId=3)
 
     twsOrder = ibi.Order(orderId=3, clientId=0, permId=44)
-    ib.wrapper.openOrder(
-        3, contract, twsOrder, ibi.OrderState(status="Submitted")
-    )
+    ib.wrapper.openOrder(3, contract, twsOrder, ibi.OrderState(status="Submitted"))
     assert ib.wrapper.permId2Trade[44] is trade
 
     twsOrder2 = ibi.Order(orderId=3, clientId=0, permId=44)
-    ib.wrapper.openOrder(
-        3, contract, twsOrder2, ibi.OrderState(status="Submitted")
-    )
+    ib.wrapper.openOrder(3, contract, twsOrder2, ibi.OrderState(status="Submitted"))
     assert ib.wrapper.permId2Trade[44] is trade
 
 
@@ -401,8 +391,8 @@ def test_openOrder_then_orderStatus_arrives_consistent_state():
             orderId=11,
             clientId=0,
             permId=51,
-            totalQuantity=Decimal("100"),
-            lmtPrice=Decimal("100"),
+            totalQuantity=Decimal(100),
+            lmtPrice=Decimal(100),
             action="BUY",
         ),
         ibi.OrderState(status="Submitted"),
@@ -411,12 +401,12 @@ def test_openOrder_then_orderStatus_arrives_consistent_state():
     ib.wrapper.orderStatus(
         orderId=11,
         status="Submitted",
-        filled=Decimal("0"),
-        remaining=Decimal("100"),
-        avgFillPrice=Decimal("0"),
+        filled=Decimal(0),
+        remaining=Decimal(100),
+        avgFillPrice=Decimal(0),
         permId=51,
         parentId=0,
-        lastFillPrice=Decimal("0"),
+        lastFillPrice=Decimal(0),
         clientId=0,
         whyHeld="",
     )
@@ -448,8 +438,8 @@ def test_execDetails_then_commissionReport_pairs_on_fill():
         permId=45,
         clientId=0,
         orderId=4,
-        shares=Decimal("10"),
-        price=Decimal("100"),
+        shares=Decimal(10),
+        price=Decimal(100),
         time="20250101 09:30:00",
     )
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
@@ -478,8 +468,8 @@ def test_execDetails_without_commissionReport_keeps_default_empty():
         permId=46,
         clientId=0,
         orderId=5,
-        shares=Decimal("5"),
-        price=Decimal("99"),
+        shares=Decimal(5),
+        price=Decimal(99),
         time="20250101 09:30:00",
     )
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
@@ -506,8 +496,8 @@ def test_duplicate_execId_does_not_double_append_to_trade_fills():
         permId=47,
         clientId=0,
         orderId=6,
-        shares=Decimal("10"),
-        price=Decimal("100"),
+        shares=Decimal(10),
+        price=Decimal(100),
         time="20250101 09:30:00",
     )
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
@@ -538,27 +528,27 @@ def test_orderStatus_total_consistent_with_trade_filled_remaining():
             permId=49,
             clientId=0,
             orderId=8,
-            shares=Decimal("40"),
-            price=Decimal("100"),
+            shares=Decimal(40),
+            price=Decimal(100),
             time="20250101 09:30:00",
         ),
     )
     ib.wrapper.orderStatus(
         orderId=8,
         status="Submitted",
-        filled=Decimal("40"),
-        remaining=Decimal("60"),
-        avgFillPrice=Decimal("100"),
+        filled=Decimal(40),
+        remaining=Decimal(60),
+        avgFillPrice=Decimal(100),
         permId=49,
         parentId=0,
-        lastFillPrice=Decimal("100"),
+        lastFillPrice=Decimal(100),
         clientId=0,
         whyHeld="",
     )
 
     serverTotal = trade.orderStatus.total
     derivedTotal = trade.filled() + trade.remaining()
-    assert serverTotal == derivedTotal == Decimal("100")
+    assert serverTotal == derivedTotal == Decimal(100)
 
 
 # ---------------------------------------------------------------------------
@@ -630,7 +620,7 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
     ib.wrapper.permId2Trade[53] = trade
 
     fills = [("e1", "20"), ("e2", "20"), ("e3", "10")]
-    cum = Decimal("0")
+    cum = Decimal(0)
     for execId, sharesStr in fills:
         ib.wrapper.execDetails(
             reqId=99,
@@ -641,7 +631,7 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
                 clientId=0,
                 orderId=13,
                 shares=Decimal(sharesStr),
-                price=Decimal("100"),
+                price=Decimal(100),
                 time="20250101 09:30:00",
             ),
         )
@@ -653,13 +643,13 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
         cum += Decimal(sharesStr)
         ib.wrapper.orderStatus(
             orderId=13,
-            status="Filled" if cum == Decimal("50") else "Submitted",
+            status="Filled" if cum == Decimal(50) else "Submitted",
             filled=cum,
-            remaining=Decimal("50") - cum,
-            avgFillPrice=Decimal("100"),
+            remaining=Decimal(50) - cum,
+            avgFillPrice=Decimal(100),
             permId=53,
             parentId=0,
-            lastFillPrice=Decimal("100"),
+            lastFillPrice=Decimal(100),
             clientId=0,
             whyHeld="",
         )
@@ -667,16 +657,12 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
         assert trade.orderStatus.filled == cum
 
     assert trade.orderStatus.status == "Filled"
-    assert trade.filled() == Decimal("50")
-    assert trade.remaining() == Decimal("0")
-    assert all(
-        f.commissionReport.commission == Decimal("0.5") for f in trade.fills
-    )
+    assert trade.filled() == Decimal(50)
+    assert trade.remaining() == Decimal(0)
+    assert all(f.commissionReport.commission == Decimal("0.5") for f in trade.fills)
     # All fills carry the same permId — the wire's link from the
     # execution back to the order. Here we asserted on
     # ``trade.orderStatus.permId`` (set on the orderStatus callback)
     # rather than ``trade.order.permId`` because this lifecycle did
     # not include an ``openOrder`` callback to mutate the latter.
-    assert all(
-        f.execution.permId == trade.orderStatus.permId for f in trade.fills
-    )
+    assert all(f.execution.permId == trade.orderStatus.permId for f in trade.fills)

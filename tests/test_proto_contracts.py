@@ -287,9 +287,9 @@ def test_create_contract_details_size_fields_string_to_decimal():
     proto.sizeIncrement = "0.5"
     proto.suggestedSizeIncrement = "1"
     details = createContractDetails(proto, Contract())
-    assert details.minSize == Decimal("1")
+    assert details.minSize == Decimal(1)
     assert details.sizeIncrement == Decimal("0.5")
-    assert details.suggestedSizeIncrement == Decimal("1")
+    assert details.suggestedSizeIncrement == Decimal(1)
 
 
 def test_create_contract_details_size_field_unparseable_stays_none():
@@ -397,7 +397,7 @@ def test_create_contract_details_populates_fund_family_fields():
     assert details.eventContract1 == "EC1"
     assert details.eventContractDescription1 == "First desc"
     assert details.eventContractDescription2 == "Second desc"
-    assert details.minAlgoSize == Decimal("5")
+    assert details.minAlgoSize == Decimal(5)
     assert details.lastPricePrecision == Decimal("0.01")
     assert details.lastSizePrecision == Decimal("0.001")
 

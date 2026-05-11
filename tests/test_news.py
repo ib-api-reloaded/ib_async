@@ -126,9 +126,7 @@ def test_priceSizeTick_writes_tickAttrib_to_ticker():
     assert ticker.tickAttrib is None
 
     # tickType 1 (BID) with stale-NBBO pastLimit flag.
-    ib.wrapper.priceSizeTick(
-        3, 1, 292.06, 120.0, ibi.TickAttrib(pastLimit=True)
-    )
+    ib.wrapper.priceSizeTick(3, 1, 292.06, 120.0, ibi.TickAttrib(pastLimit=True))
     assert ticker.tickAttrib is not None
     assert ticker.tickAttrib.pastLimit is True
     assert ticker.tickAttrib.preOpen is False

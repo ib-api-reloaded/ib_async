@@ -541,7 +541,7 @@ def test_is_valid_float_rejects_unset_sentinel():
     assert _isValidFloat(1.5) is True
     assert _isValidFloat(-1.5) is True
     # Decimal compares cleanly against the float sentinel.
-    assert _isValidFloat(Decimal("0")) is True
+    assert _isValidFloat(Decimal(0)) is True
     assert _isValidFloat(Decimal("1.5")) is True
 
 
@@ -2014,7 +2014,7 @@ def test_binary_open_order_decodes_full_order_preview_block():
     assert len(seen) == 1
     _, _, o, st = seen[0]
     assert st.marginCurrency == "USD"
-    assert st.suggestedSize == Decimal("5")
+    assert st.suggestedSize == Decimal(5)
     assert st.rejectReason == "test-reject-reason"
     assert st.orderAllocations == []
     # Trailer fields past warningText still align after the new block.
@@ -2072,11 +2072,11 @@ def test_binary_open_order_decodes_order_allocations():
     assert len(st.orderAllocations) == 1
     alloc = st.orderAllocations[0]
     assert alloc.account == "DU-ALLOC-A"
-    assert alloc.position == Decimal("10")
-    assert alloc.positionDesired == Decimal("20")
-    assert alloc.positionAfter == Decimal("15")
-    assert alloc.desiredAllocQty == Decimal("5")
-    assert alloc.allowedAllocQty == Decimal("5")
+    assert alloc.position == Decimal(10)
+    assert alloc.positionDesired == Decimal(20)
+    assert alloc.positionAfter == Decimal(15)
+    assert alloc.desiredAllocQty == Decimal(5)
+    assert alloc.allowedAllocQty == Decimal(5)
     assert alloc.isMonetary is False
 
 
@@ -2153,7 +2153,7 @@ def test_binary_open_order_at_exact_gate_195_reads_full_order_preview_block():
     assert len(seen) == 1
     _, _, o, st = seen[0]
     assert st.marginCurrency == "USD"
-    assert st.suggestedSize == Decimal("7")
+    assert st.suggestedSize == Decimal(7)
     assert st.rejectReason == "test-reason-195"
     assert o.extOperator == "EXT-G"
 
@@ -2544,10 +2544,10 @@ def test_safe_decimal_real_values_round_trip():
     correctly. Locks the sentinel guard from over-rejecting."""
     from ib_async._proto.safe import safe_decimal
 
-    assert safe_decimal("100") == Decimal("100")
+    assert safe_decimal("100") == Decimal(100)
     assert safe_decimal("0.5") == Decimal("0.5")
     assert safe_decimal("-1.25") == Decimal("-1.25")
-    assert safe_decimal("0") == Decimal("0")
+    assert safe_decimal("0") == Decimal(0)
 
 
 # ---------------------------------------------------------------------------
@@ -2597,7 +2597,7 @@ def test_commission_report_arriving_before_fill_is_buffered_and_drained():
         permId=42,
         clientId=0,
         orderId=1,
-        shares=Decimal("10"),
+        shares=Decimal(10),
         price=100.0,
         time="20250101 09:30:00",
     )
@@ -3081,7 +3081,7 @@ def test_generic_tick_map_no_clamp_set_matches_documentation():
     """
     from ib_async.wrapper import _GENERIC_TICK_NO_CLAMP
 
-    assert _GENERIC_TICK_NO_CLAMP == frozenset({31, 49, 90})
+    assert frozenset({31, 49, 90}) == _GENERIC_TICK_NO_CLAMP
 
 
 def test_odd_lot_tick_maps_registered_for_all_six_types():
@@ -3210,12 +3210,12 @@ def test_account_download_end_settles_future_after_values_and_portfolio():
     contract.conId = 265598
     ib.wrapper.updatePortfolio(
         contract,
-        Decimal("10"),
+        Decimal(10),
         Decimal("190.50"),
         Decimal("1905.00"),
         Decimal("180.00"),
         Decimal("105.00"),
-        Decimal("0"),
+        Decimal(0),
         "DU1",
     )
     assert not future.done()
@@ -3241,12 +3241,12 @@ def test_update_portfolio_drops_zero_size_position_row():
     # First open the position.
     ib.wrapper.updatePortfolio(
         contract,
-        Decimal("10"),
+        Decimal(10),
         Decimal("190.50"),
         Decimal("1905.00"),
         Decimal("180.00"),
         Decimal("105.00"),
-        Decimal("0"),
+        Decimal(0),
         "DU1",
     )
     assert 265598 in ib.wrapper.portfolio["DU1"]
@@ -3254,11 +3254,11 @@ def test_update_portfolio_drops_zero_size_position_row():
     # Then close it — the row must drop.
     ib.wrapper.updatePortfolio(
         contract,
-        Decimal("0"),
+        Decimal(0),
         Decimal("190.50"),
-        Decimal("0"),
+        Decimal(0),
         Decimal("180.00"),
-        Decimal("0"),
+        Decimal(0),
         Decimal("105.00"),
         "DU1",
     )
@@ -3279,10 +3279,10 @@ def test_position_drops_zero_and_appends_to_live_request():
     contract = ibi.Stock("AAPL", "SMART", "USD")
     contract.conId = 265598
 
-    ib.wrapper.position("DU1", contract, Decimal("10"), Decimal("180.00"))
+    ib.wrapper.position("DU1", contract, Decimal(10), Decimal("180.00"))
     assert 265598 in ib.wrapper.positions["DU1"]
 
-    ib.wrapper.position("DU1", contract, Decimal("0"), Decimal("180.00"))
+    ib.wrapper.position("DU1", contract, Decimal(0), Decimal("180.00"))
     assert 265598 not in ib.wrapper.positions["DU1"]
 
     ib.wrapper.positionEnd()
@@ -3313,12 +3313,12 @@ def test_position_multi_emits_event_and_accumulates_per_reqid():
     contract.conId = 265598
 
     ib.wrapper.positionMulti(
-        7, "DU1", "Conservative", contract, Decimal("5"), Decimal("180.00")
+        7, "DU1", "Conservative", contract, Decimal(5), Decimal("180.00")
     )
 
     assert len(captured) == 1
     assert captured[0].account == "DU1"
-    assert captured[0].position == Decimal("5")
+    assert captured[0].position == Decimal(5)
     assert 265598 in ib.wrapper.positions["DU1"]
     assert not future.done()
 
@@ -3340,13 +3340,13 @@ def test_position_multi_drops_zero_size_row():
 
     # Open via positionMulti.
     ib.wrapper.positionMulti(
-        9, "DU1", "Aggressive", contract, Decimal("3"), Decimal("180.00")
+        9, "DU1", "Aggressive", contract, Decimal(3), Decimal("180.00")
     )
     assert 265598 in ib.wrapper.positions["DU1"]
 
     # Close it.
     ib.wrapper.positionMulti(
-        9, "DU1", "Aggressive", contract, Decimal("0"), Decimal("180.00")
+        9, "DU1", "Aggressive", contract, Decimal(0), Decimal("180.00")
     )
     assert 265598 not in ib.wrapper.positions["DU1"]
 
@@ -4616,10 +4616,10 @@ def test_pnl_single_subscription_mutates_in_place_for_user_references():
 
     user_held = sub.pnlSingle  # user reference
 
-    ib.wrapper.pnlSingle(400, D("100"), 1.0, 2.0, 3.0, 1234.5)
+    ib.wrapper.pnlSingle(400, D(100), 1.0, 2.0, 3.0, 1234.5)
 
     assert user_held is pnlSingle
-    assert user_held.position == D("100")
+    assert user_held.position == D(100)
     assert user_held.dailyPnL == 1.0
     assert user_held.unrealizedPnL == 2.0
     assert user_held.realizedPnL == 3.0
@@ -5043,7 +5043,7 @@ def test_order_convenience_constructors_coerce_decimal():
     from decimal import Decimal
 
     lo = ibi.LimitOrder("BUY", 10, 1.5)
-    assert lo.totalQuantity == Decimal("10")
+    assert lo.totalQuantity == Decimal(10)
     assert lo.lmtPrice == Decimal("1.5")
     # Float "0.1" must round-trip through str() — guard against the
     # binary imprecision regression.
@@ -5301,9 +5301,9 @@ def test_safe_decimal_passthrough_decimal_input():
     """
     from ib_async._proto.safe import safe_decimal
 
-    assert safe_decimal(Decimal("-1")) == Decimal("-1")
-    assert safe_decimal(Decimal("-2")) == Decimal("-2")
-    assert safe_decimal(Decimal("0")) == Decimal("0")
+    assert safe_decimal(Decimal(-1)) == Decimal(-1)
+    assert safe_decimal(Decimal(-2)) == Decimal(-2)
+    assert safe_decimal(Decimal(0)) == Decimal(0)
     assert safe_decimal(Decimal("100.5")) == Decimal("100.5")
 
 
@@ -5335,8 +5335,8 @@ def test_safe_decimal_negative_real_value_not_conflated_with_unset():
     """
     from ib_async._proto.safe import safe_decimal
 
-    assert safe_decimal("-1") == Decimal("-1")
-    assert safe_decimal("-2") == Decimal("-2")
+    assert safe_decimal("-1") == Decimal(-1)
+    assert safe_decimal("-2") == Decimal(-2)
     # And confirm the actual UNSET sentinels still collapse to None.
     assert safe_decimal("2147483647") is None
 
@@ -5438,7 +5438,7 @@ def test_process_proto_buf_msg_id_mid_int_overflow_does_not_raise():
                 "",  # whyHeld
                 "5000000000",  # mktCapPrice
             ],
-            Decimal("5000000000"),
+            Decimal(5000000000),
         ),
     ],
     ids=["pre_131_no_mkt_cap_price", "gate_131_with_mkt_cap_price"],
@@ -5466,7 +5466,7 @@ def test_binary_order_status_market_cap_price_gate_131(
     assert args[0] == 1234
     assert args[1] == "Submitted"
     assert args[2] == Decimal("10.5")
-    assert args[3] == Decimal("0")
+    assert args[3] == Decimal(0)
     assert args[4] == Decimal("120.25")
     assert args[5] == 55
     assert args[6] == 0

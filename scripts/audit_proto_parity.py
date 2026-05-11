@@ -34,8 +34,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUR_PROTO_DIR = REPO_ROOT / "ib_async" / "_proto"
 IBKR_CLIENT_UTILS = (
-    Path.home()
-    / "<IBKR-TWSAPI>/IBJts/source/pythonclient/ibapi/client_utils.py"
+    Path.home() / "<IBKR-TWSAPI>/IBJts/source/pythonclient/ibapi/client_utils.py"
 )
 
 # Gate kinds. The first six are the only ones IBKR uses for scalar
@@ -207,7 +206,10 @@ ACCEPTED_GAPS: dict[tuple[str, str], str] = {
     # ``float`` and we gate with ``_isValidFloat`` — matches the proto
     # type and is semantically equivalent (neither sentinel collides
     # with 0.0).
-    ("createOrderProto", "discretionaryAmt"): "proto field is double; our float gate matches",
+    (
+        "createOrderProto",
+        "discretionaryAmt",
+    ): "proto field is double; our float gate matches",
     # ``hedgeMaxSize`` and ``whatIfType`` do not exist on our ``Order``
     # dataclass. Adding the proto write without dataclass support would
     # invent fields user code can never set.
@@ -255,20 +257,14 @@ def compare(
                 continue
             expected = next(iter(kinds & interesting))
             if (fn, field) in ACCEPTED_GAPS:
-                notes.append(
-                    f"  accepted: {fn}.{field} ({ACCEPTED_GAPS[(fn, field)]})"
-                )
+                notes.append(f"  accepted: {fn}.{field} ({ACCEPTED_GAPS[(fn, field)]})")
                 continue
             if field not in our_map:
-                divergences.append(
-                    f"  {fn}.{field}: IBKR={expected} ours=MISSING"
-                )
+                divergences.append(f"  {fn}.{field}: IBKR={expected} ours=MISSING")
                 continue
             if expected not in our_map[field]:
                 actual = ", ".join(sorted(our_map[field]))
-                divergences.append(
-                    f"  {fn}.{field}: IBKR={expected} ours={{{actual}}}"
-                )
+                divergences.append(f"  {fn}.{field}: IBKR={expected} ours={{{actual}}}")
     return divergences, notes
 
 

@@ -1378,9 +1378,7 @@ def createExecutionDetails(
         createContract(proto.contract) if proto.HasField("contract") else Contract()
     )
     execution = (
-        createExecution(proto.execution)
-        if proto.HasField("execution")
-        else Execution()
+        createExecution(proto.execution) if proto.HasField("execution") else Execution()
     )
     return reqId, contract, execution
 

@@ -58,10 +58,10 @@ def test_safe_decimal_is_falsy_on_unset_so_if_checks_work():
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("0", Decimal("0")),
+        ("0", Decimal(0)),
         ("0.0", Decimal("0.0")),
         ("1.5", Decimal("1.5")),
-        ("100", Decimal("100")),
+        ("100", Decimal(100)),
         ("-3.14", Decimal("-3.14")),
         ("0.00001", Decimal("0.00001")),
         ("9999999999999.999999", Decimal("9999999999999.999999")),

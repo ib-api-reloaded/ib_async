@@ -377,8 +377,7 @@ class SubscriptionRegistry:
             # would crash with a less-specific ``AttributeError``.
             if self._wrapper is None:
                 raise RuntimeError(
-                    "SubscriptionRegistry must be wrapper-bound to "
-                    "allocate Tickers"
+                    "SubscriptionRegistry must be wrapper-bound to allocate Tickers"
                 )
             ticker = _Ticker(contract=contract, defaults=self._wrapper.defaults)
             self._tickers[key] = ticker
@@ -456,7 +455,9 @@ class SubscriptionRegistry:
         pattern as :meth:`pnl_subs` / :meth:`pnl_single_subs`.
         """
 
-        return iter([sub for sub in self._by_reqid.values() if isinstance(sub, sub_class)])
+        return iter(
+            [sub for sub in self._by_reqid.values() if isinstance(sub, sub_class)]
+        )
 
     def __contains__(self, reqId: int) -> bool:
         return reqId in self._by_reqid

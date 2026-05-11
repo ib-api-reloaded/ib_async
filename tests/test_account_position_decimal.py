@@ -59,7 +59,7 @@ def test_position_is_frozen():
 def test_portfolio_item_is_frozen():
     item = PortfolioItem(contract=ibi.Stock("AAPL", "SMART", "USD"))
     with pytest.raises(FrozenInstanceError):
-        item.position = Decimal("100")  # type: ignore[misc]
+        item.position = Decimal(100)  # type: ignore[misc]
 
 
 # ---------------------------------------------------------------------------
@@ -142,10 +142,10 @@ def test_position_constructed_with_decimals():
     p = Position(
         "DU1",
         ibi.Stock("AAPL", "SMART", "USD"),
-        Decimal("100"),
+        Decimal(100),
         Decimal("150.25"),
     )
-    assert p.position == Decimal("100")
+    assert p.position == Decimal(100)
     assert p.avgCost == Decimal("150.25")
 
 
@@ -163,7 +163,7 @@ def test_portfolio_item_defaults_are_none():
 def test_portfolio_item_full_construction():
     item = PortfolioItem(
         ibi.Stock("AAPL", "SMART", "USD"),
-        Decimal("100"),
+        Decimal(100),
         Decimal("150.25"),
         Decimal("15025.00"),
         Decimal("145.00"),
@@ -171,7 +171,7 @@ def test_portfolio_item_full_construction():
         Decimal("-50.00"),
         "DU1",
     )
-    assert item.position == Decimal("100")
+    assert item.position == Decimal(100)
     assert item.unrealizedPNL == Decimal("125.00")
     assert item.realizedPNL == Decimal("-50.00")
 
@@ -199,7 +199,7 @@ def test_order_state_unset_commission_is_falsy():
 
 
 def test_order_state_commission_explicit_zero_is_falsy_too():
-    s = OrderState(commissionAndFees=Decimal("0"))
+    s = OrderState(commissionAndFees=Decimal(0))
     assert not s.commissionAndFees
 
 
@@ -240,8 +240,8 @@ def test_wrapper_position_stores_nonzero_position():
     ib = _ib()
     contract = ibi.Stock("AAPL", "SMART", "USD")
     contract.conId = 7
-    ib.wrapper.position("DU1", contract, Decimal("100"), Decimal("150.25"))
-    assert ib.wrapper.positions["DU1"][7].position == Decimal("100")
+    ib.wrapper.position("DU1", contract, Decimal(100), Decimal("150.25"))
+    assert ib.wrapper.positions["DU1"][7].position == Decimal(100)
 
 
 def test_wrapper_position_zero_drops_cached_entry():
@@ -249,9 +249,9 @@ def test_wrapper_position_zero_drops_cached_entry():
     ib = _ib()
     contract = ibi.Stock("AAPL", "SMART", "USD")
     contract.conId = 7
-    ib.wrapper.position("DU1", contract, Decimal("100"), Decimal("150.25"))
+    ib.wrapper.position("DU1", contract, Decimal(100), Decimal("150.25"))
     assert 7 in ib.wrapper.positions["DU1"]
-    ib.wrapper.position("DU1", contract, Decimal("0"), Decimal("0"))
+    ib.wrapper.position("DU1", contract, Decimal(0), Decimal(0))
     assert 7 not in ib.wrapper.positions["DU1"]
 
 
@@ -260,7 +260,7 @@ def test_wrapper_position_none_drops_cached_entry():
     ib = _ib()
     contract = ibi.Stock("AAPL", "SMART", "USD")
     contract.conId = 7
-    ib.wrapper.position("DU1", contract, Decimal("100"), Decimal("150.25"))
+    ib.wrapper.position("DU1", contract, Decimal(100), Decimal("150.25"))
     assert 7 in ib.wrapper.positions["DU1"]
     ib.wrapper.position("DU1", contract, None, None)
     assert 7 not in ib.wrapper.positions["DU1"]
@@ -272,7 +272,7 @@ def test_wrapper_update_portfolio_zero_drops_cached_entry():
     contract.conId = 7
     ib.wrapper.updatePortfolio(
         contract,
-        Decimal("100"),
+        Decimal(100),
         Decimal("150.25"),
         Decimal("15025.00"),
         Decimal("145.00"),
@@ -283,7 +283,7 @@ def test_wrapper_update_portfolio_zero_drops_cached_entry():
     assert 7 in ib.wrapper.portfolio["DU1"]
     ib.wrapper.updatePortfolio(
         contract,
-        Decimal("0"),
+        Decimal(0),
         None,
         None,
         None,
@@ -304,9 +304,9 @@ def test_fill_construction_round_trip():
 
     fill = Fill(
         ibi.Stock("AAPL", "SMART", "USD"),
-        Execution(execId="abc", shares=Decimal("10"), price=Decimal("150")),
+        Execution(execId="abc", shares=Decimal(10), price=Decimal(150)),
         ibi.CommissionReport(execId="abc", commissionAndFees=Decimal("1.0")),
         datetime(2026, 5, 9, tzinfo=UTC),
     )
-    assert fill.execution.shares == Decimal("10")
+    assert fill.execution.shares == Decimal(10)
     assert fill.commissionReport.commissionAndFees == Decimal("1.0")

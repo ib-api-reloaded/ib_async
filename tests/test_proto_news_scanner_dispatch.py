@@ -460,11 +460,15 @@ def test_req_news_bulletins_below_gate_uses_binary():
     ib = _ibAtVersion(208)
     sent = _captureSend(ib)
     ib.client.reqNewsBulletins(True)
-    assert sent[0][4:].startswith(b"\x00\x00\x00\x0c")  # REQ_NEWS_BULLETINS=12, raw int (server>=201)
+    assert sent[0][4:].startswith(
+        b"\x00\x00\x00\x0c"
+    )  # REQ_NEWS_BULLETINS=12, raw int (server>=201)
 
 
 def test_req_pnl_below_gate_uses_binary():
     ib = _ibAtVersion(209)
     sent = _captureSend(ib)
     ib.client.reqPnL(7, "DU1", "")
-    assert sent[0][4:].startswith(b"\x00\x00\x00\x5c")  # REQ_PNL=92, raw int (server>=201)
+    assert sent[0][4:].startswith(
+        b"\x00\x00\x00\x5c"
+    )  # REQ_PNL=92, raw int (server>=201)
