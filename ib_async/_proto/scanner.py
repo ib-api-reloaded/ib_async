@@ -55,6 +55,7 @@ from .._pb import (
 )
 from ..contract import Contract, ContractDetails, TagValue
 from ..objects import ScannerSubscription
+from ..util import UNSET_INTEGER
 from .contracts import createContract, createContractProto
 from .orders import _isValidInt
 from .safe import fill_tag_value_map, safe_decimal
@@ -183,49 +184,6 @@ def createScannerParametersXml(proto: ScannerParameters_pb2.ScannerParameters) -
 
 
 # ---------------------------------------------------------------------------
-# FundamentalsData (msgId 51 receive) + request / cancel
-# ---------------------------------------------------------------------------
-
-
-def createFundamentalDataArgs(
-    proto: FundamentalsData_pb2.FundamentalsData,
-) -> FundamentalDataArgs:
-    """``Wrapper.fundamentalData(reqId, data)`` args."""
-    reqId = proto.reqId if proto.HasField("reqId") else 0
-    data = proto.data if proto.HasField("data") else ""
-    return FundamentalDataArgs(reqId=reqId, data=data)
-
-
-def createFundamentalsDataRequestProto(
-    reqId: int,
-    contract: Contract,
-    reportType: str,
-    fundamentalsDataOptions: list[TagValue] | None = None,
-) -> FundamentalsDataRequest_pb2.FundamentalsDataRequest:
-    """Build a ``FundamentalsDataRequest`` envelope.
-
-    ``fundamentalsDataOptions`` is the documented TagValue trailer the
-    binary path sends after ``reportType``. The proto wire spells it
-    ``fundamentalsDataOptions`` (a ``map<string, string>``); empty /
-    ``None`` lists leave the field unset.
-    """
-    proto = FundamentalsDataRequest_pb2.FundamentalsDataRequest()
-    proto.reqId = reqId
-    proto.contract.CopyFrom(createContractProto(contract))
-    proto.reportType = reportType
-    fill_tag_value_map(fundamentalsDataOptions, proto.fundamentalsDataOptions)
-    return proto
-
-
-def createCancelFundamentalsDataProto(
-    reqId: int,
-) -> CancelFundamentalsData_pb2.CancelFundamentalsData:
-    proto = CancelFundamentalsData_pb2.CancelFundamentalsData()
-    proto.reqId = reqId
-    return proto
-
-
-# ---------------------------------------------------------------------------
 # PnL (msgId 94 receive) + request / cancel
 # ---------------------------------------------------------------------------
 
@@ -252,16 +210,22 @@ def createPnLArgs(proto: PnL_pb2.PnL) -> PnLArgs:
 def createPnLRequestProto(
     reqId: int, account: str, modelCode: str
 ) -> PnLRequest_pb2.PnLRequest:
+    # Mirror IBKR's gating: empty ``modelCode`` MUST NOT reach the wire
+    # (otherwise the server returns Error 321: Model name '' is incorrect).
     proto = PnLRequest_pb2.PnLRequest()
-    proto.reqId = reqId
-    proto.account = account
-    proto.modelCode = modelCode
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if account:
+        proto.account = account
+    if modelCode:
+        proto.modelCode = modelCode
     return proto
 
 
 def createCancelPnLProto(reqId: int) -> CancelPnL_pb2.CancelPnL:
     proto = CancelPnL_pb2.CancelPnL()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -297,17 +261,23 @@ def createPnLSingleArgs(proto: PnLSingle_pb2.PnLSingle) -> PnLSingleArgs:
 def createPnLSingleRequestProto(
     reqId: int, account: str, modelCode: str, conId: int
 ) -> PnLSingleRequest_pb2.PnLSingleRequest:
+    # Mirror IBKR's gating; empty modelCode must NOT be written.
     proto = PnLSingleRequest_pb2.PnLSingleRequest()
-    proto.reqId = reqId
-    proto.account = account
-    proto.modelCode = modelCode
-    proto.conId = conId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if account:
+        proto.account = account
+    if modelCode:
+        proto.modelCode = modelCode
+    if conId != UNSET_INTEGER:
+        proto.conId = conId
     return proto
 
 
 def createCancelPnLSingleProto(reqId: int) -> CancelPnLSingle_pb2.CancelPnLSingle:
     proto = CancelPnLSingle_pb2.CancelPnLSingle()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -404,7 +374,8 @@ def createScannerSubscriptionRequestProto(
     both TagValue trailer maps directly on the wire).
     """
     proto = ScannerSubscriptionRequest_pb2.ScannerSubscriptionRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.scannerSubscription.CopyFrom(
         createScannerSubscriptionProto(
             sub,
@@ -419,7 +390,8 @@ def createCancelScannerSubscriptionProto(
     reqId: int,
 ) -> CancelScannerSubscription_pb2.CancelScannerSubscription:
     proto = CancelScannerSubscription_pb2.CancelScannerSubscription()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 

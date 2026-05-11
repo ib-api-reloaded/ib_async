@@ -1420,7 +1420,8 @@ def createPlaceOrderRequestProto(
     than on it.
     """
     proto = PlaceOrderRequest_pb2.PlaceOrderRequest()
-    proto.orderId = orderId
+    if _isValidInt(orderId):
+        proto.orderId = orderId
     # Pass the order so per-leg pricing (BAG-secType only) lands on the
     # ComboLeg proto's ``perLegPrice`` field. IBKR's reference signature
     # is ``createContractProto(contract, order)``.
@@ -1445,7 +1446,8 @@ def createCancelOrderRequestProto(
     ``manualOrderCancelTime`` skipped on empty string.
     """
     proto = CancelOrderRequest_pb2.CancelOrderRequest()
-    proto.orderId = orderId
+    if _isValidInt(orderId):
+        proto.orderId = orderId
     cancel = OrderCancel_pb2.OrderCancel()
     if manualOrderCancelTime:
         cancel.manualOrderCancelTime = manualOrderCancelTime
@@ -1472,7 +1474,8 @@ def createAutoOpenOrdersRequestProto(
     autoBind: bool,
 ) -> AutoOpenOrdersRequest_pb2.AutoOpenOrdersRequest:
     proto = AutoOpenOrdersRequest_pb2.AutoOpenOrdersRequest()
-    proto.autoBind = autoBind
+    if autoBind:
+        proto.autoBind = autoBind
     return proto
 
 
@@ -1480,7 +1483,8 @@ def createCompletedOrdersRequestProto(
     apiOnly: bool,
 ) -> CompletedOrdersRequest_pb2.CompletedOrdersRequest:
     proto = CompletedOrdersRequest_pb2.CompletedOrdersRequest()
-    proto.apiOnly = apiOnly
+    if apiOnly:
+        proto.apiOnly = apiOnly
     return proto
 
 
@@ -1538,6 +1542,7 @@ def createExecutionRequestProto(
     reqId: int, execFilter: ExecutionFilter
 ) -> ExecutionRequest_pb2.ExecutionRequest:
     proto = ExecutionRequest_pb2.ExecutionRequest()
-    proto.reqId = reqId
+    if _isValidInt(reqId):
+        proto.reqId = reqId
     proto.executionFilter.CopyFrom(createExecutionFilterProto(execFilter))
     return proto
