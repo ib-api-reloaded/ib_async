@@ -1267,7 +1267,7 @@ class Wrapper:
             # Workaround: for TICK-NYSE, it is valid to have price=-1, size=0 because it can float between -10,000 and 10,000
             #             and it also never reports a size. As a workaround, check if ticker.close exists as a proxy for "not TICK-NYSE"
             #             because TICK-NYSE never has open/close values populated.
-            if price == -1 and size == 0 and ticker.close > 0:
+            if price == -1 and size == 0 and ticker.close is not None and ticker.close > 0:
                 price = self.defaultEmptyPrice
                 size = self.defaultEmptySize
 

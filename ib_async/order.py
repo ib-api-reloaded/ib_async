@@ -578,24 +578,24 @@ class OrderStateNumeric(OrderState):
 
     state_numeric: OrderStateNumeric = state.numeric(digits=2)"""
 
-    initMarginBefore: float = float("nan")  # type: ignore
-    maintMarginBefore: float = float("nan")  # type: ignore
-    equityWithLoanBefore: float = float("nan")  # type: ignore
-    initMarginChange: float = float("nan")  # type: ignore
-    maintMarginChange: float = float("nan")  # type: ignore
-    equityWithLoanChange: float = float("nan")  # type: ignore
-    initMarginAfter: float = float("nan")  # type: ignore
-    maintMarginAfter: float = float("nan")  # type: ignore
-    equityWithLoanAfter: float = float("nan")  # type: ignore
-    initMarginBeforeOutsideRTH: float = float("nan")  # type: ignore
-    maintMarginBeforeOutsideRTH: float = float("nan")  # type: ignore
-    equityWithLoanBeforeOutsideRTH: float = float("nan")  # type: ignore
-    initMarginChangeOutsideRTH: float = float("nan")  # type: ignore
-    maintMarginChangeOutsideRTH: float = float("nan")  # type: ignore
-    equityWithLoanChangeOutsideRTH: float = float("nan")  # type: ignore
-    initMarginAfterOutsideRTH: float = float("nan")  # type: ignore
-    maintMarginAfterOutsideRTH: float = float("nan")  # type: ignore
-    equityWithLoanAfterOutsideRTH: float = float("nan")  # type: ignore
+    initMarginBefore: float | None = None  # type: ignore
+    maintMarginBefore: float | None = None  # type: ignore
+    equityWithLoanBefore: float | None = None  # type: ignore
+    initMarginChange: float | None = None  # type: ignore
+    maintMarginChange: float | None = None  # type: ignore
+    equityWithLoanChange: float | None = None  # type: ignore
+    initMarginAfter: float | None = None  # type: ignore
+    maintMarginAfter: float | None = None  # type: ignore
+    equityWithLoanAfter: float | None = None  # type: ignore
+    initMarginBeforeOutsideRTH: float | None = None  # type: ignore
+    maintMarginBeforeOutsideRTH: float | None = None  # type: ignore
+    equityWithLoanBeforeOutsideRTH: float | None = None  # type: ignore
+    initMarginChangeOutsideRTH: float | None = None  # type: ignore
+    maintMarginChangeOutsideRTH: float | None = None  # type: ignore
+    equityWithLoanChangeOutsideRTH: float | None = None  # type: ignore
+    initMarginAfterOutsideRTH: float | None = None  # type: ignore
+    maintMarginAfterOutsideRTH: float | None = None  # type: ignore
+    equityWithLoanAfterOutsideRTH: float | None = None  # type: ignore
     commissionAndFees: float | None = None  # type: ignore[assignment]
     minCommission: float | None = None  # type: ignore[assignment]
     maxCommission: float | None = None  # type: ignore[assignment]
