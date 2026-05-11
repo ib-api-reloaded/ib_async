@@ -647,7 +647,14 @@ class Wrapper:
         pass
 
     def nextValidId(self, reqId: int):
-        pass
+        # Bump the client's reqId sequence so subsequent requests don't
+        # collide with the server-side counter. On the binary path the
+        # client's ``_onSocketHasData`` snoop also does this for ``msgId
+        # 9``, but the protobuf path routes straight here via
+        # ``_protoNextValidId`` without touching that snoop, so this is
+        # the only update path on 213+ gateways.
+        if reqId > 0:
+            self.ib.client.updateReqId(reqId)
 
     def managedAccounts(self, accountsList: str):
         self.accounts = [a for a in accountsList.split(",") if a]
