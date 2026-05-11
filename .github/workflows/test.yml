@@ -2,6 +2,19 @@ name: ib_async
 
 on: [push, pull_request]
 
+# Protobuf bindings under ib_async/_pb/ are gitignored — generated at
+# build/dev time from IBKR's .proto schemas. CI needs the schemas on
+# disk before mypy / pytest will run. ``IB_PROTO_SOURCE`` must point at
+# a directory of ``*.proto`` files. Default below assumes the operator
+# vendors them at ``vendor/proto/`` (or sets the repository variable
+# ``IB_PROTO_SOURCE_PATH`` to a different in-repo location). Without
+# this resolved, every job that runs ``make protos`` will fail with
+# "protoc source directory not found" — surfacing the missing wiring
+# instead of the old silent ``ModuleNotFoundError: No module named
+# 'ib_async._pb'`` mypy crash.
+env:
+  IB_PROTO_SOURCE: ${{ vars.IB_PROTO_SOURCE_PATH || 'vendor/proto' }}
+
 jobs:
   build-poetry:
     name: poetry (${{ matrix.python-version }})
@@ -27,6 +40,12 @@ jobs:
         run: |
           poetry install --with=dev
 
+      - name: Generate protobuf bindings
+        # ``ib_async/_pb/`` is gitignored; mypy / ruff / pytest all
+        # depend on it. Runs the same generator the wheel build uses.
+        run: |
+          poetry run python scripts/generate_protos.py
+
       - name: MyPy static code analysis
         if: ${{ !startsWith(matrix.python-version, 'pypy') }}
         run: |
@@ -35,6 +54,10 @@ jobs:
       - name: Ruff check
         run: |
           poetry run ruff check
+
+      - name: Run owned test suite
+        run: |
+          poetry run pytest -q
 
   build-uv:
     name: uv (${{ matrix.python-version }})
@@ -60,6 +83,10 @@ jobs:
         run: |
           uv sync --group dev
 
+      - name: Generate protobuf bindings
+        run: |
+          uv run python scripts/generate_protos.py
+
       - name: MyPy static code analysis
         if: ${{ !startsWith(matrix.python-version, 'pypy') }}
         run: |
@@ -68,3 +95,53 @@ jobs:
       - name: Ruff check
         run: |
           uv run ruff check
+
+      - name: Run owned test suite
+        run: |
+          uv run pytest -q
+
+  # Catches the "google module not found" class of release-engineering
+  # regression: build the wheel, install it into a clean venv, import
+  # the package. If ``_pb/`` is missing from the wheel manifest (or any
+  # runtime dependency is missing from the metadata), this fails before
+  # users do — not after the first ``pip install ib_async``.
+  wheel-smoke:
+    name: wheel smoke test (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv toolchain
+        run: |
+          pip install pip uv setuptools wheel -U
+
+      - name: Build wheel + sdist with bundled protos
+        # ``make build`` regenerates ``ib_async/_pb/`` then runs
+        # ``uv build``. The ``[tool.poetry.include]`` glob bundles the
+        # generated modules into both artifacts so end users don't need
+        # ``protoc`` / ``grpcio-tools`` at install time.
+        run: |
+          uv sync --group dev
+          make build
+
+      - name: Clean-venv install + import smoke test
+        # New venv with NO dev deps installed — only what the wheel's
+        # runtime metadata declares. Imports the package and constructs
+        # an ``IB()`` so any missing-runtime-dep regression
+        # ("can't find google module" on the legacy proto path) fails
+        # the build instead of a user's first ``pip install``.
+        run: |
+          python -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install --upgrade pip
+          /tmp/smoke-venv/bin/pip install dist/*.whl
+          /tmp/smoke-venv/bin/python -c "import ib_async; ib_async.IB(); print('smoke ok')"
