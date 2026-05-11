@@ -57,8 +57,16 @@ from ..contract import Contract, ContractDetails, TagValue
 from ..objects import ScannerSubscription
 from ..util import UNSET_INTEGER
 from .contracts import createContract, createContractProto
-from .orders import _isValidInt
-from .safe import fill_tag_value_map, safe_decimal
+from .safe import (
+    fill_tag_value_map,
+    safe_decimal,
+)
+from .safe import (
+    is_valid_float as _isValidFloat,
+)
+from .safe import (
+    is_valid_int as _isValidInt,
+)
 
 # ---------------------------------------------------------------------------
 # Args dataclasses (slotted, frozen — operator-mandated, not tuples)
@@ -368,15 +376,15 @@ def createScannerSubscriptionProto(
         proto.locationCode = sub.locationCode
     if sub.scanCode:
         proto.scanCode = sub.scanCode
-    if sub.abovePrice is not None:
+    if _isValidFloat(sub.abovePrice):
         proto.abovePrice = float(sub.abovePrice)
-    if sub.belowPrice is not None:
+    if _isValidFloat(sub.belowPrice):
         proto.belowPrice = float(sub.belowPrice)
-    if sub.aboveVolume is not None:
+    if _isValidInt(sub.aboveVolume):
         proto.aboveVolume = sub.aboveVolume
-    if sub.marketCapAbove is not None:
+    if _isValidFloat(sub.marketCapAbove):
         proto.marketCapAbove = float(sub.marketCapAbove)
-    if sub.marketCapBelow is not None:
+    if _isValidFloat(sub.marketCapBelow):
         proto.marketCapBelow = float(sub.marketCapBelow)
     if sub.moodyRatingAbove:
         proto.moodyRatingAbove = sub.moodyRatingAbove
@@ -390,13 +398,13 @@ def createScannerSubscriptionProto(
         proto.maturityDateAbove = sub.maturityDateAbove
     if sub.maturityDateBelow:
         proto.maturityDateBelow = sub.maturityDateBelow
-    if sub.couponRateAbove is not None:
+    if _isValidFloat(sub.couponRateAbove):
         proto.couponRateAbove = float(sub.couponRateAbove)
-    if sub.couponRateBelow is not None:
+    if _isValidFloat(sub.couponRateBelow):
         proto.couponRateBelow = float(sub.couponRateBelow)
     if sub.excludeConvertible:
         proto.excludeConvertible = sub.excludeConvertible
-    if sub.averageOptionVolumeAbove is not None:
+    if _isValidInt(sub.averageOptionVolumeAbove):
         proto.averageOptionVolumeAbove = sub.averageOptionVolumeAbove
     if sub.scannerSettingPairs:
         proto.scannerSettingPairs = sub.scannerSettingPairs

@@ -14,7 +14,9 @@ value lands as ``None`` (the unset sentinel for our domain dataclass
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
-from typing import Final
+from typing import Final, TypeGuard
+
+from ..util import UNSET_DECIMAL, UNSET_DOUBLE, UNSET_INTEGER, UNSET_LONG
 
 # IBKR's reference ``decode(Decimal, fields)`` (utils.py) treats these
 # wire strings as the "unset Decimal" sentinel: max int32, max int64,
@@ -33,6 +35,45 @@ _DECIMAL_UNSET_STRINGS: Final[frozenset[str]] = frozenset(
         "-9223372036854775808",  # most-negative int64
     }
 )
+
+
+def is_valid_int(value: int | None) -> TypeGuard[int]:
+    """Returns True when ``value`` should be written to the proto wire.
+
+    Mirrors IBKR's ``isValidIntValue`` (``client_utils.py``): ``None``
+    (our domain unset sentinel) and the IBKR magic ``UNSET_INTEGER``
+    wire value both come back False, so the proto3-optional field stays
+    absent on the wire and the server's default fill behaves correctly.
+    """
+    if value is None:
+        return False
+    return value != UNSET_INTEGER
+
+
+def is_valid_float(value: float | Decimal | None) -> TypeGuard[float | Decimal]:
+    """Float / Decimal analogue of :func:`is_valid_int`. Rejects
+    ``None`` and the IBKR magic ``UNSET_DOUBLE`` sentinel."""
+    if value is None:
+        return False
+    return value != UNSET_DOUBLE
+
+
+def is_valid_long(value: int | None) -> TypeGuard[int]:
+    """``int64`` analogue. Rejects ``None`` and ``UNSET_LONG``. Use for
+    proto fields typed ``optional int64`` (e.g. ``Order.permId``)."""
+    if value is None:
+        return False
+    return value != UNSET_LONG
+
+
+def is_valid_decimal(value: Decimal | None) -> TypeGuard[Decimal]:
+    """Stringly-encoded Decimal analogue. Rejects ``None`` and the
+    ``UNSET_DECIMAL`` sentinel. Use for proto string fields that carry
+    a Decimal in IBKR's canonical wire form (e.g.
+    ``Order.totalQuantity``)."""
+    if value is None:
+        return False
+    return value != UNSET_DECIMAL
 
 
 def format_proto_double(value: float) -> str:

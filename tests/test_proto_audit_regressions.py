@@ -4293,20 +4293,23 @@ def test_proto_combo_leg_full_field_set_round_trip():
     assert rebuilt.exemptCode == 3
 
 
-def test_proto_combo_leg_default_exempt_code_minus_one_not_written():
+def test_proto_combo_leg_default_exempt_code_writes_minus_one():
     """``ComboLeg.exemptCode`` defaults to ``-1`` in the domain
-    dataclass — that sentinel means "use server default" and must
-    NOT round-trip as a real wire value. Encoder skips it; decoder
-    leaves the dataclass default in place when the wire is silent.
-    """
+    dataclass — that's the real wire value meaning "not exempt".
+    IBKR's reference gates with ``isValidIntValue`` (only ``UNSET_INTEGER``
+    suppresses) so ``-1`` flows through; skipping the write would let
+    the server's proto3 default fill the field with the sentinel and
+    reject the request. An empty inbound proto round-trips back to the
+    ``-1`` dataclass default."""
     from ib_async._pb import ComboLeg_pb2
     from ib_async._proto.contracts import createComboLeg, createComboLegProto
     from ib_async.contract import ComboLeg
 
     leg = ComboLeg(conId=7, ratio=1, action="BUY", exchange="SMART")
     proto = createComboLegProto(leg)
-    # exemptCode default -1 must NOT land on the wire.
-    assert not proto.HasField("exemptCode")
+    # exemptCode default -1 IS the wire value — flows through.
+    assert proto.HasField("exemptCode")
+    assert proto.exemptCode == -1
 
     # Empty proto round-trips back to default -1.
     empty = ComboLeg_pb2.ComboLeg()

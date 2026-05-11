@@ -85,7 +85,15 @@ from ..contract import Contract, ContractDescription, TagValue
 from ..objects import PriceIncrement, SmartComponent, SoftDollarTier
 from ..util import UNSET_INTEGER
 from .contracts import createContractDescription, createContractProto
-from .safe import fill_tag_value_map
+from .safe import (
+    fill_tag_value_map,
+)
+from .safe import (
+    is_valid_float as _isValidFloat,
+)
+from .safe import (
+    is_valid_int as _isValidInt,
+)
 
 # ---------------------------------------------------------------------------
 # Args dataclasses for converter return shapes — slotted, frozen, named.
@@ -547,10 +555,13 @@ def createCalculateImpliedVolatilityRequestProto(
     so user-supplied trailers reach the wire.
     """
     proto = CalculateImpliedVolatilityRequest_pb2.CalculateImpliedVolatilityRequest()
-    proto.reqId = reqId
+    if _isValidInt(reqId):
+        proto.reqId = reqId
     proto.contract.CopyFrom(createContractProto(contract))
-    proto.optionPrice = optionPrice
-    proto.underPrice = underPrice
+    if _isValidFloat(optionPrice):
+        proto.optionPrice = optionPrice
+    if _isValidFloat(underPrice):
+        proto.underPrice = underPrice
     fill_tag_value_map(impliedVolatilityOptions, proto.impliedVolatilityOptions)
     return proto
 
@@ -569,10 +580,13 @@ def createCalculateOptionPriceRequestProto(
     so user-supplied trailers reach the wire.
     """
     proto = CalculateOptionPriceRequest_pb2.CalculateOptionPriceRequest()
-    proto.reqId = reqId
+    if _isValidInt(reqId):
+        proto.reqId = reqId
     proto.contract.CopyFrom(createContractProto(contract))
-    proto.volatility = volatility
-    proto.underPrice = underPrice
+    if _isValidFloat(volatility):
+        proto.volatility = volatility
+    if _isValidFloat(underPrice):
+        proto.underPrice = underPrice
     fill_tag_value_map(optionPriceOptions, proto.optionPriceOptions)
     return proto
 
@@ -581,7 +595,8 @@ def createCancelCalculateImpliedVolatilityProto(
     reqId: int,
 ) -> CancelCalculateImpliedVolatility_pb2.CancelCalculateImpliedVolatility:
     proto = CancelCalculateImpliedVolatility_pb2.CancelCalculateImpliedVolatility()
-    proto.reqId = reqId
+    if _isValidInt(reqId):
+        proto.reqId = reqId
     return proto
 
 
@@ -589,7 +604,8 @@ def createCancelCalculateOptionPriceProto(
     reqId: int,
 ) -> CancelCalculateOptionPrice_pb2.CancelCalculateOptionPrice:
     proto = CancelCalculateOptionPrice_pb2.CancelCalculateOptionPrice()
-    proto.reqId = reqId
+    if _isValidInt(reqId):
+        proto.reqId = reqId
     return proto
 
 

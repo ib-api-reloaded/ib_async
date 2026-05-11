@@ -36,7 +36,16 @@ from ..contract import (
     TagValue,
 )
 from ..util import UNSET_DOUBLE, UNSET_INTEGER
-from .safe import format_proto_double, safe_decimal
+from .safe import (
+    format_proto_double,
+    safe_decimal,
+)
+from .safe import (
+    is_valid_float as _isValidFloat,
+)
+from .safe import (
+    is_valid_int as _isValidInt,
+)
 
 if TYPE_CHECKING:
     from ..order import Order
@@ -82,29 +91,32 @@ def createComboLegProto(
     # target proto (the contributor's PR had this swapped, which made
     # every conditional vacuously true and stomped on the proto with
     # blanks). Zero / empty-string source values are treated as "unset".
-    if leg.conId:
+    # IBKR gates these on ``isValidIntValue`` (``!= UNSET_INTEGER``) so
+    # ``0`` flows through to the wire — our ``_isValidInt`` matches.
+    if _isValidInt(leg.conId):
         proto.conId = leg.conId
-    if leg.ratio:
+    if _isValidInt(leg.ratio):
         proto.ratio = leg.ratio
     if leg.action:
         proto.action = leg.action
     if leg.exchange:
         proto.exchange = leg.exchange
-    if leg.openClose:
+    if _isValidInt(leg.openClose):
         proto.openClose = leg.openClose
-    if leg.shortSaleSlot:
+    if _isValidInt(leg.shortSaleSlot):
         proto.shortSalesSlot = leg.shortSaleSlot
     if leg.designatedLocation:
         proto.designatedLocation = leg.designatedLocation
-    # ``exemptCode`` defaults to -1 in the domain dataclass, so explicit
-    # presence-tracking guards against round-tripping the default as a
-    # real value.
-    if leg.exemptCode != -1:
+    # ``exemptCode`` defaults to -1 in the domain dataclass — a real wire
+    # value meaning "not exempt". IBKR's gate is ``isValidIntValue`` so
+    # ``-1`` flows through to the wire; suppressing it would re-fill the
+    # field with the UNSET_INTEGER sentinel on the server side.
+    if _isValidInt(leg.exemptCode):
         proto.exemptCode = leg.exemptCode
     # ``perLegPrice`` is BAG-secType-only and rides on the contract proto
     # alongside the leg, NOT the order proto. Mirror IBKR's
     # ``createComboLegProto(comboLeg, perLegPrice)`` reference.
-    if perLegPrice is not None and perLegPrice != UNSET_DOUBLE:
+    if _isValidFloat(perLegPrice):
         proto.perLegPrice = float(perLegPrice)
     return proto
 
@@ -129,11 +141,14 @@ def createDeltaNeutralContractProto(
     dnc: DeltaNeutralContract,
 ) -> DeltaNeutralContract_pb2.DeltaNeutralContract:
     proto = DeltaNeutralContract_pb2.DeltaNeutralContract()
-    if dnc.conId:
+    # IBKR gates these on the sentinel checks — ``conId == 0`` and
+    # ``delta == 0`` / ``price == 0`` are legitimate wire values that
+    # truthy-gating would silently drop.
+    if _isValidInt(dnc.conId):
         proto.conId = dnc.conId
-    if dnc.delta:
+    if _isValidFloat(dnc.delta):
         proto.delta = dnc.delta
-    if dnc.price:
+    if _isValidFloat(dnc.price):
         proto.price = dnc.price
     return proto
 

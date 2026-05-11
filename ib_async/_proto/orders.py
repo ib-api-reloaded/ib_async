@@ -19,7 +19,6 @@ that exact path.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import TypeGuard
 
 from .._pb import (
     AllOpenOrdersRequest_pb2,
@@ -61,9 +60,23 @@ from ..order import (
     TimeCondition,
     VolumeCondition,
 )
-from ..util import UNSET_DOUBLE, UNSET_INTEGER
+from ..util import UNSET_INTEGER
 from .contracts import createContract, createContractProto
-from .safe import safe_decimal
+from .safe import (
+    is_valid_decimal as _isValidDecimal,
+)
+from .safe import (
+    is_valid_float as _isValidFloat,
+)
+from .safe import (
+    is_valid_int as _isValidInt,
+)
+from .safe import (
+    is_valid_long as _isValidLong,
+)
+from .safe import (
+    safe_decimal,
+)
 
 
 def _decimalToWireString(value: Decimal | None) -> str:
@@ -112,30 +125,6 @@ def _parseTagValueList(source: object) -> list[TagValue]:
     return out
 
 
-def _isValidFloat(value: float | Decimal | None) -> TypeGuard[float | Decimal]:
-    """Returns True for any value the proto wire should carry. ``None``
-    (the domain unset sentinel) and the IBKR magic ``UNSET_DOUBLE`` wire
-    value both come back False. ``Decimal`` and ``float`` compare
-    cleanly against the sentinel.
-
-    Typed as a ``TypeGuard`` so callers that gate proto writes on this
-    function narrow the value to non-None for the assignment.
-    """
-    if value is None:
-        return False
-    return value != UNSET_DOUBLE
-
-
-def _isValidInt(value: int | None) -> TypeGuard[int]:
-    """Returns True for any value the proto wire should carry. ``None``
-    (the domain unset sentinel) and the IBKR magic ``UNSET_INTEGER``
-    wire value both come back False. ``TypeGuard`` narrows for callers.
-    """
-    if value is None:
-        return False
-    return value != UNSET_INTEGER
-
-
 def createOrderProto(order: Order) -> Order_pb2.Order:
     """Encode a domain ``Order`` into its protobuf representation.
 
@@ -148,13 +137,13 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
 
     Domain fields that exist in IBKR's reference but are NOT on our
     ``Order`` dataclass (``customerAccount``, ``professionalCustomer``,
-    ``bondAccruedInterest``, ``includeOvernight``,
-    ``manualOrderIndicator``, ``submitter``, ``deactivate``, ``postOnly``,
-    ``allowPreOpen``, ``ignoreOpenAuction``, ``seekPriceImprovement``,
-    ``whatIfType``, ``hedgeMaxSize``) are silently skipped — adding them
-    here without dataclass support would invent fields user code can
-    never set. Order proto schema gaps: none — every IBKR-reference
-    field maps to an Order_pb2 field at this proto version.
+    ``bondAccruedInterest``, ``includeOvernight``, ``submitter``,
+    ``deactivate``, ``postOnly``, ``allowPreOpen``, ``ignoreOpenAuction``,
+    ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``) are
+    silently skipped — adding them here without dataclass support would
+    invent fields user code can never set. Order proto schema gaps:
+    none — every IBKR-reference field maps to an Order_pb2 field at
+    this proto version.
     """
     proto = Order_pb2.Order()
 
@@ -167,7 +156,7 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.clientId = order.clientId
     if order.orderId:
         proto.orderId = order.orderId
-    if order.permId:
+    if _isValidLong(order.permId):
         proto.permId = order.permId
     if _isValidInt(order.parentId):
         proto.parentId = order.parentId
@@ -175,15 +164,15 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # Primary attributes
     if order.action:
         proto.action = order.action
-    if order.totalQuantity is not None:
+    if _isValidDecimal(order.totalQuantity):
         proto.totalQuantity = _decimalToWireString(order.totalQuantity)
     if _isValidInt(order.displaySize):
         proto.displaySize = order.displaySize
     if order.orderType:
         proto.orderType = order.orderType
-    if order.lmtPrice is not None:
+    if _isValidFloat(order.lmtPrice):
         proto.lmtPrice = float(order.lmtPrice)
-    if order.auxPrice is not None:
+    if _isValidFloat(order.auxPrice):
         proto.auxPrice = float(order.auxPrice)
     if order.tif:
         proto.tif = order.tif
@@ -211,9 +200,9 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.sweepToFill = order.sweepToFill
     if _isValidFloat(order.percentOffset):
         proto.percentOffset = float(order.percentOffset)
-    if order.trailingPercent is not None:
+    if _isValidFloat(order.trailingPercent):
         proto.trailingPercent = float(order.trailingPercent)
-    if order.trailStopPrice is not None:
+    if _isValidFloat(order.trailStopPrice):
         proto.trailStopPrice = float(order.trailStopPrice)
     # ``minQty`` defaults to UNSET_INTEGER in our domain — guarding with
     # ``if order.minQty:`` would always write the sentinel value to the
@@ -399,17 +388,17 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # Adjustable orders
     if order.adjustedOrderType:
         proto.adjustedOrderType = order.adjustedOrderType
-    if order.triggerPrice is not None:
+    if _isValidFloat(order.triggerPrice):
         proto.triggerPrice = float(order.triggerPrice)
-    if order.adjustedStopPrice is not None:
+    if _isValidFloat(order.adjustedStopPrice):
         proto.adjustedStopPrice = float(order.adjustedStopPrice)
-    if order.adjustedStopLimitPrice is not None:
+    if _isValidFloat(order.adjustedStopLimitPrice):
         proto.adjustedStopLimitPrice = float(order.adjustedStopLimitPrice)
-    if order.adjustedTrailingAmount is not None:
+    if _isValidFloat(order.adjustedTrailingAmount):
         proto.adjustedTrailingAmount = float(order.adjustedTrailingAmount)
     if _isValidInt(order.adjustableTrailingUnit):
         proto.adjustableTrailingUnit = order.adjustableTrailingUnit
-    if order.lmtPriceOffset is not None:
+    if _isValidFloat(order.lmtPriceOffset):
         proto.lmtPriceOffset = float(order.lmtPriceOffset)
 
     # Conditions
@@ -478,6 +467,8 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.advancedErrorOverride = order.advancedErrorOverride
     if order.manualOrderTime:
         proto.manualOrderTime = order.manualOrderTime
+    if _isValidInt(order.manualOrderIndicator):
+        proto.manualOrderIndicator = order.manualOrderIndicator
 
     # Mid-price competition family (UNSET sentinels)
     if _isValidInt(order.minTradeQty):
@@ -1515,7 +1506,9 @@ def createExecutionFilterProto(
     execFilter: ExecutionFilter,
 ) -> ExecutionFilter_pb2.ExecutionFilter:
     proto = ExecutionFilter_pb2.ExecutionFilter()
-    if execFilter.clientId:
+    # IBKR gates ``clientId`` on ``isValidIntValue`` — ``0`` is the
+    # documented "no client filter" wire value and must flow through.
+    if _isValidInt(execFilter.clientId):
         proto.clientId = execFilter.clientId
     if execFilter.acctCode:
         proto.acctCode = execFilter.acctCode
@@ -1534,7 +1527,7 @@ def createExecutionFilterProto(
     # gating is the caller's responsibility (mirrors IBKR's reference);
     # the encoder unconditionally writes when the domain field carries
     # a non-sentinel value.
-    if execFilter.lastNDays is not None:
+    if _isValidInt(execFilter.lastNDays):
         proto.lastNDays = execFilter.lastNDays
     if execFilter.specificDates:
         proto.specificDates.extend(execFilter.specificDates)
