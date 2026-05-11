@@ -446,7 +446,13 @@ def createStartApiRequestProto(
 ) -> StartApiRequest_pb2.StartApiRequest:
     proto = StartApiRequest_pb2.StartApiRequest()
     proto.clientId = clientId
-    proto.optionalCapabilities = optionalCapabilities
+    # IBKR's reference clients (Java EClientUtils, Python client_utils) gate
+    # this on a non-empty check. With proto3 ``optional`` semantics an
+    # explicit empty-string assignment serializes as a present-but-empty
+    # field (``HasField`` returns True), which the TWS gateway rejects on
+    # the startApi frame and silently closes the socket.
+    if optionalCapabilities:
+        proto.optionalCapabilities = optionalCapabilities
     return proto
 
 
