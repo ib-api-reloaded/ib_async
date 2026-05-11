@@ -535,6 +535,22 @@ class Client:
                             "<<< proto %d, %d bytes", canonicalMsgId, len(payload)
                         )
                     self.decoder.processProtoBuf(canonicalMsgId, payload)
+                    # The binary branch below snoops for ``nextValidId`` (9)
+                    # and ``managedAccounts`` (15) to flip ``_apiReady`` and
+                    # fire ``apiStart``. On a 207+ gateway TWS sends both of
+                    # those via protobuf, so we need the same snoop here.
+                    # The proto handlers run before this point, so
+                    # ``wrapper.accounts`` is already populated for msgId 15.
+                    # For msgId 9 we only need a boolean — ``updateReqId``
+                    # itself happens inside ``wrapper.nextValidId``.
+                    if not self._apiReady:
+                        if canonicalMsgId == 9:
+                            self._hasReqId = True
+                        elif canonicalMsgId == 15:
+                            self._accounts = list(self.wrapper.accounts)
+                        if self._hasReqId and self._accounts:
+                            self._apiReady = True
+                            self.apiStart.emit()
                     continue
                 fields = [
                     str(wireMsgId),

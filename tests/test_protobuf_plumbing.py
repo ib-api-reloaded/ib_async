@@ -198,3 +198,42 @@ def test_receive_handles_split_proto_then_binary_in_one_buffer():
 
     assert proto_seen == [(PLACE_ORDER, b"\x08\x01")]
     assert bin_seen == [["49", "1", "1700000000"]]
+
+
+# --- apiReady snoop on the protobuf receive path -------------------------
+
+
+def test_proto_path_snoops_next_valid_id_and_managed_accounts_to_fire_api_start():
+    # On a 207+ gateway TWS routes ``nextValidId`` (msgId 9) and
+    # ``managedAccounts`` (msgId 15) through the protobuf receive path.
+    # The handshake-completion snoop that flips ``_apiReady`` and fires
+    # ``apiStart`` lives in ``_onSocketHasData`` and used to run only in
+    # the binary branch, so the apiStart event never emitted on a fully
+    # protobuf session — ``connectAsync`` timed out at ``apiStart``.
+    from ib_async._pb import ManagedAccounts_pb2, NextValidId_pb2
+
+    ib = ibi.IB()
+    ib.client._serverVersion = 214
+    fired: list[bool] = []
+    ib.client.apiStart += lambda: fired.append(True)
+
+    next_valid_id = NextValidId_pb2.NextValidId()
+    next_valid_id.orderId = 1000
+    frame_next = _protobuf_frame(9, next_valid_id.SerializeToString())
+
+    managed = ManagedAccounts_pb2.ManagedAccounts()
+    managed.accountsList = "U1,U2"
+    frame_managed = _protobuf_frame(15, managed.SerializeToString())
+
+    ib.client._onSocketHasData(frame_next)
+    assert ib.client._hasReqId is True
+    assert ib.client._apiReady is False
+    assert fired == []
+    # ``wrapper.nextValidId`` must bump the client's reqId sequence so
+    # subsequent requests don't collide with the server-side counter.
+    assert ib.client._reqIdSeq >= 1000
+
+    ib.client._onSocketHasData(frame_managed)
+    assert ib.client._accounts == ["U1", "U2"]
+    assert ib.client._apiReady is True
+    assert fired == [True]
