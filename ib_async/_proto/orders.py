@@ -161,14 +161,15 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # Order ids — set even at zero where IBKR treats zero as a valid
     # identifier. ``clientId`` MUST round-trip; the contributor's PR
     # had a typo here that silently dropped it from every outbound
-    # order, sending fills to the wrong client bucket.
-    if order.clientId or order.clientId == 0:
+    # order, sending fills to the wrong client bucket. IBKR's reference
+    # uses ``isValidIntValue`` (≠ UNSET sentinel) so ``0`` flows through.
+    if _isValidInt(order.clientId):
         proto.clientId = order.clientId
     if order.orderId:
         proto.orderId = order.orderId
     if order.permId:
         proto.permId = order.permId
-    if order.parentId:
+    if _isValidInt(order.parentId):
         proto.parentId = order.parentId
 
     # Primary attributes
@@ -176,7 +177,7 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.action = order.action
     if order.totalQuantity is not None:
         proto.totalQuantity = _decimalToWireString(order.totalQuantity)
-    if order.displaySize:
+    if _isValidInt(order.displaySize):
         proto.displaySize = order.displaySize
     if order.orderType:
         proto.orderType = order.orderType
@@ -229,9 +230,9 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.orderRef = order.orderRef
     if order.rule80A:
         proto.rule80A = order.rule80A
-    if order.ocaType:
+    if _isValidInt(order.ocaType):
         proto.ocaType = order.ocaType
-    if order.triggerMethod:
+    if _isValidInt(order.triggerMethod):
         proto.triggerMethod = order.triggerMethod
 
     # Extended order fields
@@ -264,13 +265,13 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.deltaNeutralOrderType = order.deltaNeutralOrderType
     if _isValidFloat(order.deltaNeutralAuxPrice):
         proto.deltaNeutralAuxPrice = float(order.deltaNeutralAuxPrice)
-    if order.deltaNeutralConId:
+    if _isValidInt(order.deltaNeutralConId):
         proto.deltaNeutralConId = order.deltaNeutralConId
     if order.deltaNeutralOpenClose:
         proto.deltaNeutralOpenClose = order.deltaNeutralOpenClose
     if order.deltaNeutralShortSale:
         proto.deltaNeutralShortSale = order.deltaNeutralShortSale
-    if order.deltaNeutralShortSaleSlot:
+    if _isValidInt(order.deltaNeutralShortSaleSlot):
         proto.deltaNeutralShortSaleSlot = order.deltaNeutralShortSaleSlot
     if order.deltaNeutralDesignatedLocation:
         proto.deltaNeutralDesignatedLocation = order.deltaNeutralDesignatedLocation
@@ -331,9 +332,9 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # Open / close + origin
     if order.openClose:
         proto.openClose = order.openClose
-    if order.origin:
+    if _isValidInt(order.origin):
         proto.origin = order.origin
-    if order.shortSaleSlot:
+    if _isValidInt(order.shortSaleSlot):
         proto.shortSaleSlot = order.shortSaleSlot
     if order.designatedLocation:
         proto.designatedLocation = order.designatedLocation
@@ -353,7 +354,7 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.deltaNeutralClearingIntent = order.deltaNeutralClearingIntent
 
     # Discretionary + smart-routing opt-out
-    if order.discretionaryAmt:
+    if _isValidFloat(order.discretionaryAmt):
         proto.discretionaryAmt = order.discretionaryAmt
     if order.optOutSmartRouting:
         proto.optOutSmartRouting = order.optOutSmartRouting
@@ -384,13 +385,13 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.randomizePrice = order.randomizePrice
 
     # Pegged-to-benchmark family
-    if order.referenceContractId:
+    if _isValidInt(order.referenceContractId):
         proto.referenceContractId = order.referenceContractId
-    if order.peggedChangeAmount:
+    if _isValidFloat(order.peggedChangeAmount):
         proto.peggedChangeAmount = order.peggedChangeAmount
     if order.isPeggedChangeAmountDecrease:
         proto.isPeggedChangeAmountDecrease = order.isPeggedChangeAmountDecrease
-    if order.referenceChangeAmount:
+    if _isValidFloat(order.referenceChangeAmount):
         proto.referenceChangeAmount = order.referenceChangeAmount
     if order.referenceExchangeId:
         proto.referenceExchangeId = order.referenceExchangeId
@@ -406,7 +407,7 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.adjustedStopLimitPrice = float(order.adjustedStopLimitPrice)
     if order.adjustedTrailingAmount is not None:
         proto.adjustedTrailingAmount = float(order.adjustedTrailingAmount)
-    if order.adjustableTrailingUnit:
+    if _isValidInt(order.adjustableTrailingUnit):
         proto.adjustableTrailingUnit = order.adjustableTrailingUnit
     if order.lmtPriceOffset is not None:
         proto.lmtPriceOffset = float(order.lmtPriceOffset)
