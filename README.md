@@ -97,6 +97,41 @@ poetry install --with=docs,dev
 uv sync --group dev --group docs
 ```
 
+### Development loop (v3.0+)
+
+The protobuf send / receive path landed in v3.0 generates bindings
+from IBKR's ``.proto`` schemas at build time. The generated modules
+live under ``ib_async/_pb/`` and are **gitignored** — they're
+build artifacts, not source. Local dev needs them on disk before
+``mypy`` / ``pytest`` will run; release builds regenerate them
+before bundling into the wheel and sdist so end users of
+``pip install ib_async`` get a working package without ``protoc``
+or ``grpcio-tools``.
+
+The Makefile encapsulates this. After ``uv sync --all-groups`` (or
+``poetry install --with=dev``):
+
+```bash
+# 1. Generate protobuf bindings into ib_async/_pb/.
+#    Set IB_PROTO_SOURCE to the path of IBJts/source/proto from
+#    IBKR's TWS API distribution.
+make protos
+
+# 2. Owned test suite (~1000 tests).
+make test
+
+# 3. Linters.
+make lint
+
+# 4. Full release build (regenerates protos, then `uv build`).
+make build
+```
+
+``make help`` lists every target. The build hook bundles freshly-
+generated bindings into the artifact regardless of whether
+``_pb/`` was already on disk — release engineering doesn't depend
+on local state.
+
 ## Generate Docs
 
 ```bash
