@@ -267,9 +267,7 @@ class Client:
         body = struct.pack(">I", wireMsgId) + serialized
         self.conn.sendMsg(self._prefix(body))
 
-    def _tryProto(
-        self, canonicalMsgId: int, build_proto: Callable[[], Any]
-    ) -> bool:
+    def _tryProto(self, canonicalMsgId: int, build_proto: Callable[[], Any]) -> bool:
         """Emit the protobuf-encoded frame for ``canonicalMsgId`` when the
         negotiated server supports it. Returns True when the proto path
         handled the send so callers can early-return; False when the caller
@@ -1209,6 +1207,7 @@ class Client:
             and int(faData) == 2
         ):
             return
+
         def _proto():
             from ._proto.accounts import createFARequestProto
 
@@ -1226,6 +1225,7 @@ class Client:
             and int(faData) == 2
         ):
             return
+
         def _proto():
             from ._proto.accounts import createFAReplaceProto
 
@@ -1983,9 +1983,7 @@ class Client:
         from ._pb_msgids import REQ_CONFIG
         from ._proto.rest import createConfigRequestProto
 
-        self.sendProto(
-            REQ_CONFIG, createConfigRequestProto(reqId).SerializeToString()
-        )
+        self.sendProto(REQ_CONFIG, createConfigRequestProto(reqId).SerializeToString())
 
     def updateConfig(
         self,

@@ -73,7 +73,7 @@ def test_account_value_proto_lands_in_account_values_dict():
     av = ib.wrapper.accountValues[key]
     assert av.value == "100000.00"
     # Typed view is the v3.0 ergonomic surface.
-    assert av.decimalValue == Decimal("100000")
+    assert av.decimalValue == Decimal(100000)
 
 
 # ---------- updatePortfolio (msgId 7) ------------------------------------
@@ -94,9 +94,9 @@ def test_portfolio_value_proto_lands_in_portfolio_dict():
     proto.contract.symbol = "AAPL"
     ib.client.decoder.processProtoBuf(7, proto.SerializeToString())
     item = ib.wrapper.portfolio["DU1"][7]
-    assert item.position == Decimal("100")
+    assert item.position == Decimal(100)
     assert item.marketPrice == Decimal("150.25")
-    assert item.realizedPNL == Decimal("-50")
+    assert item.realizedPNL == Decimal(-50)
 
 
 def test_portfolio_value_zero_position_drops_cached_entry():
@@ -162,7 +162,7 @@ def test_position_proto_lands_in_positions_dict():
     proto.contract.symbol = "AAPL"
     ib.client.decoder.processProtoBuf(61, proto.SerializeToString())
     pos = ib.wrapper.positions["DU1"][7]
-    assert pos.position == Decimal("100")
+    assert pos.position == Decimal(100)
     assert pos.avgCost == Decimal("150.25")
 
 
@@ -204,7 +204,7 @@ def test_account_summary_proto_lands_in_acct_summary_dict():
     ib.client.decoder.processProtoBuf(63, proto.SerializeToString())
     av = ib.wrapper.acctSummary[("DU1", "NetLiquidation", "USD")]
     assert av.value == "100000.00"
-    assert av.decimalValue == Decimal("100000")
+    assert av.decimalValue == Decimal(100000)
 
 
 def test_account_summary_end_proto_settles_reqId():
@@ -281,7 +281,9 @@ def test_req_account_updates_uses_binary_below_gate():
     ib = _ibAtVersion(206)
     sent = _captureSend(ib)
     ib.client.reqAccountUpdates(True, "DU1")
-    assert sent[0][4:].startswith(b"\x00\x00\x00\x06")  # REQ_ACCT_DATA=6, raw int (server>=201)
+    assert sent[0][4:].startswith(
+        b"\x00\x00\x00\x06"
+    )  # REQ_ACCT_DATA=6, raw int (server>=201)
 
 
 def test_req_account_updates_uses_protobuf_at_gate():
@@ -333,7 +335,9 @@ def test_req_positions_uses_binary_below_gate():
     ib = _ibAtVersion(206)
     sent = _captureSend(ib)
     ib.client.reqPositions()
-    assert sent[0][4:].startswith(b"\x00\x00\x00\x3d")  # REQ_POSITIONS=61, raw int (server>=201)
+    assert sent[0][4:].startswith(
+        b"\x00\x00\x00\x3d"
+    )  # REQ_POSITIONS=61, raw int (server>=201)
 
 
 # ---------- reqAccountSummary / cancelAccountSummary --------------------

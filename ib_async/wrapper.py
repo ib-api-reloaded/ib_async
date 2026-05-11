@@ -2000,7 +2000,9 @@ class Wrapper:
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)
                     trade.log.append(logEntry)
-                    self._logger.warning(f"Canceled order [{trade.order.orderId}]: {msg}")
+                    self._logger.warning(
+                        f"Canceled order [{trade.order.orderId}]: {msg}"
+                    )
                     self.ib.orderStatusEvent.emit(trade)
                     trade.statusEvent.emit(trade)
                     trade.cancelledEvent.emit(trade)

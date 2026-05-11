@@ -63,7 +63,7 @@ def test_open_order_proto_creates_trade_via_existing_wrapper_path():
     trade = ib.wrapper.trades[(0, 42)]
     assert trade.contract.symbol == "AAPL"
     assert trade.order.permId == 999
-    assert trade.order.totalQuantity == Decimal("100")
+    assert trade.order.totalQuantity == Decimal(100)
     assert trade.order.lmtPrice == Decimal("50.5")
     assert trade.orderStatus.status == "Submitted"
 
@@ -117,8 +117,8 @@ def test_order_status_proto_updates_existing_trade():
 
     trade = ib.wrapper.trades[(0, 1)]
     assert trade.orderStatus.status == "Filled"
-    assert trade.orderStatus.filled == Decimal("100")
-    assert trade.orderStatus.remaining == Decimal("0")
+    assert trade.orderStatus.filled == Decimal(100)
+    assert trade.orderStatus.remaining == Decimal(0)
     assert trade.orderStatus.avgFillPrice == Decimal("50.5")
 
 
@@ -149,7 +149,7 @@ def test_contract_data_proto_appends_to_request_registry():
     assert details.contract.symbol == "AAPL"
     assert details.marketName == "NMS"
     assert details.minTick == Decimal("0.01")
-    assert details.minSize == Decimal("1")
+    assert details.minSize == Decimal(1)
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +178,7 @@ def test_commission_report_proto_attaches_to_existing_fill():
 
     assert fill.commissionReport.execId == "exec-7"
     assert fill.commissionReport.commission == Decimal("1.25")
-    assert fill.commissionReport.realizedPNL == Decimal("10")
+    assert fill.commissionReport.realizedPNL == Decimal(10)
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ def test_execution_details_proto_lands_fill_on_trade():
     assert len(trade.fills) == 1
     fill = trade.fills[0]
     assert fill.execution.execId == "exec-1"
-    assert fill.execution.shares == Decimal("100")
+    assert fill.execution.shares == Decimal(100)
     assert fill.execution.price == Decimal("50.5")
 
 

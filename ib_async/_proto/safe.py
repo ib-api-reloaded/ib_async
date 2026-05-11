@@ -64,6 +64,7 @@ def normalize_none_scalars(obj: Any) -> Any:
                 setattr(obj, f.name, f.default)
     return obj
 
+
 # IBKR's reference ``decode(Decimal, fields)`` (utils.py) treats these
 # wire strings as the "unset Decimal" sentinel: max int32, max int64,
 # max double in upper-case-E scientific form, and the most-negative

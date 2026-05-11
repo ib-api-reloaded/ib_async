@@ -702,7 +702,7 @@ class Trade:
             # don't count fills for the leg contracts
             fills = [f for f in fills if f.contract.secType == "BAG"]
 
-        total = Decimal("0")
+        total = Decimal(0)
         for f in fills:
             shares = f.execution.shares
             if shares is not None:
@@ -719,7 +719,7 @@ class Trade:
         """
         total = self.order.totalQuantity
         if total is None:
-            return Decimal("0")
+            return Decimal(0)
         return total - self.filled()
 
 

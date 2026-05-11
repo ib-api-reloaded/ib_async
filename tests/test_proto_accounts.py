@@ -274,7 +274,7 @@ def test_position_empty_position_string_returns_none():
 def test_position_valid_decimal_string_round_trips():
     proto = Position_pb2.Position(account="DU1", position="100", avgCost=150.25)
     pos = createPosition(proto)
-    assert pos.position == Decimal("100")
+    assert pos.position == Decimal(100)
     assert pos.avgCost == Decimal("150.25")
 
 
@@ -295,7 +295,7 @@ def test_position_args_helper_returns_wrapper_args_in_order():
     args = createPositionArgs(proto)
     assert args.account == "DU1"
     assert args.contract.symbol == "AAPL"
-    assert args.posSize == Decimal("100")
+    assert args.posSize == Decimal(100)
     assert args.avgCost == Decimal("150.25")
 
 
@@ -332,7 +332,7 @@ def test_position_multi_full_round_trip():
     assert args.account == "DU1"
     assert args.modelCode == "MODEL_A"
     assert args.contract.symbol == "AAPL"
-    assert args.pos == Decimal("100")
+    assert args.pos == Decimal(100)
     assert args.avgCost == Decimal("150.25")
 
 
@@ -401,12 +401,12 @@ def test_portfolio_value_full_round_trip():
     )
     proto.contract.symbol = "AAPL"
     item = createPortfolioItem(proto)
-    assert item.position == Decimal("100")
+    assert item.position == Decimal(100)
     assert item.marketPrice == Decimal("150.25")
-    assert item.marketValue == Decimal("15025")
-    assert item.averageCost == Decimal("145")
-    assert item.unrealizedPNL == Decimal("125")
-    assert item.realizedPNL == Decimal("-50")
+    assert item.marketValue == Decimal(15025)
+    assert item.averageCost == Decimal(145)
+    assert item.unrealizedPNL == Decimal(125)
+    assert item.realizedPNL == Decimal(-50)
     assert item.account == "DU1"
 
 
@@ -417,7 +417,7 @@ def test_update_portfolio_args_helper_returns_8_fields():
         accountName="DU1",
     )
     args = createUpdatePortfolioArgs(proto)
-    assert args.posSize == Decimal("100")
+    assert args.posSize == Decimal(100)
     assert args.marketPrice == Decimal("150.25")
     assert args.account == "DU1"
 

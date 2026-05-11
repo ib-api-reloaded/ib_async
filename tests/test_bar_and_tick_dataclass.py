@@ -78,7 +78,7 @@ def test_bar_data_unset_open_is_falsy():
 
 
 def test_bar_data_zero_open_is_falsy_too():
-    bar = BarData(open=Decimal("0"))
+    bar = BarData(open=Decimal(0))
     assert not bar.open
 
 
@@ -103,7 +103,7 @@ def test_bar_data_safe_decimal_round_trip_from_wire_strings():
     assert bar.high == Decimal("151.0")
     assert bar.low is None
     assert bar.close is None
-    assert bar.volume == Decimal("1000")
+    assert bar.volume == Decimal(1000)
 
 
 # ---------------------------------------------------------------------------

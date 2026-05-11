@@ -124,7 +124,7 @@ def test_create_order_round_trip_all_primary_fields():
         clientId=11,
         permId=999,
         action="BUY",
-        totalQuantity=Decimal("100"),
+        totalQuantity=Decimal(100),
         orderType="LMT",
         lmtPrice=Decimal("50.5"),
         auxPrice=Decimal("0.10"),
@@ -140,7 +140,7 @@ def test_create_order_round_trip_all_primary_fields():
     assert decoded.clientId == 11
     assert decoded.permId == 999
     assert decoded.action == "BUY"
-    assert decoded.totalQuantity == Decimal("100")
+    assert decoded.totalQuantity == Decimal(100)
     assert decoded.orderType == "LMT"
     assert decoded.lmtPrice == Decimal("50.5")
     assert decoded.auxPrice == Decimal("0.10")
@@ -165,7 +165,7 @@ def test_create_order_proto_skips_unset_decimal_fields():
 def test_create_order_proto_writes_decimal_quantity_via_canonical_string():
     # Decimal('100') round-trips as "100" not "100.0" — IBKR's wire
     # convention is the unsuffixed form for whole numbers.
-    order = Order(orderId=1, clientId=0, totalQuantity=Decimal("100"))
+    order = Order(orderId=1, clientId=0, totalQuantity=Decimal(100))
     proto = createOrderProto(order)
     assert proto.totalQuantity == "100"
 
@@ -185,7 +185,7 @@ def test_create_order_proto_coerces_none_plain_int_fields_to_dataclass_default()
     # behavior.
     order = Order(
         action="BUY",
-        totalQuantity=Decimal("1"),
+        totalQuantity=Decimal(1),
         orderType="LMT",
         lmtPrice=Decimal("292.52"),
     )
@@ -391,8 +391,8 @@ def test_create_order_status_round_trip():
     status = createOrderStatus(proto)
     assert status.orderId == 1
     assert status.status == "Filled"
-    assert status.filled == Decimal("100")
-    assert status.remaining == Decimal("0")
+    assert status.filled == Decimal(100)
+    assert status.remaining == Decimal(0)
     assert status.avgFillPrice == Decimal("50.5")
     assert status.lastFillPrice == Decimal("50.6")
     assert status.clientId == 42
@@ -413,7 +413,7 @@ def test_order_status_total_property_sums_when_both_set():
     proto.filled = "30"
     proto.remaining = "70"
     status = createOrderStatus(proto)
-    assert status.total == Decimal("100")
+    assert status.total == Decimal(100)
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +457,7 @@ def test_create_order_state_reads_what_if_diagnostic_fields():
     proto.suggestedSize = "50"
     proto.rejectReason = "Insufficient margin"
     state = createOrderState(proto)
-    assert state.suggestedSize == Decimal("50")
+    assert state.suggestedSize == Decimal(50)
     assert state.rejectReason == "Insufficient margin"
 
 
@@ -479,8 +479,8 @@ def test_create_order_state_reads_order_allocations():
     state = createOrderState(proto)
     assert len(state.orderAllocations) == 2
     assert state.orderAllocations[0].account == "U1234"
-    assert state.orderAllocations[0].position == Decimal("100")
-    assert state.orderAllocations[0].desiredAllocQty == Decimal("50")
+    assert state.orderAllocations[0].position == Decimal(100)
+    assert state.orderAllocations[0].desiredAllocQty == Decimal(50)
     assert state.orderAllocations[0].isMonetary is False
     assert state.orderAllocations[1].account == "U5678"
     # Unset fields stay None on the frozen domain record.
@@ -515,9 +515,9 @@ def test_create_execution_round_trip():
     proto.isPriceRevisionPending = True
     ex = createExecution(proto)
     assert ex.execId == "exec-1"
-    assert ex.shares == Decimal("100")
+    assert ex.shares == Decimal(100)
     assert ex.price == Decimal("50.5")
-    assert ex.cumQty == Decimal("100")
+    assert ex.cumQty == Decimal(100)
     assert ex.avgPrice == Decimal("50.5")
     assert ex.permId == 99
     assert ex.clientId == 42
@@ -627,7 +627,7 @@ def test_open_order_envelope_decodes_all_three_inner_messages():
     assert orderId == 1
     assert contract.symbol == "AAPL"
     assert order.clientId == 11
-    assert order.totalQuantity == Decimal("100")
+    assert order.totalQuantity == Decimal(100)
     assert state.status == "Submitted"
 
 
@@ -827,7 +827,7 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     assert order.parentId == 12345
     # Primary
     assert order.action == "BUY"
-    assert order.totalQuantity == Decimal("100")
+    assert order.totalQuantity == Decimal(100)
     assert order.orderType == "LMT"
     assert order.lmtPrice == Decimal("50.5")
     assert order.auxPrice == Decimal("0.1")
@@ -939,10 +939,10 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     assert order.conditionsCancelOrder is True
     # Adjustable
     assert order.adjustedOrderType == "STP"
-    assert order.triggerPrice == Decimal("48")
+    assert order.triggerPrice == Decimal(48)
     assert order.lmtPriceOffset == Decimal("0.05")
     assert order.adjustedStopPrice == Decimal("47.5")
-    assert order.adjustedStopLimitPrice == Decimal("47")
+    assert order.adjustedStopLimitPrice == Decimal(47)
     assert order.adjustedTrailingAmount == Decimal("0.1")
     assert order.adjustableTrailingUnit == 1
     # Soft-dollar tier
@@ -967,7 +967,7 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     assert order.midOffsetAtHalf == Decimal("0.0025")
     # Completed-order
     assert order.autoCancelDate == "20301231"
-    assert order.filledQuantity == Decimal("50")
+    assert order.filledQuantity == Decimal(50)
     assert order.refFuturesConId == 8888
     assert order.shareholder == "Shareholder"
     # Wire int(1) -> domain bool True.
@@ -995,7 +995,7 @@ def test_create_order_minimal_proto_leaves_unset_fields_at_defaults():
     order = createOrder(proto)
     # Set fields land
     assert order.action == "BUY"
-    assert order.totalQuantity == Decimal("100")
+    assert order.totalQuantity == Decimal(100)
     assert order.lmtPrice == Decimal("50.5")
     assert order.orderType == "LMT"
     # Decimal | None unset stays None

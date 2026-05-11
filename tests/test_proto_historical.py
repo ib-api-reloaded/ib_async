@@ -94,7 +94,7 @@ def test_bar_data_garbage_volume_string_yields_none():
         open=150.0, high=151.0, low=149.0, close=150.5, volume="abc", WAP="garbage"
     )
     bar = createBarData(proto)
-    assert bar.open == Decimal("150")
+    assert bar.open == Decimal(150)
     assert bar.volume is None
     assert bar.average is None
 
@@ -114,7 +114,7 @@ def test_bar_data_full_round_trip_through_str_routing():
     bar = createBarData(proto)
     assert bar.open == Decimal("0.1")
     assert bar.average == Decimal("0.125")
-    assert bar.volume == Decimal("1000")
+    assert bar.volume == Decimal(1000)
     assert bar.barCount == 42
 
 
@@ -138,8 +138,8 @@ def test_iter_historical_data_bars_round_trip():
     args = createHistoricalDataBars(proto)
     assert args.reqId == 7
     assert len(args.bars) == 2
-    assert args.bars[0].open == Decimal("150")
-    assert args.bars[1].close == Decimal("152")
+    assert args.bars[0].open == Decimal(150)
+    assert args.bars[1].close == Decimal(152)
 
 
 def test_historical_data_end_empty_proto():
@@ -198,9 +198,9 @@ def test_realtime_bar_full_round_trip():
         count=10,
     )
     args = createRealtimeBarArgs(proto)
-    assert args.open_ == Decimal("150")
+    assert args.open_ == Decimal(150)
     assert args.close == Decimal("150.5")
-    assert args.volume == Decimal("1000")
+    assert args.volume == Decimal(1000)
     assert args.wap == Decimal("150.25")
 
 
@@ -241,8 +241,8 @@ def test_histogram_data_repeated_round_trip():
     assert args.reqId == 7
     assert len(args.items) == 2
     assert args.items[0].price == 150.0
-    assert args.items[0].size == Decimal("100")
-    assert args.items[1].size == Decimal("200")
+    assert args.items[0].size == Decimal(100)
+    assert args.items[1].size == Decimal(200)
 
 
 def test_histogram_data_garbage_size_yields_none():

@@ -311,7 +311,7 @@ def test_pnl_single_fractional_position_preserved():
 def test_pnl_single_negative_position_round_trips():
     proto = PnLSingle_pb2.PnLSingle(reqId=42, position="-50")
     args = createPnLSingleArgs(proto)
-    assert args.pos == Decimal("-50")
+    assert args.pos == Decimal(-50)
 
 
 def test_pnl_single_full_round_trip():
@@ -325,7 +325,7 @@ def test_pnl_single_full_round_trip():
     )
     args = createPnLSingleArgs(proto)
     assert args.reqId == 42
-    assert args.pos == Decimal("100")
+    assert args.pos == Decimal(100)
     assert args.dailyPnL == 10.5
     assert args.unrealizedPnL == -2.5
     assert args.realizedPnL == 1.0

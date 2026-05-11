@@ -1177,10 +1177,10 @@ def _seed_trade_for_order_status(
             "5000000000",
             {
                 "filled": Decimal("10.5"),
-                "remaining": Decimal("0"),
+                "remaining": Decimal(0),
                 "avgFillPrice": Decimal("120.25"),
                 "lastFillPrice": Decimal("120.25"),
-                "mktCapPrice": Decimal("5000000000"),
+                "mktCapPrice": Decimal(5000000000),
             },
         ),
         # Empty strings land as None (the canonical unset sentinel).
@@ -1481,10 +1481,10 @@ def test_binary_and_proto_order_status_produce_identical_trade_state():
     p = trade_proto.orderStatus
     assert b.status == p.status
     assert b.filled == p.filled == Decimal("100.5")
-    assert b.remaining == p.remaining == Decimal("0")
+    assert b.remaining == p.remaining == Decimal(0)
     assert b.avgFillPrice == p.avgFillPrice == Decimal("150.25")
     assert b.lastFillPrice == p.lastFillPrice == Decimal("150.25")
-    assert b.mktCapPrice == p.mktCapPrice == Decimal("1000000")
+    assert b.mktCapPrice == p.mktCapPrice == Decimal(1000000)
 
 
 def test_binary_and_proto_exec_details_produce_identical_execution_state():
