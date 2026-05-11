@@ -16,8 +16,6 @@ from ._proto.safe import safe_decimal
 from .contract import Contract, ScanData, TagValue
 from .util import EPOCH
 
-nan = float("nan")
-
 
 @dataclass
 class ScannerSubscription:
@@ -244,9 +242,9 @@ class DepthMktDataDescription:
 class PnL:
     account: str = ""
     modelCode: str = ""
-    dailyPnL: float = nan
-    unrealizedPnL: float = nan
-    realizedPnL: float = nan
+    dailyPnL: float | None = None
+    unrealizedPnL: float | None = None
+    realizedPnL: float | None = None
 
 
 @dataclass
@@ -262,9 +260,9 @@ class PnLSingle:
     account: str = ""
     modelCode: str = ""
     conId: int = 0
-    dailyPnL: float = nan
-    unrealizedPnL: float = nan
-    realizedPnL: float = nan
+    dailyPnL: float | None = None
+    unrealizedPnL: float | None = None
+    realizedPnL: float | None = None
     # Wire ``position`` is a Decimal-shaped string. Earlier ib_async
     # truncated to ``int``, silently dropping fractional positions for
     # crypto and other FRACTIONAL_SIZE_SUPPORT (gate 163) instruments.
@@ -272,7 +270,7 @@ class PnLSingle:
     # Decimal-native domain; ``None`` is the unset sentinel (falsy
     # without the NaN truthy-trap).
     position: Decimal | None = None
-    value: float = nan
+    value: float | None = None
 
 
 @dataclass
@@ -860,7 +858,8 @@ class IBDefaults:
     emptySize: Any = 0
 
     # optionally replace ib_async default for all instance variable values before populated from API updates
-    unset: Any = nan
+    # Note: None is the universal unset sentinel. Legacy code may compare against this using ==
+    unset: Any = None
 
     # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
     timezone: tzinfo = UTC

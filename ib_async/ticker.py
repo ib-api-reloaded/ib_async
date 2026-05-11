@@ -23,9 +23,7 @@ from ib_async.objects import (
     TickByTickMidPoint,
     TickData,
 )
-from ib_async.util import dataclassRepr, isNan
-
-nan = float("nan")
+from ib_async.util import dataclassRepr
 
 # Bounded ring of most-recent per-contract news ticks. NewsTick already
 # fans out through ``IB.tickNewsEvent`` for streaming consumers; this
@@ -69,91 +67,91 @@ class Ticker:
     time: datetime | None = None
     timestamp: float | None = None
     marketDataType: int = 1
-    minTick: float = nan
-    bid: float = nan
-    bidSize: float = nan
+    minTick: float | None = None
+    bid: float | None = None
+    bidSize: float | None = None
     bidExchange: str = ""
-    ask: float = nan
-    askSize: float = nan
+    ask: float | None = None
+    askSize: float | None = None
     askExchange: str = ""
-    last: float = nan
-    lastSize: float = nan
+    last: float | None = None
+    lastSize: float | None = None
     lastExchange: str = ""
     lastTimestamp: datetime | None = None
-    prevBid: float = nan
-    prevBidSize: float = nan
-    prevAsk: float = nan
-    prevAskSize: float = nan
-    prevLast: float = nan
-    prevLastSize: float = nan
-    volume: float = nan
-    open: float = nan
-    high: float = nan
-    low: float = nan
-    close: float = nan
-    vwap: float = nan
-    low13week: float = nan
-    high13week: float = nan
-    low26week: float = nan
-    high26week: float = nan
-    low52week: float = nan
-    high52week: float = nan
-    bidYield: float = nan
-    askYield: float = nan
-    lastYield: float = nan
-    markPrice: float = nan
-    halted: float = nan
-    rtHistVolatility: float = nan
-    rtVolume: float = nan
-    rtTradeVolume: float = nan
+    prevBid: float | None = None
+    prevBidSize: float | None = None
+    prevAsk: float | None = None
+    prevAskSize: float | None = None
+    prevLast: float | None = None
+    prevLastSize: float | None = None
+    volume: float | None = None
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    vwap: float | None = None
+    low13week: float | None = None
+    high13week: float | None = None
+    low26week: float | None = None
+    high26week: float | None = None
+    low52week: float | None = None
+    high52week: float | None = None
+    bidYield: float | None = None
+    askYield: float | None = None
+    lastYield: float | None = None
+    markPrice: float | None = None
+    halted: float | None = None
+    rtHistVolatility: float | None = None
+    rtVolume: float | None = None
+    rtTradeVolume: float | None = None
     rtTime: datetime | None = None
-    avVolume: float = nan
-    tradeCount: float = nan
-    tradeRate: float = nan
-    volumeRate: float = nan
-    volumeRate3Min: float = nan
-    volumeRate5Min: float = nan
-    volumeRate10Min: float = nan
-    shortable: float = nan
-    shortableShares: float = nan
-    indexFuturePremium: float = nan
-    futuresOpenInterest: float = nan
-    putOpenInterest: float = nan
-    callOpenInterest: float = nan
-    putVolume: float = nan
-    callVolume: float = nan
-    avOptionVolume: float = nan
-    histVolatility: float = nan
-    impliedVolatility: float = nan
-    openInterest: float = nan
-    lastRthTrade: float = nan
+    avVolume: float | None = None
+    tradeCount: float | None = None
+    tradeRate: float | None = None
+    volumeRate: float | None = None
+    volumeRate3Min: float | None = None
+    volumeRate5Min: float | None = None
+    volumeRate10Min: float | None = None
+    shortable: float | None = None
+    shortableShares: float | None = None
+    indexFuturePremium: float | None = None
+    futuresOpenInterest: float | None = None
+    putOpenInterest: float | None = None
+    callOpenInterest: float | None = None
+    putVolume: float | None = None
+    callVolume: float | None = None
+    avOptionVolume: float | None = None
+    histVolatility: float | None = None
+    impliedVolatility: float | None = None
+    openInterest: float | None = None
+    lastRthTrade: float | None = None
     lastRegTime: str = ""
     optionBidExch: str = ""
     optionAskExch: str = ""
-    bondFactorMultiplier: float = nan
-    creditmanMarkPrice: float = nan
-    creditmanSlowMarkPrice: float = nan
+    bondFactorMultiplier: float | None = None
+    creditmanMarkPrice: float | None = None
+    creditmanSlowMarkPrice: float | None = None
     delayedLastTimestamp: datetime | None = None
-    delayedHalted: float = nan
+    delayedHalted: float | None = None
     reutersMutualFunds: str = ""
-    etfNavClose: float = nan
-    etfNavPriorClose: float = nan
-    etfNavBid: float = nan
-    etfNavAsk: float = nan
-    etfNavLast: float = nan
-    etfFrozenNavLast: float = nan
-    etfNavHigh: float = nan
-    etfNavLow: float = nan
+    etfNavClose: float | None = None
+    etfNavPriorClose: float | None = None
+    etfNavBid: float | None = None
+    etfNavAsk: float | None = None
+    etfNavLast: float | None = None
+    etfFrozenNavLast: float | None = None
+    etfNavHigh: float | None = None
+    etfNavLow: float | None = None
     socialMarketAnalytics: str = ""
-    estimatedIpoMidpoint: float = nan
-    finalIpoLast: float = nan
+    estimatedIpoMidpoint: float | None = None
+    finalIpoLast: float | None = None
     # Odd-lot quote board (TickType 105-110, IBKR ``ODD_LOT_*``). Sized
     # smaller than round-lot prints; arrives only when the user includes
     # the ODD_LOT generic tick in ``reqMktData``.
-    oddLotBid: float = nan
-    oddLotAsk: float = nan
-    oddLotBidSize: float = nan
-    oddLotAskSize: float = nan
+    oddLotBid: float | None = None
+    oddLotAsk: float | None = None
+    oddLotBidSize: float | None = None
+    oddLotAskSize: float | None = None
     oddLotBidExch: str = ""
     oddLotAskExch: str = ""
     dividends: Dividends | None = None
@@ -179,10 +177,10 @@ class Ticker:
     highEfp: EfpData | None = None
     lowEfp: EfpData | None = None
     closeEfp: EfpData | None = None
-    auctionVolume: float = nan
-    auctionPrice: float = nan
-    auctionImbalance: float = nan
-    regulatoryImbalance: float = nan
+    auctionVolume: float | None = None
+    auctionPrice: float | None = None
+    auctionImbalance: float | None = None
+    regulatoryImbalance: float | None = None
     bboExchange: str = ""
     snapshotPermissions: int = 0
     # Most-recent per-quote attribute flags decoded from the wire
@@ -214,82 +212,86 @@ class Ticker:
         # everything with _another_ post_init clear.
         if not self.created:
             self.updateEvent = TickerUpdateEvent("updateEvent")
-            self.minTick = self.defaults.unset
-            self.bid = self.defaults.unset
-            self.bidSize = self.defaults.unset
-            self.ask = self.defaults.unset
-            self.askSize = self.defaults.unset
-            self.last = self.defaults.unset
-            self.lastSize = self.defaults.unset
-            self.prevBid = self.defaults.unset
-            self.prevBidSize = self.defaults.unset
-            self.prevAsk = self.defaults.unset
-            self.prevAskSize = self.defaults.unset
-            self.prevLast = self.defaults.unset
-            self.prevLastSize = self.defaults.unset
-            self.volume = self.defaults.unset
-            self.open = self.defaults.unset
-            self.high = self.defaults.unset
-            self.low = self.defaults.unset
-            self.close = self.defaults.unset
-            self.vwap = self.defaults.unset
-            self.low13week = self.defaults.unset
-            self.high13week = self.defaults.unset
-            self.low26week = self.defaults.unset
-            self.high26week = self.defaults.unset
-            self.low52week = self.defaults.unset
-            self.high52week = self.defaults.unset
-            self.bidYield = self.defaults.unset
-            self.askYield = self.defaults.unset
-            self.lastYield = self.defaults.unset
-            self.markPrice = self.defaults.unset
-            self.halted = self.defaults.unset
-            self.rtHistVolatility = self.defaults.unset
-            self.rtVolume = self.defaults.unset
-            self.rtTradeVolume = self.defaults.unset
-            self.avVolume = self.defaults.unset
-            self.tradeCount = self.defaults.unset
-            self.tradeRate = self.defaults.unset
-            self.volumeRate = self.defaults.unset
-            self.volumeRate3Min = self.defaults.unset
-            self.volumeRate5Min = self.defaults.unset
-            self.volumeRate10Min = self.defaults.unset
-            self.shortable = self.defaults.unset
-            self.shortableShares = self.defaults.unset
-            self.indexFuturePremium = self.defaults.unset
-            self.futuresOpenInterest = self.defaults.unset
-            self.putOpenInterest = self.defaults.unset
-            self.callOpenInterest = self.defaults.unset
-            self.putVolume = self.defaults.unset
-            self.callVolume = self.defaults.unset
-            self.avOptionVolume = self.defaults.unset
-            self.histVolatility = self.defaults.unset
-            self.impliedVolatility = self.defaults.unset
-            self.auctionVolume = self.defaults.unset
-            self.auctionPrice = self.defaults.unset
-            self.auctionImbalance = self.defaults.unset
-            self.regulatoryImbalance = self.defaults.unset
-            self.openInterest = self.defaults.unset
-            self.lastRthTrade = self.defaults.unset
-            self.bondFactorMultiplier = self.defaults.unset
-            self.creditmanMarkPrice = self.defaults.unset
-            self.creditmanSlowMarkPrice = self.defaults.unset
-            self.delayedHalted = self.defaults.unset
-            self.etfNavClose = self.defaults.unset
-            self.etfNavPriorClose = self.defaults.unset
-            self.etfNavBid = self.defaults.unset
-            self.etfNavAsk = self.defaults.unset
-            self.etfNavLast = self.defaults.unset
-            self.etfFrozenNavLast = self.defaults.unset
-            self.etfNavHigh = self.defaults.unset
-            self.etfNavLow = self.defaults.unset
-            self.estimatedIpoMidpoint = self.defaults.unset
-            self.finalIpoLast = self.defaults.unset
-            self.oddLotBid = self.defaults.unset
-            self.oddLotAsk = self.defaults.unset
-            self.oddLotBidSize = self.defaults.unset
-            self.oddLotAskSize = self.defaults.unset
-
+            # Reset all float fields to the configured unset sentinel.
+            # Users may provide a custom sentinel (e.g., -1.0) via IBDefaults(unset=...).
+            # This ensures consistent unset semantics across all float-typed fields.
+            unset = self.defaults.unset
+            if unset is not None:
+                self.minTick = unset
+                self.bid = unset
+                self.bidSize = unset
+                self.ask = unset
+                self.askSize = unset
+                self.last = unset
+                self.lastSize = unset
+                self.prevBid = unset
+                self.prevBidSize = unset
+                self.prevAsk = unset
+                self.prevAskSize = unset
+                self.prevLast = unset
+                self.prevLastSize = unset
+                self.volume = unset
+                self.open = unset
+                self.high = unset
+                self.low = unset
+                self.close = unset
+                self.vwap = unset
+                self.low13week = unset
+                self.high13week = unset
+                self.low26week = unset
+                self.high26week = unset
+                self.low52week = unset
+                self.high52week = unset
+                self.bidYield = unset
+                self.askYield = unset
+                self.lastYield = unset
+                self.markPrice = unset
+                self.halted = unset
+                self.rtHistVolatility = unset
+                self.rtVolume = unset
+                self.rtTradeVolume = unset
+                self.avVolume = unset
+                self.tradeCount = unset
+                self.tradeRate = unset
+                self.volumeRate = unset
+                self.volumeRate3Min = unset
+                self.volumeRate5Min = unset
+                self.volumeRate10Min = unset
+                self.shortable = unset
+                self.shortableShares = unset
+                self.indexFuturePremium = unset
+                self.futuresOpenInterest = unset
+                self.putOpenInterest = unset
+                self.callOpenInterest = unset
+                self.putVolume = unset
+                self.callVolume = unset
+                self.avOptionVolume = unset
+                self.histVolatility = unset
+                self.impliedVolatility = unset
+                self.auctionVolume = unset
+                self.auctionPrice = unset
+                self.auctionImbalance = unset
+                self.regulatoryImbalance = unset
+                self.openInterest = unset
+                self.lastRthTrade = unset
+                self.bondFactorMultiplier = unset
+                self.creditmanMarkPrice = unset
+                self.creditmanSlowMarkPrice = unset
+                self.delayedHalted = unset
+                self.etfNavClose = unset
+                self.etfNavPriorClose = unset
+                self.etfNavBid = unset
+                self.etfNavAsk = unset
+                self.etfNavLast = unset
+                self.etfFrozenNavLast = unset
+                self.etfNavHigh = unset
+                self.etfNavLow = unset
+                self.estimatedIpoMidpoint = unset
+                self.finalIpoLast = unset
+                self.oddLotBid = unset
+                self.oddLotAsk = unset
+                self.oddLotBidSize = unset
+                self.oddLotAskSize = unset
             self.created = True
 
     def __eq__(self, other):
@@ -302,38 +304,43 @@ class Ticker:
     __str__ = dataclassRepr
 
     def isUnset(self, value) -> bool:
-        # if default value is nan and value is nan, it is unset.
-        # else, if value matches default value, it is unset.
+        # if value is None, it is unset.
+        # else, if value matches the default unset sentinel, it is unset.
         dev = self.defaults.unset
-        return (dev != dev and value != value) or (value == dev)
+        return value is None or (value == dev)
 
     def hasBidAsk(self) -> bool:
         """See if this ticker has a valid bid and ask."""
         return (
-            self.bid != -1
-            and not self.isUnset(self.bid)
+            self.bid is not None
+            and self.bid != -1
+            and self.bidSize is not None
             and self.bidSize > 0
+            and self.ask is not None
             and self.ask != -1
-            and not self.isUnset(self.ask)
+            and self.askSize is not None
             and self.askSize > 0
         )
 
-    def midpoint(self) -> float:
+    def midpoint(self) -> float | None:
         """
-        Return average of bid and ask, or defaults.unset if no valid bid and ask
+        Return average of bid and ask, or None if no valid bid and ask
         are available.
         """
-        return (self.bid + self.ask) * 0.5 if self.hasBidAsk() else self.defaults.unset
+        if self.hasBidAsk() and self.bid is not None and self.ask is not None:
+            return (self.bid + self.ask) * 0.5
+        return None
 
-    def marketPrice(self) -> float:
+    def marketPrice(self) -> float | None:
         """
         Return the first available one of
 
         * last price if within current bid/ask or no bid/ask available;
         * average of bid and ask (midpoint).
         """
-        if self.hasBidAsk():
-            if self.bid <= self.last <= self.ask:
+        price: float | None
+        if self.hasBidAsk() and self.bid is not None and self.ask is not None:
+            if self.last is not None and self.bid <= self.last <= self.ask:
                 price = self.last
             else:
                 price = self.midpoint()
@@ -433,10 +440,10 @@ class Midpoints(Tickfilter):
 @dataclass
 class Bar:
     time: datetime | None
-    open: float = nan
-    high: float = nan
-    low: float = nan
-    close: float = nan
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
     volume: int = 0
     count: int = 0
 
@@ -470,11 +477,17 @@ class TimeBars(Op):
             return
         bar = self.bars[-1]
 
-        if isNan(bar.open):
+        if bar.open is None:
             bar.open = bar.high = bar.low = price
 
-        bar.high = max(bar.high, price)
-        bar.low = min(bar.low, price)
+        if bar.high is not None:
+            bar.high = max(bar.high, price)
+        else:
+            bar.high = price
+        if bar.low is not None:
+            bar.low = min(bar.low, price)
+        else:
+            bar.low = price
         bar.close = price
         bar.volume += size
         bar.count += 1
@@ -483,8 +496,9 @@ class TimeBars(Op):
     def _on_timer(self, time):
         if self.bars:
             bar = self.bars[-1]
-            if isNan(bar.close) and len(self.bars) > 1:
-                bar.open = bar.high = bar.low = bar.close = self.bars[-2].close
+            if bar.close is None and len(self.bars) > 1:
+                prev_close = self.bars[-2].close
+                bar.open = bar.high = bar.low = bar.close = prev_close
 
             self.bars.updateEvent.emit(self.bars, True)
             self.emit(bar)
