@@ -209,7 +209,15 @@ def createContractProto(
     on every leg.
     """
     proto = Contract_pb2.Contract()
-    if contract.conId:
+    # IBKR's reference gates ``conId`` and ``strike`` on the sentinel
+    # check (``isValidIntValue`` / ``isValidFloatValue``), so a ``0``
+    # value is emitted explicitly. Suppressing the field at zero leaves
+    # the server reading the proto3-default-absent slot as the IBKR
+    # ``UNSET_INTEGER`` / ``UNSET_DOUBLE`` sentinel and rejecting the
+    # request — e.g. ``Error 135: Can't find order with id =
+    # 2147483647`` on a placeOrder whose contract has not been
+    # qualified yet (conId still at the dataclass default).
+    if contract.conId != UNSET_INTEGER:
         proto.conId = contract.conId
     if contract.symbol:
         proto.symbol = contract.symbol
@@ -219,7 +227,7 @@ def createContractProto(
         proto.lastTradeDateOrContractMonth = contract.lastTradeDateOrContractMonth
     if contract.lastTradeDate:
         proto.lastTradeDate = contract.lastTradeDate
-    if contract.strike:
+    if contract.strike != UNSET_DOUBLE:
         proto.strike = contract.strike
     if contract.right:
         proto.right = contract.right
