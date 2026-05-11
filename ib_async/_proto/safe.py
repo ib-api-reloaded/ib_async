@@ -13,10 +13,56 @@ value lands as ``None`` (the unset sentinel for our domain dataclass
 
 from __future__ import annotations
 
+import dataclasses
 from decimal import Decimal, InvalidOperation
-from typing import Final, TypeGuard
+from typing import Any, Final, TypeGuard
 
 from ..util import UNSET_DECIMAL, UNSET_DOUBLE, UNSET_INTEGER, UNSET_LONG
+
+# Plain-scalar type annotation strings that survive ``from __future__ import
+# annotations``. Fields typed as ``int | None`` / ``Optional[int]`` etc are
+# intentionally left out — for those, ``None`` is the domain unset sentinel
+# and is meant to skip the wire emission. Plain ``int`` / ``float`` /
+# ``bool`` / ``str`` fields with a real default are coerced back to that
+# default if a caller stomped ``None`` onto the slot, mirroring the binary
+# path's ``_FORMAT_HANDLERS[type(None)] = lambda _: ""`` behavior at the
+# wire boundary (see ``Client._make_format_handlers``).
+_PLAIN_SCALAR_TYPES: Final[frozenset[str]] = frozenset({"int", "float", "bool", "str"})
+
+
+def normalize_none_scalars(obj: Any) -> Any:
+    """Coerce ``None`` on plain-scalar dataclass fields back to the field's
+    default value. Mutates and returns ``obj`` so callers can chain it on
+    converter entry — the proto path's analog of the binary path's
+    ``NoneType → ""`` formatter, which the TWS server parses as the
+    field's wire-default (typically ``0`` for plain ``int`` fields like
+    ``parentId``, ``ocaType``, ``triggerMethod``).
+
+    Without this normalization, a caller (e.g. icli's whatIf-preview path
+    which stamps ``parentId = None`` to suppress the parent link)
+    produces a wire frame missing the field entirely; TWS reads
+    proto3-absent as its own ``UNSET_INTEGER = 2147483647`` sentinel and
+    rejects the request with ``Error 135: Can't find order with id =
+    2147483647``. The binary path always emits ``""`` for None and the
+    server reads ``""`` as the field's default, which is what
+    end-users expect from ``= None``.
+
+    Only acts on plain-scalar annotations (``int`` / ``float`` / ``bool``
+    / ``str``). ``int | None`` / ``Decimal | None`` / etc are left alone
+    because ``None`` is their domain unset sentinel and the converter
+    callers already gate emission on ``is not None`` / ``_isValidInt`` /
+    similar.
+    """
+    if not dataclasses.is_dataclass(obj):
+        return obj
+    for f in dataclasses.fields(obj):
+        if f.type in _PLAIN_SCALAR_TYPES and getattr(obj, f.name, None) is None:
+            # ``MISSING`` for fields with no default is rare on the IBKR
+            # dataclasses but guarded for symmetry: leave the slot as
+            # None and let the converter's gate skip it.
+            if f.default is not dataclasses.MISSING:
+                setattr(obj, f.name, f.default)
+    return obj
 
 # IBKR's reference ``decode(Decimal, fields)`` (utils.py) treats these
 # wire strings as the "unset Decimal" sentinel: max int32, max int64,

@@ -170,6 +170,39 @@ def test_create_order_proto_writes_decimal_quantity_via_canonical_string():
     assert proto.totalQuantity == "100"
 
 
+def test_create_order_proto_coerces_none_plain_int_fields_to_dataclass_default():
+    # Live regression: icli's whatIf-preview path stamps
+    # ``parentId = None`` on a fresh-copy Order to suppress the parent
+    # link. The binary path's ``_FORMAT_HANDLERS[type(None)] = lambda
+    # _: ""`` formatter mapped that to ``""``, which TWS parses as the
+    # field's wire default (``0`` for ``parentId``). The protobuf path
+    # has no equivalent and used to skip the field entirely, leaving
+    # TWS to read proto3-absent as its own ``UNSET_INTEGER`` sentinel
+    # and reject every previewOrder / placeOrder with ``Error 135:
+    # Can't find order with id = 2147483647``. The converter must
+    # coerce ``None`` on plain-int fields back to the dataclass
+    # default so the wire matches the binary path's effective
+    # behavior.
+    order = Order(
+        action="BUY",
+        totalQuantity=Decimal("1"),
+        orderType="LMT",
+        lmtPrice=Decimal("292.52"),
+    )
+    order.parentId = None  # type: ignore[assignment]
+    order.ocaType = None  # type: ignore[assignment]
+    order.triggerMethod = None  # type: ignore[assignment]
+    proto = createOrderProto(order)
+    # Field must be present with the dataclass default — not absent.
+    assert proto.HasField("parentId") and proto.parentId == 0
+    assert proto.HasField("ocaType") and proto.ocaType == 0
+    assert proto.HasField("triggerMethod") and proto.triggerMethod == 0
+    # ``exemptCode`` defaults to ``-1`` — None must coerce to -1 too.
+    order.exemptCode = None  # type: ignore[assignment]
+    proto = createOrderProto(order)
+    assert proto.HasField("exemptCode") and proto.exemptCode == -1
+
+
 def test_limit_order_constructor_coerces_user_floats_to_decimal():
     # User-friendly ``LimitOrder("BUY", 100, 50.5)`` round-trips through
     # ``_toDecimal`` so the wire-side gets a clean Decimal even though

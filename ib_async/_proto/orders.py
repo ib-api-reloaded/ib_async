@@ -75,6 +75,7 @@ from .safe import (
     is_valid_long as _isValidLong,
 )
 from .safe import (
+    normalize_none_scalars,
     safe_decimal,
 )
 
@@ -145,6 +146,19 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     none — every IBKR-reference field maps to an Order_pb2 field at
     this proto version.
     """
+    # Wire-boundary parity with the binary path: ``Client.send`` maps
+    # ``None`` on a plain-int Order field to ``""``, which the server
+    # parses as the wire-default (``0`` for ``parentId`` / ``ocaType``
+    # / ``triggerMethod`` / …). The protobuf path can't emit ``""`` for
+    # an ``optional int32`` slot, so we coerce ``None → field default``
+    # here before the per-field gates run. Without this, callers that
+    # explicitly set ``order.parentId = None`` (icli's whatIf-preview
+    # path) produce a wire frame missing the field; TWS reads
+    # proto3-absent as its own ``UNSET_INTEGER = 2147483647`` sentinel
+    # and rejects with ``Error 135: Can't find order with id =
+    # 2147483647``.
+    normalize_none_scalars(order)
+
     proto = Order_pb2.Order()
 
     # Order ids — set even at zero where IBKR treats zero as a valid
