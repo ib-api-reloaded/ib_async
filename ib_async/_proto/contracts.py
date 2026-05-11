@@ -38,6 +38,7 @@ from ..contract import (
 from ..util import UNSET_DOUBLE, UNSET_INTEGER
 from .safe import (
     format_proto_double,
+    normalize_none_scalars,
     safe_decimal,
 )
 from .safe import (
@@ -223,6 +224,13 @@ def createContractProto(
     data, etc.) pass ``None`` and the wire proto omits ``perLegPrice``
     on every leg.
     """
+    # Mirror the binary path's ``NoneType → ""`` wire formatter: callers
+    # may stamp ``None`` onto a plain-int / plain-float / plain-str
+    # Contract field; the proto path can't emit ``""`` for an
+    # ``optional int32`` slot so we coerce ``None → dataclass default``
+    # before the per-field gates run.
+    normalize_none_scalars(contract)
+
     proto = Contract_pb2.Contract()
     # IBKR's reference gates ``conId`` and ``strike`` on the sentinel
     # check (``isValidIntValue`` / ``isValidFloatValue``), so a ``0``
