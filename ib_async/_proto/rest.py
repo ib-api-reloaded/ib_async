@@ -83,6 +83,7 @@ from .._pb import (
 )
 from ..contract import Contract, ContractDescription, TagValue
 from ..objects import PriceIncrement, SmartComponent, SoftDollarTier
+from ..util import UNSET_INTEGER
 from .contracts import createContractDescription, createContractProto
 from .safe import fill_tag_value_map
 
@@ -259,7 +260,8 @@ def createUserInfoArgs(proto: UserInfo_pb2.UserInfo) -> UserInfoArgs:
 
 def createUserInfoRequestProto(reqId: int) -> UserInfoRequest_pb2.UserInfoRequest:
     proto = UserInfoRequest_pb2.UserInfoRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -294,7 +296,8 @@ def createSoftDollarTiersRequestProto(
     reqId: int,
 ) -> SoftDollarTiersRequest_pb2.SoftDollarTiersRequest:
     proto = SoftDollarTiersRequest_pb2.SoftDollarTiersRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -328,8 +331,10 @@ def createSmartComponentsRequestProto(
     reqId: int, bboExchange: str
 ) -> SmartComponentsRequest_pb2.SmartComponentsRequest:
     proto = SmartComponentsRequest_pb2.SmartComponentsRequest()
-    proto.reqId = reqId
-    proto.bboExchange = bboExchange
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if bboExchange:
+        proto.bboExchange = bboExchange
     return proto
 
 
@@ -358,7 +363,8 @@ def createMarketRuleRequestProto(
     marketRuleId: int,
 ) -> MarketRuleRequest_pb2.MarketRuleRequest:
     proto = MarketRuleRequest_pb2.MarketRuleRequest()
-    proto.marketRuleId = marketRuleId
+    if marketRuleId != UNSET_INTEGER:
+        proto.marketRuleId = marketRuleId
     return proto
 
 
@@ -405,11 +411,16 @@ def createSecDefOptParamsRequestProto(
     underlyingConId: int,
 ) -> SecDefOptParamsRequest_pb2.SecDefOptParamsRequest:
     proto = SecDefOptParamsRequest_pb2.SecDefOptParamsRequest()
-    proto.reqId = reqId
-    proto.underlyingSymbol = underlyingSymbol
-    proto.futFopExchange = futFopExchange
-    proto.underlyingSecType = underlyingSecType
-    proto.underlyingConId = underlyingConId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if underlyingSymbol:
+        proto.underlyingSymbol = underlyingSymbol
+    if futFopExchange:
+        proto.futFopExchange = futFopExchange
+    if underlyingSecType:
+        proto.underlyingSecType = underlyingSecType
+    if underlyingConId != UNSET_INTEGER:
+        proto.underlyingConId = underlyingConId
     return proto
 
 
@@ -431,8 +442,10 @@ def createMatchingSymbolsRequestProto(
     reqId: int, pattern: str
 ) -> MatchingSymbolsRequest_pb2.MatchingSymbolsRequest:
     proto = MatchingSymbolsRequest_pb2.MatchingSymbolsRequest()
-    proto.reqId = reqId
-    proto.pattern = pattern
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if pattern:
+        proto.pattern = pattern
     return proto
 
 
@@ -445,7 +458,8 @@ def createStartApiRequestProto(
     clientId: int, optionalCapabilities: str
 ) -> StartApiRequest_pb2.StartApiRequest:
     proto = StartApiRequest_pb2.StartApiRequest()
-    proto.clientId = clientId
+    if clientId != UNSET_INTEGER:
+        proto.clientId = clientId
     # IBKR's reference clients (Java EClientUtils, Python client_utils) gate
     # this on a non-empty check. With proto3 ``optional`` semantics an
     # explicit empty-string assignment serializes as a present-but-empty
@@ -460,7 +474,8 @@ def createSetServerLogLevelRequestProto(
     logLevel: int,
 ) -> SetServerLogLevelRequest_pb2.SetServerLogLevelRequest:
     proto = SetServerLogLevelRequest_pb2.SetServerLogLevelRequest()
-    proto.logLevel = logLevel
+    if logLevel != UNSET_INTEGER:
+        proto.logLevel = logLevel
     return proto
 
 
@@ -493,17 +508,22 @@ def createExerciseOptionsRequestProto(
     decoder honors the explicit-False semantic.
     """
     proto = ExerciseOptionsRequest_pb2.ExerciseOptionsRequest()
-    proto.orderId = orderId
+    if orderId != UNSET_INTEGER:
+        proto.orderId = orderId
     proto.contract.CopyFrom(createContractProto(contract))
-    proto.exerciseAction = exerciseAction
-    proto.exerciseQuantity = exerciseQuantity
-    proto.account = account
-    proto.override = override
-    if manualOrderTime is not None:
+    if exerciseAction != UNSET_INTEGER:
+        proto.exerciseAction = exerciseAction
+    if exerciseQuantity != UNSET_INTEGER:
+        proto.exerciseQuantity = exerciseQuantity
+    if account:
+        proto.account = account
+    if override:
+        proto.override = override
+    if manualOrderTime:
         proto.manualOrderTime = manualOrderTime
-    if customerAccount is not None:
+    if customerAccount:
         proto.customerAccount = customerAccount
-    if professionalCustomer is not None:
+    if professionalCustomer:
         proto.professionalCustomer = professionalCustomer
     return proto
 

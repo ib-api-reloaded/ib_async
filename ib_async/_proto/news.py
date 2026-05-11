@@ -55,6 +55,7 @@ from ..objects import (
     NewsTick,
     WshEventData,
 )
+from ..util import UNSET_INTEGER
 from .safe import fill_tag_value_map
 
 # ---------------------------------------------------------------------------
@@ -161,7 +162,8 @@ def createNewsBulletinsRequestProto(
     allMessages: bool,
 ) -> NewsBulletinsRequest_pb2.NewsBulletinsRequest:
     proto = NewsBulletinsRequest_pb2.NewsBulletinsRequest()
-    proto.allMessages = allMessages
+    if allMessages:
+        proto.allMessages = allMessages
     return proto
 
 
@@ -231,9 +233,12 @@ def createNewsArticleRequestProto(
     matching IBKR's ``client_utils.createNewsArticleRequestProto``.
     """
     proto = NewsArticleRequest_pb2.NewsArticleRequest()
-    proto.reqId = reqId
-    proto.providerCode = providerCode
-    proto.articleId = articleId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if providerCode:
+        proto.providerCode = providerCode
+    if articleId:
+        proto.articleId = articleId
     fill_tag_value_map(newsArticleOptions, proto.newsArticleOptions)
     return proto
 
@@ -293,12 +298,18 @@ def createHistoricalNewsRequestProto(
     ``client_utils.createHistoricalNewsRequestProto``.
     """
     proto = HistoricalNewsRequest_pb2.HistoricalNewsRequest()
-    proto.reqId = reqId
-    proto.conId = conId
-    proto.providerCodes = providerCodes
-    proto.startDateTime = startDateTime
-    proto.endDateTime = endDateTime
-    proto.totalResults = totalResults
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if conId != UNSET_INTEGER:
+        proto.conId = conId
+    if providerCodes:
+        proto.providerCodes = providerCodes
+    if startDateTime:
+        proto.startDateTime = startDateTime
+    if endDateTime:
+        proto.endDateTime = endDateTime
+    if totalResults != UNSET_INTEGER:
+        proto.totalResults = totalResults
     fill_tag_value_map(historicalNewsOptions, proto.historicalNewsOptions)
     return proto
 
@@ -360,7 +371,8 @@ def createWshMetaDataRequestProto(
     reqId: int,
 ) -> WshMetaDataRequest_pb2.WshMetaDataRequest:
     proto = WshMetaDataRequest_pb2.WshMetaDataRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -368,7 +380,8 @@ def createCancelWshMetaDataProto(
     reqId: int,
 ) -> CancelWshMetaData_pb2.CancelWshMetaData:
     proto = CancelWshMetaData_pb2.CancelWshMetaData()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -395,7 +408,8 @@ def createWshEventDataRequestProto(
     swallow a ``True`` if we relied on default-skipping.
     """
     proto = WshEventDataRequest_pb2.WshEventDataRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     # ``conId`` and ``totalLimit`` default to ``None`` on the domain
     # ``WshEventData`` dataclass — the universal unset marker. Writing
     # the field with no user-supplied value would have IBKR's server
@@ -426,5 +440,6 @@ def createCancelWshEventDataProto(
     reqId: int,
 ) -> CancelWshEventData_pb2.CancelWshEventData:
     proto = CancelWshEventData_pb2.CancelWshEventData()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto

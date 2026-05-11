@@ -638,19 +638,26 @@ def createMarketDataRequestProto(
     regulatorySnapshot: bool,
     marketDataOptions: list[TagValue] | None = None,
 ) -> MarketDataRequest_pb2.MarketDataRequest:
+    # Each scalar gated per IBKR's ``client_utils.createMarketDataRequestProto``:
+    # reqId is isValidIntValue; string is non-empty; bool is truthy.
     proto = MarketDataRequest_pb2.MarketDataRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.genericTickList = genericTickList
-    proto.snapshot = snapshot
-    proto.regulatorySnapshot = regulatorySnapshot
+    if genericTickList:
+        proto.genericTickList = genericTickList
+    if snapshot:
+        proto.snapshot = snapshot
+    if regulatorySnapshot:
+        proto.regulatorySnapshot = regulatorySnapshot
     fill_tag_value_map(marketDataOptions, proto.marketDataOptions)
     return proto
 
 
 def createCancelMarketDataProto(reqId: int) -> CancelMarketData_pb2.CancelMarketData:
     proto = CancelMarketData_pb2.CancelMarketData()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -658,7 +665,8 @@ def createMarketDataTypeRequestProto(
     marketDataType: int,
 ) -> MarketDataTypeRequest_pb2.MarketDataTypeRequest:
     proto = MarketDataTypeRequest_pb2.MarketDataTypeRequest()
-    proto.marketDataType = marketDataType
+    if marketDataType != UNSET_INTEGER:
+        proto.marketDataType = marketDataType
     return proto
 
 
@@ -670,10 +678,13 @@ def createMarketDepthRequestProto(
     marketDepthOptions: list[TagValue] | None = None,
 ) -> MarketDepthRequest_pb2.MarketDepthRequest:
     proto = MarketDepthRequest_pb2.MarketDepthRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.numRows = numRows
-    proto.isSmartDepth = isSmartDepth
+    if numRows != UNSET_INTEGER:
+        proto.numRows = numRows
+    if isSmartDepth:
+        proto.isSmartDepth = isSmartDepth
     fill_tag_value_map(marketDepthOptions, proto.marketDepthOptions)
     return proto
 
@@ -682,8 +693,10 @@ def createCancelMarketDepthProto(
     reqId: int, isSmartDepth: bool
 ) -> CancelMarketDepth_pb2.CancelMarketDepth:
     proto = CancelMarketDepth_pb2.CancelMarketDepth()
-    proto.reqId = reqId
-    proto.isSmartDepth = isSmartDepth
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if isSmartDepth:
+        proto.isSmartDepth = isSmartDepth
     return proto
 
 
@@ -701,17 +714,22 @@ def createTickByTickRequestProto(
     ignoreSize: bool,
 ) -> TickByTickRequest_pb2.TickByTickRequest:
     proto = TickByTickRequest_pb2.TickByTickRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.tickType = tickType
-    proto.numberOfTicks = numberOfTicks
-    proto.ignoreSize = ignoreSize
+    if tickType:
+        proto.tickType = tickType
+    if numberOfTicks != UNSET_INTEGER:
+        proto.numberOfTicks = numberOfTicks
+    if ignoreSize:
+        proto.ignoreSize = ignoreSize
     return proto
 
 
 def createCancelTickByTickProto(reqId: int) -> CancelTickByTick_pb2.CancelTickByTick:
     proto = CancelTickByTick_pb2.CancelTickByTick()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 

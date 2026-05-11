@@ -57,6 +57,7 @@ from .._pb import (
 )
 from ..contract import Contract
 from ..objects import AccountValue, FamilyCode, PortfolioItem, Position
+from ..util import UNSET_INTEGER
 from .contracts import createContract
 from .safe import safe_decimal
 
@@ -207,10 +208,20 @@ def createAccountSummaryArgs(
 def createAccountSummaryRequestProto(
     reqId: int, group: str, tags: str
 ) -> AccountSummaryRequest_pb2.AccountSummaryRequest:
+    # Mirror IBKR's ``client_utils.createAccountSummaryRequestProto``:
+    # every field is gated on a non-empty / valid-int check. Proto3
+    # explicit-optional semantics treat an explicit empty-string
+    # assignment as "present-but-empty" (HasField returns True), which
+    # the TWS gateway rejects on some paths. The gates below skip the
+    # write when the source carries an unset / sentinel value so the
+    # wire proto stays sparse.
     proto = AccountSummaryRequest_pb2.AccountSummaryRequest()
-    proto.reqId = reqId
-    proto.group = group
-    proto.tags = tags
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if group:
+        proto.group = group
+    if tags:
+        proto.tags = tags
     return proto
 
 
@@ -218,7 +229,8 @@ def createCancelAccountSummaryProto(
     reqId: int,
 ) -> CancelAccountSummary_pb2.CancelAccountSummary:
     proto = CancelAccountSummary_pb2.CancelAccountSummary()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -254,11 +266,20 @@ def createAccountUpdateMultiArgs(
 def createAccountUpdatesMultiRequestProto(
     reqId: int, account: str, modelCode: str, ledgerAndNLV: bool
 ) -> AccountUpdatesMultiRequest_pb2.AccountUpdatesMultiRequest:
+    # Mirror IBKR's ``client_utils.createAccountUpdatesMultiRequestProto``:
+    # each field is gated. Writing an explicit empty ``modelCode`` over
+    # this path produced ``Error 321: Model name '' is incorrect`` from
+    # TWS gateway 214; the gate below skips the write so the proto field
+    # stays unset when the caller passes ``""``.
     proto = AccountUpdatesMultiRequest_pb2.AccountUpdatesMultiRequest()
-    proto.reqId = reqId
-    proto.account = account
-    proto.modelCode = modelCode
-    proto.ledgerAndNLV = ledgerAndNLV
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if account:
+        proto.account = account
+    if modelCode:
+        proto.modelCode = modelCode
+    if ledgerAndNLV:
+        proto.ledgerAndNLV = ledgerAndNLV
     return proto
 
 
@@ -266,7 +287,8 @@ def createCancelAccountUpdatesMultiProto(
     reqId: int,
 ) -> CancelAccountUpdatesMulti_pb2.CancelAccountUpdatesMulti:
     proto = CancelAccountUpdatesMulti_pb2.CancelAccountUpdatesMulti()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -278,9 +300,15 @@ def createCancelAccountUpdatesMultiProto(
 def createAccountDataRequestProto(
     subscribe: bool, acctCode: str
 ) -> AccountDataRequest_pb2.AccountDataRequest:
+    # Mirror IBKR's ``client_utils.createAccountDataRequestProto`` —
+    # both fields are gated. Writing an explicit empty ``acctCode``
+    # over proto3 explicit-optional semantics presents the field as
+    # set-but-empty to TWS.
     proto = AccountDataRequest_pb2.AccountDataRequest()
-    proto.subscribe = subscribe
-    proto.acctCode = acctCode
+    if subscribe:
+        proto.subscribe = subscribe
+    if acctCode:
+        proto.acctCode = acctCode
     return proto
 
 
@@ -360,10 +388,16 @@ def createPositionMultiArgs(
 def createPositionsMultiRequestProto(
     reqId: int, account: str, modelCode: str
 ) -> PositionsMultiRequest_pb2.PositionsMultiRequest:
+    # Mirror IBKR's ``client_utils.createPositionsMultiRequestProto`` —
+    # each field is gated. Empty modelCode must NOT be written to the
+    # wire (same model-name rejection as accountUpdatesMulti).
     proto = PositionsMultiRequest_pb2.PositionsMultiRequest()
-    proto.reqId = reqId
-    proto.account = account
-    proto.modelCode = modelCode
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if account:
+        proto.account = account
+    if modelCode:
+        proto.modelCode = modelCode
     return proto
 
 
@@ -371,7 +405,8 @@ def createCancelPositionsMultiProto(
     reqId: int,
 ) -> CancelPositionsMulti_pb2.CancelPositionsMulti:
     proto = CancelPositionsMulti_pb2.CancelPositionsMulti()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -480,7 +515,8 @@ def createFamilyCodesRequestProto() -> FamilyCodesRequest_pb2.FamilyCodesRequest
 
 def createFARequestProto(faDataType: int) -> FARequest_pb2.FARequest:
     proto = FARequest_pb2.FARequest()
-    proto.faDataType = faDataType
+    if faDataType != UNSET_INTEGER:
+        proto.faDataType = faDataType
     return proto
 
 
@@ -488,9 +524,12 @@ def createFAReplaceProto(
     reqId: int, faDataType: int, xml: str
 ) -> FAReplace_pb2.FAReplace:
     proto = FAReplace_pb2.FAReplace()
-    proto.reqId = reqId
-    proto.faDataType = faDataType
-    proto.xml = xml
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if faDataType != UNSET_INTEGER:
+        proto.faDataType = faDataType
+    if xml:
+        proto.xml = xml
     return proto
 
 

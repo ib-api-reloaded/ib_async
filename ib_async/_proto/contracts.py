@@ -507,10 +507,13 @@ def createContractDataRequestProto(
 ) -> ContractDataRequest_pb2.ContractDataRequest:
     """Encode a ``ContractDataRequest`` envelope for ``reqContractDetails``.
 
-    Wraps a freshly-encoded ``ContractProto`` plus the request id.
+    Wraps a freshly-encoded ``ContractProto`` plus the request id. The
+    reqId write is gated on ``isValidIntValue`` (mirrors IBKR's
+    ``client_utils.createContractDataRequestProto``).
     """
     proto = ContractDataRequest_pb2.ContractDataRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.CopyFrom(createContractProto(contract))
     return proto
 

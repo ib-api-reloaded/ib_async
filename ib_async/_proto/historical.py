@@ -74,6 +74,7 @@ from ..objects import (
     HistoricalTickBidAsk,
     HistoricalTickLast,
 )
+from ..util import UNSET_INTEGER
 from .contracts import createContractProto
 from .market_data import createTickAttribBidAsk, createTickAttribLast
 from .safe import fill_tag_value_map, safe_decimal, wire_size_to_float
@@ -458,16 +459,27 @@ def createHistoricalDataRequestProto(
     keepUpToDate: bool,
     chartOptions: list[TagValue] | None = None,
 ) -> HistoricalDataRequest_pb2.HistoricalDataRequest:
+    # Each scalar gated per IBKR's ``client_utils.createHistoricalDataRequestProto``:
+    # reqId / formatDate via isValidIntValue; strings via non-empty;
+    # bools via truthy.
     proto = HistoricalDataRequest_pb2.HistoricalDataRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.endDateTime = endDateTime
-    proto.barSizeSetting = barSizeSetting
-    proto.duration = durationStr
-    proto.useRTH = bool(useRTH)
-    proto.whatToShow = whatToShow
-    proto.formatDate = formatDate
-    proto.keepUpToDate = keepUpToDate
+    if endDateTime:
+        proto.endDateTime = endDateTime
+    if barSizeSetting:
+        proto.barSizeSetting = barSizeSetting
+    if durationStr:
+        proto.duration = durationStr
+    if useRTH:
+        proto.useRTH = bool(useRTH)
+    if whatToShow:
+        proto.whatToShow = whatToShow
+    if formatDate != UNSET_INTEGER:
+        proto.formatDate = formatDate
+    if keepUpToDate:
+        proto.keepUpToDate = keepUpToDate
     fill_tag_value_map(chartOptions, proto.chartOptions)
     return proto
 
@@ -476,7 +488,8 @@ def createCancelHistoricalDataProto(
     reqId: int,
 ) -> CancelHistoricalData_pb2.CancelHistoricalData:
     proto = CancelHistoricalData_pb2.CancelHistoricalData()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -489,11 +502,15 @@ def createRealTimeBarsRequestProto(
     realTimeBarsOptions: list[TagValue] | None = None,
 ) -> RealTimeBarsRequest_pb2.RealTimeBarsRequest:
     proto = RealTimeBarsRequest_pb2.RealTimeBarsRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.barSize = barSize
-    proto.whatToShow = whatToShow
-    proto.useRTH = useRTH
+    if barSize != UNSET_INTEGER:
+        proto.barSize = barSize
+    if whatToShow:
+        proto.whatToShow = whatToShow
+    if useRTH:
+        proto.useRTH = useRTH
     fill_tag_value_map(realTimeBarsOptions, proto.realTimeBarsOptions)
     return proto
 
@@ -502,7 +519,8 @@ def createCancelRealTimeBarsProto(
     reqId: int,
 ) -> CancelRealTimeBars_pb2.CancelRealTimeBars:
     proto = CancelRealTimeBars_pb2.CancelRealTimeBars()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -510,11 +528,15 @@ def createHeadTimestampRequestProto(
     reqId: int, contract: Contract, useRTH: int, whatToShow: str, formatDate: int
 ) -> HeadTimestampRequest_pb2.HeadTimestampRequest:
     proto = HeadTimestampRequest_pb2.HeadTimestampRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.useRTH = bool(useRTH)
-    proto.whatToShow = whatToShow
-    proto.formatDate = formatDate
+    if useRTH:
+        proto.useRTH = bool(useRTH)
+    if whatToShow:
+        proto.whatToShow = whatToShow
+    if formatDate != UNSET_INTEGER:
+        proto.formatDate = formatDate
     return proto
 
 
@@ -522,7 +544,8 @@ def createCancelHeadTimestampProto(
     reqId: int,
 ) -> CancelHeadTimestamp_pb2.CancelHeadTimestamp:
     proto = CancelHeadTimestamp_pb2.CancelHeadTimestamp()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -530,10 +553,13 @@ def createHistogramDataRequestProto(
     reqId: int, contract: Contract, useRTH: bool, timePeriod: str
 ) -> HistogramDataRequest_pb2.HistogramDataRequest:
     proto = HistogramDataRequest_pb2.HistogramDataRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.useRTH = useRTH
-    proto.timePeriod = timePeriod
+    if useRTH:
+        proto.useRTH = useRTH
+    if timePeriod:
+        proto.timePeriod = timePeriod
     return proto
 
 
@@ -541,7 +567,8 @@ def createCancelHistogramDataProto(
     reqId: int,
 ) -> CancelHistogramData_pb2.CancelHistogramData:
     proto = CancelHistogramData_pb2.CancelHistogramData()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -557,14 +584,21 @@ def createHistoricalTicksRequestProto(
     miscOptions: list[TagValue] | None = None,
 ) -> HistoricalTicksRequest_pb2.HistoricalTicksRequest:
     proto = HistoricalTicksRequest_pb2.HistoricalTicksRequest()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     proto.contract.MergeFrom(createContractProto(contract))
-    proto.startDateTime = startDateTime
-    proto.endDateTime = endDateTime
-    proto.numberOfTicks = numberOfTicks
-    proto.whatToShow = whatToShow
-    proto.useRTH = bool(useRTH)
-    proto.ignoreSize = ignoreSize
+    if startDateTime:
+        proto.startDateTime = startDateTime
+    if endDateTime:
+        proto.endDateTime = endDateTime
+    if numberOfTicks != UNSET_INTEGER:
+        proto.numberOfTicks = numberOfTicks
+    if whatToShow:
+        proto.whatToShow = whatToShow
+    if useRTH:
+        proto.useRTH = bool(useRTH)
+    if ignoreSize:
+        proto.ignoreSize = ignoreSize
     fill_tag_value_map(miscOptions, proto.miscOptions)
     return proto
 
@@ -573,7 +607,8 @@ def createCancelHistoricalTicksProto(
     reqId: int,
 ) -> CancelHistoricalTicks_pb2.CancelHistoricalTicks:
     proto = CancelHistoricalTicks_pb2.CancelHistoricalTicks()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
 
 
@@ -585,5 +620,6 @@ def createCancelContractDataProto(
     ``client_utils.createCancelContractDataProto``.
     """
     proto = CancelContractData_pb2.CancelContractData()
-    proto.reqId = reqId
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto
