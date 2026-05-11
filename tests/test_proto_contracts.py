@@ -97,18 +97,25 @@ def test_combo_leg_proto_reads_from_source_not_target():
     assert proto.ratio == 2
     assert proto.action == "BUY"
     assert proto.exchange == "SMART"
-    # Unset source fields stay unset on the proto.
-    assert not proto.HasField("openClose")
+    # ``designatedLocation`` is a string; empty string suppresses the
+    # write so a default ComboLeg leaves the field unset on the wire.
     assert not proto.HasField("designatedLocation")
+    # ``openClose`` is an int gated by ``isValidIntValue`` (IBKR's
+    # reference) — ``0`` flows through as a real wire value.
+    assert proto.HasField("openClose")
+    assert proto.openClose == 0
 
 
-def test_combo_leg_proto_skips_default_exempt_code():
-    # exemptCode default is -1 in the domain dataclass; round-tripping
-    # the default would corrupt servers that interpret -1 differently
-    # from "unset".
-    leg = ComboLeg()  # exemptCode defaults to -1
+def test_combo_leg_proto_emits_default_exempt_code_value():
+    # ``exemptCode`` default is ``-1`` — IBKR's reference treats this
+    # as a real wire value ("not exempt") and emits it via the
+    # ``isValidIntValue`` gate (only ``UNSET_INTEGER`` suppresses).
+    # Skipping the write would let the server's proto3-default fill
+    # the field with the sentinel.
+    leg = ComboLeg()
     proto = createComboLegProto(leg)
-    assert not proto.HasField("exemptCode")
+    assert proto.HasField("exemptCode")
+    assert proto.exemptCode == -1
 
 
 def test_combo_leg_proto_emits_explicit_exempt_code_value():

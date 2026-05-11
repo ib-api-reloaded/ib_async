@@ -56,6 +56,7 @@ from ..objects import (
 )
 from ..util import UNSET_INTEGER
 from .safe import fill_tag_value_map
+from .safe import is_valid_int as _isValidInt
 
 # ---------------------------------------------------------------------------
 # Args dataclasses for converter return shapes — slotted, frozen, named.
@@ -412,7 +413,7 @@ def createWshEventDataRequestProto(
     # the field with no user-supplied value would have IBKR's server
     # interpret a sentinel as a real contract id and reject the
     # subscription. Skip the write when the domain value is ``None``.
-    if data.conId is not None:
+    if _isValidInt(data.conId):
         proto.conId = data.conId
     if data.filter:
         proto.filter = data.filter
@@ -426,7 +427,7 @@ def createWshEventDataRequestProto(
         proto.startDate = data.startDate
     if data.endDate:
         proto.endDate = data.endDate
-    if data.totalLimit is not None:
+    if _isValidInt(data.totalLimit):
         proto.totalLimit = data.totalLimit
     return proto
 
