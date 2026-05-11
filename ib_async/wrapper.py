@@ -1225,11 +1225,17 @@ class Wrapper:
         if not ticker:
             # Stray tick after :meth:`IB.cancelMktData` is normal — TWS
             # still emits a handful of ticks for ~1-2 seconds after the
-            # cancel lands. Log at debug so a real reqId mismatch is
-            # still surfaced under verbose logging without spamming
-            # default-level output.
+            # cancel lands.
             self._logger.debug(f"priceSizeTick: Unknown reqId: {reqId}")
             return
+
+        # Per-quote attribute flags: pastLimit / preOpen / canAutoExecute.
+        # Overwriting a single slot keeps the hot path O(1); historical
+        # per-tick attrib remains available via the ``ticks`` log if a
+        # strategy needs the time series. ``attrib is None`` skips —
+        # legacy wire frames pre-181 don't emit attrMask.
+        if attrib is not None:
+            ticker.tickAttrib = attrib
 
         # Allow overwriting IBKR's default "empty price" of -1 when there is no qty/size on a side.
         # https://interactivebrokers.github.io/tws-api/tick_types.html
@@ -1777,6 +1783,15 @@ class Wrapper:
             contract=self._snapshotContractForReqId(reqId),
         )
         self.newsTicks.append(news)
+        # Per-Ticker bounded ring so a holder of the Ticker reference
+        # can read recent news without subscribing to the global event.
+        # ``deque(maxlen=_NEWS_MAXLEN)`` evicts the oldest entry on
+        # overflow — O(1) append, bounded memory. Reqs that didn't go
+        # through ``reqMktData`` (e.g. ``reqNewsBulletins``) won't have
+        # a matching Ticker; the global ``newsTicks`` + tickNewsEvent
+        # remain the catch-all for those.
+        if ticker := self._get_ticker(reqId):
+            ticker.news.append(news)
         self.ib.tickNewsEvent.emit(news)
 
     def newsArticle(self, reqId: int, articleType: int, articleText: str):

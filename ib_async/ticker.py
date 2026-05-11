@@ -1,5 +1,6 @@
 """Access to realtime market information."""
 
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
@@ -14,7 +15,9 @@ from ib_async.objects import (
     FundamentalRatios,
     IBDefaults,
     MktDepthData,
+    NewsTick,
     OptionComputation,
+    TickAttrib,
     TickByTickAllLast,
     TickByTickBidAsk,
     TickByTickMidPoint,
@@ -23,6 +26,18 @@ from ib_async.objects import (
 from ib_async.util import dataclassRepr, isNan
 
 nan = float("nan")
+
+# Bounded ring of most-recent per-contract news ticks. NewsTick already
+# fans out through ``IB.tickNewsEvent`` for streaming consumers; this
+# deque is the snapshot view a holder of a Ticker reference can read
+# without their own subscriber bookkeeping. Sized for the eyeball
+# "what's recent for this name" case; raise via ``Ticker.news.maxlen``
+# replacement if a strategy needs longer retention.
+_NEWS_MAXLEN: int = 5
+
+
+def _new_news_deque() -> deque[NewsTick]:
+    return deque(maxlen=_NEWS_MAXLEN)
 
 
 @dataclass(slots=True)
@@ -170,6 +185,20 @@ class Ticker:
     regulatoryImbalance: float = nan
     bboExchange: str = ""
     snapshotPermissions: int = 0
+    # Most-recent per-quote attribute flags decoded from the wire
+    # ``attrMask`` on every bid/ask/last ``priceSizeTick``: ``pastLimit``
+    # (consolidated quote is stale relative to its source venue),
+    # ``preOpen`` (pre-market auction), ``canAutoExecute`` (regulatory
+    # NBBO eligibility). Single attribute write per tick — overwrites
+    # rather than appending so the hot path stays O(1) and bounded.
+    tickAttrib: TickAttrib | None = None
+    # Bounded ring of most-recent ``NewsTick`` items keyed by the
+    # ``reqMktData`` reqId for this Ticker. Capped at ``_NEWS_MAXLEN``
+    # via ``deque(maxlen=...)`` so the oldest news rolls off
+    # automatically — no growth even for a long-lived ticker on a
+    # news-heavy name. Empty deque by default to keep the
+    # ``dataclassRepr`` output unchanged on tickers without news.
+    news: deque[NewsTick] = field(default_factory=_new_news_deque, repr=False)
 
     defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
     created: bool = False
