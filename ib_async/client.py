@@ -1694,15 +1694,43 @@ class Client:
         self.send(66, 1, apiData)
 
     def queryDisplayGroups(self, reqId):
+        def _proto():
+            from ._proto.rest import createQueryDisplayGroupsRequestProto
+
+            return createQueryDisplayGroupsRequestProto(reqId)
+
+        if self._tryProto(_M.QUERY_DISPLAY_GROUPS, _proto):
+            return
         self.send(67, 1, reqId)
 
     def subscribeToGroupEvents(self, reqId, groupId):
+        def _proto():
+            from ._proto.rest import createSubscribeToGroupEventsRequestProto
+
+            return createSubscribeToGroupEventsRequestProto(reqId, groupId)
+
+        if self._tryProto(_M.SUBSCRIBE_TO_GROUP_EVENTS, _proto):
+            return
         self.send(68, 1, reqId, groupId)
 
     def updateDisplayGroup(self, reqId, contractInfo):
+        def _proto():
+            from ._proto.rest import createUpdateDisplayGroupRequestProto
+
+            return createUpdateDisplayGroupRequestProto(reqId, contractInfo)
+
+        if self._tryProto(_M.UPDATE_DISPLAY_GROUP, _proto):
+            return
         self.send(69, 1, reqId, contractInfo)
 
     def unsubscribeFromGroupEvents(self, reqId):
+        def _proto():
+            from ._proto.rest import createUnsubscribeFromGroupEventsRequestProto
+
+            return createUnsubscribeFromGroupEventsRequestProto(reqId)
+
+        if self._tryProto(_M.UNSUBSCRIBE_FROM_GROUP_EVENTS, _proto):
+            return
         self.send(70, 1, reqId)
 
     def startApi(self):
