@@ -192,6 +192,19 @@ class Order:
     # ``submitter`` identifies the originating session for compliance
     # logging. Empty means IBKR did not supply one for this order.
     submitter: str = ""
+    # ``allowPreOpen`` / ``ignoreOpenAuction`` control auction-window
+    # routing. ``deactivate`` flags the order to be killed on fill or
+    # completion. ``postOnly`` rejects an order that would immediately
+    # match (maker-only constraint). ``seekPriceImprovement`` /
+    # ``whatIfType`` / ``hedgeMaxSize`` parameterize specialized order
+    # types. All accept ``None`` to mean "leave at server default".
+    allowPreOpen: bool = False
+    deactivate: bool = False
+    postOnly: bool = False
+    ignoreOpenAuction: bool = False
+    seekPriceImprovement: int | None = None
+    whatIfType: int | None = None
+    hedgeMaxSize: int | None = None
 
     def __repr__(self):
         attrs = dataclassNonDefaults(self)

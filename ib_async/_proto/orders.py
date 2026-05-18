@@ -136,15 +136,16 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     which made every outbound protobuf-path order land as a
     non-transmitted staged order on the broker.
 
-    Domain fields that exist in IBKR's reference but are NOT on our
-    ``Order`` dataclass (``customerAccount``, ``professionalCustomer``,
-    ``bondAccruedInterest``, ``includeOvernight``, ``submitter``,
-    ``deactivate``, ``postOnly``, ``allowPreOpen``, ``ignoreOpenAuction``,
-    ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``) are
-    silently skipped — adding them here without dataclass support would
-    invent fields user code can never set. Order proto schema gaps:
-    none — every IBKR-reference field maps to an Order_pb2 field at
-    this proto version.
+    Every IBKR-reference field maps to an ``Order_pb2`` field at this
+    proto version. Compliance / origination fields
+    (``customerAccount``, ``professionalCustomer``,
+    ``bondAccruedInterest``, ``includeOvernight``, ``submitter``) are
+    written on send so a user's re-place of a fetched order preserves
+    the originating session — silent data loss before, regulatory-
+    relevant. Specialized order-behavior flags (``allowPreOpen``,
+    ``deactivate``, ``postOnly``, ``ignoreOpenAuction``,
+    ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``) round
+    out the IBKR parity surface.
     """
     # Wire-boundary parity with the binary path: ``Client.send`` maps
     # ``None`` on a plain-int Order field to ``""``, which the server
@@ -519,6 +520,41 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # ``totalQuantity``.
     if order.filledQuantity is not None:
         proto.filledQuantity = _decimalToWireString(order.filledQuantity)
+
+    # Compliance / origination fields. These exist on our Order
+    # dataclass and are populated on receive, but were silently
+    # dropped on send before — a fetched-then-replaced order would
+    # lose its originating-session tagging, which IBKR uses for
+    # regulatory logging. Match IBKR's truthy gate.
+    if order.customerAccount:
+        proto.customerAccount = order.customerAccount
+    if order.professionalCustomer:
+        proto.professionalCustomer = order.professionalCustomer
+    if order.bondAccruedInterest is not None:
+        proto.bondAccruedInterest = _decimalToWireString(order.bondAccruedInterest)
+    if order.includeOvernight:
+        proto.includeOvernight = order.includeOvernight
+    if order.submitter:
+        proto.submitter = order.submitter
+
+    # Specialized order-behavior flags. Bool flags default ``False``;
+    # writes only when truthy to keep the wire payload compact. The
+    # three ``int | None`` fields use the sentinel-aware gate so
+    # ``None`` stays absent and proto3 defaults to 0 server-side.
+    if order.allowPreOpen:
+        proto.allowPreOpen = order.allowPreOpen
+    if order.deactivate:
+        proto.deactivate = order.deactivate
+    if order.postOnly:
+        proto.postOnly = order.postOnly
+    if order.ignoreOpenAuction:
+        proto.ignoreOpenAuction = order.ignoreOpenAuction
+    if _isValidInt(order.seekPriceImprovement):
+        proto.seekPriceImprovement = order.seekPriceImprovement
+    if _isValidInt(order.whatIfType):
+        proto.whatIfType = order.whatIfType
+    if _isValidInt(order.hedgeMaxSize):
+        proto.hedgeMaxSize = order.hedgeMaxSize
 
     return proto
 
@@ -1058,6 +1094,22 @@ def createOrder(
         order.manualOrderIndicator = proto.manualOrderIndicator
     if proto.HasField("submitter"):
         order.submitter = proto.submitter
+
+    # Specialized order-behavior flags.
+    if proto.HasField("allowPreOpen"):
+        order.allowPreOpen = proto.allowPreOpen
+    if proto.HasField("deactivate"):
+        order.deactivate = proto.deactivate
+    if proto.HasField("postOnly"):
+        order.postOnly = proto.postOnly
+    if proto.HasField("ignoreOpenAuction"):
+        order.ignoreOpenAuction = proto.ignoreOpenAuction
+    if proto.HasField("seekPriceImprovement"):
+        order.seekPriceImprovement = proto.seekPriceImprovement
+    if proto.HasField("whatIfType"):
+        order.whatIfType = proto.whatIfType
+    if proto.HasField("hedgeMaxSize"):
+        order.hedgeMaxSize = proto.hedgeMaxSize
 
     return order
 

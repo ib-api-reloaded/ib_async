@@ -147,10 +147,10 @@ def collect_assigns(
     def walk(node: ast.AST, gate: str) -> None:
         if isinstance(node, ast.If):
             sub_gate = classify_gate(node.test)
-            for child in node.body:
-                walk(child, sub_gate)
-            for child in node.orelse:
-                walk(child, gate)
+            for body_stmt in node.body:
+                walk(body_stmt, sub_gate)
+            for else_stmt in node.orelse:
+                walk(else_stmt, gate)
             return
         if isinstance(node, ast.Assign):
             for tgt in node.targets:
@@ -225,11 +225,29 @@ ACCEPTED_GAPS: dict[tuple[str, str], str] = {
         "createOrderProto",
         "discretionaryAmt",
     ): "proto field is double; our float gate matches",
-    # ``hedgeMaxSize`` and ``whatIfType`` do not exist on our ``Order``
-    # dataclass. Adding the proto write without dataclass support would
-    # invent fields user code can never set.
-    ("createOrderProto", "hedgeMaxSize"): "not on our Order dataclass",
-    ("createOrderProto", "whatIfType"): "not on our Order dataclass",
+    # ``routeMarketableToBbo`` and ``usePriceMgmtAlgo`` are wire-int
+    # (0/1/UNSET) but our domain types them as ``bool`` with default
+    # ``False`` — there is no representation for "explicit no" distinct
+    # from "leave at server default", so we collapse both into the
+    # truthy gate. The wire effect is equivalent because proto3-absent
+    # ≡ proto3-bool-default = False on the server.
+    (
+        "createOrderProto",
+        "routeMarketableToBbo",
+    ): "domain bool collapses None and False; proto3 absent ≡ False default",
+    (
+        "createOrderProto",
+        "usePriceMgmtAlgo",
+    ): "domain bool collapses None and False; proto3 absent ≡ False default",
+    # IBKR's reference uses a truthy gate on ``bondAccruedInterest``
+    # (a ``Decimal``); ours is ``Decimal | None`` so an explicit
+    # ``is not None`` check is the semantically-precise gate. Truthy
+    # would silently drop ``Decimal("0")`` (a valid zero-accrual
+    # bond). Our gate is strictly tighter.
+    (
+        "createOrderProto",
+        "bondAccruedInterest",
+    ): "Decimal | None; is_not_none is strictly tighter than IBKR's truthy",
 }
 
 
@@ -243,10 +261,13 @@ def compare(
     notes: list[str] = []
     for fn, ibkr_assigns in sorted(ibkr.items()):
         if not any(
-            kind in {INT_VALID, FLOAT_VALID, LONG_VALID, DECIMAL_VALID}
+            kind
+            in {INT_VALID, FLOAT_VALID, LONG_VALID, DECIMAL_VALID, IS_NOT_NONE, TRUTHY}
             for _, kind in ibkr_assigns
         ):
-            # No sentinel-gated field — nothing for us to diverge on.
+            # No gated field at all — IBKR fn is pure ``proto.x = y``
+            # writes (e.g., trivial passthrough composers). Nothing to
+            # diverge on.
             continue
         our_fn_names = (fn, *EXTRA_OURS_FNS.get(fn, ()))
         if not any(n in ours for n in our_fn_names):
@@ -266,20 +287,57 @@ def compare(
         for f, k in our_assigns:
             our_map[f].add(k)
 
+        sentinel_kinds = {INT_VALID, FLOAT_VALID, LONG_VALID, DECIMAL_VALID}
+        soft_kinds = {IS_NOT_NONE, TRUTHY}
         for field, kinds in sorted(ibkr_map.items()):
-            interesting = {INT_VALID, FLOAT_VALID, LONG_VALID, DECIMAL_VALID}
-            if not (kinds & interesting):
+            # Hard pass: IBKR sentinel-aware gates. A mismatch here is
+            # the Error-135 class — proto3-absent ↔ IBKR sentinel
+            # bleeding onto the wire. Fails the audit.
+            if kinds & sentinel_kinds:
+                expected = next(iter(kinds & sentinel_kinds))
+                if (fn, field) in ACCEPTED_GAPS:
+                    notes.append(
+                        f"  accepted: {fn}.{field} ({ACCEPTED_GAPS[(fn, field)]})"
+                    )
+                    continue
+                if field not in our_map:
+                    divergences.append(f"  {fn}.{field}: IBKR={expected} ours=MISSING")
+                    continue
+                if expected not in our_map[field]:
+                    actual = ", ".join(sorted(our_map[field]))
+                    divergences.append(
+                        f"  {fn}.{field}: IBKR={expected} ours={{{actual}}}"
+                    )
                 continue
-            expected = next(iter(kinds & interesting))
-            if (fn, field) in ACCEPTED_GAPS:
-                notes.append(f"  accepted: {fn}.{field} ({ACCEPTED_GAPS[(fn, field)]})")
-                continue
-            if field not in our_map:
-                divergences.append(f"  {fn}.{field}: IBKR={expected} ours=MISSING")
-                continue
-            if expected not in our_map[field]:
-                actual = ", ".join(sorted(our_map[field]))
-                divergences.append(f"  {fn}.{field}: IBKR={expected} ours={{{actual}}}")
+
+            # Soft pass: IBKR explicitly chose ``is not None`` (keeps
+            # falsy-but-present writes) vs ``truthy`` (collapses None
+            # and falsy together). The wire effect of using ``truthy``
+            # where IBKR uses ``is not None`` is usually benign because
+            # proto3 absent ≡ proto3-default-value, but the intent
+            # divergence is still a blind spot: if a future ours-side
+            # edit reverses one of these, today's audit wouldn't notice.
+            # Reported as ``soft:`` notes only — not failing the audit
+            # — so we can ratchet to hard once each is triaged.
+            if kinds & soft_kinds:
+                expected = next(iter(kinds & soft_kinds))
+                if (fn, field) in ACCEPTED_GAPS:
+                    continue
+                if field not in our_map:
+                    notes.append(
+                        f"  soft: {fn}.{field}: IBKR={expected} ours=NOT_WRITTEN"
+                    )
+                    continue
+                if expected not in our_map[field] and not (
+                    our_map[field] & sentinel_kinds
+                ):
+                    # ours-using-sentinel-gate is strictly tighter than
+                    # IS_NOT_NONE / TRUTHY — don't flag that as a soft
+                    # divergence (it's an upgrade, not a drift).
+                    actual = ", ".join(sorted(our_map[field]))
+                    notes.append(
+                        f"  soft: {fn}.{field}: IBKR={expected} ours={{{actual}}}"
+                    )
     return divergences, notes
 
 
