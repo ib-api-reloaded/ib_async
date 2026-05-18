@@ -110,7 +110,16 @@ check_untyped_defs = true
 
 
 [tool.pytest.ini_options]
-asyncio_mode="auto"
+asyncio_mode = "auto"
+# ``live`` tests require a running TWS / IB Gateway on
+# 127.0.0.1:7497. They are dangerous (real orders) and useless (no
+# server) by default, so the default ``addopts`` deselects them.
+# Opt in with ``pytest -m live`` or ``pytest -m 'live or not live'``
+# to include them.
+addopts = "-m 'not live'"
+markers = [
+    "live: requires a running TWS / IB Gateway on 127.0.0.1:7497 (deselected by default)",
+]
 
 
 [build-system]
