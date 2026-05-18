@@ -7,7 +7,7 @@
 # and source distribution so end users get the bindings bundled into
 # the package without needing ``protoc`` or ``grpcio-tools``.
 
-.PHONY: help sync protos build release test lint format clean
+.PHONY: help sync protos audit build release publish test lint format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -15,17 +15,21 @@ PB_DIR := ib_async/_pb
 help:
 	@echo "Targets:"
 	@echo "  sync     - uv sync --all-groups (install deps + dev extras)"
-	@echo "  protos   - regenerate ib_async/_pb/ from upstream .proto schemas"
+	@echo "  protos   - fetch+extract TWS API archive (if needed), regenerate $(PB_DIR)/"
 	@echo "  build    - regenerate protos, then build sdist + wheel into dist/"
-	@echo "  release  - alias for build (guarantees fresh protos in the artifact)"
+	@echo "  release  - full pipeline: fetch + protos + lint + audit + test + build + smoke"
+	@echo "  publish  - release pipeline then upload via uv publish"
 	@echo "  test     - run the owned test suite"
 	@echo "  lint     - ruff check + mypy"
 	@echo "  format   - ruff format"
-	@echo "  clean    - remove dist/, build/, generated _pb/, caches"
+	@echo "  clean    - remove dist/, build/, $(PB_DIR)/, caches"
 
 sync:
 	uv sync --all-groups
 
+# Version + SHA256 of the TWS API archive are pinned in pyproject.toml
+# under [tool.ib_async.twsapi]. The script handles fetch / cache /
+# SHA-verify / extract / protoc — no manual setup needed.
 protos:
 	$(PYTHON) scripts/generate_protos.py
 
@@ -35,7 +39,13 @@ protos:
 build: protos
 	uv build
 
-release: build
+# Full release-engineering pipeline. Aborts before publish on any
+# red step (lint / audit / tests / smoke install).
+release:
+	$(PYTHON) scripts/release.py
+
+publish:
+	$(PYTHON) scripts/release.py --publish
 
 test:
 	uv run pytest -q
