@@ -444,13 +444,13 @@ def test_execDetails_then_commissionReport_pairs_on_fill():
     )
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
     assert len(trade.fills) == 1
-    assert trade.fills[0].commissionReport.commission is None
+    assert trade.fills[0].commissionReport.commissionAndFees is None
 
     report = ibi.CommissionReport(
-        execId=execId, commission=Decimal("1.0"), currency="USD"
+        execId=execId, commissionAndFees=Decimal("1.0"), currency="USD"
     )
     ib.wrapper.commissionReport(report)
-    assert trade.fills[0].commissionReport.commission == Decimal("1.0")
+    assert trade.fills[0].commissionReport.commissionAndFees == Decimal("1.0")
     assert len(seenComm) == 1
 
 
@@ -476,7 +476,7 @@ def test_execDetails_without_commissionReport_keeps_default_empty():
 
     assert len(trade.fills) == 1
     cr = trade.fills[0].commissionReport
-    assert cr.commission is None
+    assert cr.commissionAndFees is None
     assert cr.realizedPNL is None
     assert cr.execId == ""
 
@@ -637,7 +637,7 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
         )
         ib.wrapper.commissionReport(
             ibi.CommissionReport(
-                execId=execId, commission=Decimal("0.5"), currency="USD"
+                execId=execId, commissionAndFees=Decimal("0.5"), currency="USD"
             )
         )
         cum += Decimal(sharesStr)
@@ -659,7 +659,9 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
     assert trade.orderStatus.status == "Filled"
     assert trade.filled() == Decimal(50)
     assert trade.remaining() == Decimal(0)
-    assert all(f.commissionReport.commission == Decimal("0.5") for f in trade.fills)
+    assert all(
+        f.commissionReport.commissionAndFees == Decimal("0.5") for f in trade.fills
+    )
     # All fills carry the same permId — the wire's link from the
     # execution back to the order. Here we asserted on
     # ``trade.orderStatus.permId`` (set on the orderStatus callback)

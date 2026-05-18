@@ -1,7 +1,13 @@
-import pandas as pd
+import pytest
+
+pd = pytest.importorskip("pandas")
 
 import ib_async
 from ib_async import Stock, util
+
+# Live: requires a running TWS / IB Gateway on 127.0.0.1:4001.
+# Skipped by default. Opt in with ``pytest -m live``.
+pytestmark = pytest.mark.live
 
 
 def test_contract_format_data_pd():

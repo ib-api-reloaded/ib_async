@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from ib_async._pb import (
     AttachedOrders_pb2,
     CommissionAndFeesReport_pb2,
@@ -421,6 +423,7 @@ def test_order_status_total_property_sums_when_both_set():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_create_order_state_renames_commission_and_fees_to_commission():
     proto = OrderState_pb2.OrderState()
     proto.status = "PreSubmitted"
@@ -552,6 +555,7 @@ def test_create_execution_reads_submitter_and_opt_exercise_type():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_create_commission_report_renames_fields():
     proto = CommissionAndFeesReport_pb2.CommissionAndFeesReport()
     proto.execId = "exec-1"
@@ -578,13 +582,13 @@ def test_create_commission_report_unparseable_redemption_date_safe():
     proto.yieldRedemptionDate = "garbage"
     report = createCommissionReport(proto)
     assert report.yieldRedemptionDate == 0
-    assert report.commission == Decimal("1.25")
+    assert report.commissionAndFees == Decimal("1.25")
 
 
 def test_create_commission_report_handles_empty_proto():
     proto = CommissionAndFeesReport_pb2.CommissionAndFeesReport()
     report = createCommissionReport(proto)
-    assert report.commission is None
+    assert report.commissionAndFees is None
     assert report.realizedPNL is None
     assert report.yield_ is None
 
