@@ -87,6 +87,7 @@ def createComboLegProto(
     ``ComboLeg`` proto's ``perLegPrice`` field. Pass ``None`` (or skip
     the arg) when there is no order pricing context.
     """
+    normalize_none_scalars(leg)
     proto = ComboLeg_pb2.ComboLeg()
     # Read every field from the SOURCE leg, never from the freshly-empty
     # target proto (the contributor's PR had this swapped, which made
@@ -141,6 +142,7 @@ def createDeltaNeutralContract(
 def createDeltaNeutralContractProto(
     dnc: DeltaNeutralContract,
 ) -> DeltaNeutralContract_pb2.DeltaNeutralContract:
+    normalize_none_scalars(dnc)
     proto = DeltaNeutralContract_pb2.DeltaNeutralContract()
     # IBKR gates these on the sentinel checks — ``conId == 0`` and
     # ``delta == 0`` / ``price == 0`` are legitimate wire values that

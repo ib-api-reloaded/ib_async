@@ -64,6 +64,7 @@ from .._pb import (
     NextValidId_pb2,
     OrdersConfig_pb2,
     PriceIncrement_pb2,
+    QueryDisplayGroupsRequest_pb2,
     SecDefOptParameter_pb2,
     SecDefOptParameterEnd_pb2,
     SecDefOptParamsRequest_pb2,
@@ -75,9 +76,12 @@ from .._pb import (
     SoftDollarTiers_pb2,
     SoftDollarTiersRequest_pb2,
     StartApiRequest_pb2,
+    SubscribeToGroupEventsRequest_pb2,
     SymbolSamples_pb2,
+    UnsubscribeFromGroupEventsRequest_pb2,
     UpdateConfigRequest_pb2,
     UpdateConfigWarning_pb2,
+    UpdateDisplayGroupRequest_pb2,
     UserInfo_pb2,
     UserInfoRequest_pb2,
 )
@@ -668,4 +672,53 @@ def createUpdateConfigRequestProto(
         proto.acceptedWarnings.extend(acceptedWarnings)
     if resetAPIOrderSequence is not None:
         proto.resetAPIOrderSequence = resetAPIOrderSequence
+    return proto
+
+
+# ---------------------------------------------------------------------------
+# Display-group event family (msgIds 67-70). TWS UI feature for syncing
+# multiple chart windows to the same symbol; rarely used programmatically
+# but part of the full IBKR surface.
+# ---------------------------------------------------------------------------
+
+
+def createQueryDisplayGroupsRequestProto(
+    reqId: int,
+) -> QueryDisplayGroupsRequest_pb2.QueryDisplayGroupsRequest:
+    proto = QueryDisplayGroupsRequest_pb2.QueryDisplayGroupsRequest()
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    return proto
+
+
+def createSubscribeToGroupEventsRequestProto(
+    reqId: int,
+    groupId: int,
+) -> SubscribeToGroupEventsRequest_pb2.SubscribeToGroupEventsRequest:
+    proto = SubscribeToGroupEventsRequest_pb2.SubscribeToGroupEventsRequest()
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if groupId != UNSET_INTEGER:
+        proto.groupId = groupId
+    return proto
+
+
+def createUpdateDisplayGroupRequestProto(
+    reqId: int,
+    contractInfo: str,
+) -> UpdateDisplayGroupRequest_pb2.UpdateDisplayGroupRequest:
+    proto = UpdateDisplayGroupRequest_pb2.UpdateDisplayGroupRequest()
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
+    if contractInfo:
+        proto.contractInfo = contractInfo
+    return proto
+
+
+def createUnsubscribeFromGroupEventsRequestProto(
+    reqId: int,
+) -> UnsubscribeFromGroupEventsRequest_pb2.UnsubscribeFromGroupEventsRequest:
+    proto = UnsubscribeFromGroupEventsRequest_pb2.UnsubscribeFromGroupEventsRequest()
+    if reqId != UNSET_INTEGER:
+        proto.reqId = reqId
     return proto

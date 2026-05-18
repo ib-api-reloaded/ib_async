@@ -1569,6 +1569,11 @@ def createGlobalCancelRequestProto(
 def createExecutionFilterProto(
     execFilter: ExecutionFilter,
 ) -> ExecutionFilter_pb2.ExecutionFilter:
+    # Wire-boundary coalesce — restore dataclass defaults for any plain
+    # scalar a caller stomped to ``None``. Mirrors the binary path's
+    # ``NoneType → ""`` formatter at converter entry.
+    normalize_none_scalars(execFilter)
+
     proto = ExecutionFilter_pb2.ExecutionFilter()
     # IBKR gates ``clientId`` on ``isValidIntValue`` — ``0`` is the
     # documented "no client filter" wire value and must flow through.

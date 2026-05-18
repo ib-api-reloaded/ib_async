@@ -59,6 +59,7 @@ from ..util import UNSET_INTEGER
 from .contracts import createContract, createContractProto
 from .safe import (
     fill_tag_value_map,
+    normalize_none_scalars,
     safe_decimal,
 )
 from .safe import (
@@ -367,6 +368,12 @@ def createScannerSubscriptionProto(
     other is IBKR-internal but accepted for parity. Empty / ``None``
     lists leave the wire fields unset.
     """
+    # Wire-boundary coalesce: if a caller stomps ``None`` onto a plain-
+    # scalar field (e.g. ``sub.numberOfRows = None``), restore the
+    # dataclass default before the gates run, mirroring the binary
+    # path's ``NoneType → ""`` formatter.
+    normalize_none_scalars(sub)
+
     proto = ScannerSubscription_pb2.ScannerSubscription()
     if _isValidInt(sub.numberOfRows):
         proto.numberOfRows = sub.numberOfRows
