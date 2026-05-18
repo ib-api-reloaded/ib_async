@@ -1,8 +1,438 @@
 ``ib_async`` Changelog
 ======================
 
+3.0
+---
+
+Version 3.0.0 (Unreleased)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The v3.0 release lands the protobuf wire-protocol migration, shifts
+financial numerics to ``Decimal | None`` end-to-end, and closes the
+IBKR-parity gap against the reference client at TWS / Gateway server
+version 225. The full upgrade guide with examples lives at
+``docs/migration/v3.md``.
+
+**The most likely-to-hit changes**
+
+* Financial numeric fields are now ``Decimal | None`` (was ``float``).
+* ``commission`` is now ``commissionAndFees`` on ``CommissionReport``
+  and ``OrderState``. The legacy name keeps working with a
+  ``DeprecationWarning`` until v4.0.
+* ``HistogramData.count`` is renamed to ``HistogramData.size`` and
+  retyped to ``Decimal | None``.
+* ``PnLSingle.position`` is now ``Decimal | None`` (was ``int``).
+* Hot-path records (``AccountValue``, ``Position``, ``PortfolioItem``,
+  ``Fill``, ``TickData``, ``HistoricalTick*``, ``TickByTick*``,
+  ``MktDepthData``, ``DOMLevel``, ``PriceIncrement``,
+  ``OrderAllocation``, ``OrderCancel``, ``IneligibilityReason``)
+  moved from ``NamedTuple`` to slotted-frozen ``dataclass``. Indexing
+  (``av[1]``) and tuple iteration no longer work. Use attribute
+  access (``av.tag``). ``_asdict()`` / ``_replace()`` are replaced by
+  ``dataclasses.asdict()`` / ``dataclasses.replace()``.
+
+**Added**
+
+* **Protobuf wire protocol** alongside the legacy binary path. The
+  client emits protobuf for messages whose gate the negotiated TWS /
+  IB Gateway server version supports; falls back to binary below the
+  gate. Per-message gating means a server at version 207 uses
+  protobuf for accounts but binary for historical data, etc. The
+  binary path remains fully supported for older server versions.
+* **14 new public methods on** ``IB`` **for parity with IBKR's
+  reference** ``EClient``:
+
+  * ``IB.reqCurrentTimeInMillisAsync`` (server >= 213)
+  * ``IB.setServerLogLevel``
+  * ``IB.reqSoftDollarTiersAsync``
+  * ``IB.reqFamilyCodesAsync``
+  * ``IB.cancelHeadTimeStamp`` (now settles awaiter with ``CancelledError``)
+  * ``IB.cancelHistogramData`` (now settles awaiter with ``CancelledError``)
+  * ``IB.queryDisplayGroups``, ``IB.subscribeToGroupEvents``,
+    ``IB.updateDisplayGroup``, ``IB.unsubscribeFromGroupEvents``
+  * ``IB.cancelContractData`` (protobuf-only, server >= 215; settles awaiter)
+  * ``IB.cancelHistoricalTicks`` (protobuf-only, server >= 215; settles awaiter)
+  * ``IB.reqConfigAsync``, ``IB.updateConfigAsync`` (protobuf-only, server >= 219)
+
+* **Attached-order linkage on** ``Order``: new ``slOrderId`` /
+  ``slOrderType`` / ``ptOrderId`` / ``ptOrderType`` fields preserve
+  the stop-loss and profit-target ids of a bracket or OCO group
+  across the wire. Previously the linkage was silently dropped on
+  receive.
+* **Specialized order behaviour fields on** ``Order``:
+  ``allowPreOpen``, ``deactivate``, ``postOnly``, ``ignoreOpenAuction``,
+  ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``. Both
+  receive (``createOrder``) and send (``createOrderProto`` / binary
+  ``placeOrder``) handle them.
+* **``OrderCancel`` envelope** for ``IB.cancelOrder`` and
+  ``IB.reqGlobalCancel`` carrying CME-compliance fields
+  (``manualOrderCancelTime``, ``extOperator``,
+  ``manualOrderIndicator``). Optional — callers without an envelope
+  see unchanged v2.x behaviour.
+* **``ExecutionFilter`` parametrized day-window**: new ``lastNDays``
+  + ``specificDates`` fields for narrowing ``reqExecutions`` queries
+  without walking the full session.
+* **``ContractDetails.lastTradeDate``** split out from
+  ``lastTradeDateOrContractMonth`` at server gate 182.
+* **Bond ``ContractDetails``** trading-hours block at server gate 188.
+* **``TickAttrib``** (``canAutoExecute``, ``pastLimit``, ``preOpen``)
+  surfaced on ``priceSizeTick``.
+* **``Ticker.tickAttrib``** + **``Ticker.news``** (``deque(maxlen=5)``):
+  per-quote flags and a bounded per-contract news ring are now
+  attached directly to the matching ``Ticker``. O(1) hot-path cost,
+  additive. The global ``IB.tickNewsEvent`` / ``wrapper.newsTicks``
+  still fan out.
+* **``Client.setOptionalCapabilities``** for runtime feature
+  negotiation.
+* **5 compliance / origination fields on** ``Order`` **now written
+  on send too** (``customerAccount``, ``professionalCustomer``,
+  ``bondAccruedInterest``, ``includeOvernight``, ``submitter``).
+  Previously they were populated on receive but silently dropped on
+  send — a fetched-then-replaced order lost its originating-session
+  tagging.
+
+**Changed (breaking)**
+
+* **``Decimal | None`` end-to-end** for financial numerics on
+  ``Order``, ``OrderStatus``, ``OrderState``, ``Execution``,
+  ``CommissionReport``, ``ContractDetails``, ``Position``,
+  ``PortfolioItem``, ``BarData``, ``RealTimeBar``, ``HistogramData``,
+  ``PnLSingle``. ``None`` is the unset sentinel —
+  ``Decimal('NaN')`` is never used (it is silently truthy in Python
+  and corrupted downstream comparisons).
+* **``commission`` → ``commissionAndFees``** on ``CommissionReport``
+  and ``OrderState``. Matches IBKR's reference. Legacy ``commission``
+  attribute and constructor keyword keep working with
+  ``DeprecationWarning`` until v4.0.
+* **``HistogramData.count: int`` → ``HistogramData.size: Decimal | None``**
+  — the field was the wrong name and the wrong type. ``count`` was
+  always a Decimal-encoded quantity on the wire; the legacy name
+  shipped truncated to ``int``.
+* **``PnLSingle.position: int`` → ``Decimal | None``** so fractional
+  positions don't truncate.
+* **``AccountValue.decimalValue`` stricter**: returns ``None`` for
+  non-currency tags (``Leverage``, ``DayTradesRemaining``,
+  ``AccountType``, etc.) and for IBKR UNSET sentinel strings / NaN
+  / Infinity. Previously surfaced ``1.7976931348623157e+308`` as a
+  legitimate NetLiquidation.
+* **``NamedTuple`` → ``@dataclass(slots=True, frozen=True)``** for
+  ``AccountValue``, ``Position``, ``PortfolioItem``, ``Fill``,
+  ``TickData``, ``HistoricalTick*``, ``TickByTick*``,
+  ``MktDepthData``, ``DOMLevel``, ``PriceIncrement``,
+  ``OrderAllocation``, ``OrderCancel``, ``IneligibilityReason``.
+  Equality, hashability, and pickle are preserved. Indexing and
+  tuple iteration no longer work; use attribute access.
+  ``_asdict()`` / ``_replace()`` replaced by
+  ``dataclasses.asdict()`` / ``dataclasses.replace()``.
+* **``tickByTick*.time``** now uses the wire-supplied exchange epoch
+  instead of the local-clock ``lastTime``.
+* **``Wrapper.sendMsg``** signature changed from ``str`` to
+  ``bytes | None``. Subclassers must update.
+* **``Client.MaxClientVersion = 225``** (was 178). The 178 cap
+  silently disabled every gate 201+ feature on v2.x against modern
+  TWS / Gateway — no v2.x deployment could reach protobuf.
+* **Cancel-async methods raise ``CancelledError``** on the awaiter
+  instead of hanging forever. Affects ``cancelHeadTimeStamp``,
+  ``cancelHistogramData``, ``cancelContractData``,
+  ``cancelHistoricalTicks``.
+* **``OrderState.transform()``** now applies the transformer to all
+  9 ``*OutsideRTH`` margin variants in addition to the regular 9.
+  ``.numeric()`` / ``.formatted()`` no longer leave OutsideRTH
+  fields as raw wire strings.
+* **``RealTimeBar.endTime`` removed.** The field was never populated
+  from the wire (IBKR's ``RealTimeBarTick`` proto has only
+  ``time`` / OHLC / volume / WAP / count, and their reference Python
+  has no such field) and the wrapper hardcoded ``-1``. If you need
+  an end-of-window timestamp, compute it from ``bar.time``
+  (5-second windows).
+* **Universal-unset-is-None sweep**: every magic-value default in
+  the domain dataclasses (``UNSET_INTEGER`` / ``UNSET_DOUBLE`` /
+  ``UNSET_LONG`` / ``UNSET_DECIMAL`` / ``nan``) replaced with
+  ``T | None = None``. Affected: ``Order`` (~25 fields),
+  ``OrderStateNumeric`` (18 fields), ``Ticker`` (80 fields), ``Bar``
+  (4 fields), ``PnL`` / ``PnLSingle`` (7 fields),
+  ``ScannerSubscription``, ``ExecutionFilter``,
+  ``ContractDetails.aggGroup``. Readers updated from
+  ``isNan(x)`` / ``x == UNSET_*`` to ``x is None``.
+
+**Fixed (silent-data-loss and wire-protocol bugs)**
+
+These were broken on v2.x against modern TWS / Gateway versions and
+are fixed in v3.0:
+
+* **``MaxClientVersion = 178`` cap** made every gate 201+ feature
+  unreachable in production.
+* **``errorMsg`` decoder** mis-shifted on server >= 194 (ERROR_TIME
+  gate); server errors landed on the wrong reqId.
+* **``cancelOrder`` wire frame** corrupted on server >= 192 (CME
+  tagging fields).
+* **``placeOrder`` binary path** missing gates 179-225 (rejected by
+  183+ server).
+* **``historicalData``** ``HISTORICAL_DATA_END`` msgId broken on
+  server >= 196.
+* **``_protoError`` handler** missing entirely — server errors
+  silently dropped on the protobuf path.
+* **``orderStatus``** legacy version prefix and ``mktCapPrice``
+  trailing field gated on the correct server version (131).
+* **``contractDetails``** aggGroup / underSymbol / underSecType /
+  marketRuleIds / realExpirationDate / stockType / fund-data /
+  ineligibility-reasons reads gated on their respective constants
+  (121-186).
+* **Binary ``openOrder`` duration field gate** corrected from
+  ``>= 159`` literal to ``MIN_SERVER_VER_DURATION = 158``.
+* **``TagValue`` option lists** now thread through the proto send
+  path for 7 request types — were silently dropped on protobuf.
+* **``replaceFA`` trailing ``reqId`` field** gated on
+  ``MIN_SERVER_VER_REPLACE_FA_END = 157``.
+* **``requestFA`` / ``replaceFA``** reject ``faData=2`` (Profiles)
+  at gate 177.
+* **``placeOrder`` volatility-clear** workaround hoisted above the
+  protobuf branch so it applies on both wire paths.
+* **``tickOptionComputation``** correctly maps the ``-2`` sentinel
+  to ``None`` for vega and theta (was a tautology returning ``-2.0``).
+* **``PnLSingle.position``** no longer truncates fractional positions
+  to ``int``.
+* **``HistogramData.size``** is now a ``Decimal`` (was buggy
+  ``count: int``).
+* **``Execution.optExerciseOrLapseType``** default corrected to
+  ``-1`` (IBKR's ``NoneItem`` sentinel; ``0`` means "Exercise").
+* **``commissionReport``** arriving before ``execDetails`` is now
+  parked in a bounded ``OrderedDict`` (1024 entries, FIFO eviction)
+  instead of being silently dropped or leaking unbounded memory.
+* **``IB.disconnect``** fires ``wrapper.connectionClosed`` exactly
+  once (was double-firing, causing ``InvalidStateError`` on
+  in-flight futures).
+* **``IB._backgroundTasks``** strongly references reconnect-resync
+  tasks so asyncio's weak loop reference doesn't GC them mid-run.
+* **``Watchdog.probeContract``** is now per-instance (was a
+  class-level shared mutable default — multiple watchdog instances
+  silently shared one contract).
+* **``IBC.terminateAsync``** bounded by SIGTERM 20s + SIGKILL 10s
+  (was unbounded — hung TWS during daily reset blocked the
+  reconnect loop forever).
+* **``IBC.monitorAsync``** catches stdout read exceptions cleanly
+  and decodes with ``errors="replace"``.
+* **``Wrapper.headTimestamp``** widened from ``except ValueError``
+  to ``except Exception`` so ``ZoneInfoNotFoundError`` doesn't
+  leak past and leave the awaiter hanging.
+* **``Order._toDecimal``** filters NaN / Infinity from both float
+  and Decimal inputs so a stray ``Decimal('NaN')`` from user code
+  lands as ``None``.
+* **Binary path msgId framing** at server >= 201 now uses a 4-byte
+  big-endian raw integer prefix (matching IBKR's reference
+  ``comm.make_msg(..., useRawIntMsgId=True)``). The legacy NUL-text
+  framing was silently dropped by server 201+.
+* **Wire-boundary None-coalesce** at the protobuf converter entry
+  mirrors the binary path's ``_FORMAT_HANDLERS[type(None)] =
+  lambda _: ""`` behaviour: callers that stamp ``None`` onto plain-
+  scalar dataclass fields (e.g. an order-preview path setting
+  ``parentId = None``) now produce wire frames with the field at its
+  dataclass default rather than absent, which TWS rejected as
+  ``Error 135: Can't find order with id = 2147483647``. Applied
+  uniformly at every user-mutable converter boundary.
+
+**Internal**
+
+* **Pinned TWS API version, single source of truth.** The version
+  + SHA256 of IBKR's TWS API archive live in ``pyproject.toml``
+  under ``[tool.ib_async.twsapi]``. ``scripts/generate_protos.py``
+  fetches that exact archive from ``interactivebrokers.github.io``,
+  verifies the SHA, and caches the result under
+  ``~/.cache/ib_async/twsapi-{version}/``. The same archive ships
+  both the ``.proto`` schemas AND the reference ``client_utils.py``
+  that the parity audit walks against — version-locked together,
+  so generated bindings and audit ground truth can never drift. CI
+  reads the same pin and keys its cache step on it. Contributors no
+  longer need a TWS install locally; ``make protos`` is
+  self-contained.
+* **Release engineering.** ``ib_async/_pb/`` (generated protobuf
+  bindings) is gitignored. The release build regenerates the
+  modules and bundles them into the sdist / wheel via a
+  ``[tool.poetry.include]`` glob in ``pyproject.toml``. End users
+  of ``pip install ib_async`` get the bindings without needing
+  ``protoc`` or ``grpcio-tools``; only the runtime ``protobuf``
+  dependency is declared. ``scripts/release.py`` orchestrates the
+  full pipeline (fetch + extract → generate → ruff + mypy → parity
+  audit → owned tests → ``uv build`` → clean-venv smoke install).
+  Publishing is gated behind ``--publish``.
+* **Makefile** targets: ``make protos`` / ``make audit`` /
+  ``make build`` / ``make release`` / ``make publish`` /
+  ``make test`` / ``make lint`` / ``make format`` / ``make clean``.
+* **Protobuf send-path parity audit script** at
+  ``scripts/audit_proto_parity.py`` AST-walks IBKR's reference
+  ``client_utils.py`` and our ``_proto/*.py``, classifies every
+  per-field gate, and reports any divergence. CI runs it as a
+  regression test; any future converter edit that drifts from
+  IBKR's ``isValidIntValue`` / ``isValidFloatValue`` /
+  ``isValidLongValue`` / ``isValidDecimalValue`` semantics breaks
+  the test immediately.
+* Hot-path tick / depth records use ``__slots__``.
+* ``processProtoBuf`` caches resolved bound methods on the dispatch
+  path.
+* ``safe_decimal(str | Decimal | None) → Decimal | None`` is the
+  single source of truth for IBKR UNSET-sentinel rejection.
+* Comprehensive owned-test suite covering the protobuf seam,
+  Decimal coercion, request / subscription lifecycles, dataclass
+  invariants, cross-version decoder gating, and wire-frame parity
+  against IBKR's reference client. Each behavioural fix listed
+  above is pinned by at least one regression test.
+
 2.0
 ---
+
+Version 2.2.0 (Unreleased)
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A stability and correctness release between v2.1.0 and the v3.0
+protobuf migration. The headline change is the internal architecture
+refactor that replaces ten parallel mutable dicts on ``Wrapper``
+with two typed registries plus self-managing ``Subscription``
+objects. Single source of truth for every kind of in-flight state,
+no behavioural change to the public API.
+
+**Added**
+
+* **``Trade.serverOrder``** — the most recent unmerged TWS-authored
+  snapshot of an order's state, with ``?`` placeholder values
+  stripped. Populated on every ``openOrder`` callback alongside the
+  existing allowlist merge into ``trade.order``. Non-breaking
+  escape hatch: callers who need a yet-to-be-allowlisted field can
+  read it directly from the raw snapshot. Existing semantics of
+  ``trade.order`` are unchanged.
+* **``IB.subscriptions()``** accessor returns the live-subscription
+  enumeration.
+* **More outbound events** emitted for matching inbound events so
+  consumers can observe lifecycle without polling.
+* **Defaults-system coverage** extended to ``realizedPNL`` and
+  ``yield_`` on the matching wrapper paths.
+* **``NewsTick``** now carries its originating ``Contract`` so
+  downstream handlers don't have to round-trip through the
+  subscription registry to identify which instrument the news
+  applies to.
+
+**Changed**
+
+* **Internal architecture refactor (no public API change)**: ten
+  parallel mutable dicts on ``Wrapper`` (``_futures``, ``_results``,
+  ``_reqId2Contract``, ``reqId2Ticker``, ``ticker2ReqId``,
+  ``reqId2Subscriber``, ``reqId2PnL``, ``reqId2PnlSingle``,
+  ``pnlKey2ReqId``, ``pnlSingleKey2ReqId``) replaced with two typed
+  registries plus eight self-managing ``Subscription`` types:
+
+  * ``RequestRegistry`` owns every in-flight one-shot / singleton
+    request. Discriminated key types (``ReqIdKey``,
+    ``SingletonKey``, ``CompositeKey``, ``WhatIfKey``) prevent
+    cross-namespace lookups. Idempotent ``set_result`` /
+    ``set_error`` survive late-callback races.
+  * ``SubscriptionRegistry`` owns every long-lived live data flow
+    plus the per-contract ``Ticker`` pool. Each subscription
+    (``MktDataSub``, ``TickByTickSub``, ``MktDepthSub``,
+    ``RealTimeBarsSub``, ``HistoricalBarsSub``, ``ScannerSub``,
+    ``PnLSub``, ``PnLSingleSub``) manages its own reqId, sends its
+    own cancel, and unregisters from every index atomically on
+    ``close()``.
+
+* **Order field updates auto-track TWS** via a redesigned mutable
+  field allowlist with explicit documentation of why the allowlist
+  shape is correct for live trading (denylist failures silently
+  overwrite user-set values; allowlist failures recover via
+  ``Trade.serverOrder``).
+* **Date normalization** extended to honour the user-requested
+  timezone consistently across more wrapper callbacks.
+* **Python 3.11 minimum** (was 3.10). Drops compatibility shims for
+  older interpreters.
+* **``uv`` toolchain support** alongside ``poetry``. Both
+  ``uv sync`` and ``poetry install`` work; CI tests under both.
+
+**Fixed**
+
+* **Voluntary ``IB.disconnect()``** wraps
+  ``wrapper.connectionClosed()`` in ``try/finally`` so the socket
+  closes even if a user trade-event handler raises during teardown.
+* **Redundant disconnect event** no longer fires twice on a clean
+  socket close.
+* **Scanner subscriptions release their registry indexes on cancel**
+  — previously a bare ``client.cancelScannerSubscription`` left
+  the entry behind, leaking memory across the daily server-side
+  reset.
+* **``Wrapper.connectionClosed``** iterates
+  ``list(self.trades.values())`` so user-driven side-effects on
+  trade events can't mutate the dict while it's being traversed.
+* **``reqMktDepth``** no longer clears the in-progress DOM on a
+  failed add — the prior depth book stays intact.
+* **Six ``req*Async`` methods** actively cancel their request on
+  timeout via the new ``_awaitOrTimeout`` helper instead of leaking
+  a pending future.
+* **``reqHistoricalDataAsync(keepUpToDate=True)``** closes its
+  ``HistoricalBarsSub`` on timeout.
+* **Late or replayed errors** no longer mutate already-finished
+  ``Trade`` objects (Filled/Cancelled trades are skipped by
+  ``Wrapper.error``).
+* **What-if order placement** no longer hangs on wire-level errors:
+  ``RequestRegistry.find_by_reqid`` checks both ``ReqIdKey`` and
+  ``WhatIfKey`` so a contract-details-style error reaches its
+  whatIf future.
+* **``endTicker``** drops its ``reqId2Ticker`` entry — previously
+  leaked one entry per cancel for the lifetime of the connection.
+* **Single-flight fixed-key requests** prevent orphaned futures when
+  two concurrent callers issue the same singleton request.
+* **``Decoder.historicalTicksBidAsk``** decodes its
+  ``TickAttribBidAsk`` mask bits per spec (bit 0 = bidPastLow,
+  bit 1 = askPastHigh), matching the live ``tickByTickBidAsk``
+  decoder. Previously the two flags were swapped on every historical
+  bid/ask tick.
+* **``Decoder.securityDefinitionOptionParameter``** coerces
+  ``underlyingConId`` to ``int`` before invoking the wrapper.
+* **``Decoder.execDetails``** narrows ``date | datetime`` ambiguity
+  with ``isinstance`` instead of ``typing.cast``.
+* **``Decoder.wrap()``'s exception handler** no longer references an
+  unbound ``args`` local that could mask the original error with
+  ``UnboundLocalError`` when per-field coercion itself raised.
+* **HistoricalNews return type** corrected to the actual list-of-news
+  shape (was annotated as a single news item).
+* **Error 10349** demoted from order-cancelling error to warning
+  so the order survives.
+* **``tzdata``** dependency pin relaxed from too-specific to
+  ``>=2025.2`` so existing user installs aren't unnecessarily
+  upgraded.
+
+**Performance**
+
+* **``Wrapper._get_ticker``** cached as a bound method, eliminating
+  per-tick attribute-lookup overhead on the dispatch hot path.
+* **``Ticker``** is ``@dataclass(slots=True)``, eliminating
+  per-attribute ``__dict__`` indirection on every tick handler.
+* **``Decoder.wrap()``** resolves ``getattr(wrapper, methodName)``
+  and the per-type converter list once at construction, removing a
+  ``getattr`` and a four-way is-comparison ternary per dispatch.
+* **``Decoder.parse()``** memoizes per-class field-coercion plans,
+  removing the ``dataclasses.fields()`` walk from every call.
+* **``defaultTimezone``** hoisted out of the historical-tick decode
+  loops.
+* **Module-level Final frozensets** ``_TICK_BY_TICK_LAST_TYPES`` /
+  ``_PEG_BENCH_ORDER_TYPES`` replace inline set literals on hot
+  paths.
+* **Module-level Final dicts** for ``Client.send`` format handlers.
+* **Typed PnL / PnL-single iterators** avoid a full subscription
+  scan.
+
+**Dependency / tooling**
+
+* Minimum Python version raised to 3.11.
+* ``uv`` toolchain supported as an alternative to ``poetry``.
+* ``mypy`` no longer runs on PyPy (it was a no-op on that
+  interpreter).
+
+**Test coverage**
+
+* Owned test suite covering decoder mask-bit fixes, slotted
+  ``Ticker`` edge cases (copy / deepcopy / pickle / repr /
+  ``__post_init__`` guard / typo enforcement), and the registry
+  lifecycle invariants.
+* Test helpers (``tests/_helpers.py``) consolidate
+  ``inject_trade()`` / ``inject_fill()`` so future tests have a
+  single place to update if ``Wrapper``'s internal trade/fill maps
+  restructure.
 
 Version 2.1.0 (2025-12-06)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
