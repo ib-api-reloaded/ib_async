@@ -31,11 +31,26 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from _twsapi_meta import load as _load_meta  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUR_PROTO_DIR = REPO_ROOT / "ib_async" / "_proto"
-IBKR_CLIENT_UTILS = (
-    Path.home() / "<IBKR-TWSAPI>/IBJts/source/pythonclient/ibapi/client_utils.py"
-)
+
+# Reference encoder is shipped INSIDE the IBKR TWS API archive
+# alongside the .proto schemas, so a cache hit guarantees the audit
+# is checking parity against the exact bytes that produced our
+# generated bindings. ``scripts/generate_protos.py`` populates the
+# cache; if absent, run ``make protos``.
+#
+# Resolution is module-level (cheap path computation) but existence
+# is verified lazily in main() — so the parity test can ``import``
+# this module without exploding when the cache hasn't been populated
+# yet.
+IBKR_CLIENT_UTILS = _load_meta().client_utils_path
 
 # Gate kinds. The first six are the only ones IBKR uses for scalar
 # fields; ``none`` marks unconditional assignment (rare, mostly
@@ -269,6 +284,13 @@ def compare(
 
 
 def main() -> int:
+    if not IBKR_CLIENT_UTILS.is_file():
+        print(
+            f"IBKR client_utils.py not found at {IBKR_CLIENT_UTILS}\n"
+            f"Run ``make protos`` to populate the version-pinned cache.",
+            file=sys.stderr,
+        )
+        return 1
     ibkr = load_ibkr()
     ours = load_ours()
     divergences, notes = compare(ibkr, ours)

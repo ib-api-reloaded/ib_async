@@ -2,18 +2,14 @@ name: ib_async
 
 on: [push, pull_request]
 
-# Protobuf bindings under ib_async/_pb/ are gitignored — generated at
-# build/dev time from IBKR's .proto schemas. CI needs the schemas on
-# disk before mypy / pytest will run. ``IB_PROTO_SOURCE`` must point at
-# a directory of ``*.proto`` files. Default below assumes the operator
-# vendors them at ``vendor/proto/`` (or sets the repository variable
-# ``IB_PROTO_SOURCE_PATH`` to a different in-repo location). Without
-# this resolved, every job that runs ``make protos`` will fail with
-# "protoc source directory not found" — surfacing the missing wiring
-# instead of the old silent ``ModuleNotFoundError: No module named
-# 'ib_async._pb'`` mypy crash.
-env:
-  IB_PROTO_SOURCE: ${{ vars.IB_PROTO_SOURCE_PATH || 'vendor/proto' }}
+# Protobuf bindings under ib_async/_pb/ are gitignored — generated
+# at build/dev/CI time. The version + SHA256 of IBKR's TWS API
+# archive are pinned in pyproject.toml [tool.ib_async.twsapi].
+# scripts/generate_protos.py fetches that exact archive (cached
+# under ~/.cache/ib_async/twsapi-{version}/), SHA-verifies, extracts
+# the protos + the parity audit's reference client_utils.py, and
+# runs protoc. The same script powers local dev, CI, and the
+# release pipeline so all three operate on identical bytes.
 
 jobs:
   build-poetry:
@@ -40,9 +36,23 @@ jobs:
         run: |
           poetry install --with=dev
 
+      - name: Read TWS API version pin
+        id: twsapi
+        shell: bash
+        # Single source of truth: pyproject.toml [tool.ib_async.twsapi].
+        # Cache key derives from the pinned version so a bump
+        # automatically invalidates the cache without manual steps.
+        run: |
+          v=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["tool"]["ib_async"]["twsapi"]["version"])')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Cache TWS API archive
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ib_async/twsapi-${{ steps.twsapi.outputs.version }}
+          key: twsapi-${{ steps.twsapi.outputs.version }}
+
       - name: Generate protobuf bindings
-        # ``ib_async/_pb/`` is gitignored; mypy / ruff / pytest all
-        # depend on it. Runs the same generator the wheel build uses.
         run: |
           poetry run python scripts/generate_protos.py
 
@@ -83,6 +93,19 @@ jobs:
         run: |
           uv sync --group dev
 
+      - name: Read TWS API version pin
+        id: twsapi
+        shell: bash
+        run: |
+          v=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["tool"]["ib_async"]["twsapi"]["version"])')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Cache TWS API archive
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ib_async/twsapi-${{ steps.twsapi.outputs.version }}
+          key: twsapi-${{ steps.twsapi.outputs.version }}
+
       - name: Generate protobuf bindings
         run: |
           uv run python scripts/generate_protos.py
@@ -102,9 +125,9 @@ jobs:
 
   # Catches the "google module not found" class of release-engineering
   # regression: build the wheel, install it into a clean venv, import
-  # the package. If ``_pb/`` is missing from the wheel manifest (or any
-  # runtime dependency is missing from the metadata), this fails before
-  # users do — not after the first ``pip install ib_async``.
+  # the package. If ``_pb/`` is missing from the wheel manifest (or
+  # any runtime dependency is missing from the metadata), this fails
+  # before users do — not after the first ``pip install ib_async``.
   wheel-smoke:
     name: wheel smoke test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -125,21 +148,25 @@ jobs:
         run: |
           pip install pip uv setuptools wheel -U
 
+      - name: Read TWS API version pin
+        id: twsapi
+        shell: bash
+        run: |
+          v=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["tool"]["ib_async"]["twsapi"]["version"])')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Cache TWS API archive
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ib_async/twsapi-${{ steps.twsapi.outputs.version }}
+          key: twsapi-${{ steps.twsapi.outputs.version }}
+
       - name: Build wheel + sdist with bundled protos
-        # ``make build`` regenerates ``ib_async/_pb/`` then runs
-        # ``uv build``. The ``[tool.poetry.include]`` glob bundles the
-        # generated modules into both artifacts so end users don't need
-        # ``protoc`` / ``grpcio-tools`` at install time.
         run: |
           uv sync --group dev
           make build
 
       - name: Clean-venv install + import smoke test
-        # New venv with NO dev deps installed — only what the wheel's
-        # runtime metadata declares. Imports the package and constructs
-        # an ``IB()`` so any missing-runtime-dep regression
-        # ("can't find google module" on the legacy proto path) fails
-        # the build instead of a user's first ``pip install``.
         run: |
           python -m venv /tmp/smoke-venv
           /tmp/smoke-venv/bin/pip install --upgrade pip

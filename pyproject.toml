@@ -45,6 +45,20 @@ docs = [
     "myst-parser>=2.0.0,<3.0.0",
 ]
 
+[tool.ib_async.twsapi]
+# Single source of truth for the IBKR TWS API version this build is
+# wired against. Consumed by ``scripts/generate_protos.py``,
+# ``scripts/release.py``, ``scripts/audit_proto_parity.py``, and CI
+# — they all read these constants so the proto bindings and the
+# parity audit's reference ``client_utils.py`` stay version-locked.
+#
+# To bump: edit ``version``, download the new archive, recompute
+# SHA256, edit ``archive_sha256``, run ``make protos`` + tests +
+# audit. The IBKR URL convention drops the first dot of
+# ``API_Version``, so 10.46.01 → 1046.01.
+version = "1046.01"
+archive_sha256 = "d62d0bd602d9b0154f73246b1224467b6cff7062d34fe864510691b7677148c4"
+
 [tool.poetry]
 # ``ib_async/_pb/`` holds protobuf bindings generated from IBKR's
 # upstream ``.proto`` schemas by ``scripts/generate_protos.py``. The
