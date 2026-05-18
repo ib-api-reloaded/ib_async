@@ -182,12 +182,6 @@ class BarData:
 @dataclass
 class RealTimeBar:
     time: datetime = EPOCH
-    # ``endTime`` is never populated from the wire — the realtime-bar
-    # message carries only ``time``. Held at ``-1`` rather than swept
-    # to ``None`` to preserve the field shape that downstream
-    # serializers / equality checks have seen since v2.x. A future
-    # major bump can collapse this to ``int | None = None``.
-    endTime: int = -1
     open_: Decimal | None = None
     high: Decimal | None = None
     low: Decimal | None = None
