@@ -2,7 +2,9 @@ import pytest
 
 import ib_async as ibi
 
-pytestmark = pytest.mark.asyncio
+# Live: requires a running TWS / IB Gateway on 127.0.0.1:7497.
+# Skipped by default. Opt in with ``pytest -m live``.
+pytestmark = [pytest.mark.asyncio, pytest.mark.live]
 
 
 async def test_request_error_raised(ib):
