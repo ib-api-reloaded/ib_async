@@ -177,7 +177,7 @@ def test_commission_report_proto_attaches_to_existing_fill():
     ib.client.decoder.processProtoBuf(59, proto.SerializeToString())
 
     assert fill.commissionReport.execId == "exec-7"
-    assert fill.commissionReport.commission == Decimal("1.25")
+    assert fill.commissionReport.commissionAndFees == Decimal("1.25")
     assert fill.commissionReport.realizedPNL == Decimal(10)
 
 

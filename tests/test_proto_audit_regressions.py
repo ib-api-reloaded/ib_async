@@ -81,7 +81,7 @@ def test_commission_report_unset_realized_pnl_stays_none_not_nan():
     ib.client.decoder.processProtoBuf(59, proto.SerializeToString())
 
     # commission did flow.
-    assert fill.commissionReport.commission == Decimal("1.25")
+    assert fill.commissionReport.commissionAndFees == Decimal("1.25")
     # realizedPNL / yield_ stay None — NOT Decimal('NaN'), NOT 0.
     assert fill.commissionReport.realizedPNL is None
     assert fill.commissionReport.yield_ is None
@@ -124,14 +124,14 @@ def test_commission_report_explicit_none_survives_wrapper_dispatch():
 
     explicit = ibi.CommissionReport(
         execId="exec-explicit-none",
-        commission=Decimal("0.50"),
+        commissionAndFees=Decimal("0.50"),
         currency="USD",
         realizedPNL=None,
         yield_=None,
     )
     ib.wrapper.commissionReport(explicit)
 
-    assert fill.commissionReport.commission == Decimal("0.50")
+    assert fill.commissionReport.commissionAndFees == Decimal("0.50")
     assert fill.commissionReport.realizedPNL is None
     assert fill.commissionReport.yield_ is None
     # Direct NaN guard: nothing morphed silently into a NaN sentinel.
@@ -2582,7 +2582,7 @@ def test_commission_report_arriving_before_fill_is_buffered_and_drained():
 
     # 1) Commission report arrives FIRST. It must be parked, not dropped.
     early_report = ibi.CommissionReport(
-        execId="exec-early", commission=2.5, currency="USD"
+        execId="exec-early", commissionAndFees=2.5, currency="USD"
     )
     ib.wrapper.commissionReport(early_report)
     # Not yet emitted — fill doesn't exist.
@@ -2605,9 +2605,9 @@ def test_commission_report_arriving_before_fill_is_buffered_and_drained():
 
     assert "exec-early" not in ib.wrapper._pendingCommissionReports
     assert len(trade.fills) == 1
-    assert trade.fills[0].commissionReport.commission == 2.5
+    assert trade.fills[0].commissionReport.commissionAndFees == 2.5
     assert len(seenCommission) == 1
-    assert seenCommission[0][2].commission == 2.5
+    assert seenCommission[0][2].commissionAndFees == 2.5
 
 
 def test_completed_order_for_existing_trade_updates_status_to_terminal():
