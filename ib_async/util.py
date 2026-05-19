@@ -4,6 +4,7 @@ import asyncio
 import datetime as dt
 import logging
 import math
+import os
 import signal
 import sys
 import time
@@ -232,34 +233,35 @@ def allowCtrlC():
 
 def logToFile(path, level=logging.INFO):
     """Create a log handler that logs to the given file."""
-    logger = logging.getLogger()
-    if logger.handlers:
-        logging.getLogger("ib_async").setLevel(level)
-    else:
-        logger.setLevel(level)
-
-    formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
-    handler = logging.FileHandler(path)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    logger = logging.getLogger("ib_async")
+    logger.setLevel(level)
+    # Records propagate up to root, so a file handler for this path anywhere
+    # in the ib_async + root handler set already captures our logs.
+    target = os.path.abspath(os.fspath(path))
+    fileHandlers = [
+        h
+        for h in (*logger.handlers, *logging.getLogger().handlers)
+        if type(h) is logging.FileHandler and h.baseFilename == target
+    ]
+    if not fileHandlers:
+        formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+        handler = logging.FileHandler(path)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
 
 def logToConsole(level=logging.INFO):
     """Create a log handler that logs to the console."""
-    logger = logging.getLogger()
+    logger = logging.getLogger("ib_async")
+    logger.setLevel(level)
+    # Records propagate up to root, so a stderr handler anywhere in the
+    # ib_async + root handler set is enough to print our logs.
     stdHandlers = [
         h
-        for h in logger.handlers
+        for h in (*logger.handlers, *logging.getLogger().handlers)
         if type(h) is logging.StreamHandler and h.stream is sys.stderr
     ]
-
-    if stdHandlers:
-        # if a standard stream handler already exists, use it and
-        # set the log level for the ib_async namespace only
-        logging.getLogger("ib_async").setLevel(level)
-    else:
-        # else create a new handler
-        logger.setLevel(level)
+    if not stdHandlers:
         formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
         handler = logging.StreamHandler()
         handler.setFormatter(formatter)
