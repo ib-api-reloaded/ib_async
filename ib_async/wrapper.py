@@ -77,7 +77,7 @@ from ib_async.objects import (
     TradeLogEntry,
 )
 from ib_async.order import Order, OrderState, OrderStatus, Trade
-from ib_async.ticker import Ticker
+from ib_async.ticker import HaltedStatus, Ticker
 from ib_async.util import (
     UNSET_DOUBLE,
     UNSET_INTEGER,
@@ -188,6 +188,7 @@ GENERIC_TICK_MAP: Final[TickDict] = {
 #   halt}. The clamp maps -1 (unset) → 0 (not halted), conflating two
 #   distinct states user code uses to gate trading decisions.
 _GENERIC_TICK_NO_CLAMP: Final[frozenset[int]] = frozenset({31, 49, 90})
+_HALTED_TICKS: Final[frozenset[int]] = frozenset({49, 90})
 
 GREEKS_TICK_MAP: Final[TickDict] = {
     10: "bidGreeks",
@@ -1544,6 +1545,12 @@ class Wrapper:
         assert tickType in GENERIC_TICK_MAP, (
             f"Received tick {tickType=} {value=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
         )
+
+        if tickType in _HALTED_TICKS:
+            try:
+                value = HaltedStatus(int(value))
+            except ValueError:
+                pass
 
         setattr(ticker, GENERIC_TICK_MAP[tickType], value)
 
