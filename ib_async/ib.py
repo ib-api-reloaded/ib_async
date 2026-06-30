@@ -1553,12 +1553,27 @@ class IB:
                 subscribe to a stream of realtime tick data.
             regulatorySnapshot: Request NBBO snapshot (may incur a fee).
             mktDataOptions: Unknown
+
+        Snapshot vs. streaming Ticker identity:
+            For ``snapshot=False`` the returned Ticker is the shared,
+            per-contract pooled Ticker (the same object returned by
+            :meth:`ticker` and fed by every live stream on the contract).
+            For ``snapshot=True`` the returned Ticker is a *private*,
+            point-in-time object that is not added to that pool: it starts
+            empty and is filled only with this snapshot's ticks, so a read
+            immediately after the call sees ``None`` rather than a value
+            left over from a prior snapshot. (If a streaming subscription
+            is already live on the contract, that fresh pooled Ticker is
+            returned instead and no new request is issued.)
         """
         # Idempotent re-subscribe: a second call for the same qualified
         # contract returns the existing ticker without issuing a second
         # IB request. Unqualified contracts (conId=0) skip the dedup
         # index entirely (see SubscriptionRegistry._market_data_kind),
         # so concurrent callers on the same blank conId stay distinct.
+        # This also covers ``snapshot=True`` while a stream is live: the
+        # stream keeps the pooled Ticker fresh, so reusing it is safe and
+        # avoids a redundant snapshot request.
         existing = self.wrapper.subscriptions.find_market_data(
             contract.conId, "mktData"
         )
@@ -1566,7 +1581,14 @@ class IB:
             return existing.ticker  # type: ignore[attr-defined]
 
         reqId = self.client.getReqId()
-        ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
+        # A snapshot gets a private, unpooled Ticker so a racing read can
+        # never observe scalar prices carried over from a prior snapshot of
+        # the same contract. Streaming reuses the pooled Ticker so a single
+        # object reflects every live tick stream.
+        if snapshot:
+            ticker = self.wrapper.subscriptions.new_snapshot_ticker(contract)
+        else:
+            ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
         self.wrapper.subscriptions.add(
             MktDataSub(
                 reqId=reqId,
@@ -2380,6 +2402,15 @@ class IB:
     async def reqTickersAsync(
         self, *contracts: Contract, regulatorySnapshot: bool = False
     ) -> list[Ticker]:
+        """Async sibling of :meth:`reqTickers`.
+
+        Each returned Ticker is a *private*, point-in-time snapshot object,
+        not the shared per-contract pooled Ticker: it is filled only with
+        this call's snapshot ticks, so it never carries scalar prices left
+        over from a prior snapshot of the same contract, and it is frozen
+        once the snapshot completes. Use ``reqMktData(snapshot=False)`` /
+        :meth:`ticker` for the shared, continuously-updated pooled Ticker.
+        """
         # Each contract gets its own snapshot subscription. Snapshot
         # MktDataSubs are registered by reqId only — they are
         # deliberately not indexed at ``(conId, "mktData")`` so that
@@ -2391,7 +2422,9 @@ class IB:
         for contract in contracts:
             reqId, future = self._openReqIdRequest(contract=contract)
             futures.append(future)
-            ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
+            # Private, unpooled Ticker per snapshot — see
+            # SubscriptionRegistry.new_snapshot_ticker.
+            ticker = self.wrapper.subscriptions.new_snapshot_ticker(contract)
             tickers.append(ticker)
             sub = MktDataSub(
                 reqId=reqId, contract=contract, ticker=ticker, snapshot=True
