@@ -108,7 +108,7 @@ from .order import (
     Trade,
     VolumeCondition,
 )
-from .ticker import Ticker
+from .ticker import HaltedStatus, Ticker
 from .version import __version__, __version_info__
 from .wrapper import RequestError, Wrapper
 
@@ -214,6 +214,7 @@ __all__ = [
     "Trade",
     "VolumeCondition",
     "Ticker",
+    "HaltedStatus",
     "__version__",
     "__version_info__",
     "RequestError",

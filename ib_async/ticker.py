@@ -3,6 +3,7 @@
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import IntEnum
 from typing import Any, ClassVar
 
 from eventkit import Event, Op
@@ -32,6 +33,13 @@ from ib_async.util import dataclassRepr
 # "what's recent for this name" case; raise via ``Ticker.news.maxlen``
 # replacement if a strategy needs longer retention.
 _NEWS_MAXLEN: int = 5
+
+
+class HaltedStatus(IntEnum):
+    UNAVAILABLE = -1
+    NOT_HALTED = 0
+    GENERAL = 1
+    VOLATILITY = 2
 
 
 def _new_news_deque() -> deque[NewsTick]:
@@ -100,7 +108,7 @@ class Ticker:
     askYield: float | None = None
     lastYield: float | None = None
     markPrice: float | None = None
-    halted: float | None = None
+    halted: HaltedStatus | float | None = None
     rtHistVolatility: float | None = None
     rtVolume: float | None = None
     rtTradeVolume: float | None = None
@@ -132,7 +140,7 @@ class Ticker:
     creditmanMarkPrice: float | None = None
     creditmanSlowMarkPrice: float | None = None
     delayedLastTimestamp: datetime | None = None
-    delayedHalted: float | None = None
+    delayedHalted: HaltedStatus | float | None = None
     reutersMutualFunds: str = ""
     etfNavClose: float | None = None
     etfNavPriorClose: float | None = None

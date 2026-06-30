@@ -2900,17 +2900,21 @@ def test_tick_generic_halted_unset_minus_one_does_not_collapse_to_zero():
     ticker = _ticker_for_reqid(ib, 4001)
 
     ib.wrapper.tickGeneric(4001, 49, -1.0)
+    assert ticker.halted is ibi.HaltedStatus.UNAVAILABLE
     assert ticker.halted == -1.0, (
         "HALTED=-1 (unset) must survive — not collapse to 0 (not halted)"
     )
 
     ib.wrapper.tickGeneric(4001, 49, 0.0)
+    assert ticker.halted is ibi.HaltedStatus.NOT_HALTED
     assert ticker.halted == 0.0  # not halted
 
     ib.wrapper.tickGeneric(4001, 49, 1.0)
+    assert ticker.halted is ibi.HaltedStatus.GENERAL
     assert ticker.halted == 1.0  # general halt
 
     ib.wrapper.tickGeneric(4001, 49, 2.0)
+    assert ticker.halted is ibi.HaltedStatus.VOLATILITY
     assert ticker.halted == 2.0  # volatility halt
 
 
@@ -2921,6 +2925,7 @@ def test_tick_generic_delayed_halted_preserves_unset_sentinel():
     ticker = _ticker_for_reqid(ib, 4002)
 
     ib.wrapper.tickGeneric(4002, 90, -1.0)
+    assert ticker.delayedHalted is ibi.HaltedStatus.UNAVAILABLE
     assert ticker.delayedHalted == -1.0
 
 
