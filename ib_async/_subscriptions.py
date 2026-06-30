@@ -19,6 +19,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
+from ib_async.ticker import Ticker
+
 if TYPE_CHECKING:
     from ib_async.client import Client
     from ib_async.contract import Contract
@@ -29,7 +31,6 @@ if TYPE_CHECKING:
         RealTimeBarList,
         ScanDataList,
     )
-    from ib_async.ticker import Ticker
     from ib_async.wrapper import Wrapper
 
 
@@ -365,10 +366,6 @@ class SubscriptionRegistry:
         one with the wrapper's :class:`IBDefaults` if no entry exists yet.
         """
 
-        # Local import keeps the module's public surface free of a
-        # cycle: Ticker imports IBDefaults from objects.py, which is fine.
-        from ib_async.ticker import Ticker as _Ticker
-
         key = hash(contract)
         ticker = self._tickers.get(key)
         if ticker is None:
@@ -379,9 +376,39 @@ class SubscriptionRegistry:
                 raise RuntimeError(
                     "SubscriptionRegistry must be wrapper-bound to allocate Tickers"
                 )
-            ticker = _Ticker(contract=contract, defaults=self._wrapper.defaults)
+            ticker = Ticker(contract=contract, defaults=self._wrapper.defaults)
             self._tickers[key] = ticker
         return ticker
+
+    def new_snapshot_ticker(self, contract: Contract) -> Ticker:
+        """Allocate a fresh, *unpooled* :class:`Ticker` for a one-shot snapshot.
+
+        Unlike :meth:`get_or_create_ticker`, the returned Ticker is **not**
+        stored in the per-contract pool. A snapshot is a point-in-time read
+        whose lifecycle ends at ``tickSnapshotEnd``; giving it a private
+        Ticker means it:
+
+          * starts clean — it can never hand back scalar prices left over
+            from a *prior* snapshot of the same contract, and
+          * is isolated — it can never blank, nor be blanked by, a
+            concurrent streaming / tick-by-tick / market-depth consumer that
+            shares the contract's pooled Ticker.
+
+        The snapshot Ticker is reachable only through the ``reqId`` index
+        (``_ticker_by_reqid``) while its subscription is live, so tick
+        dispatch still routes the snapshot's ticks to it. It drops out of
+        every registry index when that subscription closes (on
+        ``tickSnapshotEnd`` or teardown); thereafter only the caller holds
+        it.
+        """
+
+        # Hard runtime check — mirrors :meth:`get_or_create_ticker`; an
+        # ``assert`` would vanish under ``python -O``.
+        if self._wrapper is None:
+            raise RuntimeError(
+                "SubscriptionRegistry must be wrapper-bound to allocate Tickers"
+            )
+        return Ticker(contract=contract, defaults=self._wrapper.defaults)
 
     def ticker_for_contract(self, contract: Contract) -> Ticker | None:
         """Return the pooled Ticker for ``contract`` if one exists. Used

@@ -21,6 +21,7 @@ from ib_async._requests import (
 )
 from ib_async._subscriptions import (
     HistoricalBarsSub,
+    MktDataSub,
     PnLSingleSub,
     PnLSub,
     RealTimeBarsSub,
@@ -488,10 +489,22 @@ class Wrapper:
 
         error = ConnectionError("Socket disconnect")
 
+        # Snapshot Tickers are private (not in the pool), so gather them
+        # from their still-live subscriptions before close_all drops the
+        # reqId index — otherwise an awaiter on a snapshot Ticker's
+        # ``updateEvent`` would never wake after a mid-snapshot disconnect.
+        snapshot_tickers = [
+            sub.ticker
+            for sub in self.subscriptions
+            if isinstance(sub, MktDataSub) and sub.snapshot and sub.ticker is not None
+        ]
+
         self.requests.fail_all(error)
         self.subscriptions.close_all(send_cancel=False)
 
         for ticker in self.subscriptions.pooled_tickers():
+            ticker.updateEvent.set_done()
+        for ticker in snapshot_tickers:
             ticker.updateEvent.set_done()
 
         now = datetime.now(self.defaultTimezone)
@@ -1356,6 +1369,17 @@ class Wrapper:
 
     def tickSnapshotEnd(self, reqId: int):
         self.requests.set_result(ReqIdKey(reqId))
+        # A snapshot's subscription lifecycle ends here: IB auto-completes
+        # snapshots, so close it (without a wire cancel — cancelling a
+        # snapshot is a protocol error) to drop the one-shot subscription
+        # and its private Ticker from the registry. Without this, every
+        # ``reqMktData(snapshot=True)`` would leave its sub (and Ticker)
+        # pinned in the reqId index for the life of the connection. Close
+        # is idempotent, so ``reqTickersAsync`` re-closing in its
+        # ``finally`` is a no-op.
+        sub = self.subscriptions.get_sub(reqId)
+        if isinstance(sub, MktDataSub) and sub.snapshot:
+            sub.close(send_cancel=False)
 
     def tickByTickAllLast(
         self,
@@ -2073,6 +2097,22 @@ class Wrapper:
                     hBars.keepUpToDate,
                     hBars.chartOptions,
                 )
+
+        # A snapshot terminates on EITHER tickSnapshotEnd (success) or a
+        # hard error (e.g. 200 / 354 / 10197): IB never sends
+        # tickSnapshotEnd after rejecting a snapshot. ``reqMktData(snapshot
+        # =True)`` opens no request future and has no ``finally``, so without
+        # this its one-shot MktDataSub — and its private Ticker — would stay
+        # pinned in the registry for the life of the connection, and is
+        # uncancellable (snapshot subs are not in the market-data dedup
+        # index). Warnings must NOT close it: 10167 ("displaying delayed
+        # data") is a warning that still completes via tickSnapshotEnd. Close
+        # is idempotent, so reqTickersAsync re-closing in its ``finally`` is a
+        # no-op.
+        if not isWarning:
+            sub = self.subscriptions.get_sub(reqId)
+            if isinstance(sub, MktDataSub) and sub.snapshot:
+                sub.close(send_cancel=False)
 
         self.ib.errorEvent.emit(reqId, errorCode, errorString, contract)
 
