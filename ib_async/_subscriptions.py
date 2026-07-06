@@ -288,9 +288,11 @@ class SubscriptionRegistry:
         # for a given contract so a single Ticker reflects every live
         # tick stream. Keyed by ``hash(contract)`` (which uses conId).
         self._tickers: dict[int, Ticker] = {}
-        # (conId, kind) -> Subscription, where kind is the IB-level
-        # market-data type ("mktData", "Last", "AllLast", "BidAsk",
-        # "MidPoint", "mktDepth").
+        # (identity, kind) -> Subscription, where identity is the
+        # contract's market-data identity (its conId, or a bag's synthetic
+        # comboLeg hash — see _market_data_identity) and kind is the
+        # IB-level market-data type ("mktData", "Last", "AllLast",
+        # "BidAsk", "MidPoint", "mktDepth").
         self._by_market_data_key: dict[tuple[int, str], Subscription] = {}
         # (account, modelCode) -> PnLSub.
         self._by_pnl_key: dict[tuple[str, str], PnLSub] = {}
@@ -304,8 +306,8 @@ class SubscriptionRegistry:
 
         Raises :class:`KeyError` if the reqId is already in use, or if a
         market-data subscription already exists for the
-        ``(conId, kind)`` pair (caller should idempotently dedupe via
-        :meth:`find_market_data` first).
+        ``(identity, kind)`` pair (caller should idempotently dedupe via
+        :meth:`find_market_data_for_contract` first).
         """
 
         if sub.reqId in self._by_reqid:
@@ -313,12 +315,14 @@ class SubscriptionRegistry:
 
         kind = self._market_data_kind(sub)
         if kind is not None:
-            mkey = (sub.contract.conId, kind)
-            if mkey in self._by_market_data_key:
-                raise KeyError(
-                    f"market-data subscription for {mkey!r} already registered"
-                )
-            self._by_market_data_key[mkey] = sub
+            identity = self._market_data_identity(sub.contract)
+            if identity is not None:
+                mkey = (identity, kind)
+                if mkey in self._by_market_data_key:
+                    raise KeyError(
+                        f"market-data subscription for {mkey!r} already registered"
+                    )
+                self._by_market_data_key[mkey] = sub
 
         if isinstance(sub, PnLSub):
             self._by_pnl_key[(sub.account, sub.modelCode)] = sub
@@ -340,7 +344,9 @@ class SubscriptionRegistry:
 
         kind = self._market_data_kind(sub)
         if kind is not None:
-            self._by_market_data_key.pop((sub.contract.conId, kind), None)
+            identity = self._market_data_identity(sub.contract)
+            if identity is not None:
+                self._by_market_data_key.pop((identity, kind), None)
 
         if isinstance(sub, PnLSub):
             self._by_pnl_key.pop((sub.account, sub.modelCode), None)
@@ -424,14 +430,41 @@ class SubscriptionRegistry:
         return list(self._tickers.values())
 
     def find_market_data(self, conId: int, kind: str) -> Subscription | None:
-        """Return any in-flight market-data subscription for ``(conId, kind)``.
+        """Low-level lookup of a market-data subscription by its index
+        *identity int* and ``kind``.
 
-        Used by ``IB.reqMktData`` / ``IB.reqTickByTickData`` /
-        ``IB.reqMktDepth`` for idempotent re-subscribe (the second call
-        returns the existing subscription instead of double-billing).
+        The identity is a contract's ``conId`` for qualified contracts and
+        a bag's synthetic comboLeg hash for spreads (see
+        :meth:`_market_data_identity`). Callers that hold the
+        :class:`Contract` should prefer :meth:`find_market_data_for_contract`,
+        which resolves the identity for them — critically for bags, whose
+        ``conId`` is always ``0`` and so can never be found via this
+        raw-conId entry point.
         """
 
         return self._by_market_data_key.get((conId, kind))
+
+    def find_market_data_for_contract(
+        self, contract: Contract, kind: str
+    ) -> Subscription | None:
+        """Return any in-flight market-data subscription for ``contract`` and
+        ``kind``, resolving the contract's market-data identity first.
+
+        Used by ``IB.reqMktData`` / ``IB.reqTickByTickData`` /
+        ``IB.reqMktDepth`` for idempotent re-subscribe (the second call
+        returns the existing subscription instead of double-billing) and by
+        the matching ``IB.cancel*`` methods to find the subscription to
+        close. Bags/spreads carry ``conId == 0`` but resolve to their
+        conId-independent synthetic comboLeg hash, so they are found here
+        (a raw ``find_market_data(contract.conId, kind)`` call could never
+        locate them). Returns ``None`` for unindexable contracts
+        (unqualified and non-bag).
+        """
+
+        identity = self._market_data_identity(contract)
+        if identity is None:
+            return None
+        return self._by_market_data_key.get((identity, kind))
 
     def get_pnl(self, account: str, modelCode: str) -> PnLSub | None:
         """Return the :class:`PnLSub` for ``(account, modelCode)`` or ``None``."""
@@ -516,29 +549,63 @@ class SubscriptionRegistry:
 
     @staticmethod
     def _market_data_kind(sub: Subscription) -> str | None:
-        """Resolve the dedup-index kind for a market-data-shaped subscription.
+        """Resolve the dedup-index *kind* for a market-data-shaped subscription.
 
         Returning ``None`` keeps the subscription out of
-        ``by_market_data_key`` (the ``(conId, kind)`` dedup index) but
+        ``by_market_data_key`` (the ``(identity, kind)`` dedup index) but
         still places it in ``by_reqid`` and ``ticker_by_reqid``. That is
-        the right behaviour for:
+        the right behaviour for non-market-data subscriptions and for a
+        snapshot :class:`MktDataSub` — concurrent snapshots for the same
+        contract are legitimate (each call is its own one-shot), so they
+        must not dedup against each other.
 
-          * Unqualified contracts (``conId == 0``) — multiple unrelated
-            callers must not collapse into one entry.
-          * Snapshot :class:`MktDataSub` — concurrent snapshots for the
-            same contract are legitimate (each call is its own one-shot).
+        Whether the *contract* is indexable at all (qualified, or a bag
+        with a stable synthetic identity) is decided separately by
+        :meth:`_market_data_identity`; :meth:`add` requires both a
+        non-``None`` kind and a non-``None`` identity before indexing.
 
         :class:`TickByTickSub` carries its kind on the instance
         (``tickType``); other concrete classes use the class-level
         ``KIND``.
         """
 
-        if not getattr(sub.contract, "conId", 0):
-            return None
         if isinstance(sub, TickByTickSub):
             return sub.tickType or None
         if isinstance(sub, MktDataSub):
             return None if sub.snapshot else "mktData"
         if isinstance(sub, MktDepthSub):
             return type(sub).KIND
+        return None
+
+    @staticmethod
+    def _market_data_identity(contract: Contract) -> int | None:
+        """Stable identity int used as the first element of the
+        ``(identity, kind)`` market-data index key.
+
+          * Qualified contracts → their ``conId``. This is the historical
+            key (the index used to be ``(conId, kind)``), so qualified
+            contracts — including CONTFUT, which keeps its positive
+            ``conId`` here rather than the negated value
+            :meth:`Contract.__hash__` produces — behave exactly as before.
+          * Bags/spreads → ``hash(contract)``, the conId-independent
+            synthetic comboLeg hash from :meth:`Contract.__hash__`. A bag
+            always carries ``conId == 0``, so under the raw-conId scheme it
+            could never be indexed — and therefore never deduped on
+            re-subscribe, nor *cancelled by contract*
+            (``IB.cancelMktData(bag)`` silently returned False and leaked
+            the live combo stream). Its synthetic hash gives every distinct
+            spread its own entry. (Like the per-contract Ticker pool, which
+            is also keyed by ``hash(contract)``, this carries the same
+            vanishingly small chance of colliding with a qualified
+            contract's ``conId``.)
+          * Genuinely-unqualified contracts (``conId == 0`` and not a
+            ``BAG``) → ``None``: they have no stable identity, so multiple
+            unrelated callers must NOT collapse into a single ``(0, kind)``
+            entry (``hash()`` of such a contract also raises).
+        """
+
+        if contract.conId:
+            return contract.conId
+        if contract.secType == "BAG":
+            return hash(contract)
         return None

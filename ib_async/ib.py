@@ -1607,15 +1607,17 @@ class IB:
             returned instead and no new request is issued.)
         """
         # Idempotent re-subscribe: a second call for the same qualified
-        # contract returns the existing ticker without issuing a second
-        # IB request. Unqualified contracts (conId=0) skip the dedup
-        # index entirely (see SubscriptionRegistry._market_data_kind),
-        # so concurrent callers on the same blank conId stay distinct.
+        # contract — or the same spread/bag, matched by its synthetic
+        # comboLeg identity — returns the existing ticker without issuing a
+        # second IB request. Genuinely-unqualified contracts (conId=0 and
+        # non-bag) skip the dedup index entirely (see
+        # SubscriptionRegistry._market_data_identity), so concurrent callers
+        # on the same blank conId stay distinct.
         # This also covers ``snapshot=True`` while a stream is live: the
         # stream keeps the pooled Ticker fresh, so reusing it is safe and
         # avoids a redundant snapshot request.
-        existing = self.wrapper.subscriptions.find_market_data(
-            contract.conId, "mktData"
+        existing = self.wrapper.subscriptions.find_market_data_for_contract(
+            contract, "mktData"
         )
         if existing is not None:
             return existing.ticker  # type: ignore[attr-defined]
@@ -1659,7 +1661,9 @@ class IB:
             Returns True if cancel was successful.
             Returns False if 'contract' was not found.
         """
-        sub = self.wrapper.subscriptions.find_market_data(contract.conId, "mktData")
+        sub = self.wrapper.subscriptions.find_market_data_for_contract(
+            contract, "mktData"
+        )
         if sub is None:
             self._logger.error(f"cancelMktData: No subscription for {contract}")
             return False
@@ -1686,10 +1690,14 @@ class IB:
             ignoreSize: Ignore bid/ask ticks that only update the size.
         """
         # Idempotent re-subscribe per (contract, tickType): a second
-        # call for the same qualified contract+kind returns the existing
-        # Ticker without issuing a duplicate IB request. Unqualified
-        # contracts skip the dedup index (see _market_data_kind).
-        existing = self.wrapper.subscriptions.find_market_data(contract.conId, tickType)
+        # call for the same qualified contract+kind (or the same
+        # spread/bag, matched by its synthetic comboLeg identity) returns
+        # the existing Ticker without issuing a duplicate IB request.
+        # Genuinely-unqualified contracts skip the dedup index (see
+        # _market_data_identity).
+        existing = self.wrapper.subscriptions.find_market_data_for_contract(
+            contract, tickType
+        )
         if existing is not None:
             return existing.ticker  # type: ignore[attr-defined]
 
@@ -1719,7 +1727,9 @@ class IB:
             Returns True if cancel was successful.
             Returns False if 'contract' was not found.
         """
-        sub = self.wrapper.subscriptions.find_market_data(contract.conId, tickType)
+        sub = self.wrapper.subscriptions.find_market_data_for_contract(
+            contract, tickType
+        )
         if sub is None:
             self._logger.error(
                 f"cancelTickByTickData: No subscription for {contract} / {tickType}"
@@ -1771,8 +1781,8 @@ class IB:
         # Idempotent re-subscribe: a second reqMktDepth on the same
         # qualified contract returns the existing Ticker without issuing
         # a duplicate request.
-        existing = self.wrapper.subscriptions.find_market_data(
-            contract.conId, "mktDepth"
+        existing = self.wrapper.subscriptions.find_market_data_for_contract(
+            contract, "mktDepth"
         )
         if existing is not None:
             return existing.ticker  # type: ignore[attr-defined]
@@ -1780,7 +1790,7 @@ class IB:
         reqId = self.client.getReqId()
         ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
         # Order matters: ``add`` may raise (e.g. if a concurrent caller
-        # somehow registered the same ``(conId, "mktDepth")`` between
+        # somehow registered the same ``(identity, "mktDepth")`` between
         # the dedup check above and this point). Register the
         # subscription BEFORE wiping the live shared Ticker's DOM
         # state so a failed registration does not leave the Ticker
@@ -1808,7 +1818,9 @@ class IB:
             contract: The exact contract object that was used to
                 subscribe with.
         """
-        sub = self.wrapper.subscriptions.find_market_data(contract.conId, "mktDepth")
+        sub = self.wrapper.subscriptions.find_market_data_for_contract(
+            contract, "mktDepth"
+        )
         if sub is None:
             self._logger.error(f"cancelMktDepth: No subscription for {contract}")
             return

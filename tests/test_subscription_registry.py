@@ -21,7 +21,7 @@ from ib_async._subscriptions import (
     SubscriptionRegistry,
     TickByTickSub,
 )
-from ib_async.contract import Stock
+from ib_async.contract import Bag, ComboLeg, Stock
 from ib_async.objects import (
     PnL,
     PnLSingle,
@@ -244,6 +244,82 @@ def test_close_does_not_set_done_on_shared_ticker():
 
     # The shared Ticker's updateEvent must still be live for tickByTick.
     assert ticker.updateEvent.done() is False
+
+
+# ---- bag / spread contracts (conId == 0) -----------------------------------
+
+
+def _bag(*leg_conIds: int) -> Bag:
+    """A spread/combo contract. Bags always carry ``conId == 0`` and are
+    identified by their comboLegs (see ``Contract.__hash__``)."""
+    legs = [
+        ComboLeg(conId=c, ratio=1, action="BUY", exchange="SMART") for c in leg_conIds
+    ]
+    return Bag(symbol="SPX", exchange="SMART", currency="USD", comboLegs=legs)
+
+
+def test_bag_market_data_is_indexed_and_findable_by_contract():
+    """A bag has conId==0 but must still be indexed — via its synthetic
+    comboLeg identity — so it can be deduped and cancelled by contract."""
+    bag = _bag(111, 222)
+    sub = MktDataSub(reqId=200, contract=bag, ticker=_ticker(bag))
+
+    reg = SubscriptionRegistry()
+    reg.add(sub)
+
+    assert reg.find_market_data_for_contract(bag, "mktData") is sub
+    # The raw-conId entry point can never find a bag (every bag's conId is 0).
+    assert reg.find_market_data(0, "mktData") is None
+
+
+def test_distinct_bags_do_not_collide():
+    """Two spreads with different legs are distinct subscriptions."""
+    bag_a = _bag(111, 222)
+    bag_b = _bag(333, 444)
+    reg = SubscriptionRegistry()
+    a = MktDataSub(reqId=201, contract=bag_a, ticker=_ticker(bag_a))
+    b = MktDataSub(reqId=202, contract=bag_b, ticker=_ticker(bag_b))
+    reg.add(a)
+    reg.add(b)
+
+    assert reg.find_market_data_for_contract(bag_a, "mktData") is a
+    assert reg.find_market_data_for_contract(bag_b, "mktData") is b
+
+
+def test_identical_bag_resubscribe_is_deduped():
+    """A second, separately-constructed bag with identical legs collapses
+    onto the same index entry (so ``reqMktData`` dedups it)."""
+    reg = SubscriptionRegistry()
+    reg.add(MktDataSub(reqId=203, contract=_bag(111, 222), ticker=_ticker(_bag(111))))
+    with pytest.raises(KeyError):
+        reg.add(
+            MktDataSub(reqId=204, contract=_bag(111, 222), ticker=_ticker(_bag(111)))
+        )
+
+
+def test_bag_close_removes_from_market_data_index():
+    reg, client = _registry_with_mock_client()
+    bag = _bag(111, 222)
+    sub = MktDataSub(reqId=205, contract=bag, ticker=_ticker(bag))
+    reg.add(sub)
+
+    sub.close()
+
+    client.cancelMktData.assert_called_once_with(205)
+    assert reg.find_market_data_for_contract(bag, "mktData") is None
+
+
+def test_unqualified_non_bag_contract_is_not_indexed():
+    """A genuinely-unqualified contract (conId==0, not a bag) has no stable
+    identity, so it is never indexed and unrelated callers must not collapse
+    under a shared ``(0, kind)`` key."""
+    reg = SubscriptionRegistry()
+    c0 = _stock(0)
+    reg.add(MktDataSub(reqId=206, contract=c0))
+    assert reg.find_market_data_for_contract(c0, "mktData") is None
+    # A second unqualified caller is addable — no collapse under (0, kind).
+    reg.add(MktDataSub(reqId=207, contract=_stock(0)))
+    assert len(reg) == 2
 
 
 # ---- close_all -------------------------------------------------------------
