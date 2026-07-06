@@ -675,7 +675,10 @@ class Wrapper:
         else:
             portfolioItems[contract.conId] = portfItem
 
-        self._logger.info(f"updatePortfolio: {portfItem}")
+        # Lazy %-formatting: the object repr is only rendered if INFO is
+        # actually enabled, so a WARNING-level production run pays nothing
+        # for these per-event handlers.
+        self._logger.info("updatePortfolio: %s", portfItem)
         self.ib.updatePortfolioEvent.emit(portfItem)
 
     def position(
@@ -692,7 +695,7 @@ class Wrapper:
             # else, add or replace the position in-place
             positions[contract.conId] = position
 
-        self._logger.info(f"position: {position}")
+        self._logger.info("position: %s", position)
         # Append to a live reqPositionsAsync accumulator if one is in
         # flight; the registry call is a no-op otherwise, so the live
         # position-update event below always fires.
@@ -793,7 +796,7 @@ class Wrapper:
                     serverOrder=serverOrderSnapshot,
                 )
                 self.trades[key] = trade
-                self._logger.info(f"openOrder: {trade}")
+                self._logger.info("openOrder: %s", trade)
 
             self.permId2Trade.setdefault(order.permId, trade)
             # If a reqOpenOrdersAsync / reqAllOpenOrdersAsync is currently
@@ -879,7 +882,7 @@ class Wrapper:
             if msg is not None:
                 logEntry = TradeLogEntry(self.lastTime, status, msg)
                 trade.log.append(logEntry)
-                self._logger.info(f"orderStatus: {trade}")
+                self._logger.info("orderStatus: %s", trade)
                 self.ib.orderStatusEvent.emit(trade)
                 trade.statusEvent.emit(trade)
                 if status != oldStatus:
@@ -899,7 +902,7 @@ class Wrapper:
         This wrapper handles both live fills and responses to
         reqExecutions.
         """
-        self._logger.info(f"execDetails {execution}")
+        self._logger.info("execDetails %s", execution)
         if execution.orderId == UNSET_INTEGER:
             # bug in TWS: executions of manual orders have unset value
             execution.orderId = 0
@@ -931,7 +934,7 @@ class Wrapper:
                 )
                 trade.log.append(logEntry)
                 if isLive:
-                    self._logger.info(f"execDetails: {fill}")
+                    self._logger.info("execDetails: %s", fill)
                     self.ib.execDetailsEvent.emit(trade, fill)
                     trade.fillEvent(trade, fill)
 
@@ -951,7 +954,7 @@ class Wrapper:
         fill = self.fills.get(commissionReport.execId)
         if fill:
             report = dataclassUpdate(fill.commissionReport, commissionReport)
-            self._logger.info(f"commissionReport: {report}")
+            self._logger.info("commissionReport: %s", report)
             trade = self.permId2Trade.get(fill.execution.permId)
             if trade:
                 self.ib.commissionReportEvent.emit(trade, fill, report)
