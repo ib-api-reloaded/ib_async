@@ -4,6 +4,7 @@ import asyncio
 import datetime as dt
 import logging
 import math
+import os
 import signal
 import sys
 import time
@@ -239,40 +240,87 @@ def allowCtrlC():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
-def logToFile(path, level=logging.INFO):
-    """Create a log handler that logs to the given file."""
-    logger = logging.getLogger()
-    if logger.handlers:
-        logging.getLogger("ib_async").setLevel(level)
-    else:
-        logger.setLevel(level)
+# Every ib_async module logs under this namespace (``ib_async.client``,
+# ``ib_async.wrapper``, ...). Attaching handlers here — never to the root
+# logger — keeps the library from capturing an application's unrelated log
+# records while still catching all of ib_async's own output.
+_LOGGER_NAME = "ib_async"
 
-    formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
-    handler = logging.FileHandler(path)
-    handler.setFormatter(formatter)
+# Default line format shared by :func:`logToFile` and :func:`logToConsole`.
+_LOG_FORMAT = "%(asctime)s %(name)s %(levelname)s %(message)s"
+
+
+def _existingHandler(match) -> bool:
+    """True if a handler satisfying ``match`` is already attached to the
+    ib_async logger or to the root logger.
+
+    Root is included because ib_async records propagate up to it: a handler
+    on either logger already covers our output, so adding another would
+    double-write. This is what makes repeat :func:`logToFile` /
+    :func:`logToConsole` calls idempotent.
+    """
+    ibLogger = logging.getLogger(_LOGGER_NAME)
+    rootLogger = logging.getLogger()
+    return any(match(h) for h in (*ibLogger.handlers, *rootLogger.handlers))
+
+
+def _attachHandler(handler, level, fmt) -> None:
+    """Attach ``handler`` to the ib_async logger at ``level``.
+
+    Handlers land on the ``ib_async`` logger rather than the root logger so
+    only the library's own records are captured. Propagation is left
+    enabled, so an application that configures the root logger still
+    receives ib_async records too.
+    """
+    logger = logging.getLogger(_LOGGER_NAME)
+    logger.setLevel(level)
+    handler.setFormatter(logging.Formatter(fmt or _LOG_FORMAT))
     logger.addHandler(handler)
 
 
-def logToConsole(level=logging.INFO):
-    """Create a log handler that logs to the console."""
-    logger = logging.getLogger()
-    stdHandlers = [
-        h
-        for h in logger.handlers
-        if type(h) is logging.StreamHandler and h.stream is sys.stderr
-    ]
+def logToFile(path, level=logging.INFO, fmt=None):
+    """Log ib_async records to ``path``.
 
-    if stdHandlers:
-        # if a standard stream handler already exists, use it and
-        # set the log level for the ib_async namespace only
-        logging.getLogger("ib_async").setLevel(level)
-    else:
-        # else create a new handler
-        logger.setLevel(level)
-        formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
-        handler = logging.StreamHandler()
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+    The file handler is attached to the ``ib_async`` logger, not the root
+    logger, so only the library's own records are written — an
+    application's other logs are not teed into the file. Idempotent: a
+    repeat call for the same path does not stack a second handler.
+
+    Args:
+        path: Destination log file.
+        level: Level for the ``ib_async`` logger (default ``INFO``).
+        fmt: Optional ``logging`` format string; defaults to the shared
+            ib_async format.
+    """
+    target = os.path.abspath(path)
+    if _existingHandler(
+        lambda h: type(h) is logging.FileHandler and h.baseFilename == target
+    ):
+        logging.getLogger(_LOGGER_NAME).setLevel(level)
+        return
+    _attachHandler(logging.FileHandler(path), level, fmt)
+
+
+def logToConsole(level=logging.INFO, fmt=None):
+    """Log ib_async records to the console (stderr).
+
+    The stream handler is attached to the ``ib_async`` logger, not the root
+    logger, so only the library's own records are printed. Idempotent, and
+    a no-op (handler-wise) when a stderr handler already exists on the
+    ``ib_async`` logger or on root — records propagate up, so a second one
+    would double-print.
+
+    Args:
+        level: Level for the ``ib_async`` logger (default ``INFO``).
+        fmt: Optional ``logging`` format string; defaults to the shared
+            ib_async format.
+    """
+    if _existingHandler(
+        lambda h: type(h) is logging.StreamHandler and h.stream is sys.stderr
+    ):
+        logging.getLogger(_LOGGER_NAME).setLevel(level)
+        return
+    _attachHandler(logging.StreamHandler(), level, fmt)
 
 
 def isNan(x: float) -> bool:
