@@ -24,10 +24,14 @@ firing in observed-on-the-wire orders, including:
 
 from __future__ import annotations
 
+import datetime
 import logging
 from decimal import Decimal
 
 import ib_async as ibi
+from ib_async._requests import ReqIdKey
+
+EXECUTION_TIME = datetime.datetime(2025, 1, 1, 9, 30, tzinfo=datetime.UTC)
 
 
 def _seedPlacedTrade(ib: ibi.IB, *, orderId: int, total: str = "100"):
@@ -223,8 +227,8 @@ def test_orderStatus_status_transitions_emit_correct_terminal_event():
     ib = ibi.IB()
     ib.wrapper.clientId = 0
     _, trade = _seedPlacedTrade(ib, orderId=2)
-    seenFilled: list = []
-    seenCancelled: list = []
+    seenFilled: list[ibi.Trade] = []
+    seenCancelled: list[ibi.Trade] = []
     trade.filledEvent += lambda t: seenFilled.append(t)
     trade.cancelledEvent += lambda t: seenCancelled.append(t)
 
@@ -429,7 +433,7 @@ def test_execDetails_then_commissionReport_pairs_on_fill():
     contract, trade = _seedPlacedTrade(ib, orderId=4)
     ib.wrapper.permId2Trade[45] = trade
 
-    seenComm: list = []
+    seenComm: list[tuple[ibi.Trade, ibi.Fill, ibi.CommissionReport]] = []
     ib.commissionReportEvent += lambda t, f, r: seenComm.append((t, f, r))
 
     execId = "exec-normal-order"
@@ -440,7 +444,7 @@ def test_execDetails_then_commissionReport_pairs_on_fill():
         orderId=4,
         shares=Decimal(10),
         price=Decimal(100),
-        time="20250101 09:30:00",
+        time=EXECUTION_TIME,
     )
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
     assert len(trade.fills) == 1
@@ -470,7 +474,7 @@ def test_execDetails_without_commissionReport_keeps_default_empty():
         orderId=5,
         shares=Decimal(5),
         price=Decimal(99),
-        time="20250101 09:30:00",
+        time=EXECUTION_TIME,
     )
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
 
@@ -498,11 +502,94 @@ def test_duplicate_execId_does_not_double_append_to_trade_fills():
         orderId=6,
         shares=Decimal(10),
         price=Decimal(100),
-        time="20250101 09:30:00",
+        time=EXECUTION_TIME,
     )
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
     ib.wrapper.execDetails(reqId=99, contract=contract, execution=execution)
     assert len(trade.fills) == 1
+
+
+def test_historical_execution_and_commission_do_not_emit_live_events():
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    contract, trade = _seedPlacedTrade(ib, orderId=60)
+    ib.wrapper.permId2Trade[160] = trade
+    ib.wrapper.requests.open(ReqIdKey(600))
+
+    seen_exec: list[tuple[ibi.Trade, ibi.Fill]] = []
+    seen_fill: list[tuple[ibi.Trade, ibi.Fill]] = []
+    seen_commission: list[
+        tuple[ibi.Trade, ibi.Fill, ibi.CommissionReport]
+    ] = []
+    ib.execDetailsEvent += lambda t, f: seen_exec.append((t, f))
+    trade.fillEvent += lambda t, f: seen_fill.append((t, f))
+    ib.commissionReportEvent += lambda t, f, r: seen_commission.append((t, f, r))
+
+    execution = ibi.Execution(
+        execId="exec-history-only",
+        permId=160,
+        clientId=0,
+        orderId=60,
+        shares=Decimal(1),
+        price=Decimal(100),
+        time=EXECUTION_TIME,
+    )
+    ib.wrapper.execDetails(reqId=600, contract=contract, execution=execution)
+    ib.wrapper.commissionReport(
+        ibi.CommissionReport(
+            execId=execution.execId,
+            commissionAndFees=Decimal("0.25"),
+            currency="USD",
+        )
+    )
+
+    assert len(trade.fills) == 1
+    assert seen_exec == []
+    assert seen_fill == []
+    assert seen_commission == []
+
+
+def test_live_execution_is_emitted_once_when_history_arrives_first():
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    contract, trade = _seedPlacedTrade(ib, orderId=61)
+    ib.wrapper.permId2Trade[161] = trade
+    ib.wrapper.requests.open(ReqIdKey(601))
+
+    seen_exec: list[tuple[ibi.Trade, ibi.Fill]] = []
+    seen_fill: list[tuple[ibi.Trade, ibi.Fill]] = []
+    seen_commission: list[
+        tuple[ibi.Trade, ibi.Fill, ibi.CommissionReport]
+    ] = []
+    ib.execDetailsEvent += lambda t, f: seen_exec.append((t, f))
+    trade.fillEvent += lambda t, f: seen_fill.append((t, f))
+    ib.commissionReportEvent += lambda t, f, r: seen_commission.append((t, f, r))
+
+    execution = ibi.Execution(
+        execId="exec-history-live-race",
+        permId=161,
+        clientId=0,
+        orderId=61,
+        shares=Decimal(1),
+        price=Decimal(100),
+        time=EXECUTION_TIME,
+    )
+    ib.wrapper.execDetails(reqId=601, contract=contract, execution=execution)
+    ib.wrapper.execDetailsEnd(601)
+    ib.wrapper.execDetails(reqId=999, contract=contract, execution=execution)
+    ib.wrapper.execDetails(reqId=999, contract=contract, execution=execution)
+    ib.wrapper.commissionReport(
+        ibi.CommissionReport(
+            execId=execution.execId,
+            commissionAndFees=Decimal("0.25"),
+            currency="USD",
+        )
+    )
+
+    assert len(trade.fills) == 1
+    assert len(seen_exec) == 1
+    assert len(seen_fill) == 1
+    assert len(seen_commission) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -530,7 +617,7 @@ def test_orderStatus_total_consistent_with_trade_filled_remaining():
             orderId=8,
             shares=Decimal(40),
             price=Decimal(100),
-            time="20250101 09:30:00",
+            time=EXECUTION_TIME,
         ),
     )
     ib.wrapper.orderStatus(
@@ -592,7 +679,7 @@ def test_oca_group_ids_round_trip_on_each_order():
     this for OCA to work server-side.
     """
     ib = ibi.IB()
-    orders = [
+    orders: list[ibi.Order] = [
         ibi.LimitOrder("BUY", 1, 100),
         ibi.LimitOrder("BUY", 1, 99),
         ibi.LimitOrder("BUY", 1, 98),
@@ -632,7 +719,7 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
                 orderId=13,
                 shares=Decimal(sharesStr),
                 price=Decimal(100),
-                time="20250101 09:30:00",
+                time=EXECUTION_TIME,
             ),
         )
         ib.wrapper.commissionReport(

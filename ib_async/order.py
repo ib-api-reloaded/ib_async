@@ -399,12 +399,18 @@ class OrderStatus:
     Cancelled: ClassVar[str] = "Cancelled"
     Filled: ClassVar[str] = "Filled"
     Inactive: ClassVar[str] = "Inactive"
+    Disconnected: ClassVar[str] = "Disconnected"
     ValidationError: ClassVar[str] = "ValidationError"
 
     # order has either been completed, cancelled, or destroyed by IBKR's risk management
     DoneStates: ClassVar[frozenset[str]] = frozenset(
         ["Filled", "Cancelled", "ApiCancelled", "Inactive"]
     )
+
+    # Local transport loss cannot prove whether a remotely working order
+    # filled, remained active, or was cancelled. Keep this distinct from
+    # broker-reported Inactive, which is a terminal rejection.
+    UncertainStates: ClassVar[frozenset[str]] = frozenset(["Disconnected"])
 
     # order is capable of executing at sometime in the future
     ActiveStates: ClassVar[frozenset[str]] = frozenset(
@@ -591,24 +597,24 @@ class OrderStateNumeric(OrderState):
 
     state_numeric: OrderStateNumeric = state.numeric(digits=2)"""
 
-    initMarginBefore: float | None = None  # type: ignore
-    maintMarginBefore: float | None = None  # type: ignore
-    equityWithLoanBefore: float | None = None  # type: ignore
-    initMarginChange: float | None = None  # type: ignore
-    maintMarginChange: float | None = None  # type: ignore
-    equityWithLoanChange: float | None = None  # type: ignore
-    initMarginAfter: float | None = None  # type: ignore
-    maintMarginAfter: float | None = None  # type: ignore
-    equityWithLoanAfter: float | None = None  # type: ignore
-    initMarginBeforeOutsideRTH: float | None = None  # type: ignore
-    maintMarginBeforeOutsideRTH: float | None = None  # type: ignore
-    equityWithLoanBeforeOutsideRTH: float | None = None  # type: ignore
-    initMarginChangeOutsideRTH: float | None = None  # type: ignore
-    maintMarginChangeOutsideRTH: float | None = None  # type: ignore
-    equityWithLoanChangeOutsideRTH: float | None = None  # type: ignore
-    initMarginAfterOutsideRTH: float | None = None  # type: ignore
-    maintMarginAfterOutsideRTH: float | None = None  # type: ignore
-    equityWithLoanAfterOutsideRTH: float | None = None  # type: ignore
+    initMarginBefore: float | None = None  # type: ignore[assignment]
+    maintMarginBefore: float | None = None  # type: ignore[assignment]
+    equityWithLoanBefore: float | None = None  # type: ignore[assignment]
+    initMarginChange: float | None = None  # type: ignore[assignment]
+    maintMarginChange: float | None = None  # type: ignore[assignment]
+    equityWithLoanChange: float | None = None  # type: ignore[assignment]
+    initMarginAfter: float | None = None  # type: ignore[assignment]
+    maintMarginAfter: float | None = None  # type: ignore[assignment]
+    equityWithLoanAfter: float | None = None  # type: ignore[assignment]
+    initMarginBeforeOutsideRTH: float | None = None  # type: ignore[assignment]
+    maintMarginBeforeOutsideRTH: float | None = None  # type: ignore[assignment]
+    equityWithLoanBeforeOutsideRTH: float | None = None  # type: ignore[assignment]
+    initMarginChangeOutsideRTH: float | None = None  # type: ignore[assignment]
+    maintMarginChangeOutsideRTH: float | None = None  # type: ignore[assignment]
+    equityWithLoanChangeOutsideRTH: float | None = None  # type: ignore[assignment]
+    initMarginAfterOutsideRTH: float | None = None  # type: ignore[assignment]
+    maintMarginAfterOutsideRTH: float | None = None  # type: ignore[assignment]
+    equityWithLoanAfterOutsideRTH: float | None = None  # type: ignore[assignment]
     commissionAndFees: float | None = None  # type: ignore[assignment]
     minCommission: float | None = None  # type: ignore[assignment]
     maxCommission: float | None = None  # type: ignore[assignment]
@@ -701,6 +707,10 @@ class Trade:
     def isDone(self) -> bool:
         """True if completely filled or cancelled, false otherwise."""
         return self.orderStatus.status in OrderStatus.DoneStates
+
+    def isUncertain(self) -> bool:
+        """True when local state cannot prove the broker order outcome."""
+        return self.orderStatus.status in OrderStatus.UncertainStates
 
     def filled(self) -> Decimal:
         """Number of shares filled across all observed executions.
