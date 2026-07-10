@@ -344,10 +344,10 @@ class Wrapper:
     # reference back to IB so wrapper can access API methods
     ib: "IB"
 
-    accountValues: dict[tuple, AccountValue] = field(init=False)
+    accountValues: dict[tuple[str, str, str, str], AccountValue] = field(init=False)
     """ (account, tag, currency, modelCode) -> AccountValue """
 
-    acctSummary: dict[tuple, AccountValue] = field(init=False)
+    acctSummary: dict[tuple[str, str, str], AccountValue] = field(init=False)
     """ (account, tag, currency) -> AccountValue """
 
     portfolio: dict[str, dict[int, PortfolioItem]] = field(init=False)
@@ -364,6 +364,9 @@ class Wrapper:
 
     fills: dict[str, Fill] = field(init=False)
     """ execId -> Fill """
+
+    _liveExecIds: set[str] = field(init=False)
+    """Executions already emitted through the live event surface."""
 
     # commissionReport callbacks usually arrive AFTER their paired
     # execDetails, but mid-connection races (especially across cross-client
@@ -436,6 +439,7 @@ class Wrapper:
         self.trades = {}
         self.permId2Trade = {}
         self.fills = {}
+        self._liveExecIds = set()
         self._pendingCommissionReports = OrderedDict()
         self.newsTicks = []
         self.msgId2NewsBulletin = {}
@@ -477,7 +481,7 @@ class Wrapper:
            Ticker we know about. Tickers are shared across mktData /
            tickByTick / mktDepth subscriptions and are therefore not
            owned by any individual Subscription.
-        4. For every still-live trade, emit a final ``Inactive``
+        4. For every still-live trade, emit a final ``Disconnected``
            transition + audit log entry, then set done on every
            per-trade event. Trades that were already in a done state
            keep their terminal status; we only set done on their events.
@@ -514,9 +518,9 @@ class Wrapper:
         # ``self.trades`` mid-iteration and raise RuntimeError.
         for trade in list(self.trades.values()):
             if not trade.isDone():
-                trade.orderStatus.status = OrderStatus.Inactive
+                trade.orderStatus.status = OrderStatus.Disconnected
                 trade.log.append(
-                    TradeLogEntry(now, OrderStatus.Inactive, "Disconnected")
+                    TradeLogEntry(now, OrderStatus.Disconnected, "Disconnected")
                 )
                 self.ib.orderStatusEvent.emit(trade)
                 trade.statusEvent.emit(trade)
@@ -1043,9 +1047,15 @@ class Wrapper:
         parkedReport = self._pendingCommissionReports.pop(execId, None)
         fill = Fill(contract, execution, parkedReport or CommissionReport(), time)
         if execId not in self.fills:
-            # first time we see this execution so add it
             self.fills[execId] = fill
-            if trade:
+        else:
+            fill = self.fills[execId]
+
+        if trade:
+            already_attached = any(
+                existing.execution.execId == execId for existing in trade.fills
+            )
+            if not already_attached:
                 trade.fills.append(fill)
                 logEntry = TradeLogEntry(
                     time,
@@ -1053,15 +1063,20 @@ class Wrapper:
                     f"Fill {execution.shares}@{execution.price}",
                 )
                 trade.log.append(logEntry)
-                if isLive:
-                    self._logger.info("execDetails: %s", fill)
-                    self.ib.execDetailsEvent.emit(trade, fill)
-                    trade.fillEvent(trade, fill)
-                    # Out-of-order commissionReport arrived first; emit
-                    # the paired event now that we have the fill.
-                    if parkedReport is not None:
-                        self.ib.commissionReportEvent.emit(trade, fill, parkedReport)
-                        trade.commissionReportEvent.emit(trade, fill, parkedReport)
+
+            # A request response and a live execution can race for the same
+            # execId. Historical ingestion owns storage, while this set owns
+            # live delivery, so either arrival order emits the live fact once.
+            if isLive and execId not in self._liveExecIds:
+                self._liveExecIds.add(execId)
+                self._logger.info("execDetails: %s", fill)
+                self.ib.execDetailsEvent.emit(trade, fill)
+                trade.fillEvent(trade, fill)
+                # Out-of-order commissionReport arrived first; emit the paired
+                # event now that the live fill and Trade are both known.
+                if parkedReport is not None:
+                    self.ib.commissionReportEvent.emit(trade, fill, parkedReport)
+                    trade.commissionReportEvent.emit(trade, fill, parkedReport)
 
         if not isLive:
             self.requests.append(ReqIdKey(reqId), fill)
@@ -1083,12 +1098,12 @@ class Wrapper:
             report = dataclassUpdate(fill.commissionReport, commissionReport)
             self._logger.info("commissionReport: %s", report)
             trade = self.permId2Trade.get(fill.execution.permId)
-            if trade:
+            if trade and commissionReport.execId in self._liveExecIds:
                 self.ib.commissionReportEvent.emit(trade, fill, report)
                 trade.commissionReportEvent.emit(trade, fill, report)
             else:
-                # this is not a live execution and the order was filled
-                # before this connection started
+                # Historical request responses update the cached Fill but never
+                # enter the live commission event surface.
                 pass
         else:
             # Two cases land here:
@@ -1507,14 +1522,14 @@ class Wrapper:
                 d = dict(
                     t.split("=")
                     for t in value.split(";")
-                    if t  # type: ignore
-                )  # type: ignore
+                    if t
+                )
                 for k, v in d.items():
                     with suppress(ValueError):
                         if v == "-99999.99":
                             v = "nan"
-                        d[k] = float(v)  # type: ignore
-                        d[k] = int(v)  # type: ignore
+                        d[k] = float(v)  # type: ignore[assignment]
+                        d[k] = int(v)  # type: ignore[assignment]
                 ticker.fundamentalRatios = FundamentalRatios(**d)
             elif tickType in RT_VOLUME_TICK_MAP:
                 # RT Volume or RT Trade Volume (O(1) dict lookup + helper)
@@ -1574,10 +1589,8 @@ class Wrapper:
         )
 
         if tickType in _HALTED_TICKS:
-            try:
+            with suppress(ValueError):
                 value = HaltedStatus(int(value))
-            except ValueError:
-                pass
 
         setattr(ticker, GENERIC_TICK_MAP[tickType], value)
 

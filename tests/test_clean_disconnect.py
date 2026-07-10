@@ -134,7 +134,7 @@ def test_disconnect_sets_done_on_pooled_ticker_update_events():
 # ---- trades ----------------------------------------------------------------
 
 
-def test_disconnect_transitions_live_trade_to_inactive():
+def test_disconnect_transitions_live_trade_to_nonterminal_disconnected():
     ib = ibi.IB()
     ib.wrapper.clientId = 0
     contract = _stock(1)
@@ -146,18 +146,23 @@ def test_disconnect_transitions_live_trade_to_inactive():
     )
     ib.wrapper.trades[(0, 1)] = trade
 
-    statuses: list = []
+    statuses: list[Trade] = []
     trade.statusEvent += statuses.append
 
     ib.wrapper.connectionClosed()
 
     # Final transition delivered before set_done.
-    assert trade.orderStatus.status == OrderStatus.Inactive
+    assert trade.orderStatus.status == OrderStatus.Disconnected
+    assert trade.isDone() is False
+    assert trade.isActive() is False
+    assert trade.isUncertain() is True
+    assert OrderStatus.Disconnected not in OrderStatus.DoneStates
+    assert OrderStatus.Inactive in OrderStatus.DoneStates
     assert len(statuses) == 1
-    assert statuses[0].orderStatus.status == OrderStatus.Inactive
+    assert statuses[0].orderStatus.status == OrderStatus.Disconnected
     # Audit log captured the transition.
     assert any(
-        entry.message == "Disconnected" and entry.status == OrderStatus.Inactive
+        entry.message == "Disconnected" and entry.status == OrderStatus.Disconnected
         for entry in trade.log
     )
 
