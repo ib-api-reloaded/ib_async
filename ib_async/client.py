@@ -980,7 +980,6 @@ class Client:
             contract,
             optionPrice,
             underPrice,
-            len(implVolOptions),
             implVolOptions,
         )
 
@@ -994,7 +993,6 @@ class Client:
             contract,
             volatility,
             underPrice,
-            len(optPrcOptions),
             optPrcOptions,
         )
 
