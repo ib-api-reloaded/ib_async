@@ -1,6 +1,7 @@
 """Utilities."""
 
 import asyncio
+import contextlib
 import datetime as dt
 import logging
 import math
@@ -131,9 +132,9 @@ def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
         raise TypeError(f"Object {obj} is not a dataclass")
 
     for srcObj in srcObjs:
-        obj.__dict__.update(dataclassAsDict(srcObj))  # type: ignore
+        obj.__dict__.update(dataclassAsDict(srcObj))  # type: ignore[union-attr]
 
-    obj.__dict__.update(**kwargs)  # type: ignore
+    obj.__dict__.update(**kwargs)  # type: ignore[union-attr]
     return obj
 
 
@@ -388,21 +389,16 @@ def run(*awaitables: Awaitable, timeout: float | None = None):
 
         loop.run_forever()
         result = None
-        all_tasks = asyncio.all_tasks(loop)  # type: ignore
+        all_tasks = asyncio.all_tasks(loop)
 
         if all_tasks:
             # cancel pending tasks
             f = asyncio.gather(*all_tasks)
             f.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 loop.run_until_complete(f)
-            except asyncio.CancelledError:
-                pass
     else:
-        if len(awaitables) == 1:
-            future = awaitables[0]
-        else:
-            future = asyncio.gather(*awaitables)
+        future = awaitables[0] if len(awaitables) == 1 else asyncio.gather(*awaitables)
 
         if timeout:
             future = asyncio.wait_for(future, timeout)
@@ -611,7 +607,7 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
         qloop.exec() if qtLib == "PyQt6" else qloop.exec_()
         timer.stop()
         stack.append((qloop, timer))
-        qApp.processEvents()  # type: ignore
+        qApp.processEvents()  # type: ignore[name-defined]
 
     if qtLib not in {"PyQt5", "PyQt6", "PySide2", "PySide6"}:
         raise RuntimeError(f"Unknown Qt library: {qtLib}")
@@ -620,9 +616,9 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
     qc = import_module(qtLib + ".QtCore")
     qw = import_module(qtLib + ".QtWidgets")
     global qApp
-    qApp = (  # type: ignore
-        qw.QApplication.instance() or qw.QApplication(sys.argv)  # type: ignore
-    )  # type: ignore
+    qApp = (  # type: ignore[name-defined]
+        qw.QApplication.instance() or qw.QApplication(sys.argv)
+    )
     loop = getLoop()
     stack: list = []
     qt_step()

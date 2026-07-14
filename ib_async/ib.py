@@ -1,6 +1,7 @@
 """High-level interface to Interactive Brokers."""
 
 import asyncio
+import contextlib
 import copy
 import datetime
 import logging
@@ -351,10 +352,8 @@ class IB:
         # GC'd never-fully-handshaken IB (the most common test shape)
         # does not pollute the warning stream and confuse pytest's
         # traceback rendering.
-        try:
+        with contextlib.suppress(Exception):
             self.disconnect()
-        except Exception:
-            pass
 
     def __enter__(self):
         return self
@@ -449,7 +448,7 @@ class IB:
         # it snapshots ``wasReady`` before flipping ``connState`` to
         # DISCONNECTED, closes the socket, then calls
         # ``wrapper.connectionClosed`` (which fails in-flight requests,
-        # closes Subscriptions, transitions live trades to Inactive, and
+        # closes Subscriptions, transitions live trades to Disconnected, and
         # finally calls ``wrapper.reset``). Calling
         # ``wrapper.connectionClosed`` here as well would double-fire
         # ``globalErrorEvent`` and double-reset the wrapper because
@@ -2412,7 +2411,7 @@ class IB:
                     possibles = [
                         details.contract
                         for details in detailsList
-                        if contract.secType == details.contract.secType  # type: ignore
+                        if contract.secType == details.contract.secType  # type: ignore[union-attr]
                     ]
 
                     # if our match instrument type filter resolved to only _one_ matching
@@ -2421,7 +2420,7 @@ class IB:
                         c = possibles[0]
                         if contract.exchange == "SMART":
                             # Allow contracts to become more generic if SMART requested as input
-                            c.exchange = contract.exchange  # type: ignore
+                            c.exchange = contract.exchange  # type: ignore[union-attr]
 
                         util.dataclassUpdate(contract, c)
                         result.append(contract)

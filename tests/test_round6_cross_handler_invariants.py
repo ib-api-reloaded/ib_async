@@ -518,9 +518,7 @@ def test_historical_execution_and_commission_do_not_emit_live_events():
 
     seen_exec: list[tuple[ibi.Trade, ibi.Fill]] = []
     seen_fill: list[tuple[ibi.Trade, ibi.Fill]] = []
-    seen_commission: list[
-        tuple[ibi.Trade, ibi.Fill, ibi.CommissionReport]
-    ] = []
+    seen_commission: list[tuple[ibi.Trade, ibi.Fill, ibi.CommissionReport]] = []
     ib.execDetailsEvent += lambda t, f: seen_exec.append((t, f))
     trade.fillEvent += lambda t, f: seen_fill.append((t, f))
     ib.commissionReportEvent += lambda t, f, r: seen_commission.append((t, f, r))
@@ -558,9 +556,7 @@ def test_live_execution_is_emitted_once_when_history_arrives_first():
 
     seen_exec: list[tuple[ibi.Trade, ibi.Fill]] = []
     seen_fill: list[tuple[ibi.Trade, ibi.Fill]] = []
-    seen_commission: list[
-        tuple[ibi.Trade, ibi.Fill, ibi.CommissionReport]
-    ] = []
+    seen_commission: list[tuple[ibi.Trade, ibi.Fill, ibi.CommissionReport]] = []
     ib.execDetailsEvent += lambda t, f: seen_exec.append((t, f))
     trade.fillEvent += lambda t, f: seen_fill.append((t, f))
     ib.commissionReportEvent += lambda t, f, r: seen_commission.append((t, f, r))
