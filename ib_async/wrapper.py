@@ -924,6 +924,25 @@ class Wrapper:
         # path. Fall back to ``status`` to remain backwards-compatible
         # with older servers / decoders that only fill the latter.
         terminalStatus = orderState.completedStatus or orderState.status
+        if terminalStatus not in OrderStatus.DoneStates:
+            # The completed-orders channel is terminal BY DEFINITION. An
+            # unset or unrecognized status string must never let this trade
+            # masquerade as an open working order in openTrades()/openOrders()
+            # forever — it would render as a permanently uncancellable "open"
+            # order in every consumer. Preserve the raw value in the trade
+            # log; classify as Inactive (no longer active at the broker).
+            self._logger.warning(
+                "completedOrder: permId=%s reported non-terminal status %r; "
+                "classifying Inactive",
+                order.permId,
+                terminalStatus,
+            )
+            rawStatus = terminalStatus
+            statusNormalized = True
+            terminalStatus = OrderStatus.Inactive
+        else:
+            rawStatus = ""
+            statusNormalized = False
         existing = self.permId2Trade.get(order.permId)
         if existing is not None:
             # An ``openOrder`` snapshot for this permId already wired up
@@ -934,15 +953,30 @@ class Wrapper:
             # ``cancelledEvent`` / ``filledEvent`` — those fired on the
             # original transition (or will fire when the matching
             # ``orderStatus`` callback arrives in the same wave).
-            if terminalStatus and existing.orderStatus.status != terminalStatus:
+            if existing.orderStatus.status != terminalStatus:
                 existing.orderStatus.status = terminalStatus
             trade = existing
         else:
             contract = Contract.recreate(contract)
-            orderStatus = OrderStatus(orderId=order.orderId, status=terminalStatus)
+            orderStatus = OrderStatus(
+                orderId=order.orderId,
+                status=terminalStatus,
+                # Carry the owning client so consumers that adjudicate manual
+                # operations by ``orderStatus.clientId`` (the live-update
+                # convention) see the true owner instead of a default 0.
+                clientId=order.clientId,
+            )
             trade = Trade(contract, order, orderStatus, [], [])
             self.trades[order.permId] = trade
             self.permId2Trade[order.permId] = trade
+        if statusNormalized:
+            trade.log.append(
+                TradeLogEntry(
+                    self.lastTime,
+                    terminalStatus,
+                    f"completed-order replay reported raw status {rawStatus!r}",
+                )
+            )
 
         # No-op if the request was already settled (e.g. a stray second
         # wave after completedOrdersEnd already fired), instead of the
