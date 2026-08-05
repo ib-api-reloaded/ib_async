@@ -687,8 +687,11 @@ class Client:
         # without this reset a TWS-populated value would ride out on every modify and the server
         # would reject it.
         if not order.orderType.startswith("VOL"):
-            # ONLY volatility orders can have 'volatility' set when sending API data.
-            order.volatility = UNSET_DOUBLE
+            # ONLY volatility orders can have 'volatility' set when sending API
+            # data. None is the v3 dialect's unset: the proto guard skips the
+            # field and the binary handler emits an empty string — and the
+            # operator-visible Order object never carries a sentinel float.
+            order.volatility = None
 
         # On TWS / IB Gateway server versions that support protobuf for
         # placeOrder (gate 203), emit a ``PlaceOrderRequest`` proto and

@@ -50,3 +50,23 @@ def test_unset_integer_sentinel_becomes_the_field_default() -> None:
     order.volatilityType = str(UNSET_INTEGER)
     _parse(order)
     assert order.volatilityType is None
+
+
+def test_place_order_never_stamps_a_sentinel_onto_the_callers_order() -> None:
+    """client.placeOrder resets non-VOL volatility to None (the v3 unset),
+    never to the UNSET_DOUBLE float — the operator-visible Order object must
+    not carry wire sentinels."""
+
+    ib = IB()
+    client = ib.client
+    sent: list[tuple] = []
+    client._tryProto = lambda msg_id, thunk: True  # capture-side: skip the wire
+    from ib_async.contract import Future
+    from ib_async.order import LimitOrder
+
+    contract = Future(symbol="MNQ", exchange="CME", currency="USD")
+    order = LimitOrder("BUY", 1, 100.0)
+    order.volatility = UNSET_DOUBLE  # a TWS-populated cached order
+    client.placeOrder(9999, contract, order)
+    assert order.volatility is None
+    del sent
