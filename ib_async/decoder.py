@@ -1341,15 +1341,26 @@ class Decoder:
             if not v:
                 setattr(obj, name, default)
             elif typ is int:
-                setattr(obj, name, int(v))
+                iv = int(v)
+                # IBKR's UNSET_INTEGER sentinel means "field not set": in the
+                # v3 None-dialect an unset field IS its dataclass default, so
+                # the sentinel never leaks into user-visible objects.
+                setattr(obj, name, default if iv == UNSET_INTEGER else iv)
             elif typ is float:
-                setattr(obj, name, float(v))
+                fv = float(v)
+                setattr(obj, name, default if fv == UNSET_DOUBLE else fv)
             elif typ is Decimal:
                 # Wire string → ``Decimal | None``. ``safe_decimal``
                 # returns ``None`` for empty / "nan" / malformed input;
                 # callers that need a non-``None`` floor (rare) can
-                # post-process the field after ``parse()``.
-                setattr(obj, name, safe_decimal(v))
+                # post-process the field after ``parse()``. The UNSET_DOUBLE
+                # sentinel compares as float (its Decimal expansion is not
+                # textually stable on the wire).
+                try:
+                    unset = float(v) == UNSET_DOUBLE
+                except (TypeError, ValueError):
+                    unset = False
+                setattr(obj, name, default if unset else safe_decimal(v))
             else:  # bool
                 setattr(obj, name, bool(int(v)))
 
