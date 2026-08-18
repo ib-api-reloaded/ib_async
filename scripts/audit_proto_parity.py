@@ -248,6 +248,18 @@ ACCEPTED_GAPS: dict[tuple[str, str], str] = {
         "createOrderProto",
         "bondAccruedInterest",
     ): "Decimal | None; is_not_none is strictly tighter than IBKR's truthy",
+    # IBKR's ``Contract.strike`` defaults to ``UNSET_DOUBLE``, so their
+    # ``isValidFloatValue`` gate suppresses the field on every contract
+    # that has no strike. OUR domain default is ``0.0``, so the same gate
+    # emits ``strike: 0`` for strikeless contracts and the server rejects
+    # the request with ``Error 200: No security definition has been found``
+    # — it breaks every option-chain sweep, which asks for all strikes of
+    # a contract month by sending no strike at all. We suppress both
+    # "no strike" spellings; a zero-strike instrument does not exist.
+    (
+        "createContractProto",
+        "strike",
+    ): "our domain default is 0.0, IBKR's is UNSET_DOUBLE; both mean unset",
 }
 
 
