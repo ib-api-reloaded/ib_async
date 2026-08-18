@@ -32,6 +32,7 @@ from ib_async._proto.contracts import (
     createComboLeg,
     createComboLegProto,
     createContract,
+    createContractDataRequestProto,
     createContractDescription,
     createContractDetails,
     createContractDetailsFromContractData,
@@ -47,6 +48,7 @@ from ib_async.contract import (
     Stock,
     TagValue,
 )
+from ib_async.util import UNSET_DOUBLE
 
 # ---------------------------------------------------------------------------
 # DeltaNeutralContract — defended against the contributor's UnboundLocalError
@@ -457,3 +459,89 @@ def test_create_contract_description_handles_missing_inner_contract():
     assert desc.contract is not None  # default-constructed
     assert desc.contract.symbol == ""
     assert desc.derivativeSecTypes == ["STK"]
+
+
+# ---------------------------------------------------------------------------
+# Send-side "no strike" / "no last trade date" suppression
+#
+# Regression: an option-chain sweep asks the server for EVERY strike of a
+# contract month by sending a contract with no strike set. IBKR's reference
+# gates ``strike`` on ``isValidFloatValue`` because THEIR ``Contract.strike``
+# defaults to ``UNSET_DOUBLE``; ours defaults to ``0.0``, so the bare
+# sentinel check put ``strike: 0`` on the wire for every strikeless contract
+# and the server answered ``Error 200: No security definition has been found
+# for the request``. ``lastTradeDate`` is receive-only in IBKR's reference and
+# was never sent by the binary path.
+# ---------------------------------------------------------------------------
+
+
+def test_create_contract_proto_omits_strike_when_unset_for_chain_sweep():
+    # The futures-option chain request: symbol + month + exchange, no strike.
+    contract = Contract(
+        secType="FOP",
+        symbol="ES",
+        lastTradeDateOrContractMonth="202609",
+        exchange="CME",
+        currency="USD",
+    )
+    proto = createContractProto(contract)
+    assert not proto.HasField("strike")
+
+
+def test_create_contract_proto_omits_strike_at_ibkr_unset_sentinel():
+    contract = Contract(secType="STK", symbol="AAPL", strike=UNSET_DOUBLE)
+    proto = createContractProto(contract)
+    assert not proto.HasField("strike")
+
+
+def test_create_contract_proto_emits_real_strike():
+    contract = Contract(
+        secType="OPT",
+        symbol="AAPL",
+        lastTradeDateOrContractMonth="20260819",
+        strike=305.0,
+        right="C",
+    )
+    proto = createContractProto(contract)
+    assert proto.HasField("strike")
+    assert proto.strike == 305.0
+
+
+def test_create_contract_proto_still_emits_zero_conid():
+    # conId stays at IBKR's reference gate: their default IS 0, and the
+    # server reads an absent slot as UNSET_INTEGER and rejects the request.
+    contract = Contract(secType="FOP", symbol="ES", conId=0)
+    proto = createContractProto(contract)
+    assert proto.HasField("conId")
+    assert proto.conId == 0
+
+
+def test_create_contract_proto_never_sends_last_trade_date():
+    # Reusing a qualified contract to sweep a different month must not echo
+    # the qualified expiry back and contradict the requested month.
+    contract = Contract(
+        secType="FOP",
+        symbol="ES",
+        lastTradeDateOrContractMonth="202608",
+        lastTradeDate="20260918",
+        exchange="CME",
+    )
+    proto = createContractProto(contract)
+    assert not proto.HasField("lastTradeDate")
+    assert proto.lastTradeDateOrContractMonth == "202608"
+
+
+def test_contract_data_request_proto_for_chain_sweep_has_no_strike():
+    request = createContractDataRequestProto(
+        42,
+        Contract(
+            secType="FOP",
+            symbol="ES",
+            lastTradeDateOrContractMonth="202609",
+            exchange="CME",
+            currency="USD",
+        ),
+    )
+    assert request.reqId == 42
+    assert not request.contract.HasField("strike")
+    assert request.contract.secType == "FOP"

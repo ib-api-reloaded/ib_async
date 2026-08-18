@@ -616,9 +616,9 @@ def test_request_fa_below_gate_177_accepts_profile():
 
 def test_place_order_volatility_clear_applies_on_proto_path():
     """For a non-VOL order, ``placeOrder`` must reset ``order.volatility``
-    to ``UNSET_DOUBLE`` BEFORE the protobuf-gated branch — so the proto
-    converter's ``_isValidFloat`` guard skips the field. If the clear
-    lived below the proto-branch return, a TWS-populated volatility
+    to the v3 unset value (``None``) BEFORE the protobuf-gated branch — so
+    the proto converter's ``_isValidFloat`` guard skips the field. If the
+    clear lived below the proto-branch return, a TWS-populated volatility
     would echo back out on every modify and the server would reject
     the order.
     """
@@ -633,8 +633,9 @@ def test_place_order_volatility_clear_applies_on_proto_path():
 
     ib.client.placeOrder(orderId=42, contract=contract, order=order)
     # The volatility-clear ran — verifies the fix is hoisted above the
-    # proto branch.
-    assert order.volatility == UNSET_DOUBLE
+    # proto branch. The reset writes None (the v3 dialect's unset), not
+    # the sentinel float, so the operator-visible Order stays clean.
+    assert order.volatility is None
 
 
 def test_place_order_volatility_preserved_for_vol_orders():

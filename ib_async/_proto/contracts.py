@@ -250,9 +250,24 @@ def createContractProto(
         proto.secType = contract.secType
     if contract.lastTradeDateOrContractMonth:
         proto.lastTradeDateOrContractMonth = contract.lastTradeDateOrContractMonth
-    if contract.lastTradeDate:
-        proto.lastTradeDate = contract.lastTradeDate
-    if contract.strike != UNSET_DOUBLE:
+    # ``lastTradeDate`` is a RECEIVE-ONLY field. IBKR's reference
+    # ``createContractProto`` never populates it and the binary path's
+    # contract formatter never sent it either. Echoing a previously
+    # qualified contract's exact expiry back on a request contradicts
+    # ``lastTradeDateOrContractMonth`` whenever a caller reuses a
+    # qualified contract to search another month (e.g. an option-chain
+    # sweep), and the server answers ``Error 200: No security definition
+    # has been found for the request``.
+    if contract.strike not in (UNSET_DOUBLE, 0.0):
+        # IBKR's reference gates strike on ``isValidFloatValue``
+        # (``!= UNSET_DOUBLE``) because THEIR ``Contract.strike``
+        # defaults to ``UNSET_DOUBLE``. Ours defaults to ``0.0``, so the
+        # bare sentinel check emits ``strike: 0`` on every contract that
+        # has no strike — the server then searches for an instrument
+        # whose strike is literally zero and rejects the request with
+        # ``Error 200: No security definition has been found``. Both
+        # values mean "no strike" here, so both stay off the wire; a
+        # zero-strike instrument does not exist.
         proto.strike = contract.strike
     if contract.right:
         proto.right = contract.right
