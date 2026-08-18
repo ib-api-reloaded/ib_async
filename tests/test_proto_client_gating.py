@@ -215,6 +215,30 @@ def test_req_contract_details_below_gate_stays_binary():
     assert sent[0][4:].startswith(b"\x00\x00\x00\x09")  # REQ_CONTRACT_DATA=9
 
 
+def test_req_contract_details_option_chain_sweep_sends_no_strike():
+    """An option-chain sweep asks for EVERY strike of a contract month by
+    leaving strike unset. Presence is meaningful on the wire: a present
+    ``strike: 0`` asks the server for an instrument struck at zero, and it
+    answers ``Error 200: No security definition has been found for the
+    request`` — which silently killed every futures-option chain lookup.
+    """
+    ib = _ibAtVersion(205)
+    sent = _captureSend(ib)
+    contract = ibi.Contract(
+        secType="FOP",
+        symbol="ES",
+        lastTradeDateOrContractMonth="202609",
+        exchange="CME",
+        currency="USD",
+    )
+    ib.client.reqContractDetails(reqId=7, contract=contract)
+    _, body = _decodeProtoFrame(sent[0])
+    proto = ContractDataRequest_pb2.ContractDataRequest()
+    proto.ParseFromString(body)
+    assert proto.contract.secType == "FOP"
+    assert not proto.contract.HasField("strike")
+
+
 # ---------------------------------------------------------------------------
 # reqExecutions — gates at 201
 # ---------------------------------------------------------------------------
