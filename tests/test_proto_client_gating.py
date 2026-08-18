@@ -237,6 +237,37 @@ def test_req_contract_details_option_chain_sweep_sends_no_strike():
     proto.ParseFromString(body)
     assert proto.contract.secType == "FOP"
     assert not proto.contract.HasField("strike")
+    # The contract-MONTH filter is what bounds the answer to one month's
+    # expirations. It is NOT optional: an unscoped chain request makes the
+    # server enumerate years of expirations and the request never returns.
+    assert proto.contract.lastTradeDateOrContractMonth == "202609"
+
+
+def test_req_contract_details_keeps_the_month_filter_and_drops_the_resolved_expiry():
+    """``lastTradeDateOrContractMonth`` (the request's month scope) and
+    ``lastTradeDate`` (one already-resolved contract's exact expiry, gate
+    182) are different fields. The month scope MUST reach the server; the
+    resolved expiry must not — IBKR's own encoder never sends it, and on a
+    sweep of a DIFFERENT month it contradicts the scope and the server
+    answers Error 200 instead of returning the chain.
+    """
+    ib = _ibAtVersion(205)
+    sent = _captureSend(ib)
+    contract = ibi.Contract(
+        secType="FOP",
+        symbol="ES",
+        # Sweeping August...
+        lastTradeDateOrContractMonth="202608",
+        # ...with a September contract's resolved expiry still attached.
+        lastTradeDate="20260918",
+        exchange="CME",
+    )
+    ib.client.reqContractDetails(reqId=7, contract=contract)
+    _, body = _decodeProtoFrame(sent[0])
+    proto = ContractDataRequest_pb2.ContractDataRequest()
+    proto.ParseFromString(body)
+    assert proto.contract.lastTradeDateOrContractMonth == "202608"
+    assert not proto.contract.HasField("lastTradeDate")
 
 
 # ---------------------------------------------------------------------------
