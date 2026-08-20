@@ -478,9 +478,32 @@ class Decoder:
         _, reqId, startDateStr, endDateStr, numBars, *fields = fields
         get = iter(fields).__next__
 
+        start: datetime | None = None
+        end: datetime | None = None
+
         for _ in range(int(numBars)):
+            date = get()
+            if (
+                isinstance(date, str)
+                and date.count(" ") >= 2
+                and "  " not in date
+                and len(date.split(" ", 1)[0]) == 4
+            ):
+                if start is None:
+                    parsedStart = parseIBDatetime(startDateStr)
+                    parsedEnd = parseIBDatetime(endDateStr)
+                    if not isinstance(parsedStart, datetime) or not isinstance(
+                        parsedEnd, datetime
+                    ):
+                        raise ValueError(
+                            "IB formatDate=3 bars require full datetime response bounds"
+                        )
+                    start = parsedStart
+                    end = parsedEnd
+                date = parseIBDatetime(date, start=start, end=end)
+
             bar = BarData(
-                date=get(),
+                date=date,
                 open=float(get()),
                 high=float(get()),
                 low=float(get()),

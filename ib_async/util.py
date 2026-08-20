@@ -590,8 +590,69 @@ def formatIBDatetime(t: dt.date | dt.datetime | str | None) -> str:
     return s
 
 
-def parseIBDatetime(s: str) -> dt.date | dt.datetime:
-    """Parse string in IB date or datetime format to datetime."""
+def _parseIBShortDatetime(
+    s: str,
+    s0: str,
+    s1: str,
+    s2: str,
+    start: dt.datetime | None,
+    end: dt.datetime | None,
+) -> dt.datetime:
+    """Parse an IB formatDate=3 value with an explicitly supplied context."""
+    if start is None and end is None:
+        raise ValueError(
+            f"Cannot infer year for IB datetime {s!r} without a response range"
+        )
+    if start is None or end is None:
+        raise ValueError(
+            "Both start and end are required to parse an IB short datetime"
+        )
+
+    try:
+        tz = ZoneInfo(s2)
+        monthDay = dt.datetime.strptime(s0 + s1, "%m%d%H:%M:%S").replace(tzinfo=tz)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise ValueError(f"Invalid IB short datetime {s!r}") from exc
+
+    def withTimezone(value: dt.datetime) -> dt.datetime:
+        return value if value.tzinfo else value.replace(tzinfo=tz)
+
+    candidates: list[dt.datetime] = []
+    start = withTimezone(start)
+    end = withTimezone(end)
+    if start > end:
+        raise ValueError(f"Invalid IB historical date range: {start!r} > {end!r}")
+
+    for year in range(min(start.year, end.year) - 1, max(start.year, end.year) + 2):
+        try:
+            candidate = monthDay.replace(year=year)
+        except ValueError:
+            # 02/29 is only valid in leap years.
+            continue
+        if start <= candidate <= end:
+            candidates.append(candidate)
+    if len(candidates) != 1:
+        if not candidates:
+            reason = "no candidate falls within the supplied context"
+        else:
+            reason = f"{len(candidates)} candidates match the supplied context"
+        raise ValueError(f"Cannot infer year for IB datetime {s!r}: {reason}")
+
+    return candidates[0]
+
+
+def parseIBDatetime(
+    s: str,
+    *,
+    start: dt.datetime | None = None,
+    end: dt.datetime | None = None,
+) -> dt.date | dt.datetime:
+    """Parse string in IB date or datetime format to datetime.
+
+    IB's ``formatDate=3`` values contain only ``MMDD``.  Such values are
+    parsed only when a full response range (``start`` and ``end``) is
+    supplied; the current year is never used as a fallback.
+    """
     if len(s) == 8:
         # YYYYmmdd
         y = int(s[0:4])
@@ -603,8 +664,11 @@ def parseIBDatetime(s: str) -> dt.date | dt.datetime:
     elif s.count(" ") >= 2 and "  " not in s:
         # 20221125 10:00:00 Europe/Amsterdam
         s0, s1, s2 = s.split(" ", 2)
-        t = dt.datetime.strptime(s0 + s1, "%Y%m%d%H:%M:%S")
-        t = t.replace(tzinfo=ZoneInfo(s2))
+        if len(s0) == 4:
+            t = _parseIBShortDatetime(s, s0, s1, s2, start, end)
+        else:
+            t = dt.datetime.strptime(s0 + s1, "%Y%m%d%H:%M:%S")
+            t = t.replace(tzinfo=ZoneInfo(s2))
     else:
         # YYYYmmdd  HH:MM:SS
         # or

@@ -914,7 +914,8 @@ class Wrapper:
     def historicalData(self, reqId: int, bar: BarData):
         results = self._results.get(reqId)
         if results is not None:
-            bar.date = parseIBDatetime(bar.date)  # type: ignore
+            if isinstance(bar.date, str):
+                bar.date = parseIBDatetime(bar.date)
             results.append(bar)
 
     def historicalDataEnd(self, reqId, _start: str, _end: str):
