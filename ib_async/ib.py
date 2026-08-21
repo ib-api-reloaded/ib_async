@@ -1386,7 +1386,9 @@ class IB:
             formatDate: For an intraday request setting to 2 will cause
                 the returned date fields to be timezone-aware
                 datetime.datetime with UTC timezone, instead of local timezone
-                as used by TWS.
+                as used by TWS. Setting to 3 makes TWS drop the year from
+                every bar timestamp; the year is recovered from the
+                response bounds once the whole series has arrived.
             keepUpToDate: If True then a realtime subscription is started
                 to keep the bars updated; ``endDateTime`` must be set
                 empty ('') then.

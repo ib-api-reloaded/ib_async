@@ -86,7 +86,9 @@ from ib_async.util import (
     dataclassUpdate,
     getLoop,
     globalErrorEvent,
+    isIBShortDatetime,
     parseIBDatetime,
+    parseIBShortDatetimes,
 )
 
 if TYPE_CHECKING:
@@ -1211,13 +1213,93 @@ class Wrapper:
         bars.updateEvent.emit(bars, True)
 
     def historicalData(self, reqId: int, bar: BarData):
-        if ReqIdKey(reqId) not in self.requests:
+        key = ReqIdKey(reqId)
+        if key not in self.requests:
             return
-        bar.date = self._normalizeDatetime(parseIBDatetime(bar.date))  # type: ignore[arg-type]
-        self.requests.append(ReqIdKey(reqId), bar)
+
+        # ``formatDate=3`` omits the year (``MMdd HH:MM:SS <tz>``), so a
+        # bar cannot be dated on its own. Keep the wire string and date
+        # the whole ascending run in ``historicalDataEnd`` -- the first
+        # point where IB's response bounds are in hand on every
+        # transport: below server version 196 they ride in the bar frame
+        # itself, from 196 they arrive as their own frame, and the
+        # protobuf ``HistoricalData`` message carries only ``reqId`` plus
+        # bars with the bounds in ``HistoricalDataEnd``.
+        if not (isinstance(bar.date, str) and isIBShortDatetime(bar.date)):
+            bar.date = self._normalizeDatetime(parseIBDatetime(bar.date))  # type: ignore[arg-type]
+
+        self.requests.append(key, bar)
 
     def historicalDataEnd(self, reqId, _start: str, _end: str):
-        self.requests.set_result(ReqIdKey(reqId))
+        key = ReqIdKey(reqId)
+        req = self.requests.get(key)
+        if req is not None:
+            self._dateShortBars(req.container, _start, _end)
+
+        self.requests.set_result(key)
+
+    def _dateShortBars(self, bars: Any, startDateStr: str, endDateStr: str) -> None:
+        """Stamp years onto the ``formatDate=3`` bars held for a request.
+
+        The response bounds IB reports alongside the dataset are full
+        ``yyyymmdd`` timestamps even when the bars themselves are not, so
+        they anchor the run. When neither bound survives parsing the run
+        is anchored on the current time instead, which is right for every
+        request that ends at or near now and is still better than
+        dropping the whole dataset.
+        """
+        # ``formatDate`` is a per-request wire setting, so a dataset is
+        # either all short or none of it is: probing the first bar keeps
+        # every other format at O(1) here rather than re-walking a
+        # multi-thousand-bar series that was already dated on arrival.
+        if not bars or not isinstance(getattr(bars[0], "date", None), str):
+            return
+
+        pending = [
+            bar
+            for bar in bars
+            if isinstance(bar, BarData)
+            and isinstance(bar.date, str)
+            and isIBShortDatetime(bar.date)
+        ]
+        if not pending:
+            return
+
+        start = self._parseResponseBound(startDateStr)
+        end = self._parseResponseBound(endDateStr)
+        if start is None and end is None:
+            self._logger.warning(
+                "historicalData: formatDate=3 bars arrived without usable "
+                "response bounds; inferring the year from the current date"
+            )
+
+        dates = parseIBShortDatetimes(
+            [bar.date for bar in pending],  # type: ignore[misc]
+            start=start,
+            end=end,
+        )
+        for bar, date in zip(pending, dates):
+            bar.date = self._normalizeDatetime(date)
+
+    @staticmethod
+    def _parseResponseBound(s: str) -> datetime | None:
+        """Parse a historical start/end bound, tolerating anything odd.
+
+        A bound that IB omits, truncates, or stamps with a timezone this
+        host doesn't know must not take the dataset down with it.
+        """
+        if not s:
+            return None
+
+        try:
+            parsed = parseIBDatetime(s)
+        except Exception:
+            return None
+
+        if isinstance(parsed, datetime):
+            return parsed
+
+        return datetime(parsed.year, parsed.month, parsed.day)
 
     def historicalDataUpdate(self, reqId: int, bar: BarData):
         sub = self.subscriptions.get_sub(reqId)
@@ -1227,8 +1309,25 @@ class Wrapper:
         if not bars:
             return
 
-        bar.date = self._normalizeDatetime(parseIBDatetime(bar.date))  # type: ignore[arg-type]
         lastDate = bars[-1].date
+        if isinstance(lastDate, str):
+            # The historical run this subscription extends is still
+            # awaiting ``historicalDataEnd`` to date its ``formatDate=3``
+            # bars, so there is nothing to order this update against yet.
+            return
+
+        if isinstance(bar.date, str) and isIBShortDatetime(bar.date):
+            # A live update carries no response bounds at all, but the
+            # bars already dated for this subscription do: an update sits
+            # on or just past the last one.
+            [date] = parseIBShortDatetimes(
+                [bar.date],
+                start=lastDate if isinstance(lastDate, datetime) else None,
+            )
+            bar.date = self._normalizeDatetime(date)
+        else:
+            bar.date = self._normalizeDatetime(parseIBDatetime(bar.date))  # type: ignore[arg-type]
+
         if bar.date < lastDate:
             return
 

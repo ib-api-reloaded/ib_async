@@ -641,8 +641,134 @@ def formatIBDatetime(t: dt.date | dt.datetime | str | None) -> str:
     return s
 
 
-def parseIBDatetime(s: str) -> dt.date | dt.datetime:
-    """Parse string in IB date or datetime format to datetime."""
+# ``formatDate=3`` values carry no year, so the month/day/time half is
+# parsed against a leap year and re-stamped once the year is known; 2000
+# keeps 02/29 parseable.
+_SHORT_DATETIME_YEAR: Final = 2000
+
+
+def isIBShortDatetime(s: str) -> bool:
+    """Return True when ``s`` is an IB ``formatDate=3`` timestamp.
+
+    ``reqHistoricalData(formatDate=3)`` ships bar timestamps as
+    ``MMdd HH:MM:SS <tz>`` -- the year is simply absent from the wire, so
+    such a value cannot become a ``datetime`` on its own. Callers detect
+    it with this predicate and resolve a whole ascending run at once with
+    :func:`parseIBShortDatetimes`, or hand the year to
+    :func:`parseIBDatetime`.
+    """
+    return (
+        len(s) != 8
+        and not s.isdigit()
+        and s.count(" ") >= 2
+        and "  " not in s
+        and len(s.split(" ", 1)[0]) == 4
+    )
+
+
+def _splitIBShortDatetime(s: str) -> tuple[dt.datetime, ZoneInfo]:
+    """Split ``MMdd HH:MM:SS <tz>`` into a year-less stamp and its zone."""
+    s0, s1, s2 = s.split(" ", 2)
+    naive = dt.datetime.strptime(f"{_SHORT_DATETIME_YEAR}{s0}{s1}", "%Y%m%d%H:%M:%S")
+    return naive, ZoneInfo(s2)
+
+
+def _stampIBYear(naive: dt.datetime, tz: ZoneInfo, year: int) -> dt.datetime | None:
+    """Move ``naive`` to ``year`` in ``tz``, or None when that date does
+    not exist (02/29 outside a leap year)."""
+    try:
+        return naive.replace(year=year, tzinfo=tz)
+    except ValueError:
+        return None
+
+
+def _nearestIBYear(
+    part: tuple[dt.datetime, ZoneInfo], anchor: dt.datetime
+) -> dt.datetime:
+    """Stamp ``part`` with the year that lands it closest to ``anchor``."""
+    naive, tz = part
+    if anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=tz)
+
+    best: dt.datetime | None = None
+    for year in range(anchor.year - 2, anchor.year + 3):
+        candidate = _stampIBYear(naive, tz, year)
+        if candidate is None:
+            continue
+        if best is None or abs(candidate - anchor) < abs(best - anchor):
+            best = candidate
+
+    if best is None:
+        raise ValueError(f"Cannot place IB short datetime near {anchor!r}")
+
+    return best
+
+
+def _stepIBYear(
+    part: tuple[dt.datetime, ZoneInfo], neighbour: dt.datetime, ascending: bool
+) -> dt.datetime:
+    """Stamp ``part`` with the nearest year that keeps the run monotonic:
+    at or after ``neighbour`` when ascending, at or before it otherwise."""
+    naive, tz = part
+    step = 1 if ascending else -1
+    for offset in range(8):
+        candidate = _stampIBYear(naive, tz, neighbour.year + step * offset)
+        if candidate is None:
+            continue
+        if (candidate >= neighbour) if ascending else (candidate <= neighbour):
+            return candidate
+
+    raise ValueError(f"Cannot order IB short datetime against {neighbour!r}")
+
+
+def parseIBShortDatetimes(
+    values: list[str],
+    *,
+    start: dt.datetime | None = None,
+    end: dt.datetime | None = None,
+) -> list[dt.datetime]:
+    """Resolve an ascending run of IB ``formatDate=3`` timestamps.
+
+    A lone ``formatDate=3`` value is ambiguous because the year never
+    reaches the wire, but a *run* is not: IB emits historical bars in
+    ascending order, so anchoring one edge fixes every element. ``start``
+    anchors the first value and the run is walked forwards, rolling the
+    year over whenever ``MMdd`` wraps past new year; otherwise ``end``
+    (defaulting to now) anchors the last value and the run is walked
+    backwards.
+
+    An anchor only has to sit within six months of the edge it anchors,
+    which the response bounds IB reports for a historical request always
+    do.
+    """
+    parts = [_splitIBShortDatetime(v) for v in values]
+    if not parts:
+        return []
+
+    if start is not None:
+        out = [_nearestIBYear(parts[0], start)]
+        for part in parts[1:]:
+            out.append(_stepIBYear(part, out[-1], ascending=True))
+        return out
+
+    if end is None:
+        end = dt.datetime.now(parts[-1][1])
+
+    out = [_nearestIBYear(parts[-1], end)]
+    for part in reversed(parts[:-1]):
+        out.append(_stepIBYear(part, out[-1], ascending=False))
+    out.reverse()
+    return out
+
+
+def parseIBDatetime(s: str, *, year: int | None = None) -> dt.date | dt.datetime:
+    """Parse string in IB date or datetime format to datetime.
+
+    ``year`` supplies the year for an IB ``formatDate=3`` value
+    (``MMdd HH:MM:SS <tz>``), which carries none of its own; such a value
+    raises without it. :func:`parseIBShortDatetimes` recovers the year
+    from a whole response instead.
+    """
     if len(s) == 8:
         # YYYYmmdd
         y = int(s[0:4])
@@ -654,8 +780,22 @@ def parseIBDatetime(s: str) -> dt.date | dt.datetime:
     elif s.count(" ") >= 2 and "  " not in s:
         # 20221125 10:00:00 Europe/Amsterdam
         s0, s1, s2 = s.split(" ", 2)
-        t = dt.datetime.strptime(s0 + s1, "%Y%m%d%H:%M:%S")
-        t = t.replace(tzinfo=ZoneInfo(s2))
+        if len(s0) == 4:
+            # 1125 10:00:00 Europe/Amsterdam -- formatDate=3, no year.
+            if year is None:
+                raise ValueError(
+                    f"IB formatDate=3 timestamp {s!r} carries no year; pass"
+                    " year=... or resolve the response with"
+                    " parseIBShortDatetimes()"
+                )
+            naive, tz = _splitIBShortDatetime(s)
+            stamped = _stampIBYear(naive, tz, year)
+            if stamped is None:
+                raise ValueError(f"IB datetime {s!r} does not exist in {year}")
+            t = stamped
+        else:
+            t = dt.datetime.strptime(s0 + s1, "%Y%m%d%H:%M:%S")
+            t = t.replace(tzinfo=ZoneInfo(s2))
     else:
         # YYYYmmdd  HH:MM:SS
         # or
