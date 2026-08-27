@@ -1432,9 +1432,13 @@ class IB:
     def reqHistoricalSchedule(
         self,
         contract: Contract,
-        numDays: int,
+        numDays: int | str,
         endDateTime: datetime.datetime | datetime.date | str | None = "",
         useRTH: bool = True,
+        barSizeSetting: str = "1 day",
+        formatDate: int = 1,
+        chartOptions: list[TagValue] | None = None,
+        timeout: float = 60,
     ) -> HistoricalSchedule:
         """
         Request historical schedule.
@@ -1443,16 +1447,40 @@ class IB:
 
         Args:
             contract: Contract of interest.
-            numDays: Number of days.
+            numDays: Span of the schedule. An int is a number of days and is
+                sent as IBKR's ``'<n> D'`` duration; a str is sent verbatim
+                as the duration, so any unit IBKR accepts can be requested
+                directly — ``'2 W'``, ``'6 M'``, ``'1 Y'``. IBKR caps a
+                request at one year and rejects a day count beyond that,
+                which is only expressible through the str form.
             endDateTime: Can be set to '' to indicate the current time,
                 or it can be given as a datetime.date or datetime.datetime,
                 or it can be given as a string in 'yyyyMMdd HH:mm:ss' format.
                 If no timezone is given then the TWS login timezone is used.
             useRTH: If True then show schedule for Regular Trading Hours,
                 if False then for extended hours.
+            barSizeSetting: Bar size the schedule is built against. IBKR
+                documents '1 day' for schedule requests; overridable for
+                callers who need a different granularity.
+            formatDate: Date format IBKR stamps on the returned schedule
+                strings. :class:`.HistoricalSchedule` carries them
+                unparsed, so this passes straight through.
+            chartOptions: Unknown.
+            timeout: Timeout in seconds after which to cancel the request
+                and return an empty schedule. Set to ``0`` to wait
+                indefinitely.
         """
         return self._run(
-            self.reqHistoricalScheduleAsync(contract, numDays, endDateTime, useRTH)
+            self.reqHistoricalScheduleAsync(
+                contract,
+                numDays,
+                endDateTime,
+                useRTH,
+                barSizeSetting,
+                formatDate,
+                chartOptions,
+                timeout,
+            )
         )
 
     def reqHistoricalTicks(
@@ -2711,30 +2739,49 @@ class IB:
 
         return bars
 
-    def reqHistoricalScheduleAsync(
+    async def reqHistoricalScheduleAsync(
         self,
         contract: Contract,
-        numDays: int,
+        numDays: int | str,
         endDateTime: datetime.datetime | datetime.date | str | None = "",
         useRTH: bool = True,
-    ) -> Awaitable[HistoricalSchedule]:
+        barSizeSetting: str = "1 day",
+        formatDate: int = 1,
+        chartOptions: list[TagValue] | None = None,
+        timeout: float = 60,
+    ) -> HistoricalSchedule:
         """Async sibling of :meth:`reqHistoricalSchedule`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         end = util.formatIBDatetime(endDateTime)
+        # An int keeps the historical shorthand; a str is the caller's own
+        # duration and goes out untouched, which is the only way to ask for
+        # a unit other than days — IBKR rejects a day count past its
+        # one-year ceiling and wants '1 Y' instead.
+        duration = numDays if isinstance(numDays, str) else f"{numDays} D"
         self.client.reqHistoricalData(
             reqId,
             contract,
             end,
-            f"{numDays} D",
-            "1 day",
+            duration,
+            barSizeSetting,
             "SCHEDULE",
             useRTH,
-            1,
+            formatDate,
             False,
-            None,
+            chartOptions,
         )
 
-        return future
+        task = asyncio.wait_for(future, timeout) if timeout else future
+        try:
+            return await task
+        except TimeoutError:
+            # Without this the await was unbounded: a duration IBKR drops
+            # rather than answers left the caller hanging with no reqId to
+            # cancel by hand.
+            self.client.cancelHistoricalData(reqId)
+            self._logger.warning(f"reqHistoricalSchedule: Timeout for {contract}")
+            self.wrapper.requests.cancel(ReqIdKey(reqId), "timeout")
+            return HistoricalSchedule()
 
     def reqHistoricalTicksAsync(
         self,
