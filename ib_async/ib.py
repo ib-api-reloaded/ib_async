@@ -28,6 +28,7 @@ from ib_async._subscriptions import (
     PnLSub,
     RealTimeBarsSub,
     ScannerSub,
+    Subscription,
     TickByTickSub,
 )
 from ib_async.client import Client
@@ -712,6 +713,27 @@ class IB:
             and (not modelCode or sub.modelCode == modelCode)
             and (not conId or sub.conId == conId)
         ]
+
+    def subscriptionForReqId(self, reqId: int) -> Subscription | None:
+        """Return the live :class:`Subscription` owning ``reqId``, or ``None``.
+
+        The reqId space is shared by orders and by every data request, so an
+        API error carrying a reqId is ambiguous on its own. This is the
+        public answer to "is this id one of my live data streams?" —
+        :meth:`tradeForOrderId` answers the order half. Together they let a
+        caller classify an ``errorEvent`` correctly instead of guessing from
+        the numeric value.
+        """
+        return self.wrapper.subscriptions.get_sub(reqId)
+
+    def tradeForOrderId(self, orderId: int) -> Trade | None:
+        """Return this client's :class:`Trade` for ``orderId``, or ``None``.
+
+        Mirrors the lookup :meth:`Wrapper.error` performs internally.
+        Trades are never evicted, so a ``None`` here is positive evidence
+        that ``orderId`` is not an order id of ours.
+        """
+        return self.wrapper.trades.get((self.wrapper.clientId, orderId))
 
     def trades(self) -> list[Trade]:
         """List of all order trades from this session."""
