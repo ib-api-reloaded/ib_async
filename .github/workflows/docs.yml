@@ -1,4 +1,5 @@
 # Adapted from https://tomasfarias.dev/articles/sphinx-docs-with-poetry-and-github-pages/
+# (the original used Poetry; this project is uv/PEP 621 only.)
 name: docs
 on:
   push:
@@ -29,19 +30,18 @@ jobs:
         with:
           python-version: 3.12
 
-      - name: Install Poetry
-        run: |
-          pip install pip poetry setuptools wheel -U
+      - name: Install uv toolchain
+        uses: astral-sh/setup-uv@v6
 
       - name: Install dependencies
         run: |
-          poetry install --with=docs
+          uv sync --frozen --group docs
 
       - name: Build documentation
         run: |
           mkdir html
           touch html/.nojekyll
-          poetry run sphinx-build -b html docs html
+          uv run --frozen sphinx-build -b html docs html
 
       - name: Upload documentation artifact
         if: ${{ github.event_name == 'push' }}

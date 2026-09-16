@@ -245,8 +245,10 @@ are fixed in v3.0:
   self-contained.
 * **Release engineering.** ``ib_async/_pb/`` (generated protobuf
   bindings) is gitignored. The release build regenerates the
-  modules and bundles them into the sdist / wheel via a
-  ``[tool.poetry.include]`` glob in ``pyproject.toml``. End users
+  modules and bundles them into the sdist / wheel via the
+  ``[tool.hatch.build]`` ``artifacts`` globs in ``pyproject.toml``
+  (``artifacts`` re-admits files hatchling would otherwise skip as
+  VCS-ignored). End users
   of ``pip install ib_async`` get the bindings without needing
   ``protoc`` or ``grpcio-tools``; only the runtime ``protobuf``
   dependency is declared. ``scripts/release.py`` orchestrates the
@@ -331,8 +333,18 @@ no behavioural change to the public API.
   timezone consistently across more wrapper callbacks.
 * **Python 3.11 minimum** (was 3.10). Drops compatibility shims for
   older interpreters.
-* **``uv`` toolchain support** alongside ``poetry``. Both
-  ``uv sync`` and ``poetry install`` work; CI tests under both.
+* **Poetry removed; ``uv`` is the only toolchain** (2026-09-16). The
+  build backend moved from ``poetry-core`` to ``hatchling`` and the
+  ``[tool.poetry]`` table is gone; its ``include`` globs for the
+  generated ``ib_async/_pb/`` bindings are now
+  ``[tool.hatch.build]`` ``artifacts``, which bundle the same files
+  into the sdist and wheel while still building cleanly from a
+  checkout with no generated bindings on disk. ``[project]`` already
+  carried the full PEP 621 metadata, so nothing moved out of
+  ``[tool.poetry]``. The duplicate Poetry CI job is retired: both
+  workflows now use ``astral-sh/setup-uv`` with ``uv sync --frozen``
+  and ``uv run --frozen``, and ``uv.lock`` is tracked so ``--frozen``
+  has a lock to honour. README and Makefile document ``uv`` only.
 
 **Fixed**
 

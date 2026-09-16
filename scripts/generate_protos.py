@@ -13,8 +13,8 @@ directory of ``.proto`` files — useful when iterating against a
 local TWS install's bundled schemas.
 
 Generated bindings live under ``ib_async/_pb/`` (gitignored, bundled
-into the wheel via ``[tool.poetry.include]``). End users do not need
-``protoc`` or ``grpcio-tools``.
+into the wheel via ``[tool.hatch.build] artifacts``). End users do not
+need ``protoc`` or ``grpcio-tools``.
 
 Behaviour:
   1. Resolve the proto source dir (env override / cache / fetch).

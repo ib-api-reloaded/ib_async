@@ -59,22 +59,6 @@ docs = [
 version = "1046.01"
 archive_sha256 = "d62d0bd602d9b0154f73246b1224467b6cff7062d34fe864510691b7677148c4"
 
-[tool.poetry]
-# ``ib_async/_pb/`` holds protobuf bindings generated from IBKR's
-# upstream ``.proto`` schemas by ``scripts/generate_protos.py``. The
-# directory is gitignored — generated artifacts never enter version
-# control — so the Makefile / release workflow regenerates them
-# locally before invoking ``uv build``. The glob below tells
-# poetry-core to bundle whatever ``_pb/*`` files exist on disk into
-# the sdist and wheel so end users of ``pip install ib_async`` get
-# the bindings without needing ``protoc`` or ``grpcio-tools``.
-include = [
-    "ib_async/py.typed",
-    { path = "ib_async/_pb/**/*.py", format = ["sdist", "wheel"] },
-    { path = "ib_async/_pb/**/*.pyi", format = ["sdist", "wheel"] },
-    { path = "ib_async/_pb/py.typed", format = ["sdist", "wheel"] },
-]
-
 [tool.mypy]
 ignore_missing_imports = true
 check_untyped_defs = true
@@ -94,8 +78,49 @@ markers = [
 
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# ``ib_async/_pb/`` holds protobuf bindings generated from IBKR's
+# upstream ``.proto`` schemas by ``scripts/generate_protos.py``. The
+# directory is gitignored — generated artifacts never enter version
+# control — so the Makefile / release workflow regenerates them
+# locally before invoking ``uv build``.
+#
+# Hatchling honours VCS ignore files when selecting distribution
+# contents, so a plain ``include`` could never see ``_pb``.
+# ``artifacts`` is precisely the escape hatch for generated files:
+# the globs below re-admit whatever ``_pb`` files exist on disk into
+# both the sdist and the wheel, and a checkout *without* generated
+# bindings still builds — the globs simply match nothing. End users
+# of ``pip install ib_async`` therefore get the bindings without
+# needing ``protoc`` or ``grpcio-tools``.
+#
+# ``artifacts`` sits on ``[tool.hatch.build]`` (not on a single
+# target) so it applies to the sdist and the wheel alike, which is
+# what the old poetry ``format = ["sdist", "wheel"]`` entries meant.
+# It matters because ``uv build`` builds the wheel *from* the sdist:
+# if the sdist dropped ``_pb``, the wheel would lose it too.
+[tool.hatch.build]
+artifacts = [
+    "ib_async/_pb/**/*.py",
+    "ib_async/_pb/**/*.pyi",
+    "ib_async/_pb/py.typed",
+]
+
+# Poetry's masonry backend auto-selected the package matching the
+# project name. Name it explicitly so wheel contents never depend on
+# backend auto-discovery.
+[tool.hatch.build.targets.wheel]
+packages = ["ib_async"]
+
+# Poetry's sdist carried the package plus the project metadata files;
+# tests, docs, notebooks and examples were never shipped. Hatchling
+# otherwise defaults to "everything not VCS-ignored", so state the
+# sdist contents explicitly to keep the published archive identical
+# in scope to what poetry-core produced.
+[tool.hatch.build.targets.sdist]
+include = ["/ib_async", "/README.md", "/LICENSE", "/pyproject.toml"]
 
 [tool.ruff]
 target-version = "py311"
