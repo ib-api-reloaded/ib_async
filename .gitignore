@@ -2,6 +2,7 @@ ib_async/__pycache__
 ib_async/_pb/
 dist
 build
+.uv-cache/
 .vscode
 .idea
 .settings
@@ -13,6 +14,5 @@ build
 html
 doctrees
 ib_async.egg-info
-poetry.lock
 *.csv
 *.json

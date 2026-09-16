@@ -39,7 +39,7 @@ audit:
 
 # Wheel + sdist always bundle freshly-generated bindings. The
 # ``protos`` prerequisite guarantees ``ib_async/_pb/`` exists with
-# current schemas before poetry-core scans for ``include`` globs.
+# current schemas before hatchling scans for ``artifacts`` globs.
 build: protos
 	uv build
 

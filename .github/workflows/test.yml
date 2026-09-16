@@ -12,8 +12,8 @@ on: [push, pull_request]
 # release pipeline so all three operate on identical bytes.
 
 jobs:
-  build-poetry:
-    name: poetry (${{ matrix.python-version }})
+  build-uv:
+    name: uv (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -28,13 +28,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Poetry toolchain
-        run: |
-          pip install pip poetry setuptools wheel -U
+      - name: Install uv toolchain
+        uses: astral-sh/setup-uv@v6
 
-      - name: Install dependencies with Poetry
+      - name: Install dependencies with uv
         run: |
-          poetry install --with=dev
+          uv sync --frozen --group dev
 
       - name: Read TWS API version pin
         id: twsapi
@@ -54,74 +53,20 @@ jobs:
 
       - name: Generate protobuf bindings
         run: |
-          poetry run python scripts/generate_protos.py
+          uv run --frozen python scripts/generate_protos.py
 
       - name: MyPy static code analysis
         if: ${{ !startsWith(matrix.python-version, 'pypy') }}
         run: |
-          poetry run mypy --pretty ib_async
+          uv run --frozen mypy --pretty ib_async
 
       - name: Ruff check
         run: |
-          poetry run ruff check
+          uv run --frozen ruff check
 
       - name: Run owned test suite
         run: |
-          poetry run pytest -q
-
-  build-uv:
-    name: uv (${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14", "pypy3.11"]
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv toolchain
-        run: |
-          pip install pip uv setuptools wheel -U
-
-      - name: Install dependencies with uv
-        run: |
-          uv sync --group dev
-
-      - name: Read TWS API version pin
-        id: twsapi
-        shell: bash
-        run: |
-          v=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["tool"]["ib_async"]["twsapi"]["version"])')
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-
-      - name: Cache TWS API archive
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ib_async/twsapi-${{ steps.twsapi.outputs.version }}
-          key: twsapi-${{ steps.twsapi.outputs.version }}
-
-      - name: Generate protobuf bindings
-        run: |
-          uv run python scripts/generate_protos.py
-
-      - name: MyPy static code analysis
-        if: ${{ !startsWith(matrix.python-version, 'pypy') }}
-        run: |
-          uv run mypy --pretty ib_async
-
-      - name: Ruff check
-        run: |
-          uv run ruff check
-
-      - name: Run owned test suite
-        run: |
-          uv run pytest -q
+          uv run --frozen pytest -q
 
   # Catches the "google module not found" class of release-engineering
   # regression: build the wheel, install it into a clean venv, import
@@ -145,8 +90,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv toolchain
-        run: |
-          pip install pip uv setuptools wheel -U
+        uses: astral-sh/setup-uv@v6
 
       - name: Read TWS API version pin
         id: twsapi
@@ -163,7 +107,7 @@ jobs:
 
       - name: Build wheel + sdist with bundled protos
         run: |
-          uv sync --group dev
+          uv sync --frozen --group dev
           make build
 
       - name: Clean-venv install + import smoke test

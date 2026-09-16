@@ -10,29 +10,28 @@
 
 ### What You Can Build
 
-* **Market Data Applications**: Stream live quotes, historical data, and market depth
-* **Trading Systems**: Place, modify, and monitor orders programmatically
-* **Portfolio Tools**: Track positions, account balances, and P&L in real-time
-* **Research Platforms**: Analyze contract details, option chains, and fundamental data
-* **Risk Management**: Monitor exposures and implement automated controls
+- **Market Data Applications**: Stream live quotes, historical data, and market depth
+- **Trading Systems**: Place, modify, and monitor orders programmatically
+- **Portfolio Tools**: Track positions, account balances, and P&L in real-time
+- **Research Platforms**: Analyze contract details, option chains, and fundamental data
+- **Risk Management**: Monitor exposures and implement automated controls
 
 ### Key Features
 
-* **Simple and Intuitive**: Write straightforward Python code without dealing with callback complexity
-* **Automatic Synchronization**: The [IB component](https://ib-api-reloaded.github.io/ib_async/api.html#module-ib_async.ib) stays in sync with TWS/Gateway automatically
-* **Async-Ready**: Built on [asyncio](https://docs.python.org/3/library/asyncio.html) and [eventkit](https://github.com/erdewit/eventkit) for high-performance applications
-* **Jupyter-Friendly**: Interactive development with live data in notebooks
-* **Production-Ready**: Robust error handling, reconnection logic, and comprehensive logging
+- **Simple and Intuitive**: Write straightforward Python code without dealing with callback complexity
+- **Automatic Synchronization**: The [IB component](https://ib-api-reloaded.github.io/ib_async/api.html#module-ib_async.ib) stays in sync with TWS/Gateway automatically
+- **Async-Ready**: Built on [asyncio](https://docs.python.org/3/library/asyncio.html) and [eventkit](https://github.com/erdewit/eventkit) for high-performance applications
+- **Jupyter-Friendly**: Interactive development with live data in notebooks
+- **Production-Ready**: Robust error handling, reconnection logic, and comprehensive logging
 
 Be sure to take a look at the
 [notebooks](https://ib-api-reloaded.github.io/ib_async/notebooks.html),
 the [recipes](https://ib-api-reloaded.github.io/ib_async/recipes.html)
 and the [API docs](https://ib-api-reloaded.github.io/ib_async/api.html).
 
-
 ## Installation
 
-`ib_async` now targets Python 3.11+ and publishes standard PEP 621 metadata, so the project installs cleanly with `pip`, `uv`, and `poetry`.
+`ib_async` now targets Python 3.11+ and publishes standard PEP 621 metadata, so the project installs cleanly with `pip` and `uv`.
 
 ### Install with pip
 
@@ -46,19 +45,13 @@ pip install ib_async
 uv add ib_async
 ```
 
-### Install with poetry
-
-```
-poetry add ib_async
-```
-
 Requirements:
 
 - Python 3.11 or higher
   - We plan to support Python releases [2 years back](https://devguide.python.org/versions/) which allows us to continue adding newer features and performance improvements over time.
 - A running IB Gateway application (or TWS with API mode enabled)
-    - [stable gateway](https://www.interactivebrokers.com/en/trading/ibgateway-stable.php) — updated every few months
-    - [latest gateway](https://www.interactivebrokers.com/en/trading/ibgateway-latest.php) — updated weekly
+  - [stable gateway](https://www.interactivebrokers.com/en/trading/ibgateway-stable.php) — updated every few months
+  - [latest gateway](https://www.interactivebrokers.com/en/trading/ibgateway-latest.php) — updated weekly
 - Make sure the [API port is enabled](https://ibkrcampus.com/ibkr-api-page/twsapi-doc/#tws-download) and 'Download open orders on connection' is checked.
 - You may also want to increase the Java memory usage under `Configure->Settings->Memory Allocation` to 4096 MB minimum to prevent gateway crashes when loading bulk data.
 
@@ -66,25 +59,13 @@ The ibapi package from IB is not needed. `ib_async` implements the full IBKR API
 
 ## Build Manually
 
-First, install your preferred environment manager:
-
-```
-pip install poetry -U
-```
-
-or:
+First, install the environment manager:
 
 ```
 pip install uv -U
 ```
 
-### Install the project with poetry
-
-```
-poetry install
-```
-
-### Install the project with uv
+### Install the project
 
 ```
 uv sync
@@ -93,23 +74,21 @@ uv sync
 ### Install everything for development and docs
 
 ```bash
-poetry install --with=docs,dev
 uv sync --group dev --group docs
 ```
 
 ### Development loop (v3.0+)
 
 The protobuf send / receive path landed in v3.0 generates bindings
-from IBKR's ``.proto`` schemas at build time. The generated modules
-live under ``ib_async/_pb/`` and are **gitignored** — they're
+from IBKR's `.proto` schemas at build time. The generated modules
+live under `ib_async/_pb/` and are **gitignored** — they're
 build artifacts, not source. Local dev needs them on disk before
-``mypy`` / ``pytest`` will run; release builds regenerate them
+`mypy` / `pytest` will run; release builds regenerate them
 before bundling into the wheel and sdist so end users of
-``pip install ib_async`` get a working package without ``protoc``
-or ``grpcio-tools``.
+`pip install ib_async` get a working package without `protoc`
+or `grpcio-tools`.
 
-The Makefile encapsulates this. After ``uv sync --all-groups`` (or
-``poetry install --with=dev``):
+The Makefile encapsulates this. After `uv sync --all-groups`:
 
 ```bash
 # 1. Generate protobuf bindings into ib_async/_pb/.
@@ -127,17 +106,14 @@ make lint
 make build
 ```
 
-``make help`` lists every target. The build hook bundles freshly-
+`make help` lists every target. The build hook bundles freshly-
 generated bindings into the artifact regardless of whether
-``_pb/`` was already on disk — release engineering doesn't depend
+`_pb/` was already on disk — release engineering doesn't depend
 on local state.
 
 ## Generate Docs
 
 ```bash
-poetry install --with=docs
-poetry run sphinx-build -b html docs html
-
 uv sync --group docs
 uv run sphinx-build -b html docs html
 ```
@@ -145,24 +121,29 @@ uv run sphinx-build -b html docs html
 ## Check Types
 
 ```bash
-poetry run mypy ib_async
 uv run mypy ib_async
 ```
 
 ## Build Package
 
+`make build` regenerates the protobuf bindings first, then builds the
+sdist + wheel with bundled `_pb/`:
+
 ```bash
-poetry build
-python -m build
+make build
 ```
 
 ## Upload Package (if maintaining)
 
+`make publish` runs the full release pipeline (protos, lint, parity
+audit, tests, build, clean-venv smoke install) and only then uploads:
+
 ```
-poetry install
-poetry config pypi-token.pypi your-api-token
-poetry publish --build
+make publish
 ```
+
+`uv publish` reads the token from `UV_PUBLISH_TOKEN` (or
+`--token your-api-token`).
 
 ## Setup Interactive Brokers
 
@@ -187,20 +168,25 @@ poetry publish --build
 ### 4. Common Connection Issues
 
 **Connection Refused**
+
 ```python
 # Make sure TWS/Gateway is running and API is enabled
 # Check that ports match (7497 for TWS, 4001 for Gateway)
-ib.connect('127.0.0.1', 7497, clientId=1)  # TWS
-ib.connect('127.0.0.1', 4001, clientId=1)  # Gateway
+ib.connect("127.0.0.1", 7497, clientId=1)  # TWS
+ib.connect("127.0.0.1", 4001, clientId=1)  # Gateway
 ```
 
 **Client ID Conflicts**
+
 ```python
 # Each connection needs a unique client ID
-ib.connect('127.0.0.1', 7497, clientId=1)  # Use different numbers for multiple connections
+ib.connect(
+    "127.0.0.1", 7497, clientId=1
+)  # Use different numbers for multiple connections
 ```
 
 **Market Data Issues**
+
 ```python
 # For free delayed data (no subscription required)
 ib.reqMarketDataType(3)  # Delayed
@@ -213,35 +199,41 @@ ib.reqMarketDataType(1)  # Real-time
 ## Connection Patterns
 
 ### Basic Script Usage
+
 ```python
 from ib_async import *
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 # Your code here
 ib.disconnect()
 ```
 
 ### Jupyter Notebook Usage
+
 ```python
 from ib_async import *
+
 util.startLoop()  # Required for notebooks
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 # Your code here - no need to call ib.run()
 ```
 
 ### Async Application
+
 ```python
 import asyncio
 from ib_async import *
 
+
 async def main():
     ib = IB()
-    await ib.connectAsync('127.0.0.1', 7497, clientId=1)
+    await ib.connectAsync("127.0.0.1", 7497, clientId=1)
     # Your async code here
     ib.disconnect()
+
 
 asyncio.run(main())
 ```
@@ -255,7 +247,7 @@ from ib_async import *
 
 # Connect to TWS or IB Gateway
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 print("Connected")
 
 # Disconnect when done
@@ -268,7 +260,7 @@ ib.disconnect()
 from ib_async import *
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Get account summary
 account = ib.managedAccounts()[0]
@@ -286,13 +278,18 @@ from ib_async import *
 # util.startLoop()  # uncomment this line when in a notebook
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Request historical data
-contract = Forex('EURUSD')
+contract = Forex("EURUSD")
 bars = ib.reqHistoricalData(
-    contract, endDateTime='', durationStr='30 D',
-    barSizeSetting='1 hour', whatToShow='MIDPOINT', useRTH=True)
+    contract,
+    endDateTime="",
+    durationStr="30 D",
+    barSizeSetting="1 hour",
+    whatToShow="MIDPOINT",
+    useRTH=True,
+)
 
 # Convert to pandas dataframe (pandas needs to be installed):
 df = util.df(bars)
@@ -308,11 +305,11 @@ from ib_async import *
 import time
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Subscribe to live market data
-contract = Stock('AAPL', 'SMART', 'USD')
-ticker = ib.reqMktData(contract, '', False, False)
+contract = Stock("AAPL", "SMART", "USD")
+ticker = ib.reqMktData(contract, "", False, False)
 
 # Print live quotes for 30 seconds
 for i in range(30):
@@ -329,11 +326,11 @@ ib.disconnect()
 from ib_async import *
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Create a contract and order
-contract = Stock('AAPL', 'SMART', 'USD')
-order = MarketOrder('BUY', 100)
+contract = Stock("AAPL", "SMART", "USD")
+order = MarketOrder("BUY", 100)
 
 # Place the order
 trade = ib.placeOrder(contract, order)
@@ -355,7 +352,7 @@ ib.disconnect()
 from ib_async import *
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Get current positions
 positions = ib.positions()
@@ -377,11 +374,15 @@ ib.disconnect()
 ```python
 from ib_async import *
 
+
 def onPnL(pnl):
-    print(f"P&L Update: Unrealized: ${pnl.unrealizedPnL:.2f}, Realized: ${pnl.realizedPnL:.2f}")
+    print(
+        f"P&L Update: Unrealized: ${pnl.unrealizedPnL:.2f}, Realized: ${pnl.realizedPnL:.2f}"
+    )
+
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Subscribe to P&L updates
 account = ib.managedAccounts()[0]
@@ -401,24 +402,24 @@ except KeyboardInterrupt:
 from ib_async import *
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Create a bracket order (entry + stop loss + take profit)
-contract = Stock('TSLA', 'SMART', 'USD')
+contract = Stock("TSLA", "SMART", "USD")
 
 # Parent order
-parent = LimitOrder('BUY', 100, 250.00)
+parent = LimitOrder("BUY", 100, 250.00)
 parent.orderId = ib.client.getReqId()
 parent.transmit = False
 
 # Stop loss
-stopLoss = StopOrder('SELL', 100, 240.00)
+stopLoss = StopOrder("SELL", 100, 240.00)
 stopLoss.orderId = ib.client.getReqId()
 stopLoss.parentId = parent.orderId
 stopLoss.transmit = False
 
 # Take profit
-takeProfit = LimitOrder('SELL', 100, 260.00)
+takeProfit = LimitOrder("SELL", 100, 260.00)
 takeProfit.orderId = ib.client.getReqId()
 takeProfit.parentId = parent.orderId
 takeProfit.transmit = True
@@ -440,20 +441,30 @@ from ib_async import *
 import pandas as pd
 
 ib = IB()
-ib.connect('127.0.0.1', 7497, clientId=1)
+ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Get multiple timeframes
-contract = Stock('SPY', 'SMART', 'USD')
+contract = Stock("SPY", "SMART", "USD")
 
 # Daily bars for 1 year
 daily_bars = ib.reqHistoricalData(
-    contract, endDateTime='', durationStr='1 Y',
-    barSizeSetting='1 day', whatToShow='TRADES', useRTH=True)
+    contract,
+    endDateTime="",
+    durationStr="1 Y",
+    barSizeSetting="1 day",
+    whatToShow="TRADES",
+    useRTH=True,
+)
 
 # 5-minute bars for last 5 days
 intraday_bars = ib.reqHistoricalData(
-    contract, endDateTime='', durationStr='5 D',
-    barSizeSetting='5 mins', whatToShow='TRADES', useRTH=True)
+    contract,
+    endDateTime="",
+    durationStr="5 D",
+    barSizeSetting="5 mins",
+    whatToShow="TRADES",
+    useRTH=True,
+)
 
 # Convert to DataFrames
 daily_df = util.df(daily_bars)
@@ -463,8 +474,8 @@ print(f"Daily bars: {len(daily_df)} rows")
 print(f"Intraday bars: {len(intraday_df)} rows")
 
 # Calculate simple moving average
-daily_df['SMA_20'] = daily_df['close'].rolling(20).mean()
-print(daily_df[['date', 'close', 'SMA_20']].tail())
+daily_df["SMA_20"] = daily_df["close"].rolling(20).mean()
+print(daily_df[["date", "close", "SMA_20"]].tail())
 
 ib.disconnect()
 ```
@@ -474,28 +485,33 @@ ib.disconnect()
 ### Core Components
 
 **`ib_async.ib.IB`** - Main interface class
+
 - Connection management (`connect()`, `disconnect()`, `connectAsync()`)
 - Market data requests (`reqMktData()`, `reqHistoricalData()`)
 - Order management (`placeOrder()`, `cancelOrder()`)
 - Account data (`positions()`, `accountSummary()`, `reqPnL()`)
 
 **`ib_async.contract`** - Financial instruments
+
 - `Stock`, `Option`, `Future`, `Forex`, `Index`, `Bond`
 - `Contract` - Base class for all instruments
 - `ComboLeg`, `DeltaNeutralContract` - Complex instruments
 
 **`ib_async.order`** - Order types and management
+
 - `MarketOrder`, `LimitOrder`, `StopOrder`, `StopLimitOrder`
 - `Order` - Base order class with all parameters
 - `OrderStatus`, `OrderState` - Order execution tracking
 - `Trade` - Complete order lifecycle tracking
 
 **`ib_async.ticker`** - Real-time market data
+
 - `Ticker` - Live quotes, trades, and market data
 - Automatic field updates (bid, ask, last, volume, etc.)
 - Event-driven updates via `updateEvent`
 
 **`ib_async.objects`** - Data structures
+
 - `BarData` - Historical price bars
 - `Position` - Portfolio positions
 - `PortfolioItem` - Portfolio details with P&L
@@ -504,6 +520,7 @@ ib.disconnect()
 ### Key Patterns
 
 **Synchronous vs Asynchronous**
+
 ```python
 # Synchronous (blocks until complete)
 bars = ib.reqHistoricalData(contract, ...)
@@ -513,24 +530,29 @@ bars = await ib.reqHistoricalDataAsync(contract, ...)
 ```
 
 **Event Handling**
+
 ```python
 # Subscribe to events
 def onOrderUpdate(trade):
     print(f"Order update: {trade.orderStatus.status}")
 
+
 ib.orderStatusEvent += onOrderUpdate
+
 
 # Or with async
 async def onTicker(ticker):
     print(f"Price update: {ticker.last}")
 
+
 ticker.updateEvent += onTicker
 ```
 
 **Error Handling**
+
 ```python
 try:
-    ib.connect('127.0.0.1', 7497, clientId=1)
+    ib.connect("127.0.0.1", 7497, clientId=1)
 except ConnectionRefusedError:
     print("TWS/Gateway not running or API not enabled")
 except Exception as e:
@@ -548,9 +570,6 @@ The complete [API documentation](https://ib-api-reloaded.github.io/ib_async/api.
 ### Running Tests
 
 ```bash
-poetry install --with=dev
-poetry run pytest
-
 uv sync --group dev
 uv run pytest
 ```
@@ -558,16 +577,12 @@ uv run pytest
 ### Type Checking
 
 ```bash
-poetry run mypy ib_async
 uv run mypy ib_async
 ```
 
 ### Code Formatting
 
 ```bash
-poetry run ruff format
-poetry run ruff check --fix
-
 uv run ruff format
 uv run ruff check --fix
 ```
@@ -575,21 +590,23 @@ uv run ruff check --fix
 ### Local Development
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/ib-api-reloaded/ib_async.git
 cd ib_async
 ```
 
 2. Install dependencies:
+
 ```bash
-poetry install --with=dev,docs
 uv sync --group dev --group docs
 ```
 
 3. Make your changes and run tests:
+
 ```bash
-poetry run pytest
-poetry run mypy ib_async
+uv run pytest
+uv run mypy ib_async
 ```
 
 4. Submit a pull request with:
