@@ -137,7 +137,11 @@ def test_create_order_round_trip_all_primary_fields():
         hidden=True,
     )
     proto = createOrderProto(src)
-    decoded = createOrder(proto)
+    # ``orderId`` rides the REQUEST ENVELOPE, not ``Order`` — IBKR's
+    # reference never writes it on send, so the decoder is handed the
+    # envelope's id exactly as ``createOpenOrder`` hands it over.
+    assert not proto.HasField("orderId")
+    decoded = createOrder(proto, orderId=src.orderId)
     assert decoded.orderId == 7
     assert decoded.clientId == 11
     assert decoded.permId == 999

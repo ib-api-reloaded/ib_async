@@ -2793,19 +2793,25 @@ def test_connection_state_codes_logged_at_warning_level(caplog):
     assert error_records == []
 
 
-def test_send_proto_bypasses_throttle_queue():
-    """Known limitation: ``sendProto`` writes directly to the socket
-    without going through the ``_msgQ`` / ``_timeQ`` sliding-window
-    throttle that ``sendMsg`` uses. Locking this in as a test so a
-    future refactor that moves the proto path through the throttle is
-    a deliberate, observable change.
+def test_send_proto_shares_the_throttle_queue():
+    """``sendProto`` hands its frame to ``sendMsg`` like every binary
+    frame, so both paths share ONE outbound queue.
+
+    This inverts an earlier pin that recorded the bypass as a known
+    limitation. The bypass had two live-money consequences on a 207+
+    gateway, where protobuf carries most of the session INCLUDING every
+    order: proto frames spent no budget in the ``MaxRequests`` /
+    ``RequestsInterval`` sliding window, and a proto frame could
+    overtake binary frames already queued behind the throttle. Request
+    ORDER and IBKR's pacing contract are not optional for orders.
     """
     ib = ibi.IB()
     sent: list = []
     ib.client.conn.sendMsg = lambda data: sent.append(data)
     ib.client.sendProto(1, b"\x00\x00")
     assert len(sent) == 1
-    assert len(ib.client._timeQ) == 0
+    # One slot of the pacing budget spent, and the queue drained.
+    assert len(ib.client._timeQ) == 1
     assert len(ib.client._msgQ) == 0
 
 

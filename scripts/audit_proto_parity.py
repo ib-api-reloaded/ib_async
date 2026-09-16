@@ -214,6 +214,26 @@ EXTRA_OURS_FNS: dict[str, tuple[str, ...]] = {
 }
 
 
+# The mirror of ``EXTRA_OURS_FNS`` for the reverse pass: IBKR builders
+# whose fields we write INSIDE a larger function instead of factoring
+# them out. Their fields count as "IBKR writes this" when the reverse
+# pass asks whether an ours-side write has a reference counterpart.
+INLINED_IBKR_FNS: dict[str, tuple[str, ...]] = {
+    # We build the SoftDollarTier sub-message inline rather than in a
+    # separate ``createSoftDollarTierProto``.
+    "createOrderProto": ("createSoftDollarTierProto",),
+    # We take the OrderCancel fields as keyword args and fill the
+    # sub-message inline rather than in ``createOrderCancelProto``.
+    "createCancelOrderRequestProto": ("createOrderCancelProto",),
+}
+
+
+# Ours-side proto-field writes that IBKR's reference deliberately does
+# NOT make anywhere. Each needs a reason; anything not listed fails the
+# reverse pass in ``compare``.
+EXTRA_OURS_FIELDS: dict[tuple[str, str], str] = {}
+
+
 ACCEPTED_GAPS: dict[tuple[str, str], str] = {
     # IBKR's ``Order.discretionaryAmt`` is typed ``int`` on their side
     # but the proto field is ``double``; their gate uses
@@ -350,6 +370,36 @@ def compare(
                     notes.append(
                         f"  soft: {fn}.{field}: IBKR={expected} ours={{{actual}}}"
                     )
+
+        # Reverse pass: a field WE write that IBKR's reference never
+        # writes is just as dangerous as a missing one. The reference is
+        # the definition of what the gateway expects on this wire
+        # version; an extra field is an unrequested claim about the
+        # order that the server may honour, ignore, or — worst —
+        # reconcile against a value it derived elsewhere. Anything
+        # legitimate lands in ``EXTRA_OURS_FIELDS`` with a reason.
+        #
+        # Compare our OWN function's writes only (not the
+        # ``EXTRA_OURS_FNS`` expansion, whose fields belong to the
+        # like-named IBKR builders and get their own reverse pass), and
+        # credit any IBKR builder we inline into this one.
+        own_map: dict[str, set[str]] = defaultdict(set)
+        for f, k in ours.get(fn, []):
+            own_map[f].add(k)
+        reference_fields = set(ibkr_map)
+        for inlined in INLINED_IBKR_FNS.get(fn, ()):
+            reference_fields.update(f for f, _ in ibkr.get(inlined, []))
+        for field in sorted(own_map):
+            if field in reference_fields:
+                continue
+            if (fn, field) in EXTRA_OURS_FIELDS:
+                notes.append(
+                    f"  extra-ok: {fn}.{field} ({EXTRA_OURS_FIELDS[(fn, field)]})"
+                )
+                continue
+            divergences.append(
+                f"  {fn}.{field}: ours writes it, IBKR reference never does"
+            )
     return divergences, notes
 
 
