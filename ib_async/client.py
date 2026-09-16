@@ -262,10 +262,19 @@ class Client:
         ``msgId = canonical + PROTOBUF_MSG_ID``, then the serialized
         protobuf body. Receivers detect the +200 sentinel and route to
         the protobuf decoder; everything else stays binary.
+
+        Handed to ``sendMsg`` like every binary frame, so protobuf
+        messages share the ONE outbound queue. Writing to ``conn``
+        directly (as this did) put proto frames outside the
+        ``MaxRequests`` / ``RequestsInterval`` pacing budget AND let
+        them overtake binary frames already waiting in the queue — on a
+        207+ gateway that is most of the session's traffic, including
+        every order. Request order and the IBKR pacing contract are not
+        optional for order messages.
         """
         wireMsgId = canonicalMsgId + PROTOBUF_MSG_ID
         body = struct.pack(">I", wireMsgId) + serialized
-        self.conn.sendMsg(self._prefix(body))
+        self.sendMsg(body)
 
     def _tryProto(self, canonicalMsgId: int, build_proto: Callable[[], Any]) -> bool:
         """Emit the protobuf-encoded frame for ``canonicalMsgId`` when the

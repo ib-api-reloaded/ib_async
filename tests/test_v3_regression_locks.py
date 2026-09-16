@@ -1372,8 +1372,14 @@ def test_create_order_proto_exhaustive_parity_round_trip():
     serialized = proto.SerializeToString()
     assert len(serialized) > 0, "Serialized proto must carry at least one set field"
 
+    # ``orderId`` rides the REQUEST ENVELOPE (``PlaceOrderRequest``),
+    # never ``Order`` itself — IBKR's reference ``createOrderProto``
+    # does not write it, so neither do we. The decoder receives it the
+    # way ``createOpenOrder`` passes it: as an explicit argument.
+    assert not proto.HasField("orderId")
+
     # Round-trip back to a domain Order.
-    decoded = createOrder(proto)
+    decoded = createOrder(proto, orderId=original.orderId)
 
     # Every set field must come back with the same value.
     assert decoded.orderId == original.orderId

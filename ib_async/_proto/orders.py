@@ -166,10 +166,20 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # had a typo here that silently dropped it from every outbound
     # order, sending fills to the wrong client bucket. IBKR's reference
     # uses ``isValidIntValue`` (≠ UNSET sentinel) so ``0`` flows through.
+    #
+    # ``orderId`` is deliberately NOT written here. On a REQUEST the
+    # order's identity is carried by the ENVELOPE
+    # (``PlaceOrderRequest.orderId`` / ``CancelOrderRequest.orderId``),
+    # which is why IBKR's reference ``createOrderProto`` never touches
+    # ``Order.orderId`` — that field exists on ``Order.proto`` for the
+    # server's ``OpenOrder`` replies. Writing it on send let a stale id
+    # on a reused Order contradict the envelope, which is the
+    # ``Error 135: Can't find order with id = …`` family, and it broke
+    # ``Client.placeOrder``'s documented contract that a caller may
+    # place under a freshly-allocated id "without having to mutate the
+    # source Order".
     if _isValidInt(order.clientId):
         proto.clientId = order.clientId
-    if order.orderId:
-        proto.orderId = order.orderId
     if _isValidLong(order.permId):
         proto.permId = order.permId
     if _isValidInt(order.parentId):
@@ -496,29 +506,25 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     if _isValidFloat(order.midOffsetAtHalf):
         proto.midOffsetAtHalf = float(order.midOffsetAtHalf)
 
-    # Auto-cancel + parent-perm wiring
-    if order.autoCancelDate:
-        proto.autoCancelDate = order.autoCancelDate
+    # Auto-cancel wiring. ``autoCancelParent`` is a request flag IBKR's
+    # reference sends; ``autoCancelDate`` / ``parentPermId`` are NOT —
+    # the server reports them back on ``OpenOrder`` and owns their
+    # values. Same story for ``shareholder``, ``refFuturesConId`` and
+    # ``filledQuantity``: all five are decode-only fields on
+    # ``Order.proto``, and echoing a server-owned value back on a place
+    # or modify request states something about the order that only the
+    # server may state (``filledQuantity`` on a modify is the sharpest
+    # example). None of them is written on either wire path.
     if order.autoCancelParent:
         proto.autoCancelParent = order.autoCancelParent
-    if order.parentPermId:
-        proto.parentPermId = order.parentPermId
 
     # Misc bool / id extras
-    if order.shareholder:
-        proto.shareholder = order.shareholder
     if order.imbalanceOnly:
         proto.imbalanceOnly = order.imbalanceOnly
     # ``routeMarketableToBbo`` is wire-int (0/1) but domain-bool. Same
     # 1/0 mapping as ``usePriceMgmtAlgo``.
     if order.routeMarketableToBbo:
         proto.routeMarketableToBbo = 1
-    if order.refFuturesConId:
-        proto.refFuturesConId = order.refFuturesConId
-    # ``filledQuantity`` is wire-string (Decimal). Encode same as
-    # ``totalQuantity``.
-    if order.filledQuantity is not None:
-        proto.filledQuantity = _decimalToWireString(order.filledQuantity)
 
     # Compliance / origination fields. These exist on our Order
     # dataclass and are populated on receive, but were silently
