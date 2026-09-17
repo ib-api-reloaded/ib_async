@@ -14,7 +14,7 @@ from eventkit import Event
 
 from ._proto.safe import safe_decimal
 from .contract import Contract, ScanData, TagValue
-from .util import EPOCH
+from .util import EPOCH, dataclassRepr
 
 
 @dataclass
@@ -90,6 +90,13 @@ class Execution:
     # preserves the unset semantics across user code that gates on the field.
     optExerciseOrLapseType: int = -1
 
+    # One display policy for the whole order plane (``ib_async/util.py``).
+    # The generated repr printed ``evRule=''``, ``evMultiplier=None`` and
+    # ``modelCode=''`` on every single execution; ``dataclass`` never
+    # overwrites a ``__repr__`` the class body already defines.
+    __repr__ = dataclassRepr
+    __str__ = dataclassRepr
+
 
 @dataclass
 class CommissionReport:
@@ -106,6 +113,10 @@ class CommissionReport:
     realizedPNL: Decimal | None = None
     yield_: Decimal | None = None
     yieldRedemptionDate: int = 0
+
+    # Same display policy as ``Execution`` above.
+    __repr__ = dataclassRepr
+    __str__ = dataclassRepr
 
 
 # ``commission`` deprecation alias — installed at module load so users
@@ -252,6 +263,11 @@ class TradeLogEntry:
     status: str = ""
     message: str = ""
     errorCode: int = 0
+
+    # Same display policy as ``Execution`` above: a log entry with no
+    # message and no error code prints its time and status only.
+    __repr__ = dataclassRepr
+    __str__ = dataclassRepr
 
 
 @dataclass
@@ -590,6 +606,11 @@ class Fill:
     execution: Execution
     commissionReport: CommissionReport
     time: datetime
+
+    # Same display policy as ``Execution`` above; the three nested objects
+    # render through their own culled reprs.
+    __repr__ = dataclassRepr
+    __str__ = dataclassRepr
 
 
 @dataclass(slots=True, frozen=True)

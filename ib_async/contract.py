@@ -186,15 +186,14 @@ class Contract:
         return h
 
     def __repr__(self):
-        attrs = util.dataclassNonDefaults(self)
+        attrs = util.dataclassDisplayFields(self)
 
         if self.__class__ is not Contract:
             attrs.pop("secType", "")
 
         clsName = self.__class__.__qualname__
-        kwargs = ", ".join(f"{k}={v!r}" for k, v in attrs.items())
 
-        return f"{clsName}({kwargs})"
+        return f"{clsName}({util.dataclassDisplayPairs(attrs)})"
 
     __str__ = __repr__
 
@@ -363,14 +362,14 @@ class Forex(Contract):
         )
 
     def __repr__(self):
-        attrs = util.dataclassNonDefaults(self)
+        attrs = util.dataclassDisplayFields(self)
         attrs.pop("secType")
         s = "Forex("
         if "symbol" in attrs and "currency" in attrs:
             pair = attrs.pop("symbol")
             pair += attrs.pop("currency")
             s += "'" + pair + "'" + (", " if attrs else "")
-        s += ", ".join(f"{k}={v!r}" for k, v in attrs.items())
+        s += util.dataclassDisplayPairs(attrs)
         s += ")"
         return s
 

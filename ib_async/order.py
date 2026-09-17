@@ -11,7 +11,12 @@ from eventkit import Event
 
 from .contract import Contract, TagValue
 from .objects import Fill, SoftDollarTier, TradeLogEntry, _install_commission_alias
-from .util import UNSET_DOUBLE, dataclassNonDefaults
+from .util import (
+    UNSET_DOUBLE,
+    dataclassDisplayFields,
+    dataclassDisplayPairs,
+    dataclassRepr,
+)
 
 
 @dataclass
@@ -207,7 +212,7 @@ class Order:
     hedgeMaxSize: int | None = None
 
     def __repr__(self):
-        attrs = dataclassNonDefaults(self)
+        attrs = dataclassDisplayFields(self)
         if self.__class__ is not Order:
             attrs.pop("orderType", None)
 
@@ -215,8 +220,7 @@ class Order:
             attrs.pop("softDollarTier")
 
         clsName = self.__class__.__qualname__
-        kwargs = ", ".join(f"{k}={v!r}" for k, v in attrs.items())
-        return f"{clsName}({kwargs})"
+        return f"{clsName}({dataclassDisplayPairs(attrs)})"
 
     __str__ = __repr__
 
@@ -376,6 +380,14 @@ class OrderStatus:
     clientId: int = 0
     whyHeld: str = ""
     mktCapPrice: Decimal | None = None
+
+    # One display policy for the whole order plane: the generated repr
+    # printed every unset price as ``None`` and every quantity as
+    # ``Decimal('0.0')``, which buried the two fields a status line is
+    # actually about. ``dataclass`` never overwrites a ``__repr__`` the
+    # class body already defines, so this binding wins.
+    __repr__ = dataclassRepr
+    __str__ = dataclassRepr
 
     @property
     def total(self) -> Decimal | None:
@@ -670,6 +682,12 @@ class Trade:
     # without waiting for the allowlist to grow. ``None`` until the first
     # ``openOrder`` callback for this trade.
     serverOrder: Order | None = None
+
+    # Same display policy as ``Order`` / ``OrderStatus`` — a Trade printed
+    # on a log line shows its contract, its order, its status and its fills
+    # on ONE line, and nothing that was never set.
+    __repr__ = dataclassRepr
+    __str__ = dataclassRepr
 
     # TODO: replace these with an enum?
     events: ClassVar = (

@@ -123,6 +123,146 @@ def dataclassNonDefaults(obj) -> dict[str, Any]:
     }
 
 
+# ONE display-repr policy for every order-plane object lives below:
+# ``DISPLAY_KEEP_ZERO_FIELDS`` + ``DISPLAY_BOILERPLATE_STRINGS`` +
+# ``dataclassDisplayFields`` + ``dataclassDisplayValue`` +
+# ``dataclassDisplayPairs``, consumed by ``dataclassRepr`` and by the
+# hand-written ``__repr__`` of ``Order`` / ``Contract`` / ``Forex``. It is
+# a DISPLAY policy only: ``dataclassAsDict`` / ``dataclassAsTuple`` /
+# ``dataclassUpdate`` / ``dataclassNonDefaults`` keep their own semantics
+# for the callers that round-trip data rather than show it.
+
+# Fields where a ZERO value is information, not absence, so display keeps
+# it. Two families:
+#   * identity — ``orderId`` 0 is TWS's own manual-order id, and a 0
+#     ``permId`` / ``parentId`` / ``clientId`` / ``conId`` / ``reqId`` is a
+#     real record key the reader needs in order to match a log line
+#     against a broker callback;
+#   * quantity — a 0 ``filled`` / ``remaining`` / ``totalQuantity`` /
+#     ``shares`` / ``cumQty`` is a definite answer ("nothing filled"), not
+#     an unset field.
+# Every OTHER numeric field that is zero says nothing a reader can use, so
+# it is dropped (a 0 price, a 0 offset, a 0 percentage, a 0 count).
+DISPLAY_KEEP_ZERO_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "orderId",
+        "permId",
+        "parentId",
+        "clientId",
+        "conId",
+        "reqId",
+        "filled",
+        "remaining",
+        "totalQuantity",
+        "shares",
+        "cumQty",
+    }
+)
+
+# String values IBKR sends to mean "not applicable". They are not empty, so
+# the empty-string rule cannot catch them, and they are not the dataclass
+# default, so the default rule cannot either — yet every one of them is
+# boilerplate that carries no information about the order.
+#   * ``'None'`` — ``Order.adjustedOrderType`` on an ``openOrder`` decode
+#     (``decoder.py`` ``o.adjustedOrderType``): IBKR writes the literal
+#     four-character string ``None`` when the order has no adjusted-stop
+#     companion.
+#   * ``'Not an insider or substantial shareholder'`` —
+#     ``Order.shareholder`` (``decoder.py`` ``o.shareholder``): the
+#     regulatory disclosure IBKR stamps on every non-insider order, i.e.
+#     on effectively every order.
+#   * ``'?'`` — TWS's unknown-string placeholder on an ``openOrder``
+#     snapshot. ``Wrapper.openOrder`` already strips it when building
+#     ``Trade.serverOrder``; display drops it wherever else it survives.
+DISPLAY_BOILERPLATE_STRINGS: Final[frozenset[str]] = frozenset(
+    {
+        "None",
+        "Not an insider or substantial shareholder",
+        "?",
+    }
+)
+
+
+def _carriesDisplayInformation(name: str, value: Any, default: Any) -> bool:
+    """Whether one field's value tells a reader something.
+
+    The single predicate behind :func:`dataclassDisplayFields`; see the
+    constants above for the two named exception sets.
+    """
+
+    # Unset, at its declared default, or NaN: nothing was said.
+    # (A field declared with ``default_factory`` has ``default`` set to the
+    # ``MISSING`` sentinel, which never equals a value, so such fields fall
+    # through to the emptiness rules below.)
+    if value is None or value == default or value != value:
+        return False
+
+    # Empty container / empty string: something was said, but it is blank.
+    if isinstance(value, list | dict | str) and not value:
+        return False
+
+    if isinstance(value, str):
+        return value not in DISPLAY_BOILERPLATE_STRINGS
+
+    # Numeric zero is absence for everything but the identity and quantity
+    # fields named above. ``bool`` is an ``int`` subclass, and ``False == 0``,
+    # so flags are excluded here — a flag that differs from its default is
+    # always information.
+    if isinstance(value, Decimal | float | int) and not isinstance(value, bool):
+        return bool(value) or name in DISPLAY_KEEP_ZERO_FIELDS
+
+    return True
+
+
+def dataclassDisplayFields(obj) -> dict[str, Any]:
+    """
+    For a ``dataclass`` instance get the fields worth SHOWING a human, in
+    declaration order, and return as ``dict``.
+
+    A field is kept only when it carries information: unset (``None``),
+    at its declared default, ``NaN``, an empty list / dict / string, an
+    IBKR "not applicable" string sentinel
+    (:data:`DISPLAY_BOILERPLATE_STRINGS`) and numeric zero outside the
+    identity / quantity fields (:data:`DISPLAY_KEEP_ZERO_FIELDS`) are all
+    dropped.
+
+    This is the one policy every order-plane repr uses, so a log line of a
+    ``Trade``, an ``Order``, an ``OrderStatus``, an ``Execution``, a
+    ``Fill``, a ``CommissionReport`` or a ``Contract`` shows the same
+    shape: only what the broker actually said.
+    """
+    if not is_dataclass(obj):
+        raise TypeError(f"Object {obj} is not a dataclass")
+
+    return {
+        field.name: value
+        for field, value in ((field, getattr(obj, field.name)) for field in fields(obj))
+        if _carriesDisplayInformation(field.name, value, field.default)
+    }
+
+
+def dataclassDisplayValue(value: Any) -> str:
+    """Render one field value for display.
+
+    ``Decimal`` prints as its plain numeric string (``29403.25``, ``1``)
+    rather than ``Decimal('29403.25')`` — the wrapper is noise in a log
+    line, and every quantity and price on the order plane is a
+    ``Decimal``. Everything else prints through ``repr``, so a nested
+    dataclass renders through its OWN culled repr.
+    """
+
+    if isinstance(value, Decimal):
+        return str(value)
+
+    return repr(value)
+
+
+def dataclassDisplayPairs(attrs: dict[str, Any]) -> str:
+    """Render display fields as the ``name=value, name=value`` repr body."""
+
+    return ", ".join(f"{k}={dataclassDisplayValue(v)}" for k, v in attrs.items())
+
+
 def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
     """
     Update fields of the given ``dataclass`` object from zero or more
@@ -141,12 +281,11 @@ def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
 def dataclassRepr(obj) -> str:
     """
     Provide a culled representation of the given ``dataclass`` instance,
-    showing only the fields with a non-default value.
+    showing only the fields that carry information under
+    :func:`dataclassDisplayFields`.
     """
-    attrs = dataclassNonDefaults(obj)
     clsName = obj.__class__.__qualname__
-    kwargs = ", ".join(f"{k}={v!r}" for k, v in attrs.items())
-    return f"{clsName}({kwargs})"
+    return f"{clsName}({dataclassDisplayPairs(dataclassDisplayFields(obj))})"
 
 
 def isnamedtupleinstance(x):
