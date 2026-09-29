@@ -82,3 +82,41 @@ def test_whatIf_error_settles_future():
         future.result()
     assert exc_info.value.code == 110
     assert WhatIfKey(555) not in ib.wrapper.requests
+
+
+def test_whatIf_refusal_answers_a_refused_OrderState():
+    """Under the default `RaiseRequestErrors=False` a refused preview answers
+    an OrderState carrying the broker's code and reason — never the request
+    registry's empty-list accumulator, which handed callers `[]` typed as
+    OrderState (2026-09-29: code 201 "MARGIN CALCULATION IS NOT SUPPORTED FOR
+    THIS CONTRACT" crashed a caller on `[].numeric()`).
+    """
+    ib = _wired_ib()
+    assert ib.RaiseRequestErrors is False
+    contract = ibi.Future("SPSOX", "202612", "CME", conId=815824306)
+    order = ibi.LimitOrder("BUY", 1, 12812.0)
+    reason = (
+        "Order rejected - reason:MARGIN CALCULATION IS NOT SUPPORTED FOR THIS "
+        "CONTRACT.  PRODUCT IS CURRENTLY UNAVAILABLE FOR TRADING"
+    )
+
+    future = ib.whatIfOrderAsync(contract, order)
+
+    ib.wrapper.error(
+        reqId=555,
+        errorCode=201,
+        errorString=reason,
+        advancedOrderRejectJson="",
+    )
+
+    assert future.done()
+    state = future.result()
+    assert isinstance(state, OrderState)
+    assert state.whatIfRefused
+    assert state.whatIfErrorCode == 201
+    assert state.whatIfErrorString == reason
+    assert WhatIfKey(555) not in ib.wrapper.requests
+
+
+def test_answered_whatIf_is_not_refused():
+    assert not OrderState(initMarginChange="1234.5").whatIfRefused

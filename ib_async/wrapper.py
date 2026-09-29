@@ -2166,6 +2166,16 @@ class Wrapper:
                 if self.ib.RaiseRequestErrors:
                     error = RequestError(reqId, errorCode, errorString)
                     self.requests.set_error(inflightRequest.key, error)
+                elif isinstance(inflightRequest.key, WhatIfKey):
+                    # A whatIf answers an OrderState, so the refusal rides on
+                    # one (never the default list accumulator, which handed
+                    # callers `[]` typed as OrderState).
+                    self.requests.set_result(
+                        inflightRequest.key,
+                        OrderState(
+                            whatIfErrorCode=errorCode, whatIfErrorString=errorString
+                        ),
+                    )
                 else:
                     self.requests.set_result(inflightRequest.key)
             elif trade:

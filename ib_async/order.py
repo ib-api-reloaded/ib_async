@@ -529,6 +529,18 @@ class OrderState:
     orderAllocations: list[OrderAllocation] = field(default_factory=list)
     completedTime: str = ""
     completedStatus: str = ""
+    # whatIf previews only: the broker's REFUSAL of the preview, which arrives
+    # as an error reply instead of an openOrder answer (e.g. 201 "Order
+    # rejected - reason:MARGIN CALCULATION IS NOT SUPPORTED FOR THIS
+    # CONTRACT"). A refused preview carries no margin or commission facts.
+    # 0 / "" for every answered preview and every live order state.
+    whatIfErrorCode: int = 0
+    whatIfErrorString: str = ""
+
+    @property
+    def whatIfRefused(self) -> bool:
+        """True when the broker refused this whatIf preview (see `whatIfErrorCode`)."""
+        return self.whatIfErrorCode != 0
 
     def transform(self, transformer):
         """Convert the numeric values of this OrderState into a new OrderState transformed by 'using'"""

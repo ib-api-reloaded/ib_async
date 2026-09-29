@@ -931,6 +931,11 @@ class IB:
 
         This method is blocking.
 
+        A preview the broker refuses answers an OrderState with
+        `whatIfRefused` True and the broker's `whatIfErrorCode` /
+        `whatIfErrorString` (unless `RaiseRequestErrors` is set, which
+        raises RequestError as for every other request).
+
         Args:
             contract: Contract to test.
             order: Order to test.
