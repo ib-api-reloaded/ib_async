@@ -60,6 +60,41 @@ def test_recognized_terminal_status_is_preserved_verbatim():
     assert not any("raw status" in entry.message for entry in trade.log)
 
 
+def test_filled_size_status_is_normalized_to_filled(caplog):
+    ib = ibi.IB()
+    trade = _completed(ib, 47, status="Filled Size: 10")
+
+    assert trade.isDone()
+    assert trade.orderStatus.status == OrderStatus.Filled
+    assert trade not in ib.openTrades()
+    assert "reported non-terminal status" not in caplog.text
+    assert any("raw status 'Filled Size: 10'" in entry.message for entry in trade.log)
+
+
+def test_multiline_cancelled_by_status_is_normalized_to_cancelled(caplog):
+    ib = ibi.IB()
+    status = "Cancelled by System:\nCancel parent on new cancelling order"
+    trade = _completed(ib, 48, status=status)
+
+    assert trade.isDone()
+    assert trade.orderStatus.status == OrderStatus.Cancelled
+    assert trade not in ib.openTrades()
+    assert "reported non-terminal status" not in caplog.text
+    assert any(repr(status) in entry.message for entry in trade.log)
+
+
+def test_cancelled_by_trader_status_is_normalized_to_cancelled(caplog):
+    ib = ibi.IB()
+    status = "Cancelled by Trader"
+    trade = _completed(ib, 49, status=status)
+
+    assert trade.isDone()
+    assert trade.orderStatus.status == OrderStatus.Cancelled
+    assert trade not in ib.openTrades()
+    assert "reported non-terminal status" not in caplog.text
+    assert any(repr(status) in entry.message for entry in trade.log)
+
+
 def test_completed_trade_carries_owning_client_id():
     ib = ibi.IB()
     trade = _completed(ib, 45, status="Cancelled", clientId=169)

@@ -3,6 +3,7 @@
 import asyncio
 import dataclasses
 import logging
+import re
 import time
 from collections import OrderedDict, defaultdict
 from contextlib import suppress
@@ -91,6 +92,10 @@ from ib_async.util import (
 
 if TYPE_CHECKING:
     from ib_async.ib import IB
+
+
+_FILLED_SIZE_STATUS = re.compile(r"Filled Size: \d+(?:\.\d+)?")
+_CANCELLED_BY_STATUS = re.compile(r"Cancelled by .*", re.DOTALL)
 
 
 OrderKeyType: TypeAlias = int | tuple[int, int]
@@ -924,7 +929,12 @@ class Wrapper:
         # path. Fall back to ``status`` to remain backwards-compatible
         # with older servers / decoders that only fill the latter.
         terminalStatus = orderState.completedStatus or orderState.status
-        if terminalStatus not in OrderStatus.DoneStates:
+        rawStatus = terminalStatus
+        if _FILLED_SIZE_STATUS.fullmatch(terminalStatus):
+            terminalStatus = OrderStatus.Filled
+        elif _CANCELLED_BY_STATUS.fullmatch(terminalStatus):
+            terminalStatus = OrderStatus.Cancelled
+        elif terminalStatus not in OrderStatus.DoneStates:
             # The completed-orders channel is terminal BY DEFINITION. An
             # unset or unrecognized status string must never let this trade
             # masquerade as an open working order in openTrades()/openOrders()
@@ -937,12 +947,8 @@ class Wrapper:
                 order.permId,
                 terminalStatus,
             )
-            rawStatus = terminalStatus
-            statusNormalized = True
             terminalStatus = OrderStatus.Inactive
-        else:
-            rawStatus = ""
-            statusNormalized = False
+        statusNormalized = terminalStatus != rawStatus
         existing = self.permId2Trade.get(order.permId)
         if existing is not None:
             # An ``openOrder`` snapshot for this permId already wired up
