@@ -929,8 +929,9 @@ class Wrapper:
         # records for completed orders; ``status`` may be unset on this
         # path. Fall back to ``status`` to remain backwards-compatible
         # with older servers / decoders that only fill the latter.
-        terminalStatus = orderState.completedStatus or orderState.status
-        if terminalStatus not in OrderStatus.DoneStates:
+        rawStatus = orderState.completedStatus or orderState.status
+        terminalStatus = OrderStatus.terminalFromCompleted(rawStatus)
+        if terminalStatus is None:
             # The completed-orders channel is terminal BY DEFINITION. An
             # unset or unrecognized status string must never let this trade
             # masquerade as an open working order in openTrades()/openOrders()
@@ -941,14 +942,12 @@ class Wrapper:
                 "completedOrder: permId=%s reported non-terminal status %r; "
                 "classifying Inactive",
                 order.permId,
-                terminalStatus,
+                rawStatus,
             )
-            rawStatus = terminalStatus
-            statusNormalized = True
             terminalStatus = OrderStatus.Inactive
-        else:
-            rawStatus = ""
-            statusNormalized = False
+        # Any rewrite — a recognised TWS phrasing or the Inactive fallback —
+        # keeps the original text in the trade log.
+        statusNormalized = terminalStatus != rawStatus
         existing = self.permId2Trade.get(order.permId)
         if existing is not None:
             # An ``openOrder`` snapshot for this permId already wired up
