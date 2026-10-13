@@ -36,7 +36,6 @@ from ib_async.objects import (
     OptionComputation,
 )
 from ib_async.order import Order, OrderState, _toDecimal
-from ib_async.util import UNSET_DOUBLE
 from ib_async.wrapper import _MAX_PENDING_COMMISSION_REPORTS
 
 # ---------------------------------------------------------------------------
