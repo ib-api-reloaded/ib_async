@@ -92,6 +92,10 @@ version 225. The full upgrade guide with examples lives at
   Previously they were populated on receive but silently dropped on
   send — a fetched-then-replaced order lost its originating-session
   tagging.
+* **``Order.conditionsIncludeOvernight``** (TWS API 10.50): lets an
+  order's conditions also evaluate during the overnight session. Sent
+  and received on the protobuf order path; ``False`` stays off the
+  wire.
 
 **Changed (breaking)**
 

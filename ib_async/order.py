@@ -145,6 +145,9 @@ class Order:
     conditions: list[OrderCondition] = field(default_factory=list)
     conditionsCancelOrder: bool = False
     conditionsIgnoreRth: bool = False
+    # Let conditions also evaluate during the overnight session. Only
+    # the protobuf order path carries it; the text wire has no slot.
+    conditionsIncludeOvernight: bool = False
     extOperator: str = ""
     # Attached-order (stop-loss / profit-take) cross-references — IBKR
     # reference ``ibapi/order.py`` carries them; the wire ships them on

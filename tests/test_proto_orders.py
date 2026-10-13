@@ -209,6 +209,18 @@ def test_create_order_proto_coerces_none_plain_int_fields_to_dataclass_default()
     assert proto.HasField("exemptCode") and proto.exemptCode == -1
 
 
+def test_create_order_proto_conditions_include_overnight_is_truthy_gated():
+    """Mirrors IBKR's truthy gate: the default stays off the wire, so
+    orders that never set it encode exactly as before the field existed."""
+    order = LimitOrder("BUY", 1, 10)
+    assert not createOrderProto(order).HasField("conditionsIncludeOvernight")
+
+    order.conditionsIncludeOvernight = True
+    proto = createOrderProto(order)
+    assert proto.HasField("conditionsIncludeOvernight")
+    assert proto.conditionsIncludeOvernight is True
+
+
 def test_limit_order_constructor_coerces_user_floats_to_decimal():
     # User-friendly ``LimitOrder("BUY", 100, 50.5)`` round-trips through
     # ``_toDecimal`` so the wire-side gets a clean Decimal even though
@@ -792,6 +804,7 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     cond.triggerMethod = 0
     proto.conditions.append(cond)
     proto.conditionsIgnoreRth = True
+    proto.conditionsIncludeOvernight = True
     proto.conditionsCancelOrder = True
     proto.adjustedOrderType = "STP"
     proto.triggerPrice = 48.0
@@ -944,6 +957,7 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     assert pc.exch == "SMART"
     assert pc.price == 99.5
     assert order.conditionsIgnoreRth is True
+    assert order.conditionsIncludeOvernight is True
     assert order.conditionsCancelOrder is True
     # Adjustable
     assert order.adjustedOrderType == "STP"
