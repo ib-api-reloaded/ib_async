@@ -455,6 +455,14 @@ MONETARY_ACCOUNT_VALUE_TAGS: frozenset[str] = frozenset(
     }
 )
 
+# TWS API 10.47 added an API setting — on by default for new installs,
+# off for upgrades — that prefixes per-currency account values with
+# ``$LEDGER-`` so they stop colliding with the account-level value of
+# the same tag (``AccruedCash`` vs ``$LEDGER-AccruedCash`` in USD).
+# ``AccountValue.tag`` keeps the prefix so the two stay distinguishable;
+# only the monetary classification looks past it.
+LEDGER_TAG_PREFIX: str = "$LEDGER-"
+
 
 @dataclass(slots=True, frozen=True)
 class AccountValue:
@@ -477,9 +485,10 @@ class AccountValue:
         site (``decoder.parse``, ``_proto/*`` converters); a divergent
         ad-hoc parse here previously surfaced a fake 1.8e308 / 2.1B
         ``NetLiquidation`` whenever IBKR shipped the unset sentinel.
+        A ``$LEDGER-`` per-currency tag classifies like its bare tag.
         Never raises.
         """
-        if self.tag not in MONETARY_ACCOUNT_VALUE_TAGS:
+        if self.tag.removeprefix(LEDGER_TAG_PREFIX) not in MONETARY_ACCOUNT_VALUE_TAGS:
             return None
         return safe_decimal(self.value)
 

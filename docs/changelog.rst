@@ -179,6 +179,11 @@ Gateway server version 226). The full upgrade guide with examples lives at
 These were broken on v2.x against modern TWS / Gateway versions and
 are fixed in v3.0:
 
+* **``AccountValue.decimalValue``** returned ``None`` for every
+  per-currency monetary value on TWS installs with TWS API 10.47's
+  ``$LEDGER-`` prefix setting on — the default for new installs. The
+  prefixed tag now classifies like its bare tag; ``tag`` itself keeps
+  the prefix.
 * **``MaxClientVersion = 178`` cap** made every gate 201+ feature
   unreachable in production.
 * **``errorMsg`` decoder** mis-shifted on server >= 194 (ERROR_TIME
