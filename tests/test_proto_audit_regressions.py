@@ -3663,7 +3663,7 @@ def test_send_round_trips_full_field_tuple_with_infinity_and_unset():
 
 
 # ---------------------------------------------------------------------------
-# Round 4 audit: TagValue option-list passthrough on scanner / news / fundamentals
+# Round 4 audit: TagValue option-list passthrough on scanner / news
 # ---------------------------------------------------------------------------
 
 
@@ -3740,27 +3740,6 @@ def test_scanner_subscription_empty_option_lists_leave_proto_maps_unset():
     assert not dict(a.scannerSubscription.scannerSubscriptionFilterOptions)
 
 
-def test_fundamentals_data_request_carries_options_into_proto_map():
-    """``fundamentalsDataOptions`` reaches the wire map field on the
-    proto path. Without this, user-supplied options on the binary
-    signature silently disappear when TWS upgrades and protobuf becomes
-    the default for that opcode.
-    """
-    from ib_async._proto.scanner import createFundamentalsDataRequestProto
-    from ib_async.contract import Stock, TagValue
-
-    contract = Stock("AAPL", "SMART", "USD")
-    proto = createFundamentalsDataRequestProto(
-        reqId=9,
-        contract=contract,
-        reportType="ReportSnapshot",
-        fundamentalsDataOptions=[TagValue("foo", "bar")],
-    )
-    assert proto.reqId == 9
-    assert proto.reportType == "ReportSnapshot"
-    assert dict(proto.fundamentalsDataOptions) == {"foo": "bar"}
-
-
 def test_news_article_request_carries_options_into_proto_map():
     """``newsArticleOptions`` round-trips into the proto's
     ``map<string, string>`` field — accepting it on the request keeps
@@ -3802,7 +3781,7 @@ def test_historical_news_request_carries_options_into_proto_map():
     assert dict(proto.historicalNewsOptions) == {"a": "b", "c": "d"}
 
 
-def test_news_and_fundamentals_request_options_default_unset():
+def test_news_request_options_default_unset():
     """Default-call (no options arg) must leave the wire map field
     unset — preserving wire compatibility for callers that don't
     supply options.
@@ -3811,8 +3790,6 @@ def test_news_and_fundamentals_request_options_default_unset():
         createHistoricalNewsRequestProto,
         createNewsArticleRequestProto,
     )
-    from ib_async._proto.scanner import createFundamentalsDataRequestProto
-    from ib_async.contract import Stock
 
     a = createNewsArticleRequestProto(reqId=1, providerCode="BRFG", articleId="x")
     assert not dict(a.newsArticleOptions)
@@ -3826,11 +3803,6 @@ def test_news_and_fundamentals_request_options_default_unset():
         totalResults=10,
     )
     assert not dict(b.historicalNewsOptions)
-
-    c = createFundamentalsDataRequestProto(
-        reqId=1, contract=Stock("AAPL", "SMART", "USD"), reportType="ReportSnapshot"
-    )
-    assert not dict(c.fundamentalsDataOptions)
 
 
 # ---------------------------------------------------------------------------
@@ -4821,11 +4793,10 @@ def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
         99,
         106,
         108,
-        # news + scanner / fundamentals / pnl
+        # news + scanner / pnl
         14,
         19,
         20,
-        51,
         83,
         84,
         85,

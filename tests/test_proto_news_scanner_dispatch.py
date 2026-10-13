@@ -1,4 +1,4 @@
-"""End-to-end dispatch + gating tests for news + scanner / fundamentals / PnL.
+"""End-to-end dispatch + gating tests for news + scanner / PnL.
 
 Same pattern as test_proto_accounts_dispatch / market_historical_dispatch.
 Synthetic proto payloads route through ``Decoder.processProtoBuf`` and
@@ -11,14 +11,11 @@ from __future__ import annotations
 
 import ib_async as ibi
 from ib_async._pb import (
-    CancelFundamentalsData_pb2,
     CancelNewsBulletins_pb2,
     CancelPnL_pb2,
     CancelPnLSingle_pb2,
     CancelScannerSubscription_pb2,
     CancelWshMetaData_pb2,
-    FundamentalsData_pb2,
-    FundamentalsDataRequest_pb2,
     HistoricalNews_pb2,
     HistoricalNewsEnd_pb2,
     HistoricalNewsRequest_pb2,
@@ -41,14 +38,12 @@ from ib_async._pb import (
     WshMetaDataRequest_pb2,
 )
 from ib_async._pb_msgids import (
-    CANCEL_FUNDAMENTAL_DATA,
     CANCEL_NEWS_BULLETINS,
     CANCEL_PNL,
     CANCEL_PNL_SINGLE,
     CANCEL_SCANNER_SUBSCRIPTION,
     CANCEL_WSH_EVENT_DATA,
     CANCEL_WSH_META_DATA,
-    REQ_FUNDAMENTAL_DATA,
     REQ_HISTORICAL_NEWS,
     REQ_NEWS_ARTICLE,
     REQ_NEWS_BULLETINS,
@@ -185,15 +180,6 @@ def test_scanner_data_proto_dispatches_per_element_then_calls_end():
     assert len(items) == 2
     assert items[0].contractDetails.contract.symbol == "AAPL"
     assert items[1].contractDetails.contract.symbol == "MSFT"
-
-
-def test_fundamental_data_proto_settles_reqId():
-    ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
-    proto = FundamentalsData_pb2.FundamentalsData(reqId=7, data="<xml/>")
-    ib.client.decoder.processProtoBuf(51, proto.SerializeToString())
-    assert req.future.done()
-    assert req.future.result() == "<xml/>"
 
 
 def test_pnl_proto_does_not_raise_without_subscription():
@@ -377,31 +363,6 @@ def test_req_scanner_parameters_uses_protobuf_at_gate():
     canonical, body = _decodeProtoFrame(sent[0])
     assert canonical == REQ_SCANNER_PARAMETERS
     assert body == b""
-
-
-def test_req_fundamental_data_uses_protobuf_at_gate():
-    ib = _ibAtVersion(210)
-    sent = _captureSend(ib)
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    ib.client.reqFundamentalData(7, contract, "ReportSnapshot", [])
-    canonical, body = _decodeProtoFrame(sent[0])
-    assert canonical == REQ_FUNDAMENTAL_DATA
-    proto = FundamentalsDataRequest_pb2.FundamentalsDataRequest()
-    proto.ParseFromString(body)
-    assert proto.reqId == 7
-    assert proto.contract.symbol == "AAPL"
-    assert proto.reportType == "ReportSnapshot"
-
-
-def test_cancel_fundamental_data_uses_protobuf_at_gate():
-    ib = _ibAtVersion(210)
-    sent = _captureSend(ib)
-    ib.client.cancelFundamentalData(7)
-    canonical, body = _decodeProtoFrame(sent[0])
-    assert canonical == CANCEL_FUNDAMENTAL_DATA
-    proto = CancelFundamentalsData_pb2.CancelFundamentalsData()
-    proto.ParseFromString(body)
-    assert proto.reqId == 7
 
 
 def test_req_pnl_uses_protobuf_at_gate():

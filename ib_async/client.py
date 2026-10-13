@@ -1509,46 +1509,6 @@ class Client:
             return
         self.send(51, 1, reqId)
 
-    def reqFundamentalData(self, reqId, contract, reportType, fundamentalDataOptions):
-        def _proto():
-            from ._proto.scanner import createFundamentalsDataRequestProto
-
-            return createFundamentalsDataRequestProto(
-                reqId,
-                contract,
-                reportType,
-                fundamentalsDataOptions=fundamentalDataOptions,
-            )
-
-        if self._tryProto(_M.REQ_FUNDAMENTAL_DATA, _proto):
-            return
-        options = fundamentalDataOptions or []
-        self.send(
-            52,
-            2,
-            reqId,
-            contract.conId,
-            contract.symbol,
-            contract.secType,
-            contract.exchange,
-            contract.primaryExchange,
-            contract.currency,
-            contract.localSymbol,
-            reportType,
-            len(options),
-            options,
-        )
-
-    def cancelFundamentalData(self, reqId):
-        def _proto():
-            from ._proto.scanner import createCancelFundamentalsDataProto
-
-            return createCancelFundamentalsDataProto(reqId)
-
-        if self._tryProto(_M.CANCEL_FUNDAMENTAL_DATA, _proto):
-            return
-        self.send(53, 1, reqId)
-
     def calculateImpliedVolatility(
         self, reqId, contract, optionPrice, underPrice, implVolOptions
     ):

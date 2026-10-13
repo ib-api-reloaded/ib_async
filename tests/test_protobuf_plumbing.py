@@ -41,10 +41,11 @@ def test_protobuf_msg_ids_table_covers_known_messages():
 
 
 def test_protobuf_msg_ids_table_size_matches_ibkr_reference():
-    # IBKR's ibapi/common.py:55-136 ships 79 entries; if the upstream
-    # adds a new message family, this test will fail loudly so we have
-    # to make a deliberate decision about syncing.
-    assert len(PROTOBUF_MSG_IDS) == 79
+    # IBKR's ibapi/common.py ``getServerVersionForMessage`` gates 77
+    # messages; if the upstream adds or drops a message family, this
+    # test will fail loudly so we have to make a deliberate decision
+    # about syncing.
+    assert len(PROTOBUF_MSG_IDS) == 77
 
 
 # --- useProtoBuf boundary behaviour --------------------------------------

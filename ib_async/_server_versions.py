@@ -24,7 +24,6 @@ from typing import Final
 
 # --- Pre-100 (legacy, listed for completeness; we never negotiate below 100)
 MIN_SERVER_VER_PTA_ORDERS: Final = 39
-MIN_SERVER_VER_FUNDAMENTAL_DATA: Final = 40
 MIN_SERVER_VER_DELTA_NEUTRAL: Final = 40
 MIN_SERVER_VER_CONTRACT_DATA_CHAIN: Final = 40
 MIN_SERVER_VER_SCALE_ORDERS2: Final = 40

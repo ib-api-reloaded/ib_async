@@ -13,7 +13,7 @@
 - **Market Data Applications**: Stream live quotes, historical data, and market depth
 - **Trading Systems**: Place, modify, and monitor orders programmatically
 - **Portfolio Tools**: Track positions, account balances, and P&L in real-time
-- **Research Platforms**: Analyze contract details, option chains, and fundamental data
+- **Research Platforms**: Analyze contract details, option chains, and historical data
 - **Risk Management**: Monitor exposures and implement automated controls
 
 ### Key Features
@@ -630,7 +630,6 @@ Projects below are not endorsed by any entity and are purely for reference or en
 
 - Adi's livestream VODs about using IBKR APIs: [Interactive Brokers API in Python](https://www.youtube.com/playlist?list=PLCZZtBmmgxn8CFKysCkcl-B1tqRgCCNIX)
 - Matt's IBKR python CLI: [icli](http://github.com/mattsta/icli)
-- Corporate data parsing via IBKR API: [ib_fundamental](https://github.com/quantbelt/ib_fundamental)
 
 ## Disclaimer
 

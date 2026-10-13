@@ -1,4 +1,4 @@
-"""Protobuf converters for scanner, fundamentals, and PnL.
+"""Protobuf converters for scanner and PnL.
 
 Pure functions: every converter takes only proto inputs (or domain
 inputs on the send side). No reads from module-level state, no
@@ -23,8 +23,8 @@ Wire-shape notes:
   ``scannerSubscriptionFilterOptions`` (the documented per-instrument
   generic filter options shipped on TWS >= MIN_SERVER_VER_SCANNER_GENERIC_OPTS)
   and ``scannerSubscriptionOptions`` (IBKR-internal, kept for parity).
-* ``FundamentalsDataRequest`` and the news-side requests (article /
-  historical news) carry trailing ``map<string, string>`` option fields
+* The news-side requests (article / historical news) carry trailing
+  ``map<string, string>`` option fields
   — these are TagValue lists on the public surface; pass-through must
   preserve them or the proto path silently drops user-provided options
   the binary path would have shipped.
@@ -36,12 +36,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .._pb import (
-    CancelFundamentalsData_pb2,
     CancelPnL_pb2,
     CancelPnLSingle_pb2,
     CancelScannerSubscription_pb2,
-    FundamentalsData_pb2,
-    FundamentalsDataRequest_pb2,
     PnL_pb2,
     PnLRequest_pb2,
     PnLSingle_pb2,
@@ -56,7 +53,7 @@ from .._pb import (
 from ..contract import Contract, ContractDetails, TagValue
 from ..objects import ScannerSubscription
 from ..util import UNSET_INTEGER
-from .contracts import createContract, createContractProto
+from .contracts import createContract
 from .safe import (
     fill_tag_value_map,
     normalize_none_scalars,
@@ -97,14 +94,6 @@ class ScannerDataArgs:
 
     reqId: int
     elements: list[ScannerDataElementArgs]
-
-
-@dataclass(slots=True, frozen=True)
-class FundamentalDataArgs:
-    """Args for ``Wrapper.fundamentalData(reqId, data)``."""
-
-    reqId: int
-    data: str
 
 
 @dataclass(slots=True, frozen=True)

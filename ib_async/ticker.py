@@ -13,7 +13,6 @@ from ib_async.objects import (
     Dividends,
     DOMLevel,
     EfpData,
-    FundamentalRatios,
     IBDefaults,
     MktDepthData,
     NewsTick,
@@ -163,7 +162,6 @@ class Ticker:
     oddLotBidExch: str = ""
     oddLotAskExch: str = ""
     dividends: Dividends | None = None
-    fundamentalRatios: FundamentalRatios | None = None
     ticks: list[TickData] = field(default_factory=list)
     tickByTicks: list[TickByTickAllLast | TickByTickBidAsk | TickByTickMidPoint] = (
         field(default_factory=list)

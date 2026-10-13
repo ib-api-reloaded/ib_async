@@ -30,6 +30,8 @@ version 225. The full upgrade guide with examples lives at
   (``av[1]``) and tuple iteration no longer work. Use attribute
   access (``av.tag``). ``_asdict()`` / ``_replace()`` are replaced by
   ``dataclasses.asdict()`` / ``dataclasses.replace()``.
+* ``reqFundamentalData`` and ``Ticker.fundamentalRatios`` are removed:
+  IBKR no longer serves fundamental data through the TWS API.
 
 **Added**
 
@@ -154,6 +156,17 @@ version 225. The full upgrade guide with examples lives at
   ``ScannerSubscription``, ``ExecutionFilter``,
   ``ContractDetails.aggGroup``. Readers updated from
   ``isNan(x)`` / ``x == UNSET_*`` to ``x is None``.
+
+**Removed**
+
+* Fundamental data. IBKR de-supported it in TWS API 10.47 and removed
+  every message for it, so ``IB.reqFundamentalData`` /
+  ``reqFundamentalDataAsync``, ``Client.reqFundamentalData`` /
+  ``cancelFundamentalData``, ``Ticker.fundamentalRatios`` (generic
+  tick ``258``) and ``FundamentalRatios`` are gone. TWS offers no
+  replacement; the Wall Street Horizon calls
+  (``reqWshMetaData`` / ``reqWshEventData``) cover corporate events
+  but not financial statements or ratios.
 
 **Fixed (silent-data-loss and wire-protocol bugs)**
 

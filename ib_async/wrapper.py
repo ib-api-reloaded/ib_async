@@ -46,7 +46,6 @@ from ib_async.objects import (
     Execution,
     FamilyCode,
     Fill,
-    FundamentalRatios,
     HistogramData,
     HistoricalNews,
     HistoricalSchedule,
@@ -1650,16 +1649,6 @@ class Wrapper:
             elif tickType in TIMESTAMP_TICK_MAP:
                 # Timestamp conversion (O(1) dict lookup)
                 self._processTimestampTick(ticker, TIMESTAMP_TICK_MAP[tickType], value)
-            elif tickType == 47:
-                # https://web.archive.org/web/20200725010343/https://interactivebrokers.github.io/tws-api/fundamental_ratios_tags.html
-                d = dict(t.split("=") for t in value.split(";") if t)
-                for k, v in d.items():
-                    with suppress(ValueError):
-                        if v == "-99999.99":
-                            v = "nan"
-                        d[k] = float(v)  # type: ignore[assignment]
-                        d[k] = int(v)  # type: ignore[assignment]
-                ticker.fundamentalRatios = FundamentalRatios(**d)
             elif tickType in RT_VOLUME_TICK_MAP:
                 # RT Volume or RT Trade Volume (O(1) dict lookup + helper)
                 result = self._processRtVolumeTick(ticker, tickType, value)
@@ -1868,9 +1857,6 @@ class Wrapper:
 
     def deltaNeutralValidation(self, reqId: int, dnc: DeltaNeutralContract):
         pass
-
-    def fundamentalData(self, reqId: int, data: str):
-        self.requests.set_result(ReqIdKey(reqId), data)
 
     def scannerParameters(self, xml: str):
         self.requests.set_result(SingletonKey("scannerParams"), xml)

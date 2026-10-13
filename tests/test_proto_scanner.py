@@ -1,4 +1,4 @@
-"""Negative-path-first tests for the scanner / fundamentals / PnL converter.
+"""Negative-path-first tests for the scanner / PnL converter.
 
 Coverage strategy:
 
@@ -24,12 +24,9 @@ from decimal import Decimal
 import pytest
 
 from ib_async._pb import (
-    CancelFundamentalsData_pb2,
     CancelPnL_pb2,
     CancelPnLSingle_pb2,
     CancelScannerSubscription_pb2,
-    FundamentalsData_pb2,
-    FundamentalsDataRequest_pb2,
     PnL_pb2,
     PnLRequest_pb2,
     PnLSingle_pb2,
@@ -41,12 +38,9 @@ from ib_async._pb import (
     ScannerSubscriptionRequest_pb2,
 )
 from ib_async._proto.scanner import (
-    createCancelFundamentalsDataProto,
     createCancelPnLProto,
     createCancelPnLSingleProto,
     createCancelScannerSubscriptionProto,
-    createFundamentalDataArgs,
-    createFundamentalsDataRequestProto,
     createPnLArgs,
     createPnLRequestProto,
     createPnLSingleArgs,
@@ -58,7 +52,6 @@ from ib_async._proto.scanner import (
     createScannerSubscriptionProto,
     createScannerSubscriptionRequestProto,
 )
-from ib_async.contract import Contract
 from ib_async.objects import ScannerSubscription
 
 # ---------------------------------------------------------------------------
@@ -175,44 +168,6 @@ def test_scanner_parameters_xml_round_trip():
 
 def test_scanner_parameters_request_proto_serializes_empty():
     assert createScannerParametersRequestProto().SerializeToString() == b""
-
-
-# ---------------------------------------------------------------------------
-# FundamentalsData
-# ---------------------------------------------------------------------------
-
-
-def test_fundamental_data_empty_proto():
-    args = createFundamentalDataArgs(FundamentalsData_pb2.FundamentalsData())
-    assert args.reqId == 0
-    assert args.data == ""
-
-
-def test_fundamental_data_full_round_trip():
-    proto = FundamentalsData_pb2.FundamentalsData(reqId=7, data="<xml/>")
-    args = createFundamentalDataArgs(proto)
-    assert args.reqId == 7
-    assert args.data == "<xml/>"
-
-
-def test_fundamentals_data_request_proto_carries_every_field():
-    contract = Contract(symbol="IBM", secType="STK", exchange="SMART", currency="USD")
-    proto = createFundamentalsDataRequestProto(7, contract, "ReportsFinSummary")
-    decoded = FundamentalsDataRequest_pb2.FundamentalsDataRequest()
-    decoded.ParseFromString(proto.SerializeToString())
-    assert decoded.reqId == 7
-    assert decoded.reportType == "ReportsFinSummary"
-    assert decoded.contract.symbol == "IBM"
-    assert decoded.contract.secType == "STK"
-    assert decoded.contract.exchange == "SMART"
-    assert decoded.contract.currency == "USD"
-
-
-def test_cancel_fundamentals_data_carries_reqId():
-    proto = createCancelFundamentalsDataProto(7)
-    decoded = CancelFundamentalsData_pb2.CancelFundamentalsData()
-    decoded.ParseFromString(proto.SerializeToString())
-    assert decoded.reqId == 7
 
 
 # ---------------------------------------------------------------------------
