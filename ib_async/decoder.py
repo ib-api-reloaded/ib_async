@@ -147,7 +147,6 @@ def _initProtoMsgHandlers() -> None:
         ExecutionDetails_pb2,
         ExecutionDetailsEnd_pb2,
         FamilyCodes_pb2,
-        FundamentalsData_pb2,
         HeadTimestamp_pb2,
         HistogramData_pb2,
         HistoricalData_pb2,
@@ -315,11 +314,10 @@ def _initProtoMsgHandlers() -> None:
                 HistoricalDataEnd_pb2.HistoricalDataEnd,
                 "_protoHistoricalDataEnd",
             ),
-            # --- news + scanner / fundamentals / PnL (gates 209 / 210) ---
+            # --- news + scanner / PnL (gates 209 / 210) ---
             14: (NewsBulletin_pb2.NewsBulletin, "_protoUpdateNewsBulletin"),
             19: (ScannerParameters_pb2.ScannerParameters, "_protoScannerParameters"),
             20: (ScannerData_pb2.ScannerData, "_protoScannerData"),
-            51: (FundamentalsData_pb2.FundamentalsData, "_protoFundamentalData"),
             83: (NewsArticle_pb2.NewsArticle, "_protoNewsArticle"),
             84: (TickNews_pb2.TickNews, "_protoTickNews"),
             85: (NewsProviders_pb2.NewsProviders, "_protoNewsProviders"),
@@ -437,7 +435,6 @@ class Decoder:
                 "realtimeBar",
                 [int, int, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal, int],
             ),
-            51: self.wrap("fundamentalData", [int, str]),
             52: self.wrap("contractDetailsEnd", [int]),
             53: self.wrap("openOrderEnd", []),
             54: self.wrap("accountDownloadEnd", [str]),
@@ -1171,7 +1168,7 @@ class Decoder:
         a = createWshEventDataArgs(proto)
         self.wrapper.wshEventData(a.reqId, a.dataJson)
 
-    # --- scanner + fundamentals + PnL handlers ----------------------------
+    # --- scanner + PnL handlers ---------------------------------------------
 
     def _protoScannerParameters(self, proto: Any) -> None:
         from ._proto.scanner import createScannerParametersXml
@@ -1193,12 +1190,6 @@ class Decoder:
                 el.legsStr,
             )
         self.wrapper.scannerDataEnd(a.reqId)
-
-    def _protoFundamentalData(self, proto: Any) -> None:
-        from ._proto.scanner import createFundamentalDataArgs
-
-        a = createFundamentalDataArgs(proto)
-        self.wrapper.fundamentalData(a.reqId, a.data)
 
     def _protoPnL(self, proto: Any) -> None:
         from ._proto.scanner import createPnLArgs

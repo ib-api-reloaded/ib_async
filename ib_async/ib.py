@@ -1633,8 +1633,6 @@ class IB:
                 233    ``last``, ``lastSize``, ``rtVolume``, ``rtTime``,
                        ``vwap`` (Time & Sales)
                 236    ``shortableShares``
-                258    ``fundamentalRatios`` (of type
-                       :class:`ib_async.objects.FundamentalRatios`)
                 293    ``tradeCount``
                 294    ``tradeRate``
                 295    ``volumeRate``
@@ -1907,35 +1905,6 @@ class IB:
                 '3 days'.
         """
         return self._run(self.reqHistogramDataAsync(contract, useRTH, period))
-
-    def reqFundamentalData(
-        self,
-        contract: Contract,
-        reportType: str,
-        fundamentalDataOptions: list[TagValue] = [],
-    ) -> str:
-        """
-        Get fundamental data of a contract in XML format.
-
-        This method is blocking.
-
-        https://interactivebrokers.github.io/tws-api/fundamentals.html
-
-        Args:
-            contract: Contract to query.
-            reportType:
-
-                * 'ReportsFinSummary': Financial summary
-                * 'ReportsOwnership': Company's ownership
-                * 'ReportSnapshot': Company's financial overview
-                * 'ReportsFinStatements': Financial Statements
-                * 'RESC': Analyst Estimates
-                * 'CalendarReport': Company's calendar
-            fundamentalDataOptions: Unknown
-        """
-        return self._run(
-            self.reqFundamentalDataAsync(contract, reportType, fundamentalDataOptions)
-        )
 
     def reqScannerData(
         self,
@@ -2868,19 +2837,6 @@ class IB:
         """Async sibling of :meth:`reqHistogramData`."""
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.reqHistogramData(reqId, contract, useRTH, period)
-        return future
-
-    def reqFundamentalDataAsync(
-        self,
-        contract: Contract,
-        reportType: str,
-        fundamentalDataOptions: list[TagValue] = [],
-    ) -> Awaitable[str]:
-        """Async sibling of :meth:`reqFundamentalData`."""
-        reqId, future = self._openReqIdRequest(contract=contract)
-        self.client.reqFundamentalData(
-            reqId, contract, reportType, fundamentalDataOptions
-        )
         return future
 
     async def reqScannerDataAsync(

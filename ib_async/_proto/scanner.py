@@ -1,4 +1,4 @@
-"""Protobuf converters for scanner, fundamentals, and PnL.
+"""Protobuf converters for scanner and PnL.
 
 Pure functions: every converter takes only proto inputs (or domain
 inputs on the send side). No reads from module-level state, no
@@ -23,8 +23,8 @@ Wire-shape notes:
   ``scannerSubscriptionFilterOptions`` (the documented per-instrument
   generic filter options shipped on TWS >= MIN_SERVER_VER_SCANNER_GENERIC_OPTS)
   and ``scannerSubscriptionOptions`` (IBKR-internal, kept for parity).
-* ``FundamentalsDataRequest`` and the news-side requests (article /
-  historical news) carry trailing ``map<string, string>`` option fields
+* The news-side requests (article / historical news) carry trailing
+  ``map<string, string>`` option fields
   — these are TagValue lists on the public surface; pass-through must
   preserve them or the proto path silently drops user-provided options
   the binary path would have shipped.
@@ -36,12 +36,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .._pb import (
-    CancelFundamentalsData_pb2,
     CancelPnL_pb2,
     CancelPnLSingle_pb2,
     CancelScannerSubscription_pb2,
-    FundamentalsData_pb2,
-    FundamentalsDataRequest_pb2,
     PnL_pb2,
     PnLRequest_pb2,
     PnLSingle_pb2,
@@ -56,7 +53,7 @@ from .._pb import (
 from ..contract import Contract, ContractDetails, TagValue
 from ..objects import ScannerSubscription
 from ..util import UNSET_INTEGER
-from .contracts import createContract, createContractProto
+from .contracts import createContract
 from .safe import (
     fill_tag_value_map,
     normalize_none_scalars,
@@ -97,14 +94,6 @@ class ScannerDataArgs:
 
     reqId: int
     elements: list[ScannerDataElementArgs]
-
-
-@dataclass(slots=True, frozen=True)
-class FundamentalDataArgs:
-    """Args for ``Wrapper.fundamentalData(reqId, data)``."""
-
-    reqId: int
-    data: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -190,53 +179,6 @@ def createScannerDataArgs(proto: ScannerData_pb2.ScannerData) -> ScannerDataArgs
 def createScannerParametersXml(proto: ScannerParameters_pb2.ScannerParameters) -> str:
     """Decode ``ScannerParameters`` to its single ``xml`` payload."""
     return proto.xml if proto.HasField("xml") else ""
-
-
-# ---------------------------------------------------------------------------
-# FundamentalsData (msgId 51 receive) + request / cancel
-# ---------------------------------------------------------------------------
-
-
-def createFundamentalDataArgs(
-    proto: FundamentalsData_pb2.FundamentalsData,
-) -> FundamentalDataArgs:
-    """``Wrapper.fundamentalData(reqId, data)`` args."""
-    reqId = proto.reqId if proto.HasField("reqId") else 0
-    data = proto.data if proto.HasField("data") else ""
-    return FundamentalDataArgs(reqId=reqId, data=data)
-
-
-def createFundamentalsDataRequestProto(
-    reqId: int,
-    contract: Contract,
-    reportType: str,
-    fundamentalsDataOptions: list[TagValue] | None = None,
-) -> FundamentalsDataRequest_pb2.FundamentalsDataRequest:
-    """Build a ``FundamentalsDataRequest`` envelope.
-
-    ``fundamentalsDataOptions`` is the documented TagValue trailer the
-    binary path sends after ``reportType``. The proto wire spells it
-    ``fundamentalsDataOptions`` (a ``map<string, string>``); empty /
-    ``None`` lists leave the field unset — matching IBKR's
-    ``client_utils.createFundamentalsDataRequestProto``.
-    """
-    proto = FundamentalsDataRequest_pb2.FundamentalsDataRequest()
-    if reqId != UNSET_INTEGER:
-        proto.reqId = reqId
-    proto.contract.CopyFrom(createContractProto(contract))
-    if reportType:
-        proto.reportType = reportType
-    fill_tag_value_map(fundamentalsDataOptions, proto.fundamentalsDataOptions)
-    return proto
-
-
-def createCancelFundamentalsDataProto(
-    reqId: int,
-) -> CancelFundamentalsData_pb2.CancelFundamentalsData:
-    proto = CancelFundamentalsData_pb2.CancelFundamentalsData()
-    if reqId != UNSET_INTEGER:
-        proto.reqId = reqId
-    return proto
 
 
 # ---------------------------------------------------------------------------

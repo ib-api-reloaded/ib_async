@@ -199,16 +199,6 @@ Output::
 
     Dividends(past12Months=1.2, next12Months=1.2, nextDate=datetime.date(2019, 2, 6), nextAmount=0.3)
 
-Fundamental ratios
-^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-    contract = Stock('IBM', 'SMART', 'USD')
-    ticker = ib.reqMktData(contract, '258')
-    ib.sleep(2)
-    print(ticker.fundamentalRatios)
-
 
 Short-lived connections
 ^^^^^^^^^^^^^^^^^^^^^^^
