@@ -53,12 +53,13 @@ docs = [
 # — they all read these constants so the proto bindings and the
 # parity audit's reference ``client_utils.py`` stay version-locked.
 #
-# To bump: edit ``version``, download the new archive, recompute
-# SHA256, edit ``archive_sha256``, run ``make protos`` + tests +
-# audit. The IBKR URL convention drops the first dot of
-# ``API_Version``, so 10.46.01 → 1046.01.
-version = "1046.01"
-archive_sha256 = "d62d0bd602d9b0154f73246b1224467b6cff7062d34fe864510691b7677148c4"
+# To bump: ``make twsapi-bump V=<version>`` fetches and checks the
+# archive, then rewrites the two keys below; follow with ``make
+# protos`` + tests + audit. ``make twsapi-status`` lists the versions
+# IBKR still serves. The IBKR URL convention drops the first dot of
+# ``API_Version``, so 10.51.01 → 1051.01.
+version = "1051.01"
+archive_sha256 = "50a459ed09f0030df25125a177e57b69bdf576ec3a89fcb1f81fdff95bbf6316"
 
 [tool.mypy]
 ignore_missing_imports = true
