@@ -632,6 +632,8 @@ class ContractDetails:
     eventContract1: str = ""
     eventContractDescription1: str = ""
     eventContractDescription2: str = ""
+    # How the contract settles on expiry: "Physical" or "Cash".
+    settlementMethod: str = ""
 
     def tradingSessions(self) -> list[TradingSession]:
         return self._parseSessions(self.tradingHours)

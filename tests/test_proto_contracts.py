@@ -239,6 +239,7 @@ def test_create_contract_details_handles_completely_empty_proto():
     assert isinstance(details, ContractDetails)
     assert details.contract is contract
     assert details.marketName == ""
+    assert details.settlementMethod == ""
     # Decimal-typed numeric fields default to ``None`` for "unset" so
     # ``if price:`` correctly evaluates falsy in user code.
     assert details.minTick is None
@@ -375,6 +376,7 @@ def test_create_contract_details_populates_fund_family_fields():
     proto.eventContract1 = "EC1"
     proto.eventContractDescription1 = "First desc"
     proto.eventContractDescription2 = "Second desc"
+    proto.settlementMethod = "Cash"
     proto.minAlgoSize = "5"
     proto.lastPricePrecision = "0.01"
     proto.lastSizePrecision = "0.001"
@@ -399,6 +401,7 @@ def test_create_contract_details_populates_fund_family_fields():
     assert details.eventContract1 == "EC1"
     assert details.eventContractDescription1 == "First desc"
     assert details.eventContractDescription2 == "Second desc"
+    assert details.settlementMethod == "Cash"
     assert details.minAlgoSize == Decimal(5)
     assert details.lastPricePrecision == Decimal("0.01")
     assert details.lastSizePrecision == Decimal("0.001")
@@ -434,6 +437,7 @@ def test_create_contract_details_from_contract_data_handles_missing_inner():
     assert details.contract is not None
     assert details.contract.symbol == "AAPL"
     assert details.marketName == ""
+    assert details.settlementMethod == ""
 
 
 # ---------------------------------------------------------------------------
