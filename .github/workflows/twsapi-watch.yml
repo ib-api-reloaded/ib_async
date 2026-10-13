@@ -1,0 +1,31 @@
+name: twsapi-watch
+
+# IBKR prunes old TWS API archives from its download location without
+# notice. CI caches the pinned archive, so a pruned pin keeps passing
+# on warm caches and only breaks once a cold run has to fetch it. This
+# job checks weekly whether IBKR still serves the pinned archive and
+# fails — notifying maintainers — the moment it doesn't, while there is
+# still time to re-pin with `make twsapi-bump` or mirror the archive
+# for `IB_TWSAPI_ARCHIVE`.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  pinned-archive:
+    name: pinned TWS API archive still served
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # scripts/twsapi.py is stdlib-only, so no dependency install.
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Check pin against what IBKR serves
+        run: python scripts/twsapi.py status --check
