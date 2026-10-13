@@ -91,9 +91,9 @@ or `grpcio-tools`.
 The Makefile encapsulates this. After `uv sync --all-groups`:
 
 ```bash
-# 1. Generate protobuf bindings into ib_async/_pb/.
-#    Set IB_PROTO_SOURCE to the path of IBJts/source/proto from
-#    IBKR's TWS API distribution.
+# 1. Generate protobuf bindings into ib_async/_pb/. Fetches and
+#    SHA256-verifies the TWS API archive pinned in pyproject.toml
+#    on first run, then builds from the local cache.
 make protos
 
 # 2. Owned test suite (~1000 tests).
@@ -105,6 +105,14 @@ make lint
 # 4. Full release build (regenerates protos, then `uv build`).
 make build
 ```
+
+IBKR prunes old TWS API archives without notice. `make twsapi-status`
+shows whether the pinned archive is still downloadable next to the
+versions IBKR currently publishes, and `make twsapi-bump V=<version>`
+re-pins after checking the new archive carries the schemas and the
+reference client the parity audit needs. To keep building a pruned
+pin, point `IB_TWSAPI_ARCHIVE` at a copy of its archive; the pinned
+SHA256 still applies.
 
 `make help` lists every target. The build hook bundles freshly-
 generated bindings into the artifact regardless of whether

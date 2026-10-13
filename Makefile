@@ -7,7 +7,7 @@
 # and source distribution so end users get the bindings bundled into
 # the package without needing ``protoc`` or ``grpcio-tools``.
 
-.PHONY: help sync protos audit build release publish test lint format clean
+.PHONY: help sync protos audit twsapi-status twsapi-bump build release publish test lint format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -17,6 +17,8 @@ help:
 	@echo "  sync     - uv sync --all-groups (install deps + dev extras)"
 	@echo "  protos   - fetch+extract TWS API archive (if needed), regenerate $(PB_DIR)/"
 	@echo "  audit    - run proto-parity audit vs version-locked client_utils.py"
+	@echo "  twsapi-status - pinned TWS API vs what IBKR still serves"
+	@echo "  twsapi-bump V=<version> - re-pin TWS API (fetch, verify, prime cache)"
 	@echo "  build    - regenerate protos, then build sdist + wheel into dist/"
 	@echo "  release  - full pipeline: fetch + protos + lint + audit + test + build + smoke"
 	@echo "  publish  - release pipeline then upload via uv publish"
@@ -36,6 +38,18 @@ protos:
 
 audit:
 	$(PYTHON) scripts/audit_proto_parity.py
+
+# IBKR prunes old TWS API archives without notice. ``twsapi-status``
+# reports whether the pinned one is still downloadable alongside the
+# versions IBKR currently publishes; ``twsapi-bump`` re-pins to one of
+# them after checking the archive carries what the build and the
+# parity audit need.
+twsapi-status:
+	$(PYTHON) scripts/twsapi.py status
+
+twsapi-bump:
+	@test -n "$(V)" || (echo "usage: make twsapi-bump V=<version>"; exit 2)
+	$(PYTHON) scripts/twsapi.py bump $(V)
 
 # Wheel + sdist always bundle freshly-generated bindings. The
 # ``protos`` prerequisite guarantees ``ib_async/_pb/`` exists with

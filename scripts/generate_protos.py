@@ -12,6 +12,11 @@ Override the cached source by setting ``IB_PROTO_SOURCE`` to a
 directory of ``.proto`` files — useful when iterating against a
 local TWS install's bundled schemas.
 
+IBKR prunes old archive versions without notice. When the pinned one
+disappears, the fetch says so and names the way out: re-pin with
+``make twsapi-bump``, or point ``IB_TWSAPI_ARCHIVE`` at a mirrored
+copy of the pinned archive (still SHA256-verified against the pin).
+
 Generated bindings live under ``ib_async/_pb/`` (gitignored, bundled
 into the wheel via ``[tool.hatch.build] artifacts``). End users do not
 need ``protoc`` or ``grpcio-tools``.
@@ -28,20 +33,17 @@ Behaviour:
 
 from __future__ import annotations
 
-import hashlib
-import io
 import os
 import re
 import shutil
 import sys
-import urllib.request
-import zipfile
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+import _twsapi_archive as archive  # noqa: E402
 from _twsapi_meta import REPO_ROOT, TwsapiMeta  # noqa: E402
 from _twsapi_meta import load as load_meta  # noqa: E402
 
@@ -92,21 +94,27 @@ def _cache_is_valid(meta: TwsapiMeta) -> bool:
     return raw == f"API_Version={meta.dotted_version}"
 
 
-_FETCH_TIMEOUT_SECONDS = 120
-
-
 def _fetch_and_extract(meta: TwsapiMeta) -> None:
-    meta.cache_dir.parent.mkdir(parents=True, exist_ok=True)
-    print(f"downloading {meta.archive_url}")
-    with urllib.request.urlopen(
-        meta.archive_url, timeout=_FETCH_TIMEOUT_SECONDS
-    ) as resp:
-        data = resp.read()
+    # ``IB_TWSAPI_ARCHIVE`` points at a mirror or local copy of the
+    # pinned archive for when IBKR has pruned it. The SHA256 pin still
+    # applies, so an override can't swap in different bytes.
+    source = os.environ.get(archive.ARCHIVE_ENV) or meta.archive_url
+    print(f"fetching {source}")
+    try:
+        data = archive.read(source)
+    except archive.ArchiveUnavailable as exc:
+        sys.exit(
+            f"cannot fetch TWS API {meta.version}: {exc}\n"
+            f"  `make twsapi-status` shows which versions IBKR still serves;\n"
+            f"  `make twsapi-bump V=<version>` re-pins to one of them.\n"
+            f"  To stay on {meta.version}, set {archive.ARCHIVE_ENV} to a\n"
+            f"  path or URL holding a copy of the pinned archive."
+        )
 
-    actual = hashlib.sha256(data).hexdigest()
+    actual = archive.sha256(data)
     if actual != meta.archive_sha256:
         sys.exit(
-            f"SHA256 mismatch for {meta.archive_url}\n"
+            f"SHA256 mismatch for {source}\n"
             f"  expected: {meta.archive_sha256}\n"
             f"  actual:   {actual}\n"
             f"If IBKR republished the same version (rare), update\n"
@@ -115,21 +123,7 @@ def _fetch_and_extract(meta: TwsapiMeta) -> None:
         )
 
     print(f"verified SHA256, extracting into {meta.cache_dir}")
-    if meta.cache_dir.exists():
-        shutil.rmtree(meta.cache_dir)
-    meta.cache_dir.mkdir(parents=True)
-
-    # Extract only what we use: protos + version marker + the
-    # reference client_utils.py the parity audit walks against.
-    with zipfile.ZipFile(io.BytesIO(data), "r") as zf:
-        keep = [
-            m
-            for m in zf.namelist()
-            if m.startswith("IBJts/source/proto/")
-            or m == "IBJts/source/pythonclient/ibapi/client_utils.py"
-            or m == "IBJts/API_VersionNum.txt"
-        ]
-        zf.extractall(meta.cache_dir, keep)
+    archive.extract(data, meta.cache_dir)
 
 
 def _reset_output() -> None:
