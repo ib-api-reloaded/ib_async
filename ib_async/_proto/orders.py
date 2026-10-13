@@ -433,6 +433,8 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.conditionsCancelOrder = order.conditionsCancelOrder
     if order.conditionsIgnoreRth:
         proto.conditionsIgnoreRth = order.conditionsIgnoreRth
+    if order.conditionsIncludeOvernight:
+        proto.conditionsIncludeOvernight = order.conditionsIncludeOvernight
 
     if order.modelCode:
         proto.modelCode = order.modelCode
@@ -980,6 +982,8 @@ def createOrder(
         order.conditions = conditions
     if proto.HasField("conditionsIgnoreRth"):
         order.conditionsIgnoreRth = proto.conditionsIgnoreRth
+    if proto.HasField("conditionsIncludeOvernight"):
+        order.conditionsIncludeOvernight = proto.conditionsIncludeOvernight
     if proto.HasField("conditionsCancelOrder"):
         order.conditionsCancelOrder = proto.conditionsCancelOrder
 
