@@ -98,3 +98,44 @@ def test_serverOrder_does_not_disturb_user_authored_trade_order():
     assert trade.serverOrder is not None
     assert trade.serverOrder.account == ""
     assert trade.serverOrder.lmtPrice == 99.5
+
+
+def test_tws_side_deactivation_reaches_trade_order():
+    """``deactivate`` can be toggled from TWS or Client Portal, so it is
+    TWS-owned once the order exists and must track every openOrder."""
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    contract = _stock(1)
+    userOrder = Order(orderId=1, clientId=0, permId=42, lmtPrice=100.0)
+    trade = Trade(contract, userOrder, OrderStatus(orderId=1, status="Submitted"))
+    ib.wrapper.trades[(0, 1)] = trade
+
+    parked = Order(orderId=1, clientId=0, permId=42, lmtPrice=100.0, deactivate=True)
+    ib.wrapper.openOrder(1, contract, parked, OrderState(status="Inactive"))
+    assert trade.order.deactivate is True
+
+    live = Order(orderId=1, clientId=0, permId=42, lmtPrice=100.0, deactivate=False)
+    ib.wrapper.openOrder(1, contract, live, OrderState(status="Submitted"))
+    assert trade.order.deactivate is False
+
+
+def test_modifying_a_parked_order_does_not_transmit_it():
+    """The hazard the allowlist entry closes: a price modify through
+    ``placeOrder(trade.order)`` on an order parked from TWS must go out
+    still deactivated rather than silently sending it to market."""
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    contract = _stock(1)
+    userOrder = Order(orderId=1, clientId=0, permId=42, lmtPrice=100.0)
+    trade = Trade(contract, userOrder, OrderStatus(orderId=1, status="Submitted"))
+    ib.wrapper.trades[(0, 1)] = trade
+    parked = Order(orderId=1, clientId=0, permId=42, lmtPrice=100.0, deactivate=True)
+    ib.wrapper.openOrder(1, contract, parked, OrderState(status="Inactive"))
+
+    sent: list[Order] = []
+    ib.client.placeOrder = lambda orderId, c, order: sent.append(order)  # type: ignore[method-assign]
+    trade.order.lmtPrice = 99.0
+    ib.placeOrder(contract, trade.order)
+
+    assert sent[0].lmtPrice == 99.0
+    assert sent[0].deactivate is True

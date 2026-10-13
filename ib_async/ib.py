@@ -1116,6 +1116,10 @@ class IB:
         It is recommended to use the more reliable and much faster
         :meth:`.openTrades` or :meth:`.openOrders` methods instead.
 
+        Since TWS API 10.48 the response also includes deactivated
+        orders: parked at IBKR, not executing until transmitted again.
+        ``trade.order.deactivate`` is True for those.
+
         This method is blocking.
         """
         return self._run(self.reqOpenOrdersAsync())
@@ -1125,7 +1129,9 @@ class IB:
         Request and return a list of all open orders over all clients.
         Note that the orders of other clients will not be kept in sync,
         use the master clientId mechanism instead to see other
-        client's orders that are kept in sync.
+        client's orders that are kept in sync. As with
+        :meth:`.reqOpenOrders`, deactivated orders are included and
+        carry ``trade.order.deactivate == True``.
         """
         return self._run(self.reqAllOpenOrdersAsync())
 

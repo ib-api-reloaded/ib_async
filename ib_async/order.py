@@ -201,8 +201,11 @@ class Order:
     # logging. Empty means IBKR did not supply one for this order.
     submitter: str = ""
     # ``allowPreOpen`` / ``ignoreOpenAuction`` control auction-window
-    # routing. ``deactivate`` flags the order to be killed on fill or
-    # completion. ``postOnly`` rejects an order that would immediately
+    # routing. ``deactivate`` parks the order: it stays stored at IBKR
+    # but is not submitted and cannot execute until it is transmitted
+    # again from the API, TWS, or Client Portal — unlike
+    # ``transmit=False``, which never leaves the TWS session and is lost
+    # at logout. ``postOnly`` rejects an order that would immediately
     # match (maker-only constraint). ``seekPriceImprovement`` /
     # ``whatIfType`` / ``hedgeMaxSize`` parameterize specialized order
     # types. All accept ``None`` to mean "leave at server default".
