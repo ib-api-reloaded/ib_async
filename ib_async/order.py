@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import ClassVar, NamedTuple
@@ -370,6 +371,17 @@ class StopLimitOrder(Order):
         )
 
 
+# TWS API 10.51 reports a completed order's outcome as descriptive text
+# in ``OrderState.completedStatus`` rather than the status names IBKR
+# documents for that field. Each pattern maps one observed phrasing to
+# the terminal status it means; text matching none stays unrecognised so
+# the caller's fallback decides instead of a guess.
+_COMPLETED_STATUS_TEXT: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"Filled Size: \d[\d,]*(?:\.\d+)?"), "Filled"),
+    (re.compile(r"Cancelled by .+", re.DOTALL), "Cancelled"),
+)
+
+
 @dataclass
 class OrderStatus:
     orderId: int = 0
@@ -462,6 +474,22 @@ class OrderStatus:
             "ApiUpdate",
         ]
     )
+
+    @staticmethod
+    def terminalFromCompleted(status: str) -> str | None:
+        """The terminal status a completed-order replay reports, or None.
+
+        Accepts a plain ``DoneStates`` name as-is and maps the descriptive
+        text TWS 10.51 sends (``"Filled Size: 10"``, ``"Cancelled by
+        Trader"``, ``"Cancelled by System:\\n..."``) to the status it
+        names. Returns None for anything else, including the empty string.
+        """
+        if status in OrderStatus.DoneStates:
+            return status
+        for pattern, terminal in _COMPLETED_STATUS_TEXT:
+            if pattern.fullmatch(status):
+                return terminal
+        return None
 
 
 @dataclass(slots=True, frozen=True)

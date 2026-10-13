@@ -184,6 +184,12 @@ are fixed in v3.0:
   ``$LEDGER-`` prefix setting on — the default for new installs. The
   prefixed tag now classifies like its bare tag; ``tag`` itself keeps
   the prefix.
+* **Completed orders reported ``Inactive`` instead of ``Filled`` /
+  ``Cancelled``.** TWS API 10.51 sends descriptive text in
+  ``completedStatus`` (``"Filled Size: 10"``, ``"Cancelled by
+  Trader"``), so every completed fill and cancel fell through to the
+  ``Inactive`` fallback with a warning. The known phrasings now map to
+  their terminal status; the original text stays in the trade log.
 * **Modifying an order parked from TWS transmitted it.** ``deactivate``
   can be toggled outside the API, but ``trade.order`` never picked the
   change up, so ``placeOrder(trade.order)`` sent the stale
