@@ -9,8 +9,8 @@ Version 3.0.0 (Unreleased)
 
 The v3.0 release lands the protobuf wire-protocol migration, shifts
 financial numerics to ``Decimal | None`` end-to-end, and closes the
-IBKR-parity gap against the reference client at TWS / Gateway server
-version 225. The full upgrade guide with examples lives at
+IBKR-parity gap against the reference client of TWS API 10.51 (TWS /
+Gateway server version 226). The full upgrade guide with examples lives at
 ``docs/migration/v3.md``.
 
 **The most likely-to-hit changes**

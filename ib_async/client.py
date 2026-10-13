@@ -19,6 +19,7 @@ from ._pb_msgids import (
     PROTOBUF_MSG_IDS,
 )
 from ._server_versions import (
+    MAX_CLIENT_VER,
     MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
     MIN_SERVER_VER_AUTO_CANCEL_PARENT,
     MIN_SERVER_VER_CME_TAGGING_FIELDS,
@@ -190,10 +191,10 @@ class Client:
     # paired with patches to every send-side / receive-side gated field
     # at gates between the old cap and the new — see
     # ``ib_async/_server_versions.py`` for the symbolic gate constants.
-    # As of v3.0 the binary path handles all gates 158-225 and the
+    # As of v3.0 the binary path handles all gates 158-226 and the
     # protobuf path takes over per-message-family at 201-213.
     MinClientVersion = 157
-    MaxClientVersion = 225
+    MaxClientVersion = MAX_CLIENT_VER
 
     DISCONNECTED, CONNECTING, CONNECTED = range(3)
 
