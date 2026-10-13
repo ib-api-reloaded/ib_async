@@ -335,6 +335,11 @@ MUTABLE_ORDER_FIELDS: Final[tuple[str, ...]] = (
     "adjustedStopLimitPrice",
     "adjustedTrailingAmount",
     "adjustableTrailingUnit",
+    # Parked / live state: an order can be deactivated or re-transmitted
+    # from TWS or Client Portal, not just the API. A stale copy here
+    # would ride along on the next modify via ``placeOrder(trade.order)``
+    # and silently transmit a parked order, or park a live one.
+    "deactivate",
 )
 
 

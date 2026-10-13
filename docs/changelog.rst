@@ -184,6 +184,12 @@ are fixed in v3.0:
   ``$LEDGER-`` prefix setting on — the default for new installs. The
   prefixed tag now classifies like its bare tag; ``tag`` itself keeps
   the prefix.
+* **Modifying an order parked from TWS transmitted it.** ``deactivate``
+  can be toggled outside the API, but ``trade.order`` never picked the
+  change up, so ``placeOrder(trade.order)`` sent the stale
+  ``deactivate=False`` and put the parked order on the market. It now
+  tracks every ``openOrder`` update. ``reqOpenOrders`` documents that
+  TWS API 10.48 includes deactivated orders in its response.
 * **``MaxClientVersion = 178`` cap** made every gate 201+ feature
   unreachable in production.
 * **``errorMsg`` decoder** mis-shifted on server >= 194 (ERROR_TIME
