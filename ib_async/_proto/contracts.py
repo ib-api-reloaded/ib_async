@@ -496,6 +496,8 @@ def createContractDetails(
         details.eventContractDescription1 = proto.eventContractDescription1
     if proto.HasField("eventContractDescription2"):
         details.eventContractDescription2 = proto.eventContractDescription2
+    if proto.HasField("settlementMethod"):
+        details.settlementMethod = proto.settlementMethod
     return details
 
 

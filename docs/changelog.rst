@@ -96,6 +96,8 @@ version 225. The full upgrade guide with examples lives at
   order's conditions also evaluate during the overnight session. Sent
   and received on the protobuf order path; ``False`` stays off the
   wire.
+* **``ContractDetails.settlementMethod``** (TWS API 10.49): how the
+  contract settles on expiry, ``"Physical"`` or ``"Cash"``.
 
 **Changed (breaking)**
 
