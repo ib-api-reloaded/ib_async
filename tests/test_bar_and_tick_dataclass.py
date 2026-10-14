@@ -20,7 +20,7 @@ Two coordinated changes:
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, is_dataclass
-from datetime import UTC
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -151,7 +151,6 @@ def test_tick_record_has_slots(cls):
 
 
 def test_tick_data_is_frozen():
-    from datetime import datetime
 
     td = TickData(
         time=datetime(2026, 5, 9, tzinfo=UTC),
@@ -170,7 +169,6 @@ def test_dom_level_is_frozen():
 
 
 def test_mkt_depth_data_round_trip():
-    from datetime import datetime
 
     md = MktDepthData(
         time=datetime(2026, 5, 9, tzinfo=UTC),
@@ -192,7 +190,6 @@ def test_mkt_depth_data_round_trip():
 
 
 def test_tick_by_tick_all_last_carries_tick_attrib_last():
-    from datetime import datetime
 
     attrib = TickAttribLast(pastLimit=True, unreported=False)
     t = TickByTickAllLast(
@@ -209,7 +206,6 @@ def test_tick_by_tick_all_last_carries_tick_attrib_last():
 
 
 def test_tick_by_tick_bid_ask_carries_tick_attrib_bid_ask():
-    from datetime import datetime
 
     attrib = TickAttribBidAsk(bidPastLow=False, askPastHigh=True)
     t = TickByTickBidAsk(
@@ -224,7 +220,6 @@ def test_tick_by_tick_bid_ask_carries_tick_attrib_bid_ask():
 
 
 def test_tick_by_tick_mid_point_minimal_record():
-    from datetime import datetime
 
     t = TickByTickMidPoint(time=datetime(2026, 5, 9, tzinfo=UTC), midPoint=150.25)
     assert t.midPoint == 150.25
@@ -236,14 +231,12 @@ def test_tick_by_tick_mid_point_minimal_record():
 
 
 def test_historical_tick_minimal_record():
-    from datetime import datetime
 
     t = HistoricalTick(time=datetime(2026, 5, 9, tzinfo=UTC), price=150.25, size=100.0)
     assert t.price == 150.25
 
 
 def test_historical_tick_bid_ask_carries_attrib():
-    from datetime import datetime
 
     attrib = TickAttribBidAsk(bidPastLow=True, askPastHigh=False)
     t = HistoricalTickBidAsk(
@@ -258,7 +251,6 @@ def test_historical_tick_bid_ask_carries_attrib():
 
 
 def test_historical_tick_last_carries_attrib():
-    from datetime import datetime
 
     attrib = TickAttribLast(pastLimit=False, unreported=True)
     t = HistoricalTickLast(

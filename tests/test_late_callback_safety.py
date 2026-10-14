@@ -12,6 +12,7 @@ completedOrdersEnd raised KeyError. The Stage-B migration through
 import ib_async as ibi
 from ib_async._requests import ReqIdKey, SingletonKey
 from ib_async.contract import ContractDetails
+from ib_async.objects import BarData, HistoricalTick
 from ib_async.order import Order, OrderState
 
 
@@ -52,7 +53,6 @@ def test_historical_data_after_end_is_noop():
     ib.wrapper.historicalDataEnd(7, "", "")
 
     # Stray bar — must not raise.
-    from ib_async.objects import BarData
 
     bar = BarData(date="20251020 15:00:00", open=1, high=2, low=0, close=1, volume=10)
     ib.wrapper.historicalData(7, bar)
@@ -93,7 +93,6 @@ def test_position_after_end_still_emits_live_event():
 
 
 def test_extend_no_op_on_settled_historical_ticks():
-    from ib_async.objects import HistoricalTick
 
     ib = ibi.IB()
     ib.wrapper.requests.open(ReqIdKey(99))

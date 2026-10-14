@@ -1,7 +1,8 @@
 import ib_async as ibi
 from ib_async import IB, Stock
+from ib_async._requests import ReqIdKey
 from ib_async._subscriptions import MktDataSub
-from ib_async.ticker import Ticker
+from ib_async.ticker import _NEWS_MAXLEN, Ticker
 
 
 def test_tickNews_populates_contract_from_active_ticker():
@@ -40,7 +41,6 @@ def test_tickNews_falls_back_to_request_contract():
     """When no Subscription is registered but a one-shot Request carries
     the originating contract, the fallback lookup still populates the
     contract on the emitted NewsTick."""
-    from ib_async._requests import ReqIdKey
 
     ib = IB()
     contract = Stock("MSFT", "SMART", "USD")
@@ -76,7 +76,6 @@ def test_tickNews_appends_to_ticker_news_deque_and_caps_at_maxlen():
     the subscription. The global ``newsTicks`` list and
     ``tickNewsEvent`` still fire so the per-Ticker view is purely
     additive."""
-    from ib_async.ticker import _NEWS_MAXLEN
 
     ib = IB()
     contract = Stock("NVDA", "SMART", "USD", conId=4815747)

@@ -25,6 +25,7 @@ import pytest
 
 from ib_async._pb import (
     AttachedOrders_pb2,
+    ComboLeg_pb2,
     CommissionAndFeesReport_pb2,
     Contract_pb2,
     Execution_pb2,
@@ -32,6 +33,7 @@ from ib_async._pb import (
     ExecutionRequest_pb2,
     OpenOrder_pb2,
     Order_pb2,
+    OrderCondition_pb2,
     OrderState_pb2,
     OrderStatus_pb2,
     PlaceOrderRequest_pb2,
@@ -49,9 +51,19 @@ from ib_async._proto.orders import (
     createOrderStatus,
     createPlaceOrderRequestProto,
 )
-from ib_async.contract import Stock
+from ib_async.contract import Stock, TagValue
 from ib_async.objects import ExecutionFilter
-from ib_async.order import LimitOrder, MarketOrder, Order
+from ib_async.order import (
+    ExecutionCondition,
+    LimitOrder,
+    MarginCondition,
+    MarketOrder,
+    Order,
+    PercentChangeCondition,
+    PriceCondition,
+    TimeCondition,
+    VolumeCondition,
+)
 
 # ---------------------------------------------------------------------------
 # CRITICAL regression: clientId must round-trip
@@ -291,7 +303,6 @@ def test_whatIf_unset_stays_off_the_wire():
 
 
 def test_algo_strategy_and_params_round_trip():
-    from ib_async.contract import TagValue
 
     order = LimitOrder("BUY", 100, 50.5)
     order.algoStrategy = "Adaptive"
@@ -704,7 +715,6 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     a field IBKR newly reads landed unread, the converter is silently
     losing wire state — fail loud.
     """
-    from ib_async._pb import OrderCondition_pb2
 
     proto = Order_pb2.Order()
     proto.orderId = 11
@@ -948,7 +958,6 @@ def test_create_order_reads_every_field_decoder_utils_reads():
     # Conditions
     assert len(order.conditions) == 1
     pc = order.conditions[0]
-    from ib_async.order import PriceCondition
 
     assert isinstance(pc, PriceCondition)
     assert pc.conjunction == "a"
@@ -1056,7 +1065,6 @@ def test_create_order_combo_legs_sourced_from_contract_proto():
     """``orderComboLegs`` per-leg prices live on the CONTRACT proto, not
     the order proto. ``createOrder`` must read them from the contract
     proto when supplied."""
-    from ib_async._pb import ComboLeg_pb2
 
     contractProto = Contract_pb2.Contract()
     leg = ComboLeg_pb2.ComboLeg()
@@ -1085,7 +1093,6 @@ def test_open_order_envelope_propagates_combo_legs_to_order():
     """End-to-end: an OpenOrder envelope with combo legs on its
     contract message must surface those legs on the decoded
     ``Order.orderComboLegs``."""
-    from ib_async._pb import ComboLeg_pb2
 
     proto = OpenOrder_pb2.OpenOrder()
     proto.orderId = 1
@@ -1104,15 +1111,6 @@ def test_create_order_conditions_decode_each_subclass():
     """Each OrderCondition subclass (price/time/margin/exec/volume/pct)
     must round-trip the subclass-specific fields. IBKR's reference
     dispatches on ``type``; we mirror that table."""
-    from ib_async._pb import OrderCondition_pb2
-    from ib_async.order import (
-        ExecutionCondition,
-        MarginCondition,
-        PercentChangeCondition,
-        PriceCondition,
-        TimeCondition,
-        VolumeCondition,
-    )
 
     proto = Order_pb2.Order()
 

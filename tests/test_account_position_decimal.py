@@ -18,7 +18,7 @@ non-monetary tags), then the happy paths. Covers the v3.0 shifts:
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, is_dataclass
-from datetime import UTC
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -327,7 +327,6 @@ def test_wrapper_update_portfolio_zero_drops_cached_entry():
 
 
 def test_fill_construction_round_trip():
-    from datetime import datetime
 
     fill = Fill(
         ibi.Stock("AAPL", "SMART", "USD"),

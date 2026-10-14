@@ -10,6 +10,7 @@ Properties verified:
     (replacing the previous hard ``assert`` that crashed retries).
 """
 
+import asyncio
 from unittest.mock import MagicMock
 
 import ib_async as ibi
@@ -63,7 +64,6 @@ def test_keepUpToDate_historical_data_registers_sub():
     """The keepUpToDate=True path adds a HistoricalBarsSub. We exercise
     just the registration step here (the full reqHistoricalDataAsync is
     integration-shaped); the cancel side is covered by the next test."""
-    import asyncio
 
     ib = _wired_ib()
     contract = _stock(2)
