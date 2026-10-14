@@ -432,7 +432,9 @@ def logToFile(path, level=logging.INFO, fmt=None):
         fmt: Optional ``logging`` format string; defaults to the shared
             ib_async format.
     """
-    target = os.path.abspath(path)
+    # Normalized exactly as logging.FileHandler normalizes baseFilename
+    # (Path.resolve() would also follow symlinks and never match).
+    target = os.path.abspath(path)  # noqa: PTH100
     if _existingHandler(
         lambda h: type(h) is logging.FileHandler and h.baseFilename == target
     ):

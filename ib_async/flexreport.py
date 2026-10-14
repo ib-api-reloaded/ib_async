@@ -5,6 +5,7 @@ import os
 import time
 import xml.etree.ElementTree as et
 from contextlib import suppress
+from pathlib import Path
 from typing import Final
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -140,14 +141,12 @@ class FlexReport:
 
     def load(self, path):
         """Load report from XML file."""
-        with open(path, "rb") as f:
-            self.data = f.read()
-            self.root = et.fromstring(self.data)
+        self.data = Path(path).read_bytes()
+        self.root = et.fromstring(self.data)
 
     def save(self, path):
         """Save report to XML file."""
-        with open(path, "wb") as f:
-            f.write(self.data)
+        Path(path).write_bytes(self.data)
 
 
 if __name__ == "__main__":

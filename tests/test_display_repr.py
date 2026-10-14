@@ -66,9 +66,9 @@ def _order_status() -> OrderStatus:
     return OrderStatus(
         orderId=10282,
         status="Filled",
-        filled=Decimal("1"),
+        filled=Decimal(1),
         # Zero IS information here: the order is done, nothing is left.
-        remaining=Decimal("0"),
+        remaining=Decimal(0),
         avgFillPrice=Decimal("29403.25"),
         permId=1275529321,
         lastFillPrice=Decimal("29403.25"),
@@ -83,12 +83,12 @@ def _execution() -> Execution:
         acctNumber="U1234567",
         exchange="CME",
         side="BOT",
-        shares=Decimal("1"),
+        shares=Decimal(1),
         price=Decimal("29403.25"),
         permId=1275529321,
         clientId=169,
         orderId=10282,
-        cumQty=Decimal("1"),
+        cumQty=Decimal(1),
         avgPrice=Decimal("29403.25"),
         lastLiquidity=1,
     )
@@ -99,7 +99,7 @@ def _commission_report() -> CommissionReport:
         execId="0000e9b5.68c9f1d2.01.01",
         commissionAndFees=Decimal("2.32"),
         currency="USD",
-        realizedPNL=Decimal("0"),
+        realizedPNL=Decimal(0),
     )
 
 
@@ -267,13 +267,13 @@ def test_keep_zero_fields_survive_a_non_default_zero() -> None:
     """Every keep-zero name that a zero can actually reach on this plane
     prints its zero rather than vanishing."""
 
-    status = OrderStatus(orderId=1, filled=Decimal("0"), remaining=Decimal("0"))
+    status = OrderStatus(orderId=1, filled=Decimal(0), remaining=Decimal(0))
     assert repr(status) == "OrderStatus(orderId=1, filled=0, remaining=0)"
 
-    execution = Execution(execId="x", shares=Decimal("0"), cumQty=Decimal("0"))
+    execution = Execution(execId="x", shares=Decimal(0), cumQty=Decimal(0))
     assert repr(execution) == "Execution(execId='x', shares=0, cumQty=0)"
 
-    order = Order(orderId=1, totalQuantity=Decimal("0"))
+    order = Order(orderId=1, totalQuantity=Decimal(0))
     assert repr(order) == "Order(orderId=1, totalQuantity=0)"
 
     assert {"orderId", "permId", "parentId", "clientId", "conId", "reqId"} <= (
@@ -282,7 +282,7 @@ def test_keep_zero_fields_survive_a_non_default_zero() -> None:
 
 
 def test_a_zero_price_is_dropped_because_it_is_not_a_quantity() -> None:
-    order = Order(orderId=1, lmtPrice=Decimal("0"), auxPrice=Decimal("0"))
+    order = Order(orderId=1, lmtPrice=Decimal(0), auxPrice=Decimal(0))
 
     assert repr(order) == "Order(orderId=1)"
 
@@ -298,7 +298,7 @@ def test_a_flag_that_differs_from_its_default_is_never_read_as_zero() -> None:
 
 def test_decimal_values_print_plain_everything_else_through_repr() -> None:
     assert dataclassDisplayValue(Decimal("29403.25")) == "29403.25"
-    assert dataclassDisplayValue(Decimal("1")) == "1"
+    assert dataclassDisplayValue(Decimal(1)) == "1"
     assert dataclassDisplayValue("GTC") == "'GTC'"
     assert dataclassDisplayValue(7) == "7"
 
@@ -308,13 +308,13 @@ def test_non_defaults_policy_is_untouched_for_its_own_callers() -> None:
     accessor and keeps its own, looser semantics: it does not drop empty
     strings, zeros or IBKR's string boilerplate."""
 
-    order = Order(orderId=1, orderRef="None", lmtPrice=Decimal("0"))
+    order = Order(orderId=1, orderRef="None", lmtPrice=Decimal(0))
     softDollarTier = order.softDollarTier
 
     assert dataclassNonDefaults(order) == {
         "orderId": 1,
         "orderRef": "None",
-        "lmtPrice": Decimal("0"),
+        "lmtPrice": Decimal(0),
         # ``default_factory`` fields have no declared default to compare
         # against, so both policies keep them; ``Order.__repr__`` is what
         # drops an empty tier from the line.

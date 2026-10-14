@@ -177,13 +177,8 @@ class Contract:
                 f"Contract {self} can't be hashed because no 'conId' value exists. Qualify contract to populate 'conId'."
             )
 
-        if self.secType == "CONTFUT":
-            # CONTFUT gets the same conId as the front contract, invert it here
-            h = -self.conId
-        else:
-            h = self.conId
-
-        return h
+        # CONTFUT gets the same conId as the front contract, invert it here
+        return -self.conId if self.secType == "CONTFUT" else self.conId
 
     def __repr__(self):
         attrs = util.dataclassDisplayFields(self)

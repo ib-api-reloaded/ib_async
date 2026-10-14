@@ -1,3 +1,5 @@
+from pathlib import Path
+
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
@@ -21,7 +23,7 @@ html_show_copyright = False
 author = "Originally Ewald de Wit; Currently Matt Stancliff"
 
 __version__ = ""
-exec(open("../ib_async/version.py").read())
+exec(Path("../ib_async/version.py").read_text())
 version = ".".join(__version__.split(".")[:2])
 release = __version__
 

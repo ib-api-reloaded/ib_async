@@ -584,13 +584,8 @@ class Wrapper:
         return Contract.recreate(contract) if contract else None
 
     def orderKey(self, clientId: int, orderId: int, permId: int) -> OrderKeyType:
-        key: OrderKeyType
-        if orderId <= 0:
-            # order is placed manually from TWS
-            key = permId
-        else:
-            key = (clientId, orderId)
-        return key
+        # an order placed manually from TWS has no API orderId
+        return permId if orderId <= 0 else (clientId, orderId)
 
     def setTimeout(self, timeout: float):
         self.lastTime = datetime.now(self.defaultTimezone)
