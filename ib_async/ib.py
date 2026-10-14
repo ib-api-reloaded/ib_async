@@ -1863,10 +1863,7 @@ class IB:
                 isSmartDepth=isSmartDepth,
             )
         )
-        ticker.domBids.clear()
-        ticker.domAsks.clear()
-        ticker.domBidsDict.clear()
-        ticker.domAsksDict.clear()
+        ticker.dom.clear()
         self.client.reqMktDepth(reqId, contract, numRows, isSmartDepth, mktDepthOptions)
         return ticker
 
@@ -1888,10 +1885,7 @@ class IB:
         sub.close()  # sends cancelMktDepth(reqId, isSmartDepth)
         # Clear DOM state on the live Ticker — it is no longer being
         # updated, so leftover levels would be stale.
-        ticker.domBids.clear()
-        ticker.domAsks.clear()
-        ticker.domBidsDict.clear()
-        ticker.domAsksDict.clear()
+        ticker.dom.clear()
 
     def reqHistogramData(
         self, contract: Contract, useRTH: bool, period: str

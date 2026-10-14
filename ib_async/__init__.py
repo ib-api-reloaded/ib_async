@@ -32,6 +32,7 @@ from .contract import (
     TradingSession,
     Warrant,
 )
+from .depth import DepthBook, DepthOperation
 from .flexreport import FlexError, FlexReport
 from .ib import IB, StartupFetch, StartupFetchALL, StartupFetchNONE
 from .ibcontroller import IBC, Watchdog
@@ -211,6 +212,8 @@ __all__ = [
     "TimeCondition",
     "Trade",
     "VolumeCondition",
+    "DepthBook",
+    "DepthOperation",
     "Ticker",
     "HaltedStatus",
     "__version__",
