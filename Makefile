@@ -20,9 +20,11 @@ RELEASEKIT ?= releasekit
 # UV_RUN_ARGS="--with=../eventkit --with=../nest_asyncio"; not --with-editable,
 # which puts those repositories (and their own `tests` packages) on sys.path).
 # test-matrix runs `make test` per Python version, so both apply there too.
+# `python -m pytest`, not `pytest`: the `pytest` script in .venv/bin runs
+# .venv's interpreter, which does not see a `--with` overlay.
 TEST_TIMEOUT ?= 60
 UV_RUN_ARGS ?=
-PYTEST := pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
+PYTEST := python -m pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
 # test-matrix: a subset of the configured Python versions, e.g. "3.13 3.15".
 PYTHONS ?=
 
