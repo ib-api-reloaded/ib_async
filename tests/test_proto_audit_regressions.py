@@ -3154,7 +3154,8 @@ def test_wrapper_error_warning_classification_in_warning_band():
         is_warning = code in _WARNING_CODES or 2100 <= code < 2200
         assert is_warning, f"code {code} should classify as warning"
 
-    assert not (2200 in _WARNING_CODES or 2100 <= 2200 < 2200)
+    code = 2200
+    assert not (code in _WARNING_CODES or 2100 <= code < 2200)
 
 
 # ---------------------------------------------------------------------------

@@ -1385,7 +1385,7 @@ class Decoder:
         # the universal unset marker on the public dataclass so user code
         # gating on ``if details.aggGroup:`` stays falsy without the
         # sentinel's magic int leaking through.
-        if cd.aggGroup == 0 or cd.aggGroup == UNSET_INTEGER:
+        if cd.aggGroup in (0, UNSET_INTEGER):
             cd.aggGroup = None
         self.wrapper.contractDetails(int(reqId), cd)
 
@@ -1491,7 +1491,7 @@ class Decoder:
         # ``aggGroup`` on the wire ships ``0`` (and IBKR's UNSET_INTEGER
         # sentinel) when the contract has no aggregate group. ``None`` is
         # the universal unset marker on the public dataclass.
-        if cd.aggGroup == 0 or cd.aggGroup == UNSET_INTEGER:
+        if cd.aggGroup in (0, UNSET_INTEGER):
             cd.aggGroup = None
         self.wrapper.bondContractDetails(int(reqId), cd)
 
@@ -1846,7 +1846,7 @@ class Decoder:
                 value = int(raw)
             except (TypeError, ValueError):
                 return None
-            if value == 0 or value == UNSET_INTEGER:
+            if value in (0, UNSET_INTEGER):
                 return None
             return value
 

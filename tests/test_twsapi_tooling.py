@@ -79,7 +79,6 @@ def _archive(
     dotted: str = "10.51.01",
     *,
     protos: bool = True,
-    clientUtils: bool = True,
     versionFile: bool = True,
 ) -> bytes:
     buf = io.BytesIO()
@@ -198,8 +197,8 @@ def test_bump_pins_and_primes_the_cache(tooling, tmp_path):
 
 def test_bump_refuses_an_unpinnable_archive_and_keeps_the_old_pin(tooling, tmp_path):
     twsapi, meta_module, pyproject = tooling
-    source = tmp_path / "stable.zip"
-    source.write_bytes(_archive(clientUtils=False))
+    source = tmp_path / "no-protos.zip"
+    source.write_bytes(_archive(protos=False))
 
     assert twsapi.main(["bump", "1051.01", "--from", str(source)]) == 1
 
@@ -234,7 +233,7 @@ def test_status_check_fails_when_the_pinned_archive_is_gone(
 def test_status_without_check_only_reports(tooling, monkeypatch):
     twsapi, _, _ = tooling
     monkeypatch.setattr(twsapi.archive, "probe", lambda url: 404)
-    monkeypatch.setattr(twsapi.archive, "fetch_published_versions", lambda: {})
+    monkeypatch.setattr(twsapi.archive, "fetch_published_versions", dict)
 
     assert twsapi.main(["status"]) == 0
 

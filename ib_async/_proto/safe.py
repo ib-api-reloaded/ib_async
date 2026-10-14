@@ -154,7 +154,7 @@ def fill_tag_value_map(items: object, target: object) -> None:
         target[tag] = value  # type: ignore[index]
 
 
-def safe_decimal(value: str | Decimal | float | int | None) -> Decimal | None:
+def safe_decimal(value: str | Decimal | float | None) -> Decimal | None:
     """Convert any wire-typed numeric to a domain ``Decimal | None``.
 
     Accepts protobuf ``string`` (the IBKR-canonical encoding for

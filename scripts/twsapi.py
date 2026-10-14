@@ -27,10 +27,10 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import _twsapi_archive as archive  # noqa: E402
-from _twsapi_meta import TwsapiMeta  # noqa: E402
-from _twsapi_meta import load as load_meta  # noqa: E402
-from _twsapi_meta import save as save_meta  # noqa: E402
+import _twsapi_archive as archive
+from _twsapi_meta import TwsapiMeta
+from _twsapi_meta import load as load_meta
+from _twsapi_meta import save as save_meta
 
 
 def _availability(status: int | None) -> str:

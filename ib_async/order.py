@@ -271,7 +271,7 @@ class Order:
             setattr(self, name, _toDecimal(v))
 
 
-def _toDecimal(value: Decimal | float | int | str | None) -> Decimal | None:
+def _toDecimal(value: Decimal | float | str | None) -> Decimal | None:
     """Coerce a user-supplied numeric to ``Decimal | None``.
 
     Goes through ``str()`` for floats so binary-float imprecision (e.g.
@@ -303,8 +303,8 @@ class LimitOrder(Order):
     def __init__(
         self,
         action: str,
-        totalQuantity: Decimal | float | int | str,
-        lmtPrice: Decimal | float | int | str,
+        totalQuantity: Decimal | float | str,
+        lmtPrice: Decimal | float | str,
         **kwargs,
     ):
         Order.__init__(
@@ -321,7 +321,7 @@ class MarketOrder(Order):
     def __init__(
         self,
         action: str,
-        totalQuantity: Decimal | float | int | str,
+        totalQuantity: Decimal | float | str,
         **kwargs,
     ):
         Order.__init__(
@@ -337,8 +337,8 @@ class StopOrder(Order):
     def __init__(
         self,
         action: str,
-        totalQuantity: Decimal | float | int | str,
-        stopPrice: Decimal | float | int | str,
+        totalQuantity: Decimal | float | str,
+        stopPrice: Decimal | float | str,
         **kwargs,
     ):
         Order.__init__(
@@ -355,9 +355,9 @@ class StopLimitOrder(Order):
     def __init__(
         self,
         action: str,
-        totalQuantity: Decimal | float | int | str,
-        lmtPrice: Decimal | float | int | str,
-        stopPrice: Decimal | float | int | str,
+        totalQuantity: Decimal | float | str,
+        lmtPrice: Decimal | float | str,
+        stopPrice: Decimal | float | str,
         **kwargs,
     ):
         Order.__init__(

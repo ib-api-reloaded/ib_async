@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import NamedTuple, Optional
 
-import ib_async.util as util
+from ib_async import util
 
 
 @dataclass
@@ -155,8 +155,7 @@ class Contract:
 
     def __eq__(self, other):
         return isinstance(other, Contract) and (
-            self.conId
-            and self.conId == other.conId
+            (self.conId and self.conId == other.conId)
             or util.dataclassAsDict(self) == util.dataclassAsDict(other)
         )
 

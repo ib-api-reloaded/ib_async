@@ -488,7 +488,7 @@ def formatSI(n: float) -> str:
         s = "0.00 "
     else:
         assert n < 9.99e26
-        log = int(math.floor(math.log10(n)))
+        log = math.floor(math.log10(n))
         i, j = divmod(log, 3)
         for _try in range(2):
             templ = f"%.{2 - j}f"

@@ -118,7 +118,7 @@ def test_cancelMktDepth_closes_via_registry_and_clears_dom():
     ib.cancelMktDepth(contract, isSmartDepth=True)
 
     ib.client.cancelMktDepth.assert_called_once()
-    (called_reqId, called_smart), _ = ib.client.cancelMktDepth.call_args
+    (_called_reqId, called_smart), _ = ib.client.cancelMktDepth.call_args
     assert called_smart is True
     assert ib.wrapper.subscriptions.find_market_data(22, "mktDepth") is None
     # DOM state cleared on cancel.

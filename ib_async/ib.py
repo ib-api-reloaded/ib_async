@@ -12,7 +12,7 @@ from typing import Any
 
 from eventkit import Event
 
-import ib_async.util as util
+from ib_async import util
 from ib_async._requests import (
     CompositeKey,
     ReqIdKey,
@@ -768,7 +768,7 @@ class IB:
 
     def orders(self) -> list[Order]:
         """List of all orders from this session."""
-        return list(trade.order for trade in self.wrapper.trades.values())
+        return [trade.order for trade in self.wrapper.trades.values()]
 
     def openOrders(self) -> list[Order]:
         """List of all open orders."""
@@ -784,7 +784,7 @@ class IB:
 
     def executions(self) -> list[Execution]:
         """List of all executions from this session."""
-        return list(fill.execution for fill in self.wrapper.fills.values())
+        return [fill.execution for fill in self.wrapper.fills.values()]
 
     def ticker(self, contract: Contract) -> Ticker | None:
         """
@@ -1025,10 +1025,8 @@ class IB:
             if not trade.isDone():
                 status = trade.orderStatus.status
                 if (
-                    status == OrderStatus.PendingSubmit
-                    and not order.transmit
-                    or status == OrderStatus.Inactive
-                ):
+                    status == OrderStatus.PendingSubmit and not order.transmit
+                ) or status == OrderStatus.Inactive:
                     newStatus = OrderStatus.Cancelled
                 else:
                     newStatus = OrderStatus.PendingCancel

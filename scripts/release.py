@@ -31,8 +31,8 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from _twsapi_meta import REPO_ROOT  # noqa: E402
-from _twsapi_meta import load as load_meta  # noqa: E402
+from _twsapi_meta import REPO_ROOT
+from _twsapi_meta import load as load_meta
 
 DIST_DIR = REPO_ROOT / "dist"
 
