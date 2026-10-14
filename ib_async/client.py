@@ -498,11 +498,10 @@ class Client:
                 self.throttleStart.emit()
                 self._logger.debug("Started to throttle requests")
             loop.call_at(times[0] + self.RequestsInterval, self.sendMsg, None)
-        else:
-            if self._isThrottling:
-                self._isThrottling = False
-                self.throttleEnd.emit()
-                self._logger.debug("Stopped to throttle requests")
+        elif self._isThrottling:
+            self._isThrottling = False
+            self.throttleEnd.emit()
+            self._logger.debug("Stopped to throttle requests")
 
     def _prefix(self, msg):
         # prefix a message with its length

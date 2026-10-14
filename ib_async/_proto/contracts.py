@@ -382,7 +382,7 @@ def createContractDetails(
         # Wire ``0`` (and IBKR's ``UNSET_INTEGER`` sentinel) collapse to
         # ``None`` so user code gating on ``if details.aggGroup:`` stays
         # falsy without surfacing the sentinel's magic int.
-        if proto.aggGroup != 0 and proto.aggGroup != UNSET_INTEGER:
+        if proto.aggGroup not in (0, UNSET_INTEGER):
             details.aggGroup = proto.aggGroup
     if proto.HasField("underSymbol"):
         details.underSymbol = proto.underSymbol

@@ -35,7 +35,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from _twsapi_meta import load as _load_meta  # noqa: E402
+from _twsapi_meta import load as _load_meta
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUR_PROTO_DIR = REPO_ROOT / "ib_async" / "_proto"

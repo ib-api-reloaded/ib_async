@@ -1005,18 +1005,18 @@ class Wrapper:
         if trade:
             msg: str | None
             oldStatus = trade.orderStatus.status
-            new = dict(
-                status=status,
-                filled=filled,
-                remaining=remaining,
-                avgFillPrice=avgFillPrice,
-                permId=permId,
-                parentId=parentId,
-                lastFillPrice=lastFillPrice,
-                clientId=clientId,
-                whyHeld=whyHeld,
-                mktCapPrice=mktCapPrice,
-            )
+            new = {
+                "status": status,
+                "filled": filled,
+                "remaining": remaining,
+                "avgFillPrice": avgFillPrice,
+                "permId": permId,
+                "parentId": parentId,
+                "lastFillPrice": lastFillPrice,
+                "clientId": clientId,
+                "whyHeld": whyHeld,
+                "mktCapPrice": mktCapPrice,
+            }
             curr = dataclassAsDict(trade.orderStatus)
             isChanged = curr != {**curr, **new}
 
@@ -2240,27 +2240,21 @@ class Wrapper:
 
     def verifyMessageAPI(self, apiData: str):
         """3rd-party API authentication callback (TWS verify dialog)."""
-        pass
 
     def verifyCompleted(self, isSuccessful: bool, errorText: str):
         """3rd-party API authentication completion callback."""
-        pass
 
     def verifyAndAuthMessageAPI(self, apiData: str, xyzChallenge: str):
         """3rd-party API auth+xyz challenge callback."""
-        pass
 
     def verifyAndAuthCompleted(self, isSuccessful: bool, errorText: str):
         """3rd-party API auth+xyz completion callback."""
-        pass
 
     def displayGroupList(self, reqId: int, groups: str):
         """TWS display-group sync — initial list."""
-        pass
 
     def displayGroupUpdated(self, reqId: int, contractInfo: str):
         """TWS display-group sync — update notification."""
-        pass
 
     def configResponseProtoBuf(self, configResponseProto: Any):
         """Carries nested config sub-messages (LockAndExitConfig,

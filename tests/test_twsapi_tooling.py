@@ -247,7 +247,7 @@ def test_status_check_fails_when_the_pinned_archive_is_gone(
 def test_status_without_check_only_reports(tooling, monkeypatch):
     twsapi, _, _ = tooling
     monkeypatch.setattr(twsapi.archive, "probe", lambda url: 404)
-    monkeypatch.setattr(twsapi.archive, "fetch_published_versions", lambda: {})
+    monkeypatch.setattr(twsapi.archive, "fetch_published_versions", dict)
 
     assert twsapi.main(["status"]) == 0
 

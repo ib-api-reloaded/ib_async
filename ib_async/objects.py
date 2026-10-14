@@ -695,7 +695,7 @@ class OptionComputation:
             undPrice=self.undPrice,
         )
 
-    def __mul__(self, other: int | float) -> OptionComputation:
+    def __mul__(self, other: float) -> OptionComputation:
         if not isinstance(other, int | float):
             raise TypeError(f"Cannot multiply {type(self)} and {type(other)}")
 

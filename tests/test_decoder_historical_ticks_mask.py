@@ -67,7 +67,7 @@ def test_historical_bidask_matches_live_tickbytick_decoding():
 
     def fake_tick_by_tick_bid_ask(
         reqId, time, bidPrice, askPrice, bidSize, askSize, attrib
-    ):  # noqa: N803
+    ):
         captured["live"] = attrib
 
     ib.wrapper.tickByTickBidAsk = fake_tick_by_tick_bid_ask  # type: ignore[method-assign]

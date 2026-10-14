@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from eventkit import Event
 
-import ib_async.util as util
+from ib_async import util
 from ib_async.contract import Contract, Forex
 from ib_async.ib import IB
 
@@ -126,21 +126,21 @@ class IBC:
         self._logger.info("Starting")
 
         # map from field names to cmd arguments; key=(UnixArg, WindowsArg)
-        args = dict(
-            twsVersion=("", ""),
-            gateway=("--gateway", "/Gateway"),
-            tradingMode=("--mode=", "/Mode:"),
-            twsPath=("--tws-path=", "/TwsPath:"),
-            twsSettingsPath=("--tws-settings-path=", ""),
-            ibcPath=("--ibc-path=", "/IbcPath:"),
-            ibcIni=("--ibc-ini=", "/Config:"),
-            javaPath=("--java-path=", "/JavaPath:"),
-            userid=("--user=", "/User:"),
-            password=("--pw=", "/PW:"),
-            fixuserid=("--fix-user=", "/FIXUser:"),
-            fixpassword=("--fix-pw=", "/FIXPW:"),
-            on2fatimeout=("--on2fatimeout=", "/On2FATimeout:"),
-        )
+        args = {
+            "twsVersion": ("", ""),
+            "gateway": ("--gateway", "/Gateway"),
+            "tradingMode": ("--mode=", "/Mode:"),
+            "twsPath": ("--tws-path=", "/TwsPath:"),
+            "twsSettingsPath": ("--tws-settings-path=", ""),
+            "ibcPath": ("--ibc-path=", "/IbcPath:"),
+            "ibcIni": ("--ibc-ini=", "/Config:"),
+            "javaPath": ("--java-path=", "/JavaPath:"),
+            "userid": ("--user=", "/User:"),
+            "password": ("--pw=", "/PW:"),
+            "fixuserid": ("--fix-user=", "/FIXUser:"),
+            "fixpassword": ("--fix-pw=", "/FIXPW:"),
+            "on2fatimeout": ("--on2fatimeout=", "/On2FATimeout:"),
+        }
 
         # create shell command
         cmd = [
@@ -153,7 +153,7 @@ class IBC:
         for k, v in util.dataclassAsDict(self).items():
             arg = args[k][self._isWindows]
             if v:
-                if arg.endswith("=") or arg.endswith(":"):
+                if arg.endswith(("=", ":")):
                     cmd.append(f"{arg}{v}")
                 elif arg:
                     cmd.append(arg)
