@@ -15,11 +15,14 @@ PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
 RELEASEKIT ?= releasekit
 
-# test: per-test limit, and extra `uv run` arguments (e.g. local sibling
+# test: per-test limit, and extra `uv run` arguments, e.g. local sibling
 # checkouts during development:
-# UV_RUN_ARGS="--with=../eventkit --with=../nest_asyncio"; not --with-editable,
-# which puts those repositories (and their own `tests` packages) on sys.path).
-# test-matrix runs `make test` per Python version, so both apply there too.
+#   UV_RUN_ARGS="--with=../eventkit --with=../nest_asyncio --with=pytest"
+# --with=pytest puts a pytest into the overlay environment; otherwise `pytest`
+# resolves to .venv/bin/pytest, which runs .venv's interpreter and never sees
+# the overlay. Not --with-editable, which puts those repositories (and their
+# own `tests` packages) on sys.path. test-matrix runs `make test` per Python
+# version, so both apply there too.
 TEST_TIMEOUT ?= 60
 UV_RUN_ARGS ?=
 PYTEST := pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
