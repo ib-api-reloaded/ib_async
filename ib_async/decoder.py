@@ -767,12 +767,10 @@ class Decoder:
 
     # --- verify / displayGroup / config handlers --------------------------
     #
-    # The matching wrapper methods don't exist on our base ``Wrapper`` —
-    # the binary path's ``wrap()`` factory falls back to a noop when a
-    # wrapper method is missing, so we mirror that here via ``getattr``.
-    # Subclasses that wire up their own verify / display-group flow get
-    # their handlers invoked; vanilla setups silently drop these wire
-    # frames just like the binary path always has.
+    # The base ``Wrapper`` defines these as hooks for subclasses. They are
+    # looked up with ``getattr`` and skipped when absent, the same
+    # tolerance the binary path's ``wrap()`` factory gives a wrapper
+    # object that does not implement every callback.
 
     def _protoVerifyMessageAPI(self, proto: Any) -> None:
         method = getattr(self.wrapper, "verifyMessageAPI", None)

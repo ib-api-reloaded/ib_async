@@ -1677,6 +1677,14 @@ class IB:
             left over from a prior snapshot. (If a streaming subscription
             is already live on the contract, that fresh pooled Ticker is
             returned instead and no new request is issued.)
+
+        Calling again for a subscribed contract:
+            While a streaming subscription for the contract is live,
+            another call returns that subscription's Ticker without
+            sending a new request, even if ``genericTickList`` or
+            ``mktDataOptions`` differ. To change them, call
+            :meth:`cancelMktData` for the contract first, then subscribe
+            again.
         """
         # Idempotent re-subscribe: a second call for the same qualified
         # contract — or the same spread/bag, matched by its synthetic

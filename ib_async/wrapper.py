@@ -1120,13 +1120,8 @@ class Wrapper:
 
     def commissionReport(self, commissionReport: CommissionReport):
         # ``commissionReport.yield_`` and ``realizedPNL`` are
-        # ``Decimal | None`` for v3.0 — ``None`` IS the unset sentinel
-        # so we don't substitute ``defaults.unset`` (which is
-        # ``float('nan')`` and would (a) violate the field type and
-        # (b) reintroduce the ``Decimal('NaN')`` truthy trap). Future
-        # IBDefaults plumbing for Decimal-typed fields lands as a
-        # separate piece of work — see the operator's IBDefaults.unset
-        # follow-up note.
+        # ``Decimal | None``; ``None`` is the unset value, so they are
+        # passed through as decoded rather than substituted.
         fill = self.fills.get(commissionReport.execId)
         if fill:
             report = dataclassUpdate(fill.commissionReport, commissionReport)
