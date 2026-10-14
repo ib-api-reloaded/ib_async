@@ -1,6 +1,7 @@
 """Event-driven socket connection."""
 
 import asyncio
+from contextlib import suppress
 
 from eventkit import Event
 
@@ -40,15 +41,12 @@ class Connection(asyncio.Protocol):
     def disconnect(self):
         if self.transport:
             self.transport.write_eof()
-            try:
-                # sometimes the loop is already closed, but we don't
-                # want the user to get a runtime exception from deep in
-                # this library, so we just hide any failure to double close
-                # the event loop.
+            # sometimes the loop is already closed, but we don't
+            # want the user to get a runtime exception from deep in
+            # this library, so we just hide any failure to double close
+            # the event loop (RuntimeError('Event loop is closed')).
+            with suppress(RuntimeError):
                 self.transport.close()
-            except RuntimeError:
-                # prevents: raise RuntimeError('Event loop is closed')
-                pass
 
     def isConnected(self):
         return self.transport is not None
