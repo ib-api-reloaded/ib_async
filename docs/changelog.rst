@@ -207,6 +207,17 @@ are fixed in v3.0:
   Trader"``), so every completed fill and cancel fell through to the
   ``Inactive`` fallback with a warning. The known phrasings now map to
   their terminal status; the original text stays in the trade log.
+* **``util.run`` reported stale global errors.** A run cancelled for
+  any reason raised the last error ``globalErrorEvent`` had ever emitted,
+  so after one global error every later cancellation was misreported as
+  it. ``run`` now raises only an error emitted during that run, chained
+  to the cancellation, and re-raises a plain cancellation unchanged.
+* **Bar and scan result lists were neither equal nor unequal.**
+  ``BarDataList``, ``RealTimeBarList``, ``ScanDataList`` and ``BarList``
+  compare by identity but inherited list inequality and list's missing
+  hash; they are now consistently identity-based and usable as dict keys.
+* **``IBC`` blocked the event loop on Windows** while ``taskkill`` ran
+  during termination; the call is now awaited.
 * **Shared defaults across calls and instances.** The ``TagValue``
   option parameters (``chartOptions``, ``mktDataOptions``,
   ``scannerSubscriptionOptions`` and the rest) defaulted to one shared
