@@ -577,22 +577,22 @@ The complete [API documentation](https://ib-api-reloaded.github.io/ib_async/api.
 
 ### Running Tests
 
+The protobuf bindings under `ib_async/_pb/` are generated, not committed,
+so generate them once after syncing (and again after a TWS API bump):
+
 ```bash
 uv sync --group dev
-uv run pytest
+make protos        # fetch the pinned TWS API archive, generate ib_async/_pb/
+make test          # the suite on the default interpreter
+make test-matrix   # the suite on Python 3.11 - 3.14, each version in its own
+                   # environment and time-boxed; logs in .venvs/logs/
 ```
 
-### Type Checking
+### Linting, Type Checking and Formatting
 
 ```bash
-uv run mypy ib_async
-```
-
-### Code Formatting
-
-```bash
-uv run ruff format
-uv run ruff check --fix
+make lint          # ruff check, mypy and prettier --check
+make format        # ruff format and prettier --write
 ```
 
 ### Local Development
@@ -610,11 +610,12 @@ cd ib_async
 uv sync --group dev --group docs
 ```
 
-3. Make your changes and run tests:
+3. Generate the protobuf bindings, make your changes, and check them:
 
 ```bash
-uv run pytest
-uv run mypy ib_async
+make protos
+make test-matrix
+make lint
 ```
 
 4. Submit a pull request with:
