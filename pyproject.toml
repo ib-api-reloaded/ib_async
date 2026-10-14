@@ -32,14 +32,18 @@ Repository = "https://github.com/ib-api-reloaded/ib_async"
 "Bug Tracker" = "https://github.com/ib-api-reloaded/ib_async/issues"
 
 [dependency-groups]
-dev = [
-    "mypy>=1.11.0",
+# What the tests need, and nothing else: `make test` installs only this
+# group, so the tests also run where the lint tools have no wheels (PyPy).
+test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
-    "pytest-xdist>=3.6,<4.0",
     "pytest-timeout>=2.3.1,<3.0.0",
     "pandas>=2.2.1,<3.0.0; implementation_name != 'pypy'",
+]
+dev = [
+    "mypy>=1.11.0",
     "ruff>=0.17.0,<0.18.0",
+    { include-group = "test" },
 ]
 # Generating the protobuf bindings (`make protos`, release builds) only;
 # kept out of `dev` so test environments never install or build grpcio.
@@ -226,6 +230,6 @@ prepare = ["make protos"]
 changelog = { path = "docs/changelog.rst", contains = "Version {version}", forbid = "Version {version} (Unreleased)" }
 
 [tool.releasekit.matrix]
-python = ["3.11", "3.12", "3.13", "3.14", "3.15"]
+python = ["3.11", "3.12", "3.13", "3.14", "3.15", "pypy3.11"]
 command = "make test"
 timeout = 600
