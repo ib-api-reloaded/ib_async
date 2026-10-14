@@ -45,7 +45,7 @@ sync:
 # under [tool.ib_async.twsapi]. The script handles fetch / cache /
 # SHA-verify / extract / protoc — no manual setup needed.
 protos:
-	$(PYTHON) scripts/generate_protos.py
+	uv run --group protos python scripts/generate_protos.py
 
 # IBKR prunes old TWS API archives without notice. ``twsapi-status``
 # reports whether the pinned one is still downloadable alongside the
@@ -68,10 +68,10 @@ build: protos
 # Full release-engineering pipeline. Aborts before publish on any
 # red step (lint / audit / tests / smoke install).
 release:
-	$(PYTHON) scripts/release.py
+	uv run --group protos python scripts/release.py
 
 publish:
-	$(PYTHON) scripts/release.py --publish
+	uv run --group protos python scripts/release.py --publish
 
 test:
 	uv run $(UV_RUN_ARGS) pytest -q

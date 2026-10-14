@@ -333,7 +333,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "grpcio-tools" },
     { name = "mypy" },
     { name = "pandas", marker = "implementation_name != 'pypy'" },
     { name = "pytest" },
@@ -350,6 +349,9 @@ docs = [
     { name = "sphinx-autodoc-typehints", version = "3.13.10", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "sphinx-rtd-theme" },
 ]
+protos = [
+    { name = "grpcio-tools" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -361,7 +363,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "grpcio-tools", specifier = ">=1.60.0" },
     { name = "mypy", specifier = ">=1.11.0" },
     { name = "pandas", marker = "implementation_name != 'pypy'", specifier = ">=2.2.1,<3.0.0" },
     { name = "pytest", specifier = ">=8.0" },
@@ -377,6 +378,7 @@ docs = [
     { name = "sphinx-autodoc-typehints", specifier = ">=3.0.0,<4.0.0" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.0,<4.0.0" },
 ]
+protos = [{ name = "grpcio-tools", specifier = ">=1.60.0" }]
 
 [[package]]
 name = "idna"
