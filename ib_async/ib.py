@@ -6,7 +6,7 @@ import copy
 import datetime
 import logging
 import time
-from collections.abc import Awaitable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from enum import Flag, auto
 from typing import Any
 
@@ -514,15 +514,27 @@ class IB:
         )
         return reqId, req.future
 
-    def _openSingletonRequest(self, name: str) -> tuple[asyncio.Future, bool]:
+    def _startSingletonRequest(
+        self, name: str, send: Callable[[], object]
+    ) -> asyncio.Future:
         """Open or attach to the single-flight :class:`SingletonKey`
-        request named ``name``. Returns ``(future, isNew)``; callers
-        guard the wire ``client.req*`` call on ``isNew`` so a second
-        concurrent caller attaches to the in-flight result instead of
-        issuing a duplicate request.
+        request named ``name`` and return its future.
+
+        Only the call that opens the request runs ``send()`` (the wire
+        ``client.req*`` call); a concurrent caller attaches to the
+        in-flight result instead of issuing a duplicate. If ``send()``
+        raises (e.g. a server too old for the request, or no connection),
+        the request is withdrawn before the exception propagates, so no
+        caller is left attached to a future that can never settle.
         """
         req, isNew = self.wrapper.requests.open(SingletonKey(name), single_flight=True)
-        return req.future, isNew
+        if isNew:
+            try:
+                send()
+            except BaseException:
+                self.wrapper.requests.cancel(SingletonKey(name))
+                raise
+        return req.future
 
     async def _awaitOrTimeout(
         self,
@@ -2541,32 +2553,26 @@ class IB:
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
         """Async sibling of :meth:`reqCurrentTime`."""
-        future, isNew = self._openSingletonRequest("currentTime")
-        if isNew:
-            self.client.reqCurrentTime()
-        return future
+        return self._startSingletonRequest("currentTime", self.client.reqCurrentTime)
 
     def reqCurrentTimeInMillisAsync(self) -> Awaitable[int]:
         """Return the IB server clock in milliseconds since the Unix epoch.
 
-        v3.0 new capability — only meaningful on TWS / IB Gateway at
-        server version 213 or newer (the protobuf REST-messages gate).
-        Older servers reject the request; awaiting this on a sub-213
-        server times out via the user's outer ``asyncio.wait_for`` if
-        any. There's no binary fallback because IBKR never shipped this
-        message family on the legacy NUL-separated wire.
+        v3.0 new capability — requires TWS / IB Gateway at server
+        version 213 or newer (the protobuf REST-messages gate). On an
+        older server this raises ``ValueError`` immediately. There's no
+        binary fallback because IBKR never shipped this message family
+        on the legacy NUL-separated wire.
         """
-        future, isNew = self._openSingletonRequest("currentTimeInMillis")
-        if isNew:
-            self.client.reqCurrentTimeInMillis()
-        return future
+        return self._startSingletonRequest(
+            "currentTimeInMillis", self.client.reqCurrentTimeInMillis
+        )
 
     def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
         """Async sibling of :meth:`reqAccountUpdates`."""
-        future, isNew = self._openSingletonRequest("accountValues")
-        if isNew:
-            self.client.reqAccountUpdates(True, account)
-        return future
+        return self._startSingletonRequest(
+            "accountValues", lambda: self.client.reqAccountUpdates(True, account)
+        )
 
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
@@ -2610,24 +2616,17 @@ class IB:
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         """Async sibling of :meth:`reqOpenOrders`."""
-        future, isNew = self._openSingletonRequest("openOrders")
-        if isNew:
-            self.client.reqOpenOrders()
-        return future
+        return self._startSingletonRequest("openOrders", self.client.reqOpenOrders)
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         """Async sibling of :meth:`reqAllOpenOrders`."""
-        future, isNew = self._openSingletonRequest("openOrders")
-        if isNew:
-            self.client.reqAllOpenOrders()
-        return future
+        return self._startSingletonRequest("openOrders", self.client.reqAllOpenOrders)
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
         """Async sibling of :meth:`reqCompletedOrders`."""
-        future, isNew = self._openSingletonRequest("completedOrders")
-        if isNew:
-            self.client.reqCompletedOrders(apiOnly)
-        return future
+        return self._startSingletonRequest(
+            "completedOrders", lambda: self.client.reqCompletedOrders(apiOnly)
+        )
 
     def reqExecutionsAsync(
         self, execFilter: ExecutionFilter | None = None
@@ -2640,10 +2639,7 @@ class IB:
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
         """Async sibling of :meth:`reqPositions`."""
-        future, isNew = self._openSingletonRequest("positions")
-        if isNew:
-            self.client.reqPositions()
-        return future
+        return self._startSingletonRequest("positions", self.client.reqPositions)
 
     def reqContractDetailsAsync(
         self, contract: Contract
@@ -2826,10 +2822,9 @@ class IB:
 
     def reqMktDepthExchangesAsync(self) -> Awaitable[list[DepthMktDataDescription]]:
         """Async sibling of :meth:`reqMktDepthExchanges`."""
-        future, isNew = self._openSingletonRequest("mktDepthExchanges")
-        if isNew:
-            self.client.reqMktDepthExchanges()
-        return future
+        return self._startSingletonRequest(
+            "mktDepthExchanges", self.client.reqMktDepthExchanges
+        )
 
     def reqHistogramDataAsync(
         self, contract: Contract, useRTH: bool, period: str
@@ -2869,10 +2864,9 @@ class IB:
 
     def reqScannerParametersAsync(self) -> Awaitable[str]:
         """Async sibling of :meth:`reqScannerParameters`."""
-        future, isNew = self._openSingletonRequest("scannerParams")
-        if isNew:
-            self.client.reqScannerParameters()
-        return future
+        return self._startSingletonRequest(
+            "scannerParams", self.client.reqScannerParameters
+        )
 
     async def calculateImpliedVolatilityAsync(
         self,
@@ -2928,10 +2922,9 @@ class IB:
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
         """Async sibling of :meth:`reqNewsProviders`."""
-        future, isNew = self._openSingletonRequest("newsProviders")
-        if isNew:
-            self.client.reqNewsProviders()
-        return future
+        return self._startSingletonRequest(
+            "newsProviders", self.client.reqNewsProviders
+        )
 
     def reqNewsArticleAsync(
         self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] = []
@@ -2964,9 +2957,9 @@ class IB:
     async def requestFAAsync(self, faDataType: int):
         """Async sibling of :meth:`requestFA`."""
         key = SingletonKey("requestFA")
-        future, isNew = self._openSingletonRequest("requestFA")
-        if isNew:
-            self.client.requestFA(faDataType)
+        future = self._startSingletonRequest(
+            "requestFA", lambda: self.client.requestFA(faDataType)
+        )
         return await self._awaitOrTimeout(key, future, 4, "requestFAAsync")
 
     async def getWshMetaDataAsync(self) -> str:
@@ -3020,10 +3013,7 @@ class IB:
 
     def reqFamilyCodesAsync(self) -> Awaitable[list]:
         """Fetch the FamilyCode list (FA users only)."""
-        future, isNew = self._openSingletonRequest("familyCodes")
-        if isNew:
-            self.client.reqFamilyCodes()
-        return future
+        return self._startSingletonRequest("familyCodes", self.client.reqFamilyCodes)
 
     def cancelHeadTimeStamp(self, reqId: int):
         """Cancel an in-flight reqHeadTimeStamp.

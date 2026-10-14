@@ -201,6 +201,15 @@ are fixed in v3.0:
   Trader"``), so every completed fill and cancel fell through to the
   ``Inactive`` fallback with a warning. The known phrasings now map to
   their terminal status; the original text stays in the trade log.
+* **A failed send could leave single-flight requests waiting forever.**
+  The account, position, order, scanner-parameter, news-provider,
+  family-code, FA and current-time requests share one in-flight request
+  between concurrent callers. When sending raised (for example
+  ``reqCurrentTimeInMillisAsync`` on a server below version 213, or a
+  send with no connection), the request stayed open, so every later call
+  attached to a future that could never settle. The request is now
+  withdrawn before the error reaches the caller, and a later call sends
+  again.
 * **Event loop warnings and failures on Python 3.12 - 3.14.**
   ``util.getLoop`` read the thread's loop through the event loop policy
   API, which warns on 3.12 / 3.13 and is deprecated on 3.14 (removal in
