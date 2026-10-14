@@ -17,7 +17,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14", "pypy3.11"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15", "pypy3.11"]
+    env:
+      # Every `uv` command (and so every make target) uses this interpreter
+      # and the committed lock file.
+      UV_PYTHON: ${{ matrix.python-version }}
+      UV_FROZEN: "1"
 
     steps:
       - uses: actions/checkout@v6
@@ -26,13 +31,10 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
 
-      - name: Install uv toolchain
-        uses: astral-sh/setup-uv@v6
-
-      - name: Install dependencies with uv
-        run: |
-          uv sync --frozen --group dev --group protos
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Read TWS API version pin
         id: twsapi
@@ -51,21 +53,17 @@ jobs:
           key: twsapi-${{ steps.twsapi.outputs.version }}
 
       - name: Generate protobuf bindings
-        run: |
-          uv run --frozen --group protos python scripts/generate_protos.py
+        run: make protos
 
-      - name: MyPy static code analysis
+      - name: Ruff
+        run: make ruff
+
+      - name: MyPy
         if: ${{ !startsWith(matrix.python-version, 'pypy') }}
-        run: |
-          uv run --frozen mypy --pretty ib_async
+        run: make typecheck
 
-      - name: Ruff check
-        run: |
-          uv run --frozen ruff check
-
-      - name: Run owned test suite
-        run: |
-          uv run --frozen pytest -q
+      - name: Tests
+        run: make test
 
   # Catches the "google module not found" class of release-engineering
   # regression: build the wheel, install it into a clean venv, import
@@ -88,8 +86,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install uv toolchain
-        uses: astral-sh/setup-uv@v6
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Read TWS API version pin
         id: twsapi
@@ -105,9 +103,9 @@ jobs:
           key: twsapi-${{ steps.twsapi.outputs.version }}
 
       - name: Build wheel + sdist with bundled protos
-        run: |
-          uv sync --frozen --group dev --group protos
-          make build
+        env:
+          UV_FROZEN: "1"
+        run: make build
 
       - name: Clean-venv install + import smoke test
         run: |

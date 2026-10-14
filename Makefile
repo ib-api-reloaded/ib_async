@@ -7,7 +7,7 @@
 # and source distribution so end users get the bindings bundled into
 # the package without needing ``protoc`` or ``grpcio-tools``.
 
-.PHONY: help sync protos audit twsapi-status twsapi-bump build release publish test test-matrix lint format clean
+.PHONY: help sync protos audit twsapi-status twsapi-bump build release publish ruff typecheck lint test test-matrix format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -20,6 +20,7 @@ PYTHON_VERSIONS ?= 3.11 3.12 3.13 3.14
 TEST_TIMEOUT ?= 60
 MATRIX_TIMEOUT ?= 600
 UV_RUN_ARGS ?=
+PYTEST := pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
 
 help:
 	@echo "Targets:"
@@ -34,7 +35,9 @@ help:
 	@echo "  test-matrix - run the suite on each of PYTHON_VERSIONS, each in its own"
 	@echo "                .venvs/py<version> environment and time-boxed; logs in"
 	@echo "                .venvs/logs/"
-	@echo "  lint     - ruff check + mypy"
+	@echo "  ruff     - ruff check + ruff format --check"
+	@echo "  typecheck - mypy"
+	@echo "  lint     - ruff + typecheck"
 	@echo "  format   - ruff format"
 	@echo "  clean    - remove dist/, build/, $(PB_DIR)/, caches"
 
@@ -73,17 +76,23 @@ release:
 publish:
 	uv run --group protos python scripts/release.py --publish
 
+# CI calls ruff / typecheck / test / protos / build, so a local run of
+# these targets is exactly what CI runs.
+ruff:
+	uv run ruff check .
+	uv run ruff format --check .
+
+typecheck:
+	uv run mypy --pretty ib_async/
+
+lint: ruff typecheck
+
 test:
-	uv run $(UV_RUN_ARGS) pytest -q
+	uv run $(UV_RUN_ARGS) $(PYTEST)
 
 test-matrix:
 	python3 scripts/test_matrix.py --versions $(PYTHON_VERSIONS) \
-		--timeout $(MATRIX_TIMEOUT) $(foreach a,$(UV_RUN_ARGS),--uv-arg=$(a)) -- \
-		pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
-
-lint:
-	uv run python -m ruff check ib_async/ tests/
-	uv run python -m mypy ib_async/
+		--timeout $(MATRIX_TIMEOUT) $(foreach a,$(UV_RUN_ARGS),--uv-arg=$(a)) -- $(PYTEST)
 
 format:
 	uv run python -m ruff format ib_async/ tests/
