@@ -7,6 +7,16 @@ import pytest
 
 import ib_async as ibi
 from ib_async import util
+from ib_async.objects import BarDataList, RealTimeBarList, ScanDataList
+from ib_async.ticker import BarList
+
+
+@pytest.mark.parametrize("cls", [BarDataList, RealTimeBarList, ScanDataList, BarList])
+def test_result_lists_hash_by_identity(cls):
+    first, second = cls(), cls()
+    assert first != second  # identity equality, even when both are empty
+    assert {first: 1, second: 2}[first] == 1
+    assert hash(first) == hash(first)
 
 
 def test_run_chains_the_global_error_to_the_cancellation():

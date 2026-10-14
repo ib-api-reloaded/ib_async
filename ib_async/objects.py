@@ -812,6 +812,14 @@ class BarDataList(list[BarData]):
     def __eq__(self, other) -> bool:
         return self is other
 
+    def __ne__(self, other) -> bool:
+        return self is not other
+
+    # Identity-hashable to match the identity equality above (list itself
+    # is unhashable, hence the override).
+    def __hash__(self) -> int:  # type: ignore[override]
+        return id(self)
+
 
 class RealTimeBarList(list[RealTimeBar]):
     """
@@ -837,6 +845,14 @@ class RealTimeBarList(list[RealTimeBar]):
     def __eq__(self, other) -> bool:
         return self is other
 
+    def __ne__(self, other) -> bool:
+        return self is not other
+
+    # Identity-hashable to match the identity equality above (list itself
+    # is unhashable, hence the override).
+    def __hash__(self) -> int:  # type: ignore[override]
+        return id(self)
+
 
 class ScanDataList(list[ScanData]):
     """
@@ -855,8 +871,16 @@ class ScanDataList(list[ScanData]):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self is other
+
+    def __ne__(self, other) -> bool:
+        return self is not other
+
+    # Identity-hashable to match the identity equality above (list itself
+    # is unhashable, hence the override).
+    def __hash__(self) -> int:  # type: ignore[override]
+        return id(self)
 
 
 class DynamicObject:
