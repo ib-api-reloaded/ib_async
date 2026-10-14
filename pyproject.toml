@@ -60,7 +60,7 @@ docs = [
 [tool.ib_async.twsapi]
 # Single source of truth for the IBKR TWS API version this build is
 # wired against. Consumed by ``scripts/generate_protos.py``,
-# ``scripts/release.py``, ``scripts/audit_proto_parity.py``, and CI
+# ``scripts/audit_proto_parity.py``, ``scripts/twsapi.py``, and CI
 # — they all read these constants so the proto bindings and the
 # parity audit's reference ``client_utils.py`` stay version-locked.
 #
@@ -217,3 +217,16 @@ ignore = [
   "SIM102", # collapsible-if: nested ifs often read clearer
   "SIM110", # reimplemented-builtin: explicit loops often read clearer
 ]
+
+[tool.releasekit]
+smoke = "ib_async.IB()"
+# protos first: lint, the audit and the tests need the generated bindings.
+checks = ["make protos", "make lint", "make audit", "make test"]
+# The bindings are gitignored; generate them in the export that is built.
+prepare = ["make protos"]
+changelog = { path = "docs/changelog.rst", contains = "Version {version}", forbid = "Version {version} (Unreleased)" }
+
+[tool.releasekit.matrix]
+python = ["3.11", "3.12", "3.13", "3.14", "3.15"]
+command = "make test"
+timeout = 600
