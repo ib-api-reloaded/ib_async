@@ -18,6 +18,7 @@ import math
 import struct
 from collections import OrderedDict
 from decimal import Decimal
+from zoneinfo import ZoneInfoNotFoundError
 
 import pytest
 
@@ -449,7 +450,7 @@ def test_head_timestamp_zone_info_not_found_surfaces_as_request_error():
     ib.wrapper.headTimestamp(reqId, "20221125 10:00:00 Mars/Olympus")
 
     assert request.future.done()
-    with pytest.raises(Exception):
+    with pytest.raises(ZoneInfoNotFoundError):
         request.future.result()
 
 
@@ -465,7 +466,7 @@ def test_head_timestamp_value_error_still_surfaces_as_request_error():
     ib.wrapper.headTimestamp(reqId, "not-a-date")
 
     assert request.future.done()
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         request.future.result()
 
 
@@ -926,7 +927,7 @@ async def test_req_tickers_async_closes_subs_on_gather_raise():
         ReqIdKey(reqIds[0]), ConnectionError("simulated wire failure")
     )
 
-    with pytest.raises(BaseException):
+    with pytest.raises(ConnectionError):
         await fut
 
     # The finally clause must have closed every snapshot sub, even
@@ -982,7 +983,8 @@ async def test_ibc_monitor_async_drains_garbled_bytes_with_replace_decode():
     ibc = IBC(twsVersion=974, gateway=True)
 
     class _GarbledStdout:
-        _lines = [b"\xff\xfe garbled \x80\x81 bytes\n", b""]  # second is EOF
+        def __init__(self):
+            self._lines = [b"\xff\xfe garbled \x80\x81 bytes\n", b""]  # then EOF
 
         async def readline(self):
             if self._lines:

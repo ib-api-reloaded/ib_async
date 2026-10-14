@@ -115,10 +115,10 @@ def dataclassNonDefaults(obj) -> dict[str, Any]:
 
     return {
         field.name: value
-        for field, value in zip(fields(obj), values)
+        for field, value in zip(fields(obj), values, strict=True)
         if value is not None
         and value != field.default
-        and value == value
+        and not isNan(value)
         and not (
             (isinstance(value, list) and value == [])
             or (isinstance(value, dict) and value == {})
@@ -197,7 +197,7 @@ def _carriesDisplayInformation(name: str, value: Any, default: Any) -> bool:
     # (A field declared with ``default_factory`` has ``default`` set to the
     # ``MISSING`` sentinel, which never equals a value, so such fields fall
     # through to the emptiness rules below.)
-    if value is None or value == default or value != value:
+    if value is None or value == default or isNan(value):
         return False
 
     # Empty container / empty string: something was said, but it is blank.
@@ -469,9 +469,10 @@ def logToConsole(level=logging.INFO, fmt=None):
     _attachHandler(logging.StreamHandler(), level, fmt)
 
 
-def isNan(x: float) -> bool:
-    """Not a number test."""
-    return x != x
+def isNan(x: object) -> bool:
+    """Not-a-number test for any value: True for float and Decimal NaN,
+    False for everything else (never raises, unlike ``math.isnan``)."""
+    return x != x  # noqa: PLR0124 - NaN is the only value unequal to itself
 
 
 def formatSI(n: float) -> str:

@@ -380,7 +380,10 @@ class Decoder:
 
         def handler(fields):
             try:
-                args = [conv(f) for conv, f in zip(converters, fields[skip:])]
+                # Newer servers may append fields this decoder does not read.
+                args = [
+                    conv(f) for conv, f in zip(converters, fields[skip:], strict=False)
+                ]
                 method(*args)
             except Exception:
                 logger.exception("Error for %s with fields=%r", methodName, fields)
@@ -1062,8 +1065,8 @@ class Decoder:
                 raw = field.type
                 if isinstance(raw, str):
                     try:
-                        raw = eval(raw, module_globals)
-                    except Exception:
+                        raw = eval(raw, module_globals)  # a type annotation
+                    except (NameError, AttributeError, TypeError, SyntaxError):
                         continue
                 typ = _resolveCoerceType(raw)
                 if typ is not None:

@@ -630,7 +630,7 @@ class OrderState:
 
                 # else, round to the requested precision
                 return round(floated, precision)
-            except Exception as _:
+            except (TypeError, ValueError):
                 # initial conversion failed so just return None in its place
                 return None
 

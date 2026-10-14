@@ -85,10 +85,10 @@ class FlexReport:
         def is_valid_url(url: str) -> bool:
             try:
                 result = urlparse(url)
-                # Must have scheme (http/https) and netloc (domain)
-                return all([result.scheme, result.netloc])
-            except Exception:
+            except ValueError:
                 return False
+            # Must have scheme (http/https) and netloc (domain)
+            return bool(result.scheme and result.netloc)
 
         _url = os.getenv("IB_FLEXREPORT_URL", FLEXREPORT_URL)
         if is_valid_url(_url):

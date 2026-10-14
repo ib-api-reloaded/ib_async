@@ -70,16 +70,7 @@ def test_copy_does_not_reset_via_post_init():
 
 def test_pickle_roundtrip_preserves_market_fields():
     ticker = _fresh_ticker()
-    # The eventkit Event in the updateEvent slot may not be pickleable in all
-    # eventkit versions; if pickle.dumps raises, mark the test xfail loudly so
-    # the regression surfaces but doesn't block the suite. (This documents
-    # behaviour rather than asserting a fix.)
-    try:
-        blob = pickle.dumps(ticker)
-    except Exception as exc:
-        pytest.xfail(f"Ticker is not picklable due to updateEvent slot: {exc!r}")
-        return
-
+    blob = pickle.dumps(ticker)
     restored = pickle.loads(blob)
     assert restored.bid == 100.5
     assert restored.ask == 100.6
