@@ -20,11 +20,11 @@ from typing import (
 )
 from zoneinfo import ZoneInfo
 
-import eventkit as ev
 import nest_asyncio
+from eventkit import Event
 from eventkit.util import get_event_loop as _threadEventLoop
 
-globalErrorEvent = ev.Event()
+globalErrorEvent: Event = Event()
 """
 Event to emit global exceptions.
 """
