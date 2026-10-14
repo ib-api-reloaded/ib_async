@@ -185,6 +185,23 @@ select = [
   "ASYNC222",
   "ASYNC230",
   "ASYNC251",
+  # current idioms: comprehensions and literals, membership tests,
+  # no redundant casts, placeholders or numeric unions
+  "C4",
+  "PIE790",
+  "PIE807",
+  "PIE810",
+  "PLR0402",
+  "PLR1714",
+  "PLR5501",
+  "PLR0133",
+  "PYI041",
+  "RUF021",
+  "RUF046",
+  "RUF059",
+  # no exec(); no unused noqa comments
+  "S102",
+  "RUF100",
 ]
 ignore = [
   "E402", # Module level import not at top of file
