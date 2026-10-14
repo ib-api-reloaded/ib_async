@@ -118,3 +118,31 @@ def test_no_deprecation_warning_importing_and_getting_a_loop():
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_startLoop_allows_sync_calls_inside_a_running_loop():
+    """What a notebook cell does: a synchronous ib_async call while the
+    loop is already running, including a timeout inside the nested run
+    (Python 3.14 needs the current-task fix to allow it)."""
+    snippet = textwrap.dedent(
+        """
+        import asyncio
+        from ib_async import util
+
+        util.startLoop()
+
+
+        async def cell():
+            return util.run(asyncio.wait_for(asyncio.sleep(0.01, result=42), 1))
+
+
+        assert asyncio.run(cell()) == 42
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-W", "error::DeprecationWarning", "-c", snippet],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
