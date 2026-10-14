@@ -168,6 +168,24 @@ select = [
   # no mutable or call-built argument defaults (shared across calls)
   "B006",
   "B008",
+  # exceptions: chain re-raises, no blind catches or blind test asserts
+  "B904",
+  "BLE001",
+  "B017",
+  "TRY401",
+  # zip() states whether unequal lengths are expected
+  "B905",
+  # equality, hashing and shared class state stay consistent
+  "PLW1641",
+  "RUF012",
+  "PLR0124",
+  # no blocking calls inside async functions
+  "ASYNC210",
+  "ASYNC220",
+  "ASYNC221",
+  "ASYNC222",
+  "ASYNC230",
+  "ASYNC251",
 ]
 ignore = [
   "E402", # Module level import not at top of file
