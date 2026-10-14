@@ -315,7 +315,7 @@ class Watchdog:
     def start(self):
         self._logger.info("Starting")
         self.startingEvent.emit(self)
-        self._runner = asyncio.ensure_future(self.runAsync())
+        self._runner = util.getLoop().create_task(self.runAsync())
         return self._runner
 
     def stop(self):
