@@ -16,3 +16,4 @@ doctrees
 ib_async.egg-info
 *.csv
 *.json
+.venvs/

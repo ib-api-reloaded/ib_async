@@ -7,10 +7,19 @@
 # and source distribution so end users get the bindings bundled into
 # the package without needing ``protoc`` or ``grpcio-tools``.
 
-.PHONY: help sync protos audit twsapi-status twsapi-bump build release publish test lint format clean
+.PHONY: help sync protos audit twsapi-status twsapi-bump build release publish test test-matrix lint format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
+
+# test-matrix: Python versions, per-test and per-version limits, and extra
+# `uv run` arguments (e.g. local sibling checkouts during development:
+# UV_RUN_ARGS="--with=../eventkit --with=../nest_asyncio"; not --with-editable,
+# which puts those repositories (and their own `tests` packages) on sys.path).
+PYTHON_VERSIONS ?= 3.11 3.12 3.13 3.14
+TEST_TIMEOUT ?= 60
+MATRIX_TIMEOUT ?= 600
+UV_RUN_ARGS ?=
 
 help:
 	@echo "Targets:"
@@ -23,6 +32,9 @@ help:
 	@echo "  release  - full pipeline: fetch + protos + lint + audit + test + build + smoke"
 	@echo "  publish  - release pipeline then upload via uv publish"
 	@echo "  test     - run the owned test suite"
+	@echo "  test-matrix - run the suite on each of PYTHON_VERSIONS, each in its own"
+	@echo "                .venvs/py<version> environment and time-boxed; logs in"
+	@echo "                .venvs/logs/"
 	@echo "  lint     - ruff check + mypy"
 	@echo "  format   - ruff format"
 	@echo "  clean    - remove dist/, build/, $(PB_DIR)/, caches"
@@ -66,7 +78,12 @@ publish:
 	$(PYTHON) scripts/release.py --publish
 
 test:
-	uv run pytest -q
+	uv run $(UV_RUN_ARGS) pytest -q
+
+test-matrix:
+	python3 scripts/test_matrix.py --versions $(PYTHON_VERSIONS) \
+		--timeout $(MATRIX_TIMEOUT) $(foreach a,$(UV_RUN_ARGS),--uv-arg=$(a)) -- \
+		pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
 
 lint:
 	uv run python -m ruff check ib_async/ tests/
