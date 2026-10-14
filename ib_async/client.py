@@ -106,8 +106,9 @@ def _make_format_handlers(makeEmpty: bool) -> dict[Any, Callable[[Any], str]]:
         # Bools become strings "1" or "0"
         bool: lambda b: "1" if b else "0",
 
-        # Lists of tags become semicolon-appended KV pairs
+        # Sequences of tags become semicolon-appended KV pairs
         list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
+        tuple: lambda tup: "".join([f"{v.tag}={v.value};" for v in tup]),
     }
     # fmt: on
 
