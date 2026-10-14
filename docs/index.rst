@@ -10,6 +10,7 @@ Contents
    recipes
    code
    changelog
+   migration/v3
    links
 
 .. include:: ../README.md
