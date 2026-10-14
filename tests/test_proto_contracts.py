@@ -18,7 +18,10 @@ Happy-path round-trip tests follow at the end.
 
 from __future__ import annotations
 
+import dataclasses
 from decimal import Decimal
+
+import pytest
 
 from ib_async._pb import (
     ComboLeg_pb2,
@@ -549,3 +552,11 @@ def test_contract_data_request_proto_for_chain_sweep_has_no_strike():
     assert request.reqId == 42
     assert not request.contract.HasField("strike")
     assert request.contract.secType == "FOP"
+
+
+def test_ineligibility_reason_is_an_immutable_hashable_record():
+    reason = IneligibilityReason(id_="R1", description="Restricted")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        reason.description = "changed"  # type: ignore[misc]
+    assert not hasattr(reason, "__dict__")
+    assert {reason, IneligibilityReason(id_="R1", description="Restricted")} == {reason}

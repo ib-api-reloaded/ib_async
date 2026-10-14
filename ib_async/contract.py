@@ -544,7 +544,7 @@ class TradingSession(NamedTuple):
     end: dt.datetime
 
 
-@dataclass
+@dataclass(slots=True, frozen=True)
 class IneligibilityReason:
     # ``id_`` (trailing underscore) mirrors IBKR's reference dataclass —
     # ``id`` shadows the Python builtin so the upstream chose ``id_``.
