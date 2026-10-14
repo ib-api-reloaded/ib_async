@@ -207,6 +207,14 @@ are fixed in v3.0:
   Trader"``), so every completed fill and cancel fell through to the
   ``Inactive`` fallback with a warning. The known phrasings now map to
   their terminal status; the original text stays in the trade log.
+* **Shared defaults across calls and instances.** The ``TagValue``
+  option parameters (``chartOptions``, ``mktDataOptions``,
+  ``scannerSubscriptionOptions`` and the rest) defaulted to one shared
+  list per method, and every ``IB()`` shared one ``IBDefaults``
+  instance. They now default to an empty tuple and to a fresh
+  ``IBDefaults`` per instance. The option parameters accept any sequence
+  of ``TagValue``; a tuple was previously encoded on the binary wire as
+  its ``repr`` instead of ``tag=value;`` pairs.
 * **A failed send could leave single-flight requests waiting forever.**
   The account, position, order, scanner-parameter, news-provider,
   family-code, FA and current-time requests share one in-flight request

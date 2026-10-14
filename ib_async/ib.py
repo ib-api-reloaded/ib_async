@@ -6,7 +6,7 @@ import copy
 import datetime
 import logging
 import time
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from enum import Flag, auto
 from typing import Any
 
@@ -75,6 +75,13 @@ from ib_async.order import (
 )
 from ib_async.ticker import Ticker
 from ib_async.wrapper import Wrapper
+
+
+def _tagValueList(options: Sequence[TagValue]) -> list[TagValue]:
+    """A fresh list of TagValue options from any sequence, so the request
+    (and anything that stores or replays it) never shares or mutates the
+    caller's object."""
+    return list(options)
 
 
 class StartupFetch(Flag):
@@ -302,9 +309,9 @@ class IB:
     MaxSyncedSubAccounts: int = 50
     TimezoneTWS: str = ""
 
-    def __init__(self, defaults: IBDefaults = IBDefaults()):
+    def __init__(self, defaults: IBDefaults | None = None):
         self._createEvents()
-        self.wrapper = Wrapper(self, defaults=defaults)
+        self.wrapper = Wrapper(self, defaults=defaults or IBDefaults())
         self.client = Client(self.wrapper)
         self.errorEvent += self._onError
         self.client.apiEnd += self.disconnectedEvent
@@ -1338,7 +1345,7 @@ class IB:
         barSize: int,
         whatToShow: str,
         useRTH: bool,
-        realTimeBarsOptions: list[TagValue] = [],
+        realTimeBarsOptions: Sequence[TagValue] = (),
     ) -> RealTimeBarList:
         """
         Request realtime 5 second bars.
@@ -1354,6 +1361,7 @@ class IB:
                 Trading Hours, if False then show all data.
             realTimeBarsOptions: Unknown.
         """
+        realTimeBarsOptions = _tagValueList(realTimeBarsOptions)
         reqId = self.client.getReqId()
         bars = RealTimeBarList()
         bars.reqId = reqId
@@ -1395,7 +1403,7 @@ class IB:
         useRTH: bool,
         formatDate: int = 1,
         keepUpToDate: bool = False,
-        chartOptions: list[TagValue] = [],
+        chartOptions: Sequence[TagValue] = (),
         timeout: float = 60,
     ) -> BarDataList:
         """
@@ -1442,6 +1450,7 @@ class IB:
                 and return an empty bar series. Set to ``0`` to wait
                 indefinitely.
         """
+        chartOptions = _tagValueList(chartOptions)
         return self._run(
             self.reqHistoricalDataAsync(
                 contract,
@@ -1537,7 +1546,7 @@ class IB:
         whatToShow: str,
         useRth: bool,
         ignoreSize: bool = False,
-        miscOptions: list[TagValue] = [],
+        miscOptions: Sequence[TagValue] = (),
     ) -> list:
         """
         Request historical ticks. The time resolution of the ticks
@@ -1564,6 +1573,7 @@ class IB:
             ignoreSize: Ignore bid/ask ticks that only update the size.
             miscOptions: Unknown.
         """
+        miscOptions = _tagValueList(miscOptions)
         return self._run(
             self.reqHistoricalTicksAsync(
                 contract,
@@ -1617,7 +1627,7 @@ class IB:
         genericTickList: str = "",
         snapshot: bool = False,
         regulatorySnapshot: bool = False,
-        mktDataOptions: list[TagValue] = [],
+        mktDataOptions: Sequence[TagValue] = (),
     ) -> Ticker:
         """
         Subscribe to tick data or request a snapshot.
@@ -1686,6 +1696,7 @@ class IB:
             :meth:`cancelMktData` for the contract first, then subscribe
             again.
         """
+        mktDataOptions = _tagValueList(mktDataOptions)
         # Idempotent re-subscribe: a second call for the same qualified
         # contract — or the same spread/bag, matched by its synthetic
         # comboLeg identity — returns the existing ticker without issuing a
@@ -1929,8 +1940,8 @@ class IB:
     def reqScannerData(
         self,
         subscription: ScannerSubscription,
-        scannerSubscriptionOptions: list[TagValue] = [],
-        scannerSubscriptionFilterOptions: list[TagValue] = [],
+        scannerSubscriptionOptions: Sequence[TagValue] = (),
+        scannerSubscriptionFilterOptions: Sequence[TagValue] = (),
     ) -> ScanDataList:
         """
         Do a blocking market scan by starting a subscription and canceling it
@@ -1945,6 +1956,10 @@ class IB:
             scannerSubscriptionOptions: Unknown.
             scannerSubscriptionFilterOptions: Advanced generic filters.
         """
+        scannerSubscriptionOptions = _tagValueList(scannerSubscriptionOptions)
+        scannerSubscriptionFilterOptions = _tagValueList(
+            scannerSubscriptionFilterOptions
+        )
         return self._run(
             self.reqScannerDataAsync(
                 subscription,
@@ -1956,8 +1971,8 @@ class IB:
     def reqScannerSubscription(
         self,
         subscription: ScannerSubscription,
-        scannerSubscriptionOptions: list[TagValue] = [],
-        scannerSubscriptionFilterOptions: list[TagValue] = [],
+        scannerSubscriptionOptions: Sequence[TagValue] = (),
+        scannerSubscriptionFilterOptions: Sequence[TagValue] = (),
     ) -> ScanDataList:
         """
         Subscribe to market scan data.
@@ -1969,6 +1984,10 @@ class IB:
             scannerSubscriptionOptions: Unknown.
             scannerSubscriptionFilterOptions: Unknown.
         """
+        scannerSubscriptionOptions = _tagValueList(scannerSubscriptionOptions)
+        scannerSubscriptionFilterOptions = _tagValueList(
+            scannerSubscriptionFilterOptions
+        )
         reqId = self.client.getReqId()
         dataList = ScanDataList()
         dataList.reqId = reqId
@@ -2019,7 +2038,7 @@ class IB:
         contract: Contract,
         optionPrice: float,
         underPrice: float,
-        implVolOptions: list[TagValue] = [],
+        implVolOptions: Sequence[TagValue] = (),
     ) -> OptionComputation:
         """
         Calculate the volatility given the option price.
@@ -2034,6 +2053,7 @@ class IB:
             underPrice: Price of the underlier to use in calculation
             implVolOptions: Unknown
         """
+        implVolOptions = _tagValueList(implVolOptions)
         return self._run(
             self.calculateImpliedVolatilityAsync(
                 contract, optionPrice, underPrice, implVolOptions
@@ -2045,7 +2065,7 @@ class IB:
         contract: Contract,
         volatility: float,
         underPrice: float,
-        optPrcOptions: list[TagValue] = [],
+        optPrcOptions: Sequence[TagValue] = (),
     ) -> OptionComputation:
         """
         Calculate the option price given the volatility.
@@ -2060,6 +2080,7 @@ class IB:
             underPrice: Price of the underlier to use in calculation
             optPrcOptions: Unknown
         """
+        optPrcOptions = _tagValueList(optPrcOptions)
         return self._run(
             self.calculateOptionPriceAsync(
                 contract, volatility, underPrice, optPrcOptions
@@ -2132,7 +2153,10 @@ class IB:
         return self._run(self.reqNewsProvidersAsync())
 
     def reqNewsArticle(
-        self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] = []
+        self,
+        providerCode: str,
+        articleId: str,
+        newsArticleOptions: Sequence[TagValue] = (),
     ) -> NewsArticle:
         """
         Get the body of a news article.
@@ -2146,6 +2170,7 @@ class IB:
             articleId: ID of the specific article.
             newsArticleOptions: Unknown.
         """
+        newsArticleOptions = _tagValueList(newsArticleOptions)
         return self._run(
             self.reqNewsArticleAsync(providerCode, articleId, newsArticleOptions)
         )
@@ -2157,7 +2182,7 @@ class IB:
         startDateTime: str | datetime.date,
         endDateTime: str | datetime.date,
         totalResults: int,
-        historicalNewsOptions: list[TagValue] = [],
+        historicalNewsOptions: Sequence[TagValue] = (),
     ) -> list[HistoricalNews] | None:
         """
         Get historical news headline.
@@ -2181,6 +2206,7 @@ class IB:
             totalResults: Maximum number of headlines to fetch (300 max).
             historicalNewsOptions: Unknown.
         """
+        historicalNewsOptions = _tagValueList(historicalNewsOptions)
         return self._run(
             self.reqHistoricalNewsAsync(
                 conId,
@@ -2687,10 +2713,11 @@ class IB:
         useRTH: bool,
         formatDate: int = 1,
         keepUpToDate: bool = False,
-        chartOptions: list[TagValue] = [],
+        chartOptions: Sequence[TagValue] = (),
         timeout: float = 60,
     ) -> BarDataList:
         """Async sibling of :meth:`reqHistoricalData`."""
+        chartOptions = _tagValueList(chartOptions)
         bars = BarDataList()
         bars.contract = contract
         bars.endDateTime = endDateTime
@@ -2792,9 +2819,10 @@ class IB:
         whatToShow: str,
         useRth: bool,
         ignoreSize: bool = False,
-        miscOptions: list[TagValue] = [],
+        miscOptions: Sequence[TagValue] = (),
     ) -> Awaitable[list]:
         """Async sibling of :meth:`reqHistoricalTicks`."""
+        miscOptions = _tagValueList(miscOptions)
         reqId, future = self._openReqIdRequest(contract=contract)
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
@@ -2845,10 +2873,14 @@ class IB:
     async def reqScannerDataAsync(
         self,
         subscription: ScannerSubscription,
-        scannerSubscriptionOptions: list[TagValue] = [],
-        scannerSubscriptionFilterOptions: list[TagValue] = [],
+        scannerSubscriptionOptions: Sequence[TagValue] = (),
+        scannerSubscriptionFilterOptions: Sequence[TagValue] = (),
     ) -> ScanDataList:
         """Async sibling of :meth:`reqScannerData`."""
+        scannerSubscriptionOptions = _tagValueList(scannerSubscriptionOptions)
+        scannerSubscriptionFilterOptions = _tagValueList(
+            scannerSubscriptionFilterOptions
+        )
         dataList = self.reqScannerSubscription(
             subscription,
             scannerSubscriptionOptions or [],
@@ -2881,9 +2913,10 @@ class IB:
         contract: Contract,
         optionPrice: float,
         underPrice: float,
-        implVolOptions: list[TagValue] = [],
+        implVolOptions: Sequence[TagValue] = (),
     ) -> OptionComputation | None:
         """Async sibling of :meth:`calculateImpliedVolatility`."""
+        implVolOptions = _tagValueList(implVolOptions)
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.calculateImpliedVolatility(
             reqId, contract, optionPrice, underPrice, implVolOptions
@@ -2900,9 +2933,10 @@ class IB:
         contract: Contract,
         volatility: float,
         underPrice: float,
-        optPrcOptions: list[TagValue] = [],
+        optPrcOptions: Sequence[TagValue] = (),
     ) -> OptionComputation | None:
         """Async sibling of :meth:`calculateOptionPrice`."""
+        optPrcOptions = _tagValueList(optPrcOptions)
         reqId, future = self._openReqIdRequest(contract=contract)
         self.client.calculateOptionPrice(
             reqId, contract, volatility, underPrice, optPrcOptions
@@ -2935,9 +2969,13 @@ class IB:
         )
 
     def reqNewsArticleAsync(
-        self, providerCode: str, articleId: str, newsArticleOptions: list[TagValue] = []
+        self,
+        providerCode: str,
+        articleId: str,
+        newsArticleOptions: Sequence[TagValue] = (),
     ) -> Awaitable[NewsArticle]:
         """Async sibling of :meth:`reqNewsArticle`."""
+        newsArticleOptions = _tagValueList(newsArticleOptions)
         reqId, future = self._openReqIdRequest()
         self.client.reqNewsArticle(reqId, providerCode, articleId, newsArticleOptions)
         return future
@@ -2949,9 +2987,10 @@ class IB:
         startDateTime: str | datetime.date,
         endDateTime: str | datetime.date,
         totalResults: int,
-        historicalNewsOptions: list[TagValue] = [],
+        historicalNewsOptions: Sequence[TagValue] = (),
     ) -> list[HistoricalNews] | None:
         """Async sibling of :meth:`reqHistoricalNews`."""
+        historicalNewsOptions = _tagValueList(historicalNewsOptions)
         reqId, future = self._openReqIdRequest()
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
