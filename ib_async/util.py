@@ -551,14 +551,21 @@ def run(*awaitables: Awaitable, timeout: float | None = None):
         # Pass loop explicitly to avoid deprecation warnings in Python 3.10+
         task = asyncio.ensure_future(future, loop=loop)
 
-        def onError(_):
+        # The global error raised while *this* run was active, if any; the
+        # event's last value may be from an earlier, unrelated run.
+        raised: list[BaseException] = []
+
+        def onError(error):
+            raised.append(error)
             task.cancel()
 
         globalErrorEvent.connect(onError)
         try:
             result = loop.run_until_complete(task)
         except asyncio.CancelledError as e:
-            raise globalErrorEvent.value() or e
+            if not raised:
+                raise
+            raise raised[0] from e
         finally:
             globalErrorEvent.disconnect(onError)
 
