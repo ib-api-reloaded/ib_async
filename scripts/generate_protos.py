@@ -133,7 +133,9 @@ def _reset_output() -> None:
 
 
 def _run_protoc(source_dir: Path) -> None:
-    from grpc_tools import protoc
+    # grpc_tools is a build-time dependency; the other commands of this
+    # script run without it.
+    from grpc_tools import protoc  # noqa: PLC0415
 
     proto_files = sorted(str(p) for p in source_dir.glob("*.proto"))
     args = [

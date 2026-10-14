@@ -13,6 +13,7 @@ from typing import Any, Final
 from eventkit import Event
 
 from . import _pb_msgids as _M
+from . import _proto as _converters
 from ._pb_msgids import (
     MIN_SERVER_VER_PROTOBUF,
     PROTOBUF_MSG_ID,
@@ -42,6 +43,7 @@ from .connection import Connection
 from .contract import Contract
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
+from .order import OrderCancel
 from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
 
 
@@ -645,9 +647,7 @@ class Client:
         mktDataOptions,
     ):
         def _proto():
-            from ._proto.market_data import createMarketDataRequestProto
-
-            return createMarketDataRequestProto(
+            return _converters.market_data.createMarketDataRequestProto(
                 reqId,
                 contract,
                 genericTickList,
@@ -677,9 +677,7 @@ class Client:
 
     def cancelMktData(self, reqId):
         def _proto():
-            from ._proto.market_data import createCancelMarketDataProto
-
-            return createCancelMarketDataProto(reqId)
+            return _converters.market_data.createCancelMarketDataProto(reqId)
 
         if self._tryProto(_M.CANCEL_MKT_DATA, _proto):
             return
@@ -710,9 +708,9 @@ class Client:
         # server uses protobuf for orders but binary for historical
         # data, etc.
         def _proto():
-            from ._proto.orders import createPlaceOrderRequestProto
-
-            return createPlaceOrderRequestProto(orderId, contract, order)
+            return _converters.orders.createPlaceOrderRequestProto(
+                orderId, contract, order
+            )
 
         if self._tryProto(_M.PLACE_ORDER, _proto):
             return
@@ -984,7 +982,6 @@ class Client:
         # ``manualCancelOrderTime: str`` form is supported for backwards
         # compatibility — a bare string promotes to an OrderCancel
         # carrying just that field.
-        from .order import OrderCancel
 
         if orderCancel is None:
             orderCancel = OrderCancel()
@@ -992,9 +989,7 @@ class Client:
             orderCancel = OrderCancel(manualOrderCancelTime=orderCancel)
 
         def _proto():
-            from ._proto.orders import createCancelOrderRequestProto
-
-            return createCancelOrderRequestProto(
+            return _converters.orders.createCancelOrderRequestProto(
                 orderId,
                 manualOrderCancelTime=orderCancel.manualOrderCancelTime,
                 extOperator=orderCancel.extOperator,
@@ -1026,9 +1021,7 @@ class Client:
 
     def reqOpenOrders(self):
         def _proto():
-            from ._proto.orders import createOpenOrdersRequestProto
-
-            return createOpenOrdersRequestProto()
+            return _converters.orders.createOpenOrdersRequestProto()
 
         if self._tryProto(_M.REQ_OPEN_ORDERS, _proto):
             return
@@ -1036,9 +1029,9 @@ class Client:
 
     def reqAccountUpdates(self, subscribe, acctCode):
         def _proto():
-            from ._proto.accounts import createAccountDataRequestProto
-
-            return createAccountDataRequestProto(subscribe, acctCode)
+            return _converters.accounts.createAccountDataRequestProto(
+                subscribe, acctCode
+            )
 
         if self._tryProto(_M.REQ_ACCT_DATA, _proto):
             return
@@ -1046,9 +1039,7 @@ class Client:
 
     def reqExecutions(self, reqId, execFilter):
         def _proto():
-            from ._proto.orders import createExecutionRequestProto
-
-            return createExecutionRequestProto(reqId, execFilter)
+            return _converters.orders.createExecutionRequestProto(reqId, execFilter)
 
         if self._tryProto(_M.REQ_EXECUTIONS, _proto):
             return
@@ -1085,9 +1076,7 @@ class Client:
 
     def reqContractDetails(self, reqId, contract):
         def _proto():
-            from ._proto.contracts import createContractDataRequestProto
-
-            return createContractDataRequestProto(reqId, contract)
+            return _converters.contracts.createContractDataRequestProto(reqId, contract)
 
         if self._tryProto(_M.REQ_CONTRACT_DATA, _proto):
             return
@@ -1108,9 +1097,7 @@ class Client:
 
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):
         def _proto():
-            from ._proto.market_data import createMarketDepthRequestProto
-
-            return createMarketDepthRequestProto(
+            return _converters.market_data.createMarketDepthRequestProto(
                 reqId,
                 contract,
                 numRows,
@@ -1143,9 +1130,9 @@ class Client:
 
     def cancelMktDepth(self, reqId, isSmartDepth):
         def _proto():
-            from ._proto.market_data import createCancelMarketDepthProto
-
-            return createCancelMarketDepthProto(reqId, isSmartDepth)
+            return _converters.market_data.createCancelMarketDepthProto(
+                reqId, isSmartDepth
+            )
 
         if self._tryProto(_M.CANCEL_MKT_DEPTH, _proto):
             return
@@ -1153,9 +1140,7 @@ class Client:
 
     def reqNewsBulletins(self, allMsgs):
         def _proto():
-            from ._proto.news import createNewsBulletinsRequestProto
-
-            return createNewsBulletinsRequestProto(allMsgs)
+            return _converters.news.createNewsBulletinsRequestProto(allMsgs)
 
         if self._tryProto(_M.REQ_NEWS_BULLETINS, _proto):
             return
@@ -1163,9 +1148,7 @@ class Client:
 
     def cancelNewsBulletins(self):
         def _proto():
-            from ._proto.news import createCancelNewsBulletinsProto
-
-            return createCancelNewsBulletinsProto()
+            return _converters.news.createCancelNewsBulletinsProto()
 
         if self._tryProto(_M.CANCEL_NEWS_BULLETINS, _proto):
             return
@@ -1173,9 +1156,7 @@ class Client:
 
     def setServerLogLevel(self, logLevel):
         def _proto():
-            from ._proto.rest import createSetServerLogLevelRequestProto
-
-            return createSetServerLogLevelRequestProto(logLevel)
+            return _converters.rest.createSetServerLogLevelRequestProto(logLevel)
 
         if self._tryProto(_M.SET_SERVER_LOGLEVEL, _proto):
             return
@@ -1183,9 +1164,7 @@ class Client:
 
     def reqAutoOpenOrders(self, bAutoBind):
         def _proto():
-            from ._proto.orders import createAutoOpenOrdersRequestProto
-
-            return createAutoOpenOrdersRequestProto(bAutoBind)
+            return _converters.orders.createAutoOpenOrdersRequestProto(bAutoBind)
 
         if self._tryProto(_M.REQ_AUTO_OPEN_ORDERS, _proto):
             return
@@ -1193,9 +1172,7 @@ class Client:
 
     def reqAllOpenOrders(self):
         def _proto():
-            from ._proto.orders import createAllOpenOrdersRequestProto
-
-            return createAllOpenOrdersRequestProto()
+            return _converters.orders.createAllOpenOrdersRequestProto()
 
         if self._tryProto(_M.REQ_ALL_OPEN_ORDERS, _proto):
             return
@@ -1203,9 +1180,7 @@ class Client:
 
     def reqManagedAccts(self):
         def _proto():
-            from ._proto.accounts import createManagedAccountsRequestProto
-
-            return createManagedAccountsRequestProto()
+            return _converters.accounts.createManagedAccountsRequestProto()
 
         if self._tryProto(_M.REQ_MANAGED_ACCTS, _proto):
             return
@@ -1222,9 +1197,7 @@ class Client:
             return
 
         def _proto():
-            from ._proto.accounts import createFARequestProto
-
-            return createFARequestProto(faData)
+            return _converters.accounts.createFARequestProto(faData)
 
         if self._tryProto(_M.REQ_FA, _proto):
             return
@@ -1240,9 +1213,7 @@ class Client:
             return
 
         def _proto():
-            from ._proto.accounts import createFAReplaceProto
-
-            return createFAReplaceProto(reqId, faData, cxml)
+            return _converters.accounts.createFAReplaceProto(reqId, faData, cxml)
 
         if self._tryProto(_M.REPLACE_FA, _proto):
             return
@@ -1268,9 +1239,7 @@ class Client:
         chartOptions,
     ):
         def _proto():
-            from ._proto.historical import createHistoricalDataRequestProto
-
-            return createHistoricalDataRequestProto(
+            return _converters.historical.createHistoricalDataRequestProto(
                 reqId,
                 contract,
                 endDateTime,
@@ -1320,9 +1289,7 @@ class Client:
         professionalCustomer: bool = False,
     ):
         def _proto():
-            from ._proto.rest import createExerciseOptionsRequestProto
-
-            return createExerciseOptionsRequestProto(
+            return _converters.rest.createExerciseOptionsRequestProto(
                 reqId,
                 contract,
                 exerciseAction,
@@ -1376,9 +1343,7 @@ class Client:
         scannerSubscriptionFilterOptions,
     ):
         def _proto():
-            from ._proto.scanner import createScannerSubscriptionRequestProto
-
-            return createScannerSubscriptionRequestProto(
+            return _converters.scanner.createScannerSubscriptionRequestProto(
                 reqId,
                 subscription,
                 scannerSubscriptionOptions=scannerSubscriptionOptions,
@@ -1418,9 +1383,7 @@ class Client:
 
     def cancelScannerSubscription(self, reqId):
         def _proto():
-            from ._proto.scanner import createCancelScannerSubscriptionProto
-
-            return createCancelScannerSubscriptionProto(reqId)
+            return _converters.scanner.createCancelScannerSubscriptionProto(reqId)
 
         if self._tryProto(_M.CANCEL_SCANNER_SUBSCRIPTION, _proto):
             return
@@ -1428,9 +1391,7 @@ class Client:
 
     def reqScannerParameters(self):
         def _proto():
-            from ._proto.scanner import createScannerParametersRequestProto
-
-            return createScannerParametersRequestProto()
+            return _converters.scanner.createScannerParametersRequestProto()
 
         if self._tryProto(_M.REQ_SCANNER_PARAMETERS, _proto):
             return
@@ -1438,9 +1399,7 @@ class Client:
 
     def cancelHistoricalData(self, reqId):
         def _proto():
-            from ._proto.historical import createCancelHistoricalDataProto
-
-            return createCancelHistoricalDataProto(reqId)
+            return _converters.historical.createCancelHistoricalDataProto(reqId)
 
         if self._tryProto(_M.CANCEL_HISTORICAL_DATA, _proto):
             return
@@ -1448,9 +1407,7 @@ class Client:
 
     def reqCurrentTime(self):
         def _proto():
-            from ._proto.rest import createCurrentTimeRequestProto
-
-            return createCurrentTimeRequestProto()
+            return _converters.rest.createCurrentTimeRequestProto()
 
         if self._tryProto(_M.REQ_CURRENT_TIME, _proto):
             return
@@ -1472,20 +1429,17 @@ class Client:
                 "version >= 213 (protobuf REST messages); current server "
                 f"version is {self._serverVersion}."
             )
-        from ._proto.rest import createCurrentTimeInMillisRequestProto
 
         self.sendProto(
             _M.REQ_CURRENT_TIME_IN_MILLIS,
-            createCurrentTimeInMillisRequestProto().SerializeToString(),
+            _converters.rest.createCurrentTimeInMillisRequestProto().SerializeToString(),
         )
 
     def reqRealTimeBars(
         self, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
     ):
         def _proto():
-            from ._proto.historical import createRealTimeBarsRequestProto
-
-            return createRealTimeBarsRequestProto(
+            return _converters.historical.createRealTimeBarsRequestProto(
                 reqId,
                 contract,
                 barSize,
@@ -1502,9 +1456,7 @@ class Client:
 
     def cancelRealTimeBars(self, reqId):
         def _proto():
-            from ._proto.historical import createCancelRealTimeBarsProto
-
-            return createCancelRealTimeBarsProto(reqId)
+            return _converters.historical.createCancelRealTimeBarsProto(reqId)
 
         if self._tryProto(_M.CANCEL_REAL_TIME_BARS, _proto):
             return
@@ -1514,9 +1466,7 @@ class Client:
         self, reqId, contract, optionPrice, underPrice, implVolOptions
     ):
         def _proto():
-            from ._proto.rest import createCalculateImpliedVolatilityRequestProto
-
-            return createCalculateImpliedVolatilityRequestProto(
+            return _converters.rest.createCalculateImpliedVolatilityRequestProto(
                 reqId,
                 contract,
                 optionPrice,
@@ -1540,9 +1490,7 @@ class Client:
         self, reqId, contract, volatility, underPrice, optPrcOptions
     ):
         def _proto():
-            from ._proto.rest import createCalculateOptionPriceRequestProto
-
-            return createCalculateOptionPriceRequestProto(
+            return _converters.rest.createCalculateOptionPriceRequestProto(
                 reqId,
                 contract,
                 volatility,
@@ -1564,9 +1512,7 @@ class Client:
 
     def cancelCalculateImpliedVolatility(self, reqId):
         def _proto():
-            from ._proto.rest import createCancelCalculateImpliedVolatilityProto
-
-            return createCancelCalculateImpliedVolatilityProto(reqId)
+            return _converters.rest.createCancelCalculateImpliedVolatilityProto(reqId)
 
         if self._tryProto(_M.CANCEL_CALC_IMPLIED_VOLAT, _proto):
             return
@@ -1574,24 +1520,18 @@ class Client:
 
     def cancelCalculateOptionPrice(self, reqId):
         def _proto():
-            from ._proto.rest import createCancelCalculateOptionPriceProto
-
-            return createCancelCalculateOptionPriceProto(reqId)
+            return _converters.rest.createCancelCalculateOptionPriceProto(reqId)
 
         if self._tryProto(_M.CANCEL_CALC_OPTION_PRICE, _proto):
             return
         self.send(57, 1, reqId)
 
     def reqGlobalCancel(self, orderCancel=None):
-        from .order import OrderCancel
-
         if orderCancel is None:
             orderCancel = OrderCancel()
 
         def _proto():
-            from ._proto.orders import createGlobalCancelRequestProto
-
-            return createGlobalCancelRequestProto(
+            return _converters.orders.createGlobalCancelRequestProto(
                 extOperator=orderCancel.extOperator,
                 manualOrderIndicator=orderCancel.manualOrderIndicator,
             )
@@ -1610,9 +1550,9 @@ class Client:
 
     def reqMarketDataType(self, marketDataType):
         def _proto():
-            from ._proto.market_data import createMarketDataTypeRequestProto
-
-            return createMarketDataTypeRequestProto(marketDataType)
+            return _converters.market_data.createMarketDataTypeRequestProto(
+                marketDataType
+            )
 
         if self._tryProto(_M.REQ_MARKET_DATA_TYPE, _proto):
             return
@@ -1620,9 +1560,7 @@ class Client:
 
     def reqPositions(self):
         def _proto():
-            from ._proto.accounts import createPositionsRequestProto
-
-            return createPositionsRequestProto()
+            return _converters.accounts.createPositionsRequestProto()
 
         if self._tryProto(_M.REQ_POSITIONS, _proto):
             return
@@ -1630,9 +1568,9 @@ class Client:
 
     def reqAccountSummary(self, reqId, groupName, tags):
         def _proto():
-            from ._proto.accounts import createAccountSummaryRequestProto
-
-            return createAccountSummaryRequestProto(reqId, groupName, tags)
+            return _converters.accounts.createAccountSummaryRequestProto(
+                reqId, groupName, tags
+            )
 
         if self._tryProto(_M.REQ_ACCOUNT_SUMMARY, _proto):
             return
@@ -1640,9 +1578,7 @@ class Client:
 
     def cancelAccountSummary(self, reqId):
         def _proto():
-            from ._proto.accounts import createCancelAccountSummaryProto
-
-            return createCancelAccountSummaryProto(reqId)
+            return _converters.accounts.createCancelAccountSummaryProto(reqId)
 
         if self._tryProto(_M.CANCEL_ACCOUNT_SUMMARY, _proto):
             return
@@ -1650,9 +1586,7 @@ class Client:
 
     def cancelPositions(self):
         def _proto():
-            from ._proto.accounts import createCancelPositionsProto
-
-            return createCancelPositionsProto()
+            return _converters.accounts.createCancelPositionsProto()
 
         if self._tryProto(_M.CANCEL_POSITIONS, _proto):
             return
@@ -1666,9 +1600,7 @@ class Client:
 
     def queryDisplayGroups(self, reqId):
         def _proto():
-            from ._proto.rest import createQueryDisplayGroupsRequestProto
-
-            return createQueryDisplayGroupsRequestProto(reqId)
+            return _converters.rest.createQueryDisplayGroupsRequestProto(reqId)
 
         if self._tryProto(_M.QUERY_DISPLAY_GROUPS, _proto):
             return
@@ -1676,9 +1608,9 @@ class Client:
 
     def subscribeToGroupEvents(self, reqId, groupId):
         def _proto():
-            from ._proto.rest import createSubscribeToGroupEventsRequestProto
-
-            return createSubscribeToGroupEventsRequestProto(reqId, groupId)
+            return _converters.rest.createSubscribeToGroupEventsRequestProto(
+                reqId, groupId
+            )
 
         if self._tryProto(_M.SUBSCRIBE_TO_GROUP_EVENTS, _proto):
             return
@@ -1686,9 +1618,9 @@ class Client:
 
     def updateDisplayGroup(self, reqId, contractInfo):
         def _proto():
-            from ._proto.rest import createUpdateDisplayGroupRequestProto
-
-            return createUpdateDisplayGroupRequestProto(reqId, contractInfo)
+            return _converters.rest.createUpdateDisplayGroupRequestProto(
+                reqId, contractInfo
+            )
 
         if self._tryProto(_M.UPDATE_DISPLAY_GROUP, _proto):
             return
@@ -1696,9 +1628,7 @@ class Client:
 
     def unsubscribeFromGroupEvents(self, reqId):
         def _proto():
-            from ._proto.rest import createUnsubscribeFromGroupEventsRequestProto
-
-            return createUnsubscribeFromGroupEventsRequestProto(reqId)
+            return _converters.rest.createUnsubscribeFromGroupEventsRequestProto(reqId)
 
         if self._tryProto(_M.UNSUBSCRIBE_FROM_GROUP_EVENTS, _proto):
             return
@@ -1706,9 +1636,9 @@ class Client:
 
     def startApi(self):
         def _proto():
-            from ._proto.rest import createStartApiRequestProto
-
-            return createStartApiRequestProto(self.clientId, self.optCapab)
+            return _converters.rest.createStartApiRequestProto(
+                self.clientId, self.optCapab
+            )
 
         if self._tryProto(_M.START_API, _proto):
             return
@@ -1722,9 +1652,9 @@ class Client:
 
     def reqPositionsMulti(self, reqId, account, modelCode):
         def _proto():
-            from ._proto.accounts import createPositionsMultiRequestProto
-
-            return createPositionsMultiRequestProto(reqId, account, modelCode)
+            return _converters.accounts.createPositionsMultiRequestProto(
+                reqId, account, modelCode
+            )
 
         if self._tryProto(_M.REQ_POSITIONS_MULTI, _proto):
             return
@@ -1732,9 +1662,7 @@ class Client:
 
     def cancelPositionsMulti(self, reqId):
         def _proto():
-            from ._proto.accounts import createCancelPositionsMultiProto
-
-            return createCancelPositionsMultiProto(reqId)
+            return _converters.accounts.createCancelPositionsMultiProto(reqId)
 
         if self._tryProto(_M.CANCEL_POSITIONS_MULTI, _proto):
             return
@@ -1742,9 +1670,7 @@ class Client:
 
     def reqAccountUpdatesMulti(self, reqId, account, modelCode, ledgerAndNLV):
         def _proto():
-            from ._proto.accounts import createAccountUpdatesMultiRequestProto
-
-            return createAccountUpdatesMultiRequestProto(
+            return _converters.accounts.createAccountUpdatesMultiRequestProto(
                 reqId, account, modelCode, ledgerAndNLV
             )
 
@@ -1754,9 +1680,7 @@ class Client:
 
     def cancelAccountUpdatesMulti(self, reqId):
         def _proto():
-            from ._proto.accounts import createCancelAccountUpdatesMultiProto
-
-            return createCancelAccountUpdatesMultiProto(reqId)
+            return _converters.accounts.createCancelAccountUpdatesMultiProto(reqId)
 
         if self._tryProto(_M.CANCEL_ACCOUNT_UPDATES_MULTI, _proto):
             return
@@ -1771,9 +1695,7 @@ class Client:
         underlyingConId,
     ):
         def _proto():
-            from ._proto.rest import createSecDefOptParamsRequestProto
-
-            return createSecDefOptParamsRequestProto(
+            return _converters.rest.createSecDefOptParamsRequestProto(
                 reqId,
                 underlyingSymbol,
                 futFopExchange,
@@ -1794,9 +1716,7 @@ class Client:
 
     def reqSoftDollarTiers(self, reqId):
         def _proto():
-            from ._proto.rest import createSoftDollarTiersRequestProto
-
-            return createSoftDollarTiersRequestProto(reqId)
+            return _converters.rest.createSoftDollarTiersRequestProto(reqId)
 
         if self._tryProto(_M.REQ_SOFT_DOLLAR_TIERS, _proto):
             return
@@ -1804,9 +1724,7 @@ class Client:
 
     def reqFamilyCodes(self):
         def _proto():
-            from ._proto.accounts import createFamilyCodesRequestProto
-
-            return createFamilyCodesRequestProto()
+            return _converters.accounts.createFamilyCodesRequestProto()
 
         if self._tryProto(_M.REQ_FAMILY_CODES, _proto):
             return
@@ -1814,9 +1732,7 @@ class Client:
 
     def reqMatchingSymbols(self, reqId, pattern):
         def _proto():
-            from ._proto.rest import createMatchingSymbolsRequestProto
-
-            return createMatchingSymbolsRequestProto(reqId, pattern)
+            return _converters.rest.createMatchingSymbolsRequestProto(reqId, pattern)
 
         if self._tryProto(_M.REQ_MATCHING_SYMBOLS, _proto):
             return
@@ -1824,9 +1740,7 @@ class Client:
 
     def reqMktDepthExchanges(self):
         def _proto():
-            from ._proto.market_data import createMarketDepthExchangesRequestProto
-
-            return createMarketDepthExchangesRequestProto()
+            return _converters.market_data.createMarketDepthExchangesRequestProto()
 
         if self._tryProto(_M.REQ_MKT_DEPTH_EXCHANGES, _proto):
             return
@@ -1834,9 +1748,9 @@ class Client:
 
     def reqSmartComponents(self, reqId, bboExchange):
         def _proto():
-            from ._proto.rest import createSmartComponentsRequestProto
-
-            return createSmartComponentsRequestProto(reqId, bboExchange)
+            return _converters.rest.createSmartComponentsRequestProto(
+                reqId, bboExchange
+            )
 
         if self._tryProto(_M.REQ_SMART_COMPONENTS, _proto):
             return
@@ -1844,9 +1758,7 @@ class Client:
 
     def reqNewsArticle(self, reqId, providerCode, articleId, newsArticleOptions):
         def _proto():
-            from ._proto.news import createNewsArticleRequestProto
-
-            return createNewsArticleRequestProto(
+            return _converters.news.createNewsArticleRequestProto(
                 reqId,
                 providerCode,
                 articleId,
@@ -1859,9 +1771,7 @@ class Client:
 
     def reqNewsProviders(self):
         def _proto():
-            from ._proto.news import createNewsProvidersRequestProto
-
-            return createNewsProvidersRequestProto()
+            return _converters.news.createNewsProvidersRequestProto()
 
         if self._tryProto(_M.REQ_NEWS_PROVIDERS, _proto):
             return
@@ -1878,9 +1788,7 @@ class Client:
         historicalNewsOptions,
     ):
         def _proto():
-            from ._proto.news import createHistoricalNewsRequestProto
-
-            return createHistoricalNewsRequestProto(
+            return _converters.news.createHistoricalNewsRequestProto(
                 reqId,
                 conId,
                 providerCodes,
@@ -1905,9 +1813,7 @@ class Client:
 
     def reqHeadTimeStamp(self, reqId, contract, whatToShow, useRTH, formatDate):
         def _proto():
-            from ._proto.historical import createHeadTimestampRequestProto
-
-            return createHeadTimestampRequestProto(
+            return _converters.historical.createHeadTimestampRequestProto(
                 reqId, contract, useRTH, whatToShow, formatDate
             )
 
@@ -1919,9 +1825,7 @@ class Client:
 
     def reqHistogramData(self, tickerId, contract, useRTH, timePeriod):
         def _proto():
-            from ._proto.historical import createHistogramDataRequestProto
-
-            return createHistogramDataRequestProto(
+            return _converters.historical.createHistogramDataRequestProto(
                 tickerId, contract, bool(useRTH), timePeriod
             )
 
@@ -1931,9 +1835,7 @@ class Client:
 
     def cancelHistogramData(self, tickerId):
         def _proto():
-            from ._proto.historical import createCancelHistogramDataProto
-
-            return createCancelHistogramDataProto(tickerId)
+            return _converters.historical.createCancelHistogramDataProto(tickerId)
 
         if self._tryProto(_M.CANCEL_HISTOGRAM_DATA, _proto):
             return
@@ -1941,9 +1843,7 @@ class Client:
 
     def cancelHeadTimeStamp(self, reqId):
         def _proto():
-            from ._proto.historical import createCancelHeadTimestampProto
-
-            return createCancelHeadTimestampProto(reqId)
+            return _converters.historical.createCancelHeadTimestampProto(reqId)
 
         if self._tryProto(_M.CANCEL_HEAD_TIMESTAMP, _proto):
             return
@@ -1953,24 +1853,24 @@ class Client:
         """Cancel an in-flight reqContractDetails. Protobuf-only —
         IBKR ships no binary form (gate 215, MIN_SERVER_VER_CANCEL_CONTRACT_DATA).
         """
-        from ._pb_msgids import CANCEL_CONTRACT_DATA
-        from ._proto.historical import createCancelContractDataProto
 
         self.sendProto(
-            CANCEL_CONTRACT_DATA,
-            createCancelContractDataProto(reqId).SerializeToString(),
+            _M.CANCEL_CONTRACT_DATA,
+            _converters.historical.createCancelContractDataProto(
+                reqId
+            ).SerializeToString(),
         )
 
     def cancelHistoricalTicks(self, reqId):
         """Cancel an in-flight reqHistoricalTicks. Protobuf-only
         (gate 215, MIN_SERVER_VER_CANCEL_CONTRACT_DATA shares the gate).
         """
-        from ._pb_msgids import CANCEL_HISTORICAL_TICKS
-        from ._proto.historical import createCancelHistoricalTicksProto
 
         self.sendProto(
-            CANCEL_HISTORICAL_TICKS,
-            createCancelHistoricalTicksProto(reqId).SerializeToString(),
+            _M.CANCEL_HISTORICAL_TICKS,
+            _converters.historical.createCancelHistoricalTicksProto(
+                reqId
+            ).SerializeToString(),
         )
 
     def reqConfig(self, reqId):
@@ -1979,10 +1879,11 @@ class Client:
         ``ConfigResponse`` carrying nested LockAndExitConfig /
         ApiConfig / MessageConfig / OrdersConfig sub-messages.
         """
-        from ._pb_msgids import REQ_CONFIG
-        from ._proto.rest import createConfigRequestProto
 
-        self.sendProto(REQ_CONFIG, createConfigRequestProto(reqId).SerializeToString())
+        self.sendProto(
+            _M.REQ_CONFIG,
+            _converters.rest.createConfigRequestProto(reqId).SerializeToString(),
+        )
 
     def updateConfig(
         self,
@@ -1998,12 +1899,10 @@ class Client:
         (gate 221, MIN_SERVER_VER_UPDATE_CONFIG). Server replies
         with ``UpdateConfigResponse`` carrying status + changed-fields list.
         """
-        from ._pb_msgids import UPDATE_CONFIG
-        from ._proto.rest import createUpdateConfigRequestProto
 
         self.sendProto(
-            UPDATE_CONFIG,
-            createUpdateConfigRequestProto(
+            _M.UPDATE_CONFIG,
+            _converters.rest.createUpdateConfigRequestProto(
                 reqId,
                 lockAndExit=lockAndExit,
                 messages=messages,
@@ -2016,9 +1915,7 @@ class Client:
 
     def reqMarketRule(self, marketRuleId):
         def _proto():
-            from ._proto.rest import createMarketRuleRequestProto
-
-            return createMarketRuleRequestProto(marketRuleId)
+            return _converters.rest.createMarketRuleRequestProto(marketRuleId)
 
         if self._tryProto(_M.REQ_MARKET_RULE, _proto):
             return
@@ -2026,9 +1923,7 @@ class Client:
 
     def reqPnL(self, reqId, account, modelCode):
         def _proto():
-            from ._proto.scanner import createPnLRequestProto
-
-            return createPnLRequestProto(reqId, account, modelCode)
+            return _converters.scanner.createPnLRequestProto(reqId, account, modelCode)
 
         if self._tryProto(_M.REQ_PNL, _proto):
             return
@@ -2036,9 +1931,7 @@ class Client:
 
     def cancelPnL(self, reqId):
         def _proto():
-            from ._proto.scanner import createCancelPnLProto
-
-            return createCancelPnLProto(reqId)
+            return _converters.scanner.createCancelPnLProto(reqId)
 
         if self._tryProto(_M.CANCEL_PNL, _proto):
             return
@@ -2046,9 +1939,9 @@ class Client:
 
     def reqPnLSingle(self, reqId, account, modelCode, conid):
         def _proto():
-            from ._proto.scanner import createPnLSingleRequestProto
-
-            return createPnLSingleRequestProto(reqId, account, modelCode, conid)
+            return _converters.scanner.createPnLSingleRequestProto(
+                reqId, account, modelCode, conid
+            )
 
         if self._tryProto(_M.REQ_PNL_SINGLE, _proto):
             return
@@ -2056,9 +1949,7 @@ class Client:
 
     def cancelPnLSingle(self, reqId):
         def _proto():
-            from ._proto.scanner import createCancelPnLSingleProto
-
-            return createCancelPnLSingleProto(reqId)
+            return _converters.scanner.createCancelPnLSingleProto(reqId)
 
         if self._tryProto(_M.CANCEL_PNL_SINGLE, _proto):
             return
@@ -2077,9 +1968,7 @@ class Client:
         miscOptions,
     ):
         def _proto():
-            from ._proto.historical import createHistoricalTicksRequestProto
-
-            return createHistoricalTicksRequestProto(
+            return _converters.historical.createHistoricalTicksRequestProto(
                 reqId,
                 contract,
                 startDateTime,
@@ -2109,9 +1998,7 @@ class Client:
 
     def reqTickByTickData(self, reqId, contract, tickType, numberOfTicks, ignoreSize):
         def _proto():
-            from ._proto.market_data import createTickByTickRequestProto
-
-            return createTickByTickRequestProto(
+            return _converters.market_data.createTickByTickRequestProto(
                 reqId, contract, tickType, numberOfTicks, ignoreSize
             )
 
@@ -2121,9 +2008,7 @@ class Client:
 
     def cancelTickByTickData(self, reqId):
         def _proto():
-            from ._proto.market_data import createCancelTickByTickProto
-
-            return createCancelTickByTickProto(reqId)
+            return _converters.market_data.createCancelTickByTickProto(reqId)
 
         if self._tryProto(_M.CANCEL_TICK_BY_TICK_DATA, _proto):
             return
@@ -2131,9 +2016,7 @@ class Client:
 
     def reqCompletedOrders(self, apiOnly):
         def _proto():
-            from ._proto.orders import createCompletedOrdersRequestProto
-
-            return createCompletedOrdersRequestProto(apiOnly)
+            return _converters.orders.createCompletedOrdersRequestProto(apiOnly)
 
         if self._tryProto(_M.REQ_COMPLETED_ORDERS, _proto):
             return
@@ -2141,9 +2024,7 @@ class Client:
 
     def reqWshMetaData(self, reqId):
         def _proto():
-            from ._proto.news import createWshMetaDataRequestProto
-
-            return createWshMetaDataRequestProto(reqId)
+            return _converters.news.createWshMetaDataRequestProto(reqId)
 
         if self._tryProto(_M.REQ_WSH_META_DATA, _proto):
             return
@@ -2151,9 +2032,7 @@ class Client:
 
     def cancelWshMetaData(self, reqId):
         def _proto():
-            from ._proto.news import createCancelWshMetaDataProto
-
-            return createCancelWshMetaDataProto(reqId)
+            return _converters.news.createCancelWshMetaDataProto(reqId)
 
         if self._tryProto(_M.CANCEL_WSH_META_DATA, _proto):
             return
@@ -2161,9 +2040,7 @@ class Client:
 
     def reqWshEventData(self, reqId, data: WshEventData):
         def _proto():
-            from ._proto.news import createWshEventDataRequestProto
-
-            return createWshEventDataRequestProto(reqId, data)
+            return _converters.news.createWshEventDataRequestProto(reqId, data)
 
         if self._tryProto(_M.REQ_WSH_EVENT_DATA, _proto):
             return
@@ -2181,9 +2058,7 @@ class Client:
 
     def cancelWshEventData(self, reqId):
         def _proto():
-            from ._proto.news import createCancelWshEventDataProto
-
-            return createCancelWshEventDataProto(reqId)
+            return _converters.news.createCancelWshEventDataProto(reqId)
 
         if self._tryProto(_M.CANCEL_WSH_EVENT_DATA, _proto):
             return
@@ -2191,9 +2066,7 @@ class Client:
 
     def reqUserInfo(self, reqId):
         def _proto():
-            from ._proto.rest import createUserInfoRequestProto
-
-            return createUserInfoRequestProto(reqId)
+            return _converters.rest.createUserInfoRequestProto(reqId)
 
         if self._tryProto(_M.REQ_USER_INFO, _proto):
             return

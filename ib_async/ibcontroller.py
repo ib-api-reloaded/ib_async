@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import subprocess
 import sys
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -174,8 +175,6 @@ class IBC:
             self._monitor.cancel()
             self._monitor = None
         if self._isWindows:
-            import subprocess
-
             subprocess.call(["taskkill", "/F", "/T", "/PID", str(self._proc.pid)])
         else:
             with suppress(ProcessLookupError):
