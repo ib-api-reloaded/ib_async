@@ -207,6 +207,12 @@ are fixed in v3.0:
   Trader"``), so every completed fill and cancel fell through to the
   ``Inactive`` fallback with a warning. The known phrasings now map to
   their terminal status; the original text stays in the trade log.
+* **``FlexReport`` fetched any URL scheme.** The configured
+  ``IB_FLEXREPORT_URL`` and the statement URL returned by the server are
+  now required to be http(s) with a host (``file://`` and the like are
+  rejected with ``FlexError``), and a success response missing its
+  reference code or URL raises ``FlexError`` instead of failing on an
+  ``assert``.
 * **``util.run`` reported stale global errors.** A run cancelled for
   any reason raised the last error ``globalErrorEvent`` had ever emitted,
   so after one global error every later cancellation was misreported as
