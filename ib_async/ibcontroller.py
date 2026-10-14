@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import subprocess
 import sys
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -175,7 +174,12 @@ class IBC:
             self._monitor.cancel()
             self._monitor = None
         if self._isWindows:
-            subprocess.call(["taskkill", "/F", "/T", "/PID", str(self._proc.pid)])
+            # Awaited, not a blocking subprocess.call: the event loop (and
+            # the Watchdog on it) keeps running while taskkill does.
+            killer = await asyncio.create_subprocess_exec(
+                "taskkill", "/F", "/T", "/PID", str(self._proc.pid)
+            )
+            await killer.wait()
         else:
             with suppress(ProcessLookupError):
                 self._proc.terminate()
@@ -201,7 +205,7 @@ class IBC:
                 line = await self._proc.stdout.readline()
             except (asyncio.CancelledError, GeneratorExit):
                 raise
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Don't let a transient stdout read failure (e.g. a decode
                 # path raising, or a closed transport) silently kill the
                 # monitor task. Log and stop draining; the process owner
@@ -271,7 +275,7 @@ class Watchdog:
         * ``hardTimeoutEvent`` (watchdog: :class:`.Watchdog`)
     """
 
-    events = [
+    events: ClassVar[list[str]] = [
         "startingEvent",
         "startedEvent",
         "stoppingEvent",
@@ -376,8 +380,8 @@ class Watchdog:
                 pass
             except Warning as w:
                 self._logger.warning(w)
-            except Exception as e:
-                self._logger.exception(e)
+            except Exception:
+                self._logger.exception("Watchdog run failed")
             finally:
                 self.ib.timeoutEvent -= onTimeout
                 self.ib.errorEvent -= onError
