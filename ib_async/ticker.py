@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import IntEnum
 from typing import Any, ClassVar
 
-from eventkit import Event, Op
+from eventkit import Event, Op, event_class
 
 from ib_async.contract import Contract
 from ib_async.depth import DepthBook
@@ -394,9 +394,8 @@ class Ticker:
         return price
 
 
+@event_class
 class TickerUpdateEvent(Event):
-    __slots__ = ()
-
     def trades(self) -> "Tickfilter":
         """Emit trade ticks."""
         return Tickfilter((4, 5, 48, 68, 71), self)
@@ -418,10 +417,11 @@ class TickerUpdateEvent(Event):
         return Midpoints((), self)
 
 
+@event_class
 class Tickfilter(Op):
     """Tick filtering event operators that ``emit(time, price, size)``."""
 
-    __slots__ = ("_tickTypes",)
+    _tickTypes: set[int]
 
     def __init__(self, tickTypes, source=None):
         Op.__init__(self, source)
@@ -473,9 +473,8 @@ class Tickfilter(Op):
         return VolumeBars(volume, self)
 
 
+@event_class
 class Midpoints(Tickfilter):
-    __slots__ = ()
-
     def on_source(self, ticker):
         if ticker.ticks:
             self.emit(ticker.time, ticker.midpoint(), 0)
@@ -509,13 +508,11 @@ class BarList(list[Bar]):
         return id(self)
 
 
+@event_class
 class TimeBars(Op):
-    __slots__ = (
-        "_timer",
-        "bars",
-    )
     __doc__ = Tickfilter.timebars.__doc__
 
+    _timer: Event | None
     bars: BarList
 
     def __init__(self, timer, source=None):
@@ -562,10 +559,11 @@ class TimeBars(Op):
         self.set_done()
 
 
+@event_class
 class TickBars(Op):
-    __slots__ = ("_count", "bars")
     __doc__ = Tickfilter.tickbars.__doc__
 
+    _count: int
     bars: BarList
 
     def __init__(self, count, source=None):
@@ -589,10 +587,11 @@ class TickBars(Op):
             self.emit(self.bars)
 
 
+@event_class
 class VolumeBars(Op):
-    __slots__ = ("_volume", "bars")
     __doc__ = Tickfilter.volumebars.__doc__
 
+    _volume: int
     bars: BarList
 
     def __init__(self, volume, source=None):
