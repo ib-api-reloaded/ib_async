@@ -22,7 +22,9 @@ RELEASEKIT ?= releasekit
 # resolves to .venv/bin/pytest, which runs .venv's interpreter and never sees
 # the overlay. Not --with-editable, which puts those repositories (and their
 # own `tests` packages) on sys.path. test-matrix runs `make test` per Python
-# version, so both apply there too.
+# version, so both apply there too, but it installs wheels only: pass the
+# siblings' built wheels instead of their directories, e.g.
+#   --with=../eventkit/dist/aeventkit-2.2.0-py3-none-any.whl
 TEST_TIMEOUT ?= 60
 UV_RUN_ARGS ?=
 PYTEST := pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
@@ -114,7 +116,7 @@ typecheck:
 lint: ruff typecheck
 
 test:
-	uv run $(UV_RUN_ARGS) $(PYTEST)
+	uv run --no-dev --group test $(UV_RUN_ARGS) $(PYTEST)
 
 test-matrix:
 	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v))
