@@ -157,6 +157,9 @@ select = [
   "FURB",
   # specific ignore / type-ignore codes
   "PGH",
+  # imports at module level only; a deliberate lazy import (an optional
+  # dependency) carries `noqa: PLC0415` with its reason
+  "PLC0415",
 ]
 ignore = [
   "E402", # Module level import not at top of file
