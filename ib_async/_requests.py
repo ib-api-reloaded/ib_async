@@ -6,8 +6,8 @@ the single source of truth for:
 
 * the awaitable :class:`asyncio.Future` the caller is blocked on,
 * the streaming-accumulation container that response handlers append to,
-* metadata: started time (monotonic), originating contract, refcount for
-  single-flight deduplication.
+* metadata: originating contract and the refcount for single-flight
+  deduplication.
 
 Discriminated key types prevent accidental cross-namespace lookups.
 The IBKR wire protocol shares one monotonic counter for request IDs and
@@ -205,8 +205,7 @@ class RequestRegistry:
         overwrite.
 
         ``future`` may be passed in to re-use an externally-created
-        Future (used by the legacy :meth:`Wrapper.startReq` facade).
-        Otherwise a fresh future is created on the active loop.
+        Future; otherwise a fresh future is created on the thread's loop.
 
         ``container`` defaults to a fresh empty list. Pass an explicit
         object (string, dataclass instance, list of expected size) for
