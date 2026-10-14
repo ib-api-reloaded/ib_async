@@ -897,7 +897,8 @@ class IB:
             takeProfitPrice: Limit price of profit order.
             stopLossPrice: Stop price of loss order.
         """
-        assert action in ("BUY", "SELL")
+        if action not in ("BUY", "SELL"):
+            raise ValueError(f"action must be 'BUY' or 'SELL', got {action!r}")
         reverseAction = "BUY" if action == "SELL" else "SELL"
         parent = LimitOrder(
             action,
@@ -977,8 +978,15 @@ class IB:
         key = self.wrapper.orderKey(self.wrapper.clientId, orderId, order.permId)
         trade = self.wrapper.trades.get(key)
         if trade:
-            # this is a modification of an existing order
-            assert trade.orderStatus.status not in OrderStatus.DoneStates
+            # this is a modification of an existing order; TWS decides
+            # whether a finished order can still be modified and reports
+            # a rejection through the usual error path
+            if trade.orderStatus.status in OrderStatus.DoneStates:
+                self._logger.warning(
+                    "Modifying order %s that is already %s",
+                    orderId,
+                    trade.orderStatus.status,
+                )
             logEntry = TradeLogEntry(now, trade.orderStatus.status, "Modify")
             trade.log.append(logEntry)
             self._logger.info(f"placeOrder: Modify order {trade}")
@@ -2509,7 +2517,7 @@ class IB:
                     result.append(None)
             else:
                 c = detailsList[0].contract
-                assert c
+                assert c  # noqa: S101 - narrows for the type checker
                 if contract.exchange == "SMART":
                     # overwriting 'SMART' exchange can create invalid contract
                     c.exchange = contract.exchange

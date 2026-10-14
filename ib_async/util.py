@@ -487,7 +487,8 @@ def formatSI(n: float) -> str:
     elif n < 1e-22:
         s = "0.00 "
     else:
-        assert n < 9.99e26
+        if n >= 9.99e26:
+            raise ValueError(f"{n} is too large for an SI prefix")
         log = math.floor(math.log10(n))
         i, j = divmod(log, 3)
         for _try in range(2):
@@ -624,7 +625,8 @@ def timeRange(start: Time_t, end: Time_t, step: float) -> Iterator[dt.datetime]:
             or as datetime.time in which case today is used as the date
         step (float): The number of seconds of each period
     """
-    assert step > 0
+    if step <= 0:
+        raise ValueError(f"step must be positive, got {step}")
     delta = dt.timedelta(seconds=step)
     t = _fillDate(start)
     tz = dt.UTC if t.tzinfo else None
@@ -656,7 +658,8 @@ async def timeRangeAsync(
     start: Time_t, end: Time_t, step: float
 ) -> AsyncIterator[dt.datetime]:
     """Async version of :meth:`timeRange`."""
-    assert step > 0
+    if step <= 0:
+        raise ValueError(f"step must be positive, got {step}")
 
     delta = dt.timedelta(seconds=step)
     t = _fillDate(start)
