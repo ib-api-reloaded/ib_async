@@ -2421,7 +2421,7 @@ class IB:
             tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
             errors = []
             resps = await asyncio.gather(*tasks, return_exceptions=True)
-            for name, resp in zip(reqs, resps):
+            for name, resp in zip(reqs, resps, strict=True):
                 if isinstance(resp, asyncio.TimeoutError):
                     msg = f"{name} request timed out"
                     errors.append(msg)
@@ -2470,7 +2470,7 @@ class IB:
         )
 
         result: list[Contract | list[Contract | None] | None] = []
-        for contract, detailsList in zip(contracts, detailsLists):
+        for contract, detailsList in zip(contracts, detailsLists, strict=True):
             if not detailsList:
                 self._logger.warning(f"Unknown contract: {contract}")
                 result.append(None)

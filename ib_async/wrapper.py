@@ -1271,7 +1271,7 @@ class Wrapper:
             start=start,
             end=end,
         )
-        for bar, date in zip(pending, dates):
+        for bar, date in zip(pending, dates, strict=True):
             bar.date = self._normalizeDatetime(date)
 
     @staticmethod
@@ -1286,7 +1286,8 @@ class Wrapper:
 
         try:
             parsed = parseIBDatetime(s)
-        except Exception:
+        except (ValueError, KeyError, OverflowError, OSError, TypeError):
+            # malformed text, unknown time zone, out-of-range epoch
             return None
 
         if isinstance(parsed, datetime):
@@ -1345,7 +1346,7 @@ class Wrapper:
         try:
             dt = self._normalizeDatetime(parseIBDatetime(headTimestamp))
             self.requests.set_result(ReqIdKey(reqId), dt)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - delivered to the awaiter
             self.requests.set_error(ReqIdKey(reqId), exc)
 
     def historicalTicks(self, reqId: int, ticks: list[HistoricalTick], done: bool):

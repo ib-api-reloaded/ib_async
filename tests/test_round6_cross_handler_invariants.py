@@ -137,7 +137,7 @@ def test_trade_filled_skips_fills_with_none_shares():
     trade = ibi.Trade(contract, order, ibi.OrderStatus(), fills, [])
     result = trade.filled()
     assert result == Decimal(60)
-    assert result == result  # NaN-poison guard
+    assert not result.is_nan()  # NaN-poison guard
 
 
 def test_trade_filled_skips_leg_fills_for_bag_contract():
