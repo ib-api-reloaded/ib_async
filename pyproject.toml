@@ -203,7 +203,10 @@ select = [
   # no exec(); no unused noqa comments
   "S102",
   "RUF100",
+  # no assert for runtime checks in the library (python -O strips them)
+  "S101",
 ]
+per-file-ignores = { "tests/**" = ["S101"], "scripts/**" = ["S101"] }
 ignore = [
   "E402", # Module level import not at top of file
   "SIM102", # collapsible-if: nested ifs often read clearer
