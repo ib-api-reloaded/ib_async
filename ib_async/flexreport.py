@@ -28,6 +28,30 @@ class FlexError(Exception):
     pass
 
 
+_WEB_SCHEMES: Final = frozenset({"http", "https"})
+
+
+def _webUrl(url: str | None, source: str) -> str:
+    """Return ``url`` if it is an http(s) URL with a host; otherwise raise
+    FlexError. Keeps ``urlopen`` from reading other schemes such as
+    ``file://`` from a configured or server-supplied URL."""
+    try:
+        parsed = urlparse(url or "")
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.scheme not in _WEB_SCHEMES or not parsed.netloc:
+        raise FlexError(f"{source} is not an http(s) URL: {url!r}")
+    return url or ""
+
+
+def _requiredText(root: et.Element, tag: str) -> str:
+    """Text of the response's ``tag`` element, or FlexError if missing."""
+    elem = root.find(tag)
+    if elem is None or not elem.text:
+        raise FlexError(f"Flex response has no {tag}")
+    return elem.text
+
+
 class FlexReport:
     """
     To obtain a token:
@@ -81,20 +105,9 @@ class FlexReport:
 
     def get_url(self):
         """Generate flexreport URL."""
-
-        def is_valid_url(url: str) -> bool:
-            try:
-                result = urlparse(url)
-            except ValueError:
-                return False
-            # Must have scheme (http/https) and netloc (domain)
-            return bool(result.scheme and result.netloc)
-
-        _url = os.getenv("IB_FLEXREPORT_URL", FLEXREPORT_URL)
-        if is_valid_url(_url):
-            return _url
-        raise FlexError(
-            "Invalid URL, please check that env variable IB_FLEXREPORT_URL is set correctly."
+        return _webUrl(
+            os.getenv("IB_FLEXREPORT_URL", FLEXREPORT_URL),
+            "IB_FLEXREPORT_URL",
         )
 
     def download(self, token, queryId):
@@ -109,12 +122,8 @@ class FlexReport:
         root = et.fromstring(data)
         elem = root.find("Status")
         if elem is not None and elem.text == "Success":
-            elem = root.find("ReferenceCode")
-            assert elem is not None
-            code = elem.text
-            elem = root.find("Url")
-            assert elem is not None
-            baseUrl = elem.text
+            code = _requiredText(root, "ReferenceCode")
+            baseUrl = _webUrl(_requiredText(root, "Url"), "Flex response Url")
             _logger.info("Statement is being prepared...")
         else:
             elem = root.find("ErrorCode")
