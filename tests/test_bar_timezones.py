@@ -3,10 +3,10 @@ from zoneinfo import ZoneInfo
 
 import ib_async as ibi
 from ib_async._requests import ReqIdKey
+from ib_async._subscriptions import RealTimeBarsSub
 
 
 def test_realtime_bars_use_configured_default_timezone():
-    from ib_async._subscriptions import RealTimeBarsSub
 
     eastern = ZoneInfo("America/New_York")
     ib = ibi.IB(defaults=ibi.IBDefaults(timezone=eastern))

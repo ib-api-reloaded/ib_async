@@ -10,8 +10,9 @@ sentinel into user-visible objects — an openOrder echo previously stamped
 from decimal import Decimal
 
 from ib_async import IB
+from ib_async.contract import Future
 from ib_async.decoder import Decoder
-from ib_async.order import Order
+from ib_async.order import LimitOrder, Order
 from ib_async.util import UNSET_DOUBLE, UNSET_INTEGER
 
 
@@ -61,8 +62,6 @@ def test_place_order_never_stamps_a_sentinel_onto_the_callers_order() -> None:
     client = ib.client
     sent: list[tuple] = []
     client._tryProto = lambda msg_id, thunk: True  # capture-side: skip the wire
-    from ib_async.contract import Future
-    from ib_async.order import LimitOrder
 
     contract = Future(symbol="MNQ", exchange="CME", currency="USD")
     order = LimitOrder("BUY", 1, 100.0)

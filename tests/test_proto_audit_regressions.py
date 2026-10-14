@@ -23,35 +23,137 @@ fixed and that future refactors could silently break:
 
 from __future__ import annotations
 
+import ast
+import inspect
 import logging
+import math
 import pathlib
+import struct
+import struct as _struct
+import sys
 from datetime import datetime
 from decimal import Decimal
+from decimal import Decimal as D
+from sys import float_info
+from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 import pytest
 
+import ib_async
+import ib_async as _root
 import ib_async as ibi
 from ib_async._pb import (
+    ComboLeg_pb2,
     CommissionAndFeesReport_pb2,
     ConfigResponse_pb2,
     Contract_pb2,
     ContractData_pb2,
+    CurrentTimeInMillis_pb2,
     DisplayGroupList_pb2,
     DisplayGroupUpdated_pb2,
     ErrorMessage_pb2,
     ExecutionDetails_pb2,
+    NewsArticle_pb2,
+    NewsBulletin_pb2,
     OpenOrder_pb2,
+    Order_pb2,
+    ScannerData_pb2,
+    ScannerParameters_pb2,
     TickByTickData_pb2,
+    TickNews_pb2,
     UpdateConfigResponse_pb2,
     VerifyCompleted_pb2,
     VerifyMessageApi_pb2,
 )
+from ib_async._pb_msgids import (
+    CANCEL_CONTRACT_DATA,
+    CANCEL_HISTORICAL_TICKS,
+    PROTOBUF_MSG_ID,
+)
 from ib_async._proto.contracts import (
+    createComboLeg,
+    createComboLegProto,
     createContract,
     createContractDetailsFromContractData,
+    createContractProto,
 )
+from ib_async._proto.news import (
+    createHistoricalNewsRequestProto,
+    createNewsArticleArgs,
+    createNewsArticleRequestProto,
+    createTickNewsArgs,
+    createUpdateNewsBulletinArgs,
+    createWshEventDataRequestProto,
+)
+from ib_async._proto.orders import (
+    _createConditionProtos,
+    _decodeConditions,
+    _isValidFloat,
+    _isValidInt,
+    createOrder,
+    createOrderProto,
+    createPlaceOrderRequestProto,
+)
+from ib_async._proto.safe import format_proto_double, safe_decimal
+from ib_async._proto.scanner import (
+    createScannerDataArgs,
+    createScannerParametersXml,
+    createScannerSubscriptionRequestProto,
+)
+from ib_async._requests import ReqIdKey, SingletonKey
+from ib_async._requests import ReqIdKey as _ReqIdKey
+from ib_async._requests import SingletonKey as _SingletonKey
+from ib_async._server_versions import (
+    MIN_SERVER_VER_CME_TAGGING_FIELDS,
+    MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS,
+    MIN_SERVER_VER_IMBALANCE_ONLY,
+    MIN_SERVER_VER_INELIGIBILITY_REASONS,
+    MIN_SERVER_VER_MANUAL_ORDER_TIME,
+    MIN_SERVER_VER_PENDING_PRICE_REVISION,
+    MIN_SERVER_VER_PROTOBUF,
+    MIN_SERVER_VER_SYNT_REALTIME_BARS,
+    UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM,
+)
+from ib_async._subscriptions import MktDataSub, MktDepthSub, PnLSingleSub, TickByTickSub
+from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
+from ib_async.client import Client as _Client
+from ib_async.contract import ComboLeg, Contract, TagValue
+from ib_async.decoder import _CONV, _PROTO_MSG_HANDLERS, Decoder, _initProtoMsgHandlers
+from ib_async.objects import (
+    MONETARY_ACCOUNT_VALUE_TAGS,
+    BarData,
+    IBDefaults,
+    PnLSingle,
+    ScannerSubscription,
+    TickAttrib,
+    TickAttribBidAsk,
+    TickAttribLast,
+    WshEventData,
+)
+from ib_async.order import (
+    ExecutionCondition,
+    LimitOrder,
+    MarginCondition,
+    Order,
+    OrderCancel,
+    OrderComboLeg,
+    OrderStatus,
+    PercentChangeCondition,
+    PriceCondition,
+    TimeCondition,
+    Trade,
+    VolumeCondition,
+)
+from ib_async.ticker import Ticker
 from ib_async.util import UNSET_INTEGER
+from ib_async.wrapper import (
+    _GENERIC_TICK_NO_CLAMP,
+    _WARNING_CODES,
+    PRICE_TICK_MAP,
+    SIZE_TICK_MAP,
+    STRING_TICK_MAP,
+)
 
 # ---------------------------------------------------------------------------
 # CommissionReport: None must survive the dispatch path without becoming NaN
@@ -530,9 +632,6 @@ def test_is_valid_float_rejects_unset_sentinel():
     encoding; ``createOrderProto`` and friends gate every optional
     double field on ``_isValidFloat`` to skip the sentinel.
     """
-    from sys import float_info
-
-    from ib_async._proto.orders import _isValidFloat
 
     UNSET_DOUBLE = float_info.max
     assert _isValidFloat(UNSET_DOUBLE) is False
@@ -549,7 +648,6 @@ def test_is_valid_int_rejects_unset_sentinel():
     """The UNSET_INTEGER sentinel (2**31 - 1) must be skipped by
     ``createOrderProto`` and friends so wire frames don't carry it.
     """
-    from ib_async._proto.orders import _isValidInt
 
     UNSET_INTEGER = 2**31 - 1
     assert _isValidInt(UNSET_INTEGER) is False
@@ -568,7 +666,6 @@ def test_req_current_time_in_millis_async_end_to_end():
     2. Receiving a proto CurrentTimeInMillis settles the future
        with the raw millisecond value.
     """
-    from ib_async._pb import CurrentTimeInMillis_pb2
 
     ib = ibi.IB()
     ib.client._serverVersion = 213
@@ -599,7 +696,6 @@ def test_is_valid_float_handles_nan_safely():
     safe_decimal layer, not at the sentinel guard. Lock the
     contract so a future "fix" doesn't accidentally reverse it.
     """
-    from ib_async._proto.orders import _isValidFloat
 
     nan = float("nan")
     assert _isValidFloat(nan) is True  # NaN != UNSET_DOUBLE (NaN != anything)
@@ -780,7 +876,6 @@ def test_cancel_order_pre_192_carries_legacy_version_byte():
     the gate, a 192+ server reads the 1 as orderId and our cancel
     targets order ID 1 instead of the real one.
     """
-    from ib_async.order import OrderCancel
 
     ib = ibi.IB()
     ib.client._serverVersion = 191  # below CME_TAGGING_FIELDS
@@ -802,7 +897,6 @@ def test_cancel_order_post_192_drops_version_appends_cme_tagging():
     extOperator + manualOrderIndicator. Wrong gate means our cancel
     frame is corrupted: the leading 1 lands as orderId.
     """
-    from ib_async.order import OrderCancel
 
     ib = ibi.IB()
     ib.client._serverVersion = 192
@@ -831,7 +925,6 @@ def test_req_global_cancel_post_192_appends_cme_tagging():
     """reqGlobalCancel mirrors cancelOrder's gating: drop VERSION,
     append extOperator + manualOrderIndicator at 192+.
     """
-    from ib_async.order import OrderCancel
 
     ib = ibi.IB()
     ib.client._serverVersion = 192
@@ -1761,10 +1854,6 @@ def test_max_client_version_advertises_modern_protobuf_gates():
     cap at 226 (IBKR's MAX_CLIENT_VER as of TWS API 10.51) so a
     careless edit can't silently regress protobuf reachability.
     """
-    from ib_async._server_versions import (
-        MIN_SERVER_VER_PROTOBUF,
-        UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM,
-    )
 
     ib = ibi.IB()
     assert ib.client.MaxClientVersion == 226
@@ -1790,9 +1879,6 @@ def test_combo_leg_per_leg_price_propagates_through_place_order():
     prices unset — the server treats unset perLegPrice as zero, which
     silently mis-prices every spread the user submits.
     """
-    from ib_async._proto.orders import createPlaceOrderRequestProto
-    from ib_async.contract import ComboLeg, Contract
-    from ib_async.order import LimitOrder, OrderComboLeg
 
     bag = Contract(
         symbol="SPX",
@@ -1824,9 +1910,6 @@ def test_combo_leg_no_per_leg_price_when_order_has_no_combo_legs():
     case), the contract proto's ComboLegs must have ``perLegPrice``
     UNSET — not zero, which the server would interpret as a real
     price."""
-    from ib_async._proto.orders import createPlaceOrderRequestProto
-    from ib_async.contract import ComboLeg, Contract
-    from ib_async.order import LimitOrder
 
     bag = Contract(
         symbol="SPX",
@@ -1848,8 +1931,6 @@ def test_create_contract_proto_no_order_omits_per_leg_price():
     protos without ``perLegPrice``. The send-side helper must not
     accidentally invent a zero per-leg price for non-trading paths.
     """
-    from ib_async._proto.contracts import createContractProto
-    from ib_async.contract import ComboLeg, Contract
 
     bag = Contract(
         symbol="SPX",
@@ -1873,8 +1954,6 @@ def test_wsh_event_data_request_omits_unset_int_sentinels():
     server reject the request. Mirror IBKR's ``isValidIntValue``
     gating from ``client_utils.createWshEventDataRequestProto``.
     """
-    from ib_async._proto.news import createWshEventDataRequestProto
-    from ib_async.objects import WshEventData
 
     data = WshEventData()  # all defaults → conId / totalLimit unset
     proto = createWshEventDataRequestProto(reqId=7, data=data)
@@ -1891,8 +1970,6 @@ def test_wsh_event_data_request_writes_set_fields():
     """When the user sets ``conId`` / ``totalLimit`` to non-sentinel
     values, those values must reach the wire — the gate must not be
     overzealous."""
-    from ib_async._proto.news import createWshEventDataRequestProto
-    from ib_async.objects import WshEventData
 
     data = WshEventData(
         conId=1234,
@@ -1917,9 +1994,6 @@ def test_price_condition_trigger_method_zero_writes_to_wire():
     would have skipped 0 entirely, leaving the field unset and risking
     the server falling back to a different default.
     """
-    from ib_async._proto.orders import createPlaceOrderRequestProto
-    from ib_async.contract import Contract
-    from ib_async.order import LimitOrder, PriceCondition
 
     cond = PriceCondition(
         conId=265598, exch="SMART", price=100.0, triggerMethod=0, isMore=True
@@ -1941,9 +2015,6 @@ def test_combo_leg_more_contract_legs_than_order_legs_safe():
     IBKR's ``createComboLegProtoList`` ``i < len(orderComboLegs)``
     guard.
     """
-    from ib_async._proto.orders import createPlaceOrderRequestProto
-    from ib_async.contract import ComboLeg, Contract
-    from ib_async.order import LimitOrder, OrderComboLeg
 
     bag = Contract(
         symbol="SPX",
@@ -2092,7 +2163,6 @@ def test_binary_open_order_skips_full_order_preview_block_below_gate_195():
     absent from the wire. Pairs with the existing >=199 above-test
     and the new gate-195 boundary test for off-by-one coverage.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
 
     serverVersion = MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS - 1
     ib = ibi.IB()
@@ -2125,7 +2195,6 @@ def test_binary_open_order_at_exact_gate_195_reads_full_order_preview_block():
     """Gate 195 boundary: at exactly MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
     the block IS present. Pairs with the below-195 test.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
 
     serverVersion = MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
     ib = ibi.IB()
@@ -2162,7 +2231,6 @@ def test_binary_open_order_at_exact_gate_198_skips_imbalance_only():
     """Gate 199 (IMBALANCE_ONLY) boundary: at exactly 198 the slot is
     NOT consumed. Pairs with the existing 199 above-test.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_IMBALANCE_ONLY
 
     serverVersion = MIN_SERVER_VER_IMBALANCE_ONLY - 1
     ib = ibi.IB()
@@ -2232,7 +2300,6 @@ def test_binary_exec_details_skips_pending_price_revision_below_gate_178():
     """Gate 178 (PENDING_PRICE_REVISION) below: at 177 no slot on the
     wire. Pairs with the >=178 above-tests already in the file.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_PENDING_PRICE_REVISION
 
     serverVersion = MIN_SERVER_VER_PENDING_PRICE_REVISION - 1
     ib = ibi.IB()
@@ -2254,7 +2321,6 @@ def test_binary_exec_details_at_exact_gate_178_reads_pending_price_revision():
     """Gate 178 boundary: at exactly 178 the slot is consumed.
     Pairs with the pre-178 test for off-by-one.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_PENDING_PRICE_REVISION
 
     serverVersion = MIN_SERVER_VER_PENDING_PRICE_REVISION
     ib = ibi.IB()
@@ -2286,8 +2352,6 @@ def test_cancel_order_manual_order_time_gate_169(offset, expected):
     cancel call exercises both sides — the only variable is server
     version and the resulting wire-arg tuple.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_MANUAL_ORDER_TIME
-    from ib_async.order import OrderCancel
 
     ib = ibi.IB()
     ib.client._serverVersion = MIN_SERVER_VER_MANUAL_ORDER_TIME + offset
@@ -2303,7 +2367,6 @@ def test_binary_contract_details_skips_ineligibility_below_gate_186():
     """Gate 186 (INELIGIBILITY_REASONS) below: at 185 there's no count
     slot at the tail.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_INELIGIBILITY_REASONS
 
     serverVersion = MIN_SERVER_VER_INELIGIBILITY_REASONS - 1
     ib = ibi.IB()
@@ -2367,7 +2430,6 @@ def test_binary_contract_details_at_exact_gate_186_reads_ineligibility_count():
     """Gate 186 boundary: at exactly 186 the count slot is present.
     Pairs with below-186 for off-by-one.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_INELIGIBILITY_REASONS
 
     serverVersion = MIN_SERVER_VER_INELIGIBILITY_REASONS
     ib = ibi.IB()
@@ -2393,7 +2455,6 @@ def test_req_global_cancel_at_exact_gate_192_drops_version():
     """Gate 192 boundary in reqGlobalCancel: at exactly 192 the legacy
     VERSION byte must be absent. Pairs with the existing 191 test.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_CME_TAGGING_FIELDS
 
     serverVersion = MIN_SERVER_VER_CME_TAGGING_FIELDS
     ib = ibi.IB()
@@ -2410,7 +2471,6 @@ def test_historical_data_at_pre_124_consumes_legacy_version_prefix():
     """Gate 124 (SYNT_REALTIME_BARS) below: at 123 the historicalData
     wire frame carries a legacy VERSION prefix that must be eaten.
     """
-    from ib_async._server_versions import MIN_SERVER_VER_SYNT_REALTIME_BARS
 
     serverVersion = MIN_SERVER_VER_SYNT_REALTIME_BARS - 1
     ib = ibi.IB()
@@ -2449,9 +2509,6 @@ def test_cancel_contract_data_emits_proto_only_at_gate_215():
     the client unconditionally takes the protobuf path. The wire
     frame is [4-byte len][4-byte wireMsgId = canonical + 200][body].
     """
-    import struct
-
-    from ib_async._pb_msgids import CANCEL_CONTRACT_DATA, PROTOBUF_MSG_ID
 
     ib = ibi.IB()
     ib.client._serverVersion = 215
@@ -2472,9 +2529,6 @@ def test_cancel_historical_ticks_emits_proto_only_at_gate_215():
     """Gate 215 partner: cancelHistoricalTicks shares the gate. Same
     proto-only contract.
     """
-    import struct
-
-    from ib_async._pb_msgids import CANCEL_HISTORICAL_TICKS, PROTOBUF_MSG_ID
 
     ib = ibi.IB()
     ib.client._serverVersion = 215
@@ -2502,14 +2556,12 @@ def test_cancel_historical_ticks_emits_proto_only_at_gate_215():
 def test_safe_decimal_unset_integer_sentinel_returns_none():
     """``"2147483647"`` is IBKR's UNSET_INTEGER. Wire payloads that
     wedge this string into a Decimal field mean the field is unset."""
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("2147483647") is None
 
 
 def test_safe_decimal_unset_long_sentinel_returns_none():
     """``"9223372036854775807"`` is IBKR's UNSET_LONG."""
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("9223372036854775807") is None
 
@@ -2517,7 +2569,6 @@ def test_safe_decimal_unset_long_sentinel_returns_none():
 def test_safe_decimal_unset_double_uppercase_e_returns_none():
     """``"1.7976931348623157E308"`` is IBKR's UNSET_DOUBLE in the
     upper-case-E formatting their wire encoder emits."""
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("1.7976931348623157E308") is None
 
@@ -2526,7 +2577,6 @@ def test_safe_decimal_unset_double_lowercase_e_returns_none():
     """``"1.7976931348623157e+308"`` is the same UNSET_DOUBLE value
     serialized through Python's ``str(float)`` — both formats must
     map to None."""
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("1.7976931348623157e+308") is None
 
@@ -2534,7 +2584,6 @@ def test_safe_decimal_unset_double_lowercase_e_returns_none():
 def test_safe_decimal_negative_long_min_sentinel_returns_none():
     """``"-9223372036854775808"`` is IBKR's most-negative int64 — also
     rejected as Decimal-unset by the reference decoder."""
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("-9223372036854775808") is None
 
@@ -2542,7 +2591,6 @@ def test_safe_decimal_negative_long_min_sentinel_returns_none():
 def test_safe_decimal_real_values_round_trip():
     """Sanity: real Decimal-shaped wire strings continue to coerce
     correctly. Locks the sentinel guard from over-rejecting."""
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("100") == Decimal(100)
     assert safe_decimal("0.5") == Decimal("0.5")
@@ -2671,8 +2719,6 @@ def test_monetary_account_value_tags_covers_ibkr_summary_standard_set():
     valid monetary values from TWS and user code mistakes the value as
     non-numeric / unset."""
 
-    from ib_async.objects import MONETARY_ACCOUNT_VALUE_TAGS
-
     # Bare-name spellings IBKR's account-summary stream emits.
     for tag in ("ReqTEquity", "ReqTMargin"):
         assert tag in MONETARY_ACCOUNT_VALUE_TAGS, f"missing {tag!r}"
@@ -2721,7 +2767,6 @@ def test_order_bound_signature_uses_ibkr_argument_names():
     that order; the parameter names are part of the public contract for
     subclasses overriding this hook.
     """
-    import inspect
 
     sig = inspect.signature(ibi.Wrapper.orderBound)
     params = list(sig.parameters)
@@ -2761,7 +2806,6 @@ def test_warning_codes_includes_connection_state_notifications():
     and any user-facing severity routing doesn't surface them as real
     errors.
     """
-    from ib_async.wrapper import _WARNING_CODES
 
     assert 1100 in _WARNING_CODES
     assert 1101 in _WARNING_CODES
@@ -2820,7 +2864,6 @@ def test_handshake_prefix_matches_ibkr_make_initial_msg():
     + ``text``. We construct the equivalent inline in ``connectAsync``
     via ``self._prefix(b"v...")`` — same wire framing, no extra NULs.
     """
-    import struct as _struct
 
     ib = ibi.IB()
     body = b"v157..225"
@@ -2849,7 +2892,6 @@ def test_max_requests_throttle_default_matches_ibkr_pacing():
     Our defaults intentionally sit just below that (45/sec) so brief
     bursts don't trip server-side disconnects.
     """
-    from ib_async.client import Client as _Client
 
     assert _Client.MaxRequests == 45
     assert _Client.RequestsInterval == 1
@@ -2860,7 +2902,6 @@ def test_disconnect_clears_in_flight_futures_with_connection_error():
     a daily server-reset doesn't wedge. Pending request futures must
     receive a ``ConnectionError`` exception.
     """
-    from ib_async._requests import SingletonKey as _SingletonKey
 
     ib = ibi.IB()
     req, _opened = ib.wrapper.requests.open(_SingletonKey("openOrders"))
@@ -2970,7 +3011,6 @@ def test_odd_lot_price_routes_through_price_tick_map():
     the odd-lot family for retail-sized prints; servers can ship these
     whenever the user enables the right generic-tick list.
     """
-    from ib_async.objects import TickAttrib
 
     ib = ibi.IB()
     ib.wrapper.clientId = 0
@@ -3019,7 +3059,6 @@ def test_price_size_tick_attribs_flow_through_to_wrapper():
     quality. Round 3 wired it through; this verifies the full path
     from a synthetic call lands on the ticker as a fresh BID.
     """
-    from ib_async.objects import TickAttrib
 
     ib = ibi.IB()
     ib.wrapper.clientId = 0
@@ -3065,7 +3104,6 @@ def test_delayed_bid_ask_last_route_through_bid_ask_last_state():
     Ticker fields render whether the user requested live or delayed.
     Verify all six branches roll prev correctly.
     """
-    from ib_async.objects import TickAttrib
 
     ib = ibi.IB()
     ib.wrapper.clientId = 0
@@ -3090,7 +3128,6 @@ def test_generic_tick_map_no_clamp_set_matches_documentation():
     this set silently it changes the wire-to-state contract; this
     test forces an explicit code update at audit-time.
     """
-    from ib_async.wrapper import _GENERIC_TICK_NO_CLAMP
 
     assert frozenset({31, 49, 90}) == _GENERIC_TICK_NO_CLAMP
 
@@ -3099,11 +3136,6 @@ def test_odd_lot_tick_maps_registered_for_all_six_types():
     """Lock the routing of TickType 105-110 so a future tick-map
     refactor cannot silently drop odd-lot support.
     """
-    from ib_async.wrapper import (
-        PRICE_TICK_MAP,
-        SIZE_TICK_MAP,
-        STRING_TICK_MAP,
-    )
 
     assert PRICE_TICK_MAP[105] == "oddLotBid"
     assert PRICE_TICK_MAP[106] == "oddLotAsk"
@@ -3118,7 +3150,6 @@ def test_wrapper_error_warning_classification_in_warning_band():
     explicit ``_WARNING_CODES`` set — this covers the data-farm
     connectivity codes (2103-2108) without enumerating them.
     """
-    from ib_async.wrapper import _WARNING_CODES
 
     for code in (2103, 2104, 2105, 2106, 2107, 2108, 2150, 2199):
         is_warning = code in _WARNING_CODES or 2100 <= code < 2200
@@ -3141,7 +3172,6 @@ def test_settled_cash_in_monetary_account_value_tags():
     Also covers the ``-C`` / ``-S`` per-segment variants that arrive on
     the live ``updateAccountValue`` stream for futures-segment accounts.
     """
-    from ib_async.objects import MONETARY_ACCOUNT_VALUE_TAGS
 
     for tag in ("SettledCash", "SettledCash-C", "SettledCash-S"):
         assert tag in MONETARY_ACCOUNT_VALUE_TAGS, f"missing {tag!r}"
@@ -3162,7 +3192,6 @@ def test_account_summary_default_tags_are_all_whitelisted():
     Drift here means a TWS account-summary reply silently degrades to
     ``None`` for that field.
     """
-    from ib_async.objects import MONETARY_ACCOUNT_VALUE_TAGS
 
     # Only the *monetary* members of the default request tag set; the
     # non-numeric ``AccountType`` and the time-string
@@ -3206,7 +3235,6 @@ def test_account_download_end_settles_future_after_values_and_portfolio():
     then ``updateAccountValue`` and ``updatePortfolio`` rows accumulate
     into the wrapper state without prematurely settling the waiter.
     """
-    from ib_async._requests import SingletonKey as _SingletonKey
 
     ib = ibi.IB()
     req, _is_new = ib.wrapper.requests.open(_SingletonKey("accountValues"))
@@ -3281,7 +3309,6 @@ def test_position_drops_zero_and_appends_to_live_request():
     every row also appends to the active ``reqPositionsAsync`` future
     accumulator so the singleton drains correctly on ``positionEnd``.
     """
-    from ib_async._requests import SingletonKey as _SingletonKey
 
     ib = ibi.IB()
     req, _is_new = ib.wrapper.requests.open(_SingletonKey("positions"), container=[])
@@ -3311,7 +3338,6 @@ def test_position_multi_emits_event_and_accumulates_per_reqid():
     and accumulate against ``ReqIdKey(reqId)`` for any future async
     waiter, with ``positionMultiEnd`` settling that future.
     """
-    from ib_async._requests import ReqIdKey as _ReqIdKey
 
     ib = ibi.IB()
     captured: list[ibi.Position] = []
@@ -3382,7 +3408,6 @@ def test_receive_fa_settles_request_fa_future_with_xml_payload():
     ``IB.requestFA(faDataType)``. The XML payload must round-trip
     end-to-end (no charset truncation, no field reorder) and the
     singleton future must resolve with the body."""
-    from ib_async._requests import SingletonKey as _SingletonKey
 
     ib = ibi.IB()
     req, _is_new = ib.wrapper.requests.open(_SingletonKey("requestFA"), container="")
@@ -3413,7 +3438,6 @@ def test_account_summary_end_settles_per_reqid_future():
     """``accountSummary`` emits one row per (account, tag) and the
     waiter resolves only on ``accountSummaryEnd(reqId)``. Rows must
     accumulate into ``acctSummary`` keyed by (account, tag, currency)."""
-    from ib_async._requests import ReqIdKey as _ReqIdKey
 
     ib = ibi.IB()
     req, _is_new = ib.wrapper.requests.open(_ReqIdKey(11))
@@ -3460,9 +3484,6 @@ def test_send_encodes_positive_infinity_as_ibkr_infinity_string():
     spelling; ``"Infinite"`` is rejected as a parse error server-side
     and silently corrupts mid-peg-to-mid orders.
     """
-    import math
-
-    from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
 
     assert _FORMAT_HANDLERS_EMPTY[float](math.inf) == "Infinity"
     assert _FORMAT_HANDLERS_KEEP[float](math.inf) == "Infinity"
@@ -3473,9 +3494,6 @@ def test_send_encodes_unset_double_as_empty_when_makeempty():
     ``makeEmpty=True`` path — matching IBKR's ``make_field_handle_empty``
     semantics. With ``makeEmpty=False`` it serializes verbatim.
     """
-    import sys
-
-    from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
 
     UNSET_DOUBLE = sys.float_info.max
     assert _FORMAT_HANDLERS_EMPTY[float](UNSET_DOUBLE) == ""
@@ -3486,7 +3504,6 @@ def test_send_encodes_unset_integer_as_empty_when_makeempty():
     """``UNSET_INTEGER`` becomes empty string on the ``makeEmpty=True``
     path; matches IBKR's ``make_field_handle_empty``.
     """
-    from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
 
     assert _FORMAT_HANDLERS_EMPTY[int](UNSET_INTEGER) == ""
     assert _FORMAT_HANDLERS_KEEP[int](UNSET_INTEGER) == str(UNSET_INTEGER)
@@ -3497,7 +3514,6 @@ def test_send_encodes_bool_as_zero_or_one_string():
     Our handler must produce the same strings or every gated boolean field
     arrives as the Python repr ``"True"`` / ``"False"`` and TWS rejects.
     """
-    from ib_async.client import _FORMAT_HANDLERS_EMPTY
 
     assert _FORMAT_HANDLERS_EMPTY[bool](True) == "1"
     assert _FORMAT_HANDLERS_EMPTY[bool](False) == "0"
@@ -3508,7 +3524,6 @@ def test_send_encodes_none_as_empty_string():
     ``None``; we permissively serialize as empty so contributor sites that
     forget to filter ``None`` from their field tuples don't crash.
     """
-    from ib_async.client import _FORMAT_HANDLERS_EMPTY
 
     assert _FORMAT_HANDLERS_EMPTY[type(None)](None) == ""
 
@@ -3521,7 +3536,6 @@ def test_safe_decimal_rejects_every_ibkr_unset_sentinel_string():
     these would let a 2.1B-or-1.8e308 fake quantity into a position
     or fill, corrupting every downstream calculation.
     """
-    from ib_async._proto.safe import safe_decimal
 
     for sentinel in (
         "2147483647",  # UNSET_INTEGER
@@ -3547,7 +3561,6 @@ def test_safe_decimal_rejects_infinity_strings_for_decimal_field():
     infinity is meaningless and the ``Decimal | None`` contract expects
     ``None``.
     """
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("Infinity") is None
     assert safe_decimal("-Infinity") is None
@@ -3559,7 +3572,6 @@ def test_decoder_conv_int_empty_string_returns_zero():
     (via ``int_type(s or 0)``). Our ``_CONV[int]`` must match — a wire
     msg whose int field arrives empty should decode to 0, not raise.
     """
-    from ib_async.decoder import _CONV
 
     assert _CONV[int]("") == 0
     assert _CONV[int]("0") == 0
@@ -3569,7 +3581,6 @@ def test_decoder_conv_int_empty_string_returns_zero():
 
 def test_decoder_conv_float_empty_string_returns_zero():
     """Same contract for floats: empty wire → 0.0."""
-    from ib_async.decoder import _CONV
 
     assert _CONV[float]("") == 0.0
     assert _CONV[float]("0") == 0.0
@@ -3580,7 +3591,6 @@ def test_decoder_conv_bool_empty_string_returns_false():
     """IBKR's ``decode(bool, fields)`` returns ``s != 0`` after coercing
     via ``int_type(s or 0)``. Empty string lands as ``False``.
     """
-    from ib_async.decoder import _CONV
 
     assert _CONV[bool]("") is False
     assert _CONV[bool]("0") is False
@@ -3593,7 +3603,6 @@ def test_decoder_conv_int_handles_long_values_without_precision_loss():
     ``_CONV[int]`` path must round-trip a 19-digit long without going
     through a float intermediate.
     """
-    from ib_async.decoder import _CONV
 
     big = 9223372036854775806  # one less than UNSET_LONG
     decoded = _CONV[int](str(big))
@@ -3606,7 +3615,6 @@ def test_safe_decimal_preserves_high_precision_for_position_fields():
     ``safe_decimal`` must not round-trip through ``float`` and lose
     precision — the IBKR wire format is a string for exactly this reason.
     """
-    from ib_async._proto.safe import safe_decimal
 
     high_precision = "12345678901234567.890123"
     result = safe_decimal(high_precision)
@@ -3618,7 +3626,6 @@ def test_format_proto_double_strips_trailing_zeros_and_decimal():
     """``format_proto_double`` matches IBKR's ``floatMaxString`` shape:
     whole numbers come back without ``.``, fractions strip trailing zeros.
     """
-    from ib_async._proto.safe import format_proto_double
 
     assert format_proto_double(100.0) == "100"
     assert format_proto_double(1.5) == "1.5"
@@ -3632,10 +3639,6 @@ def test_send_round_trips_full_field_tuple_with_infinity_and_unset():
     that matches the per-type lambdas. Locks the contract for the
     handler-table dispatch in ``Client.send``.
     """
-    import math
-    import sys
-
-    from ib_async.client import _FORMAT_HANDLERS_EMPTY
 
     UNSET_DOUBLE = sys.float_info.max
     fields = [
@@ -3675,9 +3678,6 @@ def test_scanner_subscription_filter_options_round_trip_on_proto():
     binary path concatenates them; both paths must surface the same
     semantic options to the server.
     """
-    from ib_async._proto.scanner import createScannerSubscriptionRequestProto
-    from ib_async.contract import TagValue
-    from ib_async.objects import ScannerSubscription
 
     sub = ScannerSubscription(scanCode="TOP_PERC_GAIN", instrument="STK")
     opts = [TagValue("priceAbove", "10"), TagValue("priceBelow", "100")]
@@ -3700,9 +3700,6 @@ def test_scanner_subscription_options_round_trip_on_proto():
     parity with IBKR's ``reqScannerSubscription(reqId, sub, options,
     filterOptions)`` signature.
     """
-    from ib_async._proto.scanner import createScannerSubscriptionRequestProto
-    from ib_async.contract import TagValue
-    from ib_async.objects import ScannerSubscription
 
     sub = ScannerSubscription(scanCode="TOP_PERC_GAIN")
     proto = createScannerSubscriptionRequestProto(
@@ -3721,8 +3718,6 @@ def test_scanner_subscription_empty_option_lists_leave_proto_maps_unset():
     semantics so the wire frame is byte-identical to the no-option
     request.
     """
-    from ib_async._proto.scanner import createScannerSubscriptionRequestProto
-    from ib_async.objects import ScannerSubscription
 
     sub = ScannerSubscription(scanCode="TOP_PERC_GAIN")
     a = createScannerSubscriptionRequestProto(
@@ -3748,8 +3743,6 @@ def test_news_article_request_carries_options_into_proto_map():
     parity with ``reqNewsArticle(reqId, providerCode, articleId,
     newsArticleOptions)``.
     """
-    from ib_async._proto.news import createNewsArticleRequestProto
-    from ib_async.contract import TagValue
 
     proto = createNewsArticleRequestProto(
         reqId=11,
@@ -3766,8 +3759,6 @@ def test_news_article_request_carries_options_into_proto_map():
 def test_historical_news_request_carries_options_into_proto_map():
     """``historicalNewsOptions`` reaches the wire map field on the proto
     path."""
-    from ib_async._proto.news import createHistoricalNewsRequestProto
-    from ib_async.contract import TagValue
 
     proto = createHistoricalNewsRequestProto(
         reqId=12,
@@ -3788,10 +3779,6 @@ def test_news_request_options_default_unset():
     unset — preserving wire compatibility for callers that don't
     supply options.
     """
-    from ib_async._proto.news import (
-        createHistoricalNewsRequestProto,
-        createNewsArticleRequestProto,
-    )
 
     a = createNewsArticleRequestProto(reqId=1, providerCode="BRFG", articleId="x")
     assert not dict(a.newsArticleOptions)
@@ -3817,8 +3804,6 @@ def test_scanner_data_combo_legs_str_propagates_to_scan_data():
     for combo scanners — the converter must surface it through the
     wrapper as ``ScanData.legsStr`` so user code that switches on
     combo-vs-single scanners sees a non-empty string."""
-    from ib_async._pb import ScannerData_pb2
-    from ib_async._proto.scanner import createScannerDataArgs
 
     proto = ScannerData_pb2.ScannerData()
     proto.reqId = 9
@@ -3843,8 +3828,6 @@ def test_tick_news_timestamp_preserves_full_int64_milliseconds():
     2038 must not wrap. The args dataclass stores ``int`` so Python
     arbitrary-precision keeps the full value through to the wrapper.
     """
-    from ib_async._pb import TickNews_pb2
-    from ib_async._proto.news import createTickNewsArgs
 
     far_future_ms = 4102444800000  # 2100-01-01 UTC in ms
     proto = TickNews_pb2.TickNews()
@@ -3867,8 +3850,6 @@ def test_news_bulletin_msg_type_int_passes_through_unchanged():
     remap it; the raw int reaches the wrapper / domain object so user
     code can switch on the documented values.
     """
-    from ib_async._pb import NewsBulletin_pb2
-    from ib_async._proto.news import createUpdateNewsBulletinArgs
 
     for raw in (1, 2, 3):
         proto = NewsBulletin_pb2.NewsBulletin()
@@ -3888,8 +3869,6 @@ def test_news_article_binary_pdf_articletype_preserved():
     so user code can decode the base64 payload. ``articleText`` stays
     a ``str`` (the wire is also ``str``); base64 decode is callers'.
     """
-    from ib_async._pb import NewsArticle_pb2
-    from ib_async._proto.news import createNewsArticleArgs
 
     proto = NewsArticle_pb2.NewsArticle()
     proto.reqId = 17
@@ -3905,8 +3884,6 @@ def test_scanner_parameters_xml_passes_through_without_truncation():
     """``ScannerParameters`` carries a multi-MB XML payload — the
     converter must not truncate / re-encode / strip it. User code parses
     XML client-side."""
-    from ib_async._pb import ScannerParameters_pb2
-    from ib_async._proto.scanner import createScannerParametersXml
 
     big = "<Scanner>" + ("<Item/>" * 50000) + "</Scanner>"
     proto = ScannerParameters_pb2.ScannerParameters()
@@ -4063,9 +4040,6 @@ def test_proto_price_condition_full_round_trip():
     onto the flat OrderCondition wire proto. Encode-then-decode must
     reconstruct the exact subclass with every field intact.
     """
-    from ib_async._pb import Order_pb2
-    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
-    from ib_async.order import PriceCondition
 
     cond = PriceCondition(
         conId=265598,
@@ -4109,9 +4083,6 @@ def test_proto_execution_condition_no_is_more_field():
     encoder must skip the optional field, and the decoder must
     reconstruct the object without trying to set ``isMore`` on it.
     """
-    from ib_async._pb import Order_pb2
-    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
-    from ib_async.order import ExecutionCondition
 
     cond = ExecutionCondition(secType="STK", exch="NASDAQ", symbol="AAPL")
     protos = _createConditionProtos([cond])
@@ -4140,9 +4111,6 @@ def test_proto_volume_and_percent_change_conditions_round_trip():
     operator-condition fields and a per-subclass scalar (volume /
     changePercent). Both must round-trip cleanly.
     """
-    from ib_async._pb import Order_pb2
-    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
-    from ib_async.order import PercentChangeCondition, VolumeCondition
 
     vol = VolumeCondition(conId=11, exch="SMART", isMore=True, volume=100_000)
     pct = PercentChangeCondition(
@@ -4172,9 +4140,6 @@ def test_proto_margin_and_time_conditions_round_trip():
     their value, no conId / exchange. Must round-trip to their exact
     domain subclass.
     """
-    from ib_async._pb import Order_pb2
-    from ib_async._proto.orders import _createConditionProtos, _decodeConditions
-    from ib_async.order import MarginCondition, TimeCondition
 
     margin = MarginCondition(isMore=True, percent=25)
     timec = TimeCondition(isMore=False, time="20260101 09:30:00 US/Eastern")
@@ -4200,8 +4165,6 @@ def test_proto_hedge_param_decode_requires_hedge_type():
     malformed wire frame with a stray hedgeParam (no hedgeType)
     must NOT surface that param onto the domain object.
     """
-    from ib_async._pb import Order_pb2
-    from ib_async._proto.orders import createOrder
 
     proto = Order_pb2.Order()
     proto.hedgeParam = "stale"  # No hedgeType set on the wire.
@@ -4218,8 +4181,6 @@ def test_proto_algo_params_paired_with_algo_strategy():
     algoStrategy is present — mirrors IBKR's binary path which
     gates the params length read on a non-empty strategy.
     """
-    from ib_async._pb import Order_pb2
-    from ib_async._proto.orders import createOrder
 
     # algoStrategy missing, algoParams populated — decoder must not
     # surface params.
@@ -4236,8 +4197,6 @@ def test_proto_combo_leg_full_field_set_round_trip():
     the parallel ``perLegPrice`` from the matching ``OrderComboLeg``.
     All must round-trip on encode + decode.
     """
-    from ib_async._proto.contracts import createComboLeg, createComboLegProto
-    from ib_async.contract import ComboLeg
 
     leg = ComboLeg(
         conId=12345,
@@ -4284,9 +4243,6 @@ def test_proto_combo_leg_default_exempt_code_writes_minus_one():
     the server's proto3 default fill the field with the sentinel and
     reject the request. An empty inbound proto round-trips back to the
     ``-1`` dataclass default."""
-    from ib_async._pb import ComboLeg_pb2
-    from ib_async._proto.contracts import createComboLeg, createComboLegProto
-    from ib_async.contract import ComboLeg
 
     leg = ComboLeg(conId=7, ratio=1, action="BUY", exchange="SMART")
     proto = createComboLegProto(leg)
@@ -4305,8 +4261,6 @@ def test_proto_scale_family_default_unset_skipped():
     UNSET_DOUBLE / UNSET_INTEGER defaults must NOT land on the wire
     when the user has not opted into a scale order.
     """
-    from ib_async._proto.orders import createOrderProto
-    from ib_async.order import LimitOrder
 
     order = LimitOrder("BUY", 1, 50.0)
     proto = createOrderProto(order)
@@ -4329,8 +4283,6 @@ def test_proto_what_if_flag_round_trip():
     Skipped on encode when False (default) since IBKR's reference
     encoder uses truthy semantics for the bool.
     """
-    from ib_async._proto.orders import createOrder, createOrderProto
-    from ib_async.order import LimitOrder
 
     order = LimitOrder("BUY", 1, 50.0)
     order.whatIf = True
@@ -4351,9 +4303,6 @@ def test_proto_smart_combo_routing_params_round_trip():
     on BAG-secType orders. The proto encoder writes them onto the
     Order map; round-trip must preserve all entries.
     """
-    from ib_async._proto.orders import createOrder, createOrderProto
-    from ib_async.objects import TagValue
-    from ib_async.order import LimitOrder
 
     order = LimitOrder("BUY", 1, 50.0)
     order.smartComboRoutingParams = [
@@ -4378,8 +4327,6 @@ def test_proto_pegged_to_benchmark_family_round_trip():
     must round-trip through the proto encoder + decoder for a
     PEG BENCH order.
     """
-    from ib_async._proto.orders import createOrder, createOrderProto
-    from ib_async.order import LimitOrder
 
     order = LimitOrder("BUY", 1, 50.0)
     order.orderType = "PEG BENCH"
@@ -4411,10 +4358,6 @@ def test_proto_adjusted_order_family_round_trip():
     travels via the proto encoder + decoder. ``Decimal | None`` fields
     must come back as Decimal.
     """
-    from decimal import Decimal as D
-
-    from ib_async._proto.orders import createOrder, createOrderProto
-    from ib_async.order import LimitOrder
 
     order = LimitOrder("BUY", 1, 50.0)
     order.adjustedOrderType = "STP"
@@ -4457,7 +4400,6 @@ def test_late_tick_after_cancel_is_silent_for_every_tick_handler(caplog):
     is still surfaced under verbose logging without spamming default
     output.
     """
-    from ib_async.objects import TickAttribBidAsk, TickAttribLast
 
     ib = ibi.IB()
     unknown = 99999  # never registered
@@ -4485,13 +4427,6 @@ def test_late_tick_after_cancel_is_silent_for_every_tick_handler(caplog):
 def test_subscription_close_idempotent_across_tick_kinds():
     """Closing a Subscription twice (e.g. user double-cancel + reconnect
     teardown) must not raise and must not re-issue the cancel."""
-    from unittest.mock import MagicMock
-
-    from ib_async._subscriptions import (
-        MktDataSub,
-        MktDepthSub,
-        TickByTickSub,
-    )
 
     ib = ibi.IB()
     ib.client = MagicMock()
@@ -4525,9 +4460,6 @@ def test_concurrent_market_data_subscriptions_only_one_cancel_per_kind():
     """Two distinct kinds (mktData + tickByTick "Last") on the same
     contract get distinct reqIds and the registry tracks them
     independently. Cancelling one must not cancel the other."""
-    from unittest.mock import MagicMock
-
-    from ib_async._subscriptions import MktDataSub, TickByTickSub
 
     ib = ibi.IB()
     ib.client = MagicMock()
@@ -4555,7 +4487,6 @@ def test_market_depth_l2_delete_out_of_bounds_is_silent_no_op():
     """``updateMktDepthL2`` operation 2 (delete) at a row past the end of
     the book must be a no-op — TWS occasionally sends a delete
     for a level that was already removed by a prior reset event."""
-    from ib_async._subscriptions import MktDepthSub
 
     ib = ibi.IB()
     contract = ibi.Stock("ABC", "SMART", "USD")
@@ -4580,10 +4511,6 @@ def test_pnl_single_subscription_mutates_in_place_for_user_references():
     """A user reference to ``PnLSingleSub.pnlSingle`` must observe live
     updates — the ``pnlSingle`` callback updates the existing object in
     place rather than replacing it."""
-    from decimal import Decimal as D
-
-    from ib_async._subscriptions import PnLSingleSub
-    from ib_async.objects import PnLSingle
 
     ib = ibi.IB()
     pnlSingle = PnLSingle(account="DU1", modelCode="", conId=42)
@@ -4612,7 +4539,6 @@ def test_pnl_single_subscription_mutates_in_place_for_user_references():
 def test_singleton_request_third_caller_attaches_after_two_sharers():
     """Single-flight refcount tracks every attached caller, not just
     the first attach. A third caller attaches to the same future."""
-    from ib_async._requests import SingletonKey
 
     ib = ibi.IB()
     a, isNewA = ib.wrapper.requests.open(SingletonKey("openOrders"), single_flight=True)
@@ -4631,8 +4557,6 @@ def test_ticker_post_init_resets_every_float_field_to_defaults_unset():
     reset every float-typed Ticker field to ``defaults.unset`` so a
     user with a non-NaN ``IBDefaults.unset`` (e.g. ``-1.0``) sees
     consistent unset semantics across the entire Ticker shape."""
-    from ib_async.objects import IBDefaults
-    from ib_async.ticker import Ticker
 
     sentinel = -1.0
     defaults = IBDefaults(unset=sentinel)
@@ -4661,8 +4585,6 @@ def test_late_data_after_set_result_does_not_corrupt_user_container():
     """A stray data row arriving after ``set_result`` must not append
     to the now-resolved future's container — the registry pop guards
     the accumulator from late writes."""
-    from ib_async._requests import ReqIdKey
-    from ib_async.objects import BarData
 
     ib = ibi.IB()
     req, _ = ib.wrapper.requests.open(ReqIdKey(500))
@@ -4686,7 +4608,6 @@ def test_disconnect_during_callback_reentry_does_not_raise():
     mutates ``self.trades`` must not trip
     ``RuntimeError: dictionary changed size during iteration`` — the
     handler iterates over a snapshot of the trades dict."""
-    from ib_async.order import Order, OrderStatus, Trade
 
     ib = ibi.IB()
     ib.wrapper.clientId = 0
@@ -4735,7 +4656,6 @@ def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
     deletion of one of ours) trips the regression instead of silently
     debug-dropping the new wire frame.
     """
-    from ib_async.decoder import _PROTO_MSG_HANDLERS, _initProtoMsgHandlers
 
     _initProtoMsgHandlers()
     ours = set(_PROTO_MSG_HANDLERS.keys())
@@ -4859,7 +4779,6 @@ def test_tick_efp_binary_handler_reads_all_nine_fields():
     # (one ``getattr`` per ``wrap(...)`` call) so we rebuild the handler
     # table after stubbing the wrapper method, mirroring what subclass
     # users would do at startup.
-    from ib_async.decoder import Decoder
 
     ib.client.decoder = Decoder(ib.wrapper, ib.client.serverVersion or 0)
 
@@ -4925,7 +4844,6 @@ def test_public_dataclasses_re_exported_at_package_root():
     into private modules. PEP 561 also requires these names to live on
     the package surface for downstream type-checkers to resolve them.
     """
-    import ib_async as _root
 
     # Names added to round 6 — guarded against accidental re-hiding.
     for name in (
@@ -4945,7 +4863,6 @@ def test_py_typed_marker_present():
     inline type hints. Without it, users get implicit-Any for every
     ib_async symbol even though we have full annotations.
     """
-    import ib_async
 
     pkg_dir = pathlib.Path(ib_async.__file__).parent
     marker = pkg_dir / "py.typed"
@@ -4959,10 +4876,6 @@ def test_every_ib_async_method_has_docstring():
     methods can land undocumented and silently regress the public
     surface contract.
     """
-    import ast
-    import inspect
-
-    import ib_async
 
     src = pathlib.Path(inspect.getsourcefile(ib_async.IB)).read_text()
     tree = ast.parse(src)
@@ -5022,7 +4935,6 @@ def test_order_convenience_constructors_coerce_decimal():
     funnel through ``_toDecimal`` so binary-float imprecision (e.g.
     ``Decimal(0.1) → 0.10000…0055``) cannot leak into wire messages.
     """
-    from decimal import Decimal
 
     lo = ibi.LimitOrder("BUY", 10, 1.5)
     assert lo.totalQuantity == Decimal(10)
@@ -5075,7 +4987,6 @@ def test_interpret_oversized_binary_frame_absorbs_silently():
     ib = ibi.IB()
     captured: list = []
     ib.wrapper.tickEFP = lambda *a: captured.append(a)  # type: ignore[method-assign]
-    from ib_async.decoder import Decoder
 
     ib.client.decoder = Decoder(ib.wrapper, ib.client.serverVersion or 0)
 
@@ -5176,7 +5087,6 @@ def test_interpret_fields_with_embedded_extra_empties():
     # Use updateNewsBulletin (msgId 14, wired via ``wrap([int, int, str, str])``)
     # — pure converter chain, no serverVersion-gated branches.
     ib.wrapper.updateNewsBulletin = lambda *a: captured.append(a)  # type: ignore[method-assign]
-    from ib_async.decoder import Decoder
 
     ib.client.decoder = Decoder(ib.wrapper, 200)
     # msgId, version, msgId-news, msgType, newsMessage, originExch
@@ -5281,7 +5191,6 @@ def test_safe_decimal_passthrough_decimal_input():
     legitimately-unset numeric fields stays as ``Decimal('-1')``,
     NOT silently substituted to ``None``.
     """
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal(Decimal(-1)) == Decimal(-1)
     assert safe_decimal(Decimal(-2)) == Decimal(-2)
@@ -5295,7 +5204,6 @@ def test_safe_decimal_decimal_nan_reinput_returns_none():
     Otherwise the truthy-trap (``if x:`` evaluates True on NaN)
     re-emerges through a second-pass coercion.
     """
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal(Decimal("NaN")) is None
 
@@ -5303,7 +5211,6 @@ def test_safe_decimal_decimal_nan_reinput_returns_none():
 def test_safe_decimal_decimal_infinity_reinput_returns_none():
     """Sibling of the NaN case: ``Decimal('Infinity')`` re-input must
     also collapse to None so re-coerced wire payloads stay clean."""
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal(Decimal("Infinity")) is None
     assert safe_decimal(Decimal("-Infinity")) is None
@@ -5315,7 +5222,6 @@ def test_safe_decimal_negative_real_value_not_conflated_with_unset():
     not None. Only the IBKR UNSET sentinel strings (max int32 etc.)
     are sentinels.
     """
-    from ib_async._proto.safe import safe_decimal
 
     assert safe_decimal("-1") == Decimal(-1)
     assert safe_decimal("-2") == Decimal(-2)
@@ -5352,7 +5258,6 @@ def test_decoder_parse_non_dataclass_raises_typeerror_caught_by_interpret():
     connection does not crash. Verify ``parse(int)`` raises TypeError.
     """
     ib = ibi.IB()
-    import pytest
 
     # Direct call to parse with a wrong-type arg raises — confirms the
     # error path is sensible (not a silent corruption).

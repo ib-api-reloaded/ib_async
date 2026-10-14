@@ -13,6 +13,8 @@ verify the future settles with the millisecond timestamp.
 
 from __future__ import annotations
 
+import pytest
+
 import ib_async as ibi
 from ib_async._pb import (
     CalculateImpliedVolatilityRequest_pb2,
@@ -240,7 +242,6 @@ def test_req_current_time_in_millis_rejects_pre_213_server():
     means. Better to raise on the caller's stack than ship a malformed
     frame and leave the awaiter wedged forever.
     """
-    import pytest
 
     ib = _ibAtVersion(212)
     sent = _captureSend(ib)

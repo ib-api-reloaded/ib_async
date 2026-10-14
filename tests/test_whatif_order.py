@@ -16,6 +16,8 @@ cannot accidentally resolve a margin-impact future.
 
 from unittest.mock import MagicMock
 
+import pytest
+
 import ib_async as ibi
 from ib_async._requests import WhatIfKey
 from ib_async.order import Order, OrderState
@@ -60,7 +62,6 @@ def test_whatIf_error_settles_future():
     ``RequestRegistry.find_by_reqid`` and settles whichever typed key
     was actually used at open time.
     """
-    import pytest
 
     ib = _wired_ib()
     ib.RaiseRequestErrors = True

@@ -12,6 +12,7 @@ from __future__ import annotations
 import struct
 
 import ib_async as ibi
+from ib_async._pb import ManagedAccounts_pb2, NextValidId_pb2
 from ib_async._pb_msgids import (
     MIN_SERVER_VER_PROTOBUF,
     MIN_SERVER_VER_PROTOBUF_PLACE_ORDER,
@@ -211,7 +212,6 @@ def test_proto_path_snoops_next_valid_id_and_managed_accounts_to_fire_api_start(
     # ``apiStart`` lives in ``_onSocketHasData`` and used to run only in
     # the binary branch, so the apiStart event never emitted on a fully
     # protobuf session — ``connectAsync`` timed out at ``apiStart``.
-    from ib_async._pb import ManagedAccounts_pb2, NextValidId_pb2
 
     ib = ibi.IB()
     ib.client._serverVersion = 214

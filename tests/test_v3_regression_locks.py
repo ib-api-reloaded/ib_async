@@ -507,7 +507,24 @@ def test_to_decimal_math_nan_vs_decimal_nan_equivalent():
 # Send-side test scaffolding lives in ``tests._helpers``.
 # ---------------------------------------------------------------------------
 
-from tests._helpers import _captureSend, _ibAtVersion
+import pathlib
+import warnings
+
+import ib_async.ibcontroller as ibc_mod
+from ib_async._pb import (
+    CommissionAndFeesReport_pb2,
+    Contract_pb2,
+    Execution_pb2,
+    ExecutionDetails_pb2,
+    OpenOrder_pb2,
+    OrderStatus_pb2,
+    TickPrice_pb2,
+    TickSize_pb2,
+)
+from ib_async._proto.orders import createOrder, createOrderProto
+from ib_async._subscriptions import MktDataSub
+from ib_async.ibcontroller import IBC
+from tests._helpers import _captureSend, _ibAtVersion, inject_trade
 
 # ---------------------------------------------------------------------------
 # Client.replaceFA reqId trailing field gated at server 157
@@ -674,7 +691,6 @@ def test_decoder_uses_named_constant_for_duration_gate():
     constant, not a literal. A future refactor that hardcodes ``158``
     or ``159`` would lose the off-by-one safety the constant provides.
     """
-    import pathlib
 
     decoder_src = pathlib.Path("ib_async/decoder.py").read_text()
     # The constant import + usage at the openOrder gate.
@@ -931,7 +947,6 @@ async def test_ibc_monitor_async_breaks_on_stdout_read_exception():
     propagate out and silently kill the monitor task — the IBC process
     owner would never know.
     """
-    from ib_async.ibcontroller import IBC
 
     ibc = IBC(twsVersion=974, gateway=True)
 
@@ -963,7 +978,6 @@ async def test_ibc_monitor_async_drains_garbled_bytes_with_replace_decode():
     garbled bytes flow through as replacement characters instead of
     crashing the loop on a UnicodeDecodeError.
     """
-    from ib_async.ibcontroller import IBC
 
     ibc = IBC(twsVersion=974, gateway=True)
 
@@ -1005,7 +1019,6 @@ async def test_ibc_terminate_async_escalates_to_sigkill_on_timeout():
     would let a hung TWS during the daily reset block the Watchdog
     reconnect loop forever.
     """
-    from ib_async.ibcontroller import IBC
 
     ibc = IBC(twsVersion=974, gateway=True)
 
@@ -1034,7 +1047,6 @@ async def test_ibc_terminate_async_escalates_to_sigkill_on_timeout():
 
     # Replace asyncio.wait_for inside the ibcontroller module so the
     # bounded waits "fire" their timeout immediately.
-    import ib_async.ibcontroller as ibc_mod
 
     real_wait_for = asyncio.wait_for
 
@@ -1069,7 +1081,6 @@ async def test_ibc_terminate_async_no_op_when_no_proc():
     must not raise or accidentally invoke terminate/kill on the
     sentinel.
     """
-    from ib_async.ibcontroller import IBC
 
     ibc = IBC(twsVersion=974, gateway=True)
     assert ibc._proc is None
@@ -1086,7 +1097,6 @@ def test_commission_report_canonical_name_is_commission_and_fees():
     in v3.0. The legacy ``commission`` attribute still works but emits
     ``DeprecationWarning``; the canonical access does not.
     """
-    import warnings
 
     report = ibi.CommissionReport(commissionAndFees=Decimal("1.25"))
     # Canonical access — no warning.
@@ -1130,7 +1140,6 @@ def test_order_state_commission_alias_round_trips():
     """``OrderState`` has the same deprecation alias; verify
     construction, read, and write all flow through to ``commissionAndFees``.
     """
-    from ib_async.order import OrderState
 
     with pytest.warns(DeprecationWarning):
         state = OrderState(commission=Decimal("5.00"))
@@ -1154,7 +1163,6 @@ def _seed_trade_for_order_status(
     and lands the decoded fields on ``trade.orderStatus`` instead of
     logging "No order found".
     """
-    from tests._helpers import inject_trade
 
     return inject_trade(
         ib,
@@ -1279,7 +1287,6 @@ def test_server_order_decimal_fields_round_trip_via_proto_open_order():
     the proto path is the canonical receive path on modern servers
     (gate 203+) and is exercised here.
     """
-    from ib_async._pb import OpenOrder_pb2
 
     ib = ibi.IB()
     ib.wrapper.clientId = 0
@@ -1331,7 +1338,6 @@ def test_create_order_proto_exhaustive_parity_round_trip():
     assert each set field round-trips (modulo Decimal precision and
     the well-known wire-domain rename pairs).
     """
-    from ib_async._proto.orders import createOrder, createOrderProto
 
     original = Order(
         orderId=42,
@@ -1436,8 +1442,6 @@ def test_binary_and_proto_order_status_produce_identical_trade_state():
     byte-equivalent ``Decimal`` values on ``Trade.orderStatus`` —
     same precision, same sentinel→None mapping.
     """
-    from ib_async._pb import OrderStatus_pb2
-    from tests._helpers import inject_trade
 
     # Binary path
     ib_bin = ibi.IB()
@@ -1498,7 +1502,6 @@ def test_binary_and_proto_exec_details_produce_identical_execution_state():
     a byte-equivalent ``Execution`` with the same Decimal-typed
     ``shares`` / ``price`` / ``cumQty`` / ``avgPrice`` / ``evMultiplier``.
     """
-    from ib_async._pb import Contract_pb2, Execution_pb2, ExecutionDetails_pb2
 
     # Binary path (mirroring _binary_exec_details_fields pattern)
     ib_bin = ibi.IB()
@@ -1596,7 +1599,6 @@ def test_binary_and_proto_commission_report_produce_identical_state():
     must land byte-equivalent Decimal-typed ``commissionAndFees`` /
     ``realizedPNL`` / ``yield_`` on the report.
     """
-    from ib_async._pb import CommissionAndFeesReport_pb2
 
     # Binary path
     ib_bin = ibi.IB()
@@ -1644,8 +1646,6 @@ def test_binary_and_proto_tick_price_produce_identical_ticker_state():
     """msgId 1 (TickPrice). Binary and protobuf paths must update the
     matching ``Ticker`` with the same price + size.
     """
-    from ib_async._pb import TickPrice_pb2
-    from ib_async._subscriptions import MktDataSub
 
     def _seedTicker(ib, reqId):
         contract = ibi.Stock("AAPL", "SMART", "USD")
@@ -1682,8 +1682,6 @@ def test_binary_and_proto_tick_size_produce_identical_ticker_state():
     """msgId 2 (TickSize). Binary and protobuf paths must update the
     matching ``Ticker`` with the same volume / size value.
     """
-    from ib_async._pb import TickSize_pb2
-    from ib_async._subscriptions import MktDataSub
 
     def _seedTicker(ib, reqId):
         contract = ibi.Stock("AAPL", "SMART", "USD")

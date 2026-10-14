@@ -60,13 +60,13 @@ from ib_async._pb_msgids import (
     REQ_TICK_BY_TICK_DATA,
 )
 from ib_async._requests import ReqIdKey
+from ib_async._subscriptions import MktDataSub
 from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 
 def _seedTicker(ib, reqId: int, contract: ibi.Contract | None = None):
     """Register a real market-data subscription via SubscriptionRegistry
     so the wrapper has a Ticker to update when proto messages arrive."""
-    from ib_async._subscriptions import MktDataSub
 
     contract = contract or ibi.Stock("AAPL", "SMART", "USD")
     contract.conId = getattr(contract, "conId", None) or 7

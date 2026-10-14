@@ -38,6 +38,7 @@ from ib_async._pb_msgids import (
     REQ_GLOBAL_CANCEL,
     REQ_OPEN_ORDERS,
 )
+from ib_async.order import OrderCancel
 from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 # ---------------------------------------------------------------------------
@@ -96,7 +97,6 @@ def test_place_order_uses_protobuf_at_gate_and_round_trips_clientId():
 
 
 def test_cancel_order_uses_protobuf_at_gate():
-    from ib_async.order import OrderCancel
 
     ib = _ibAtVersion(203)
     sent = _captureSend(ib)
