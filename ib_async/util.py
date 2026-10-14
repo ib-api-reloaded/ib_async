@@ -12,6 +12,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from dataclasses import fields, is_dataclass
 from decimal import Decimal
+from importlib import import_module
 from typing import (
     Any,
     Final,
@@ -50,9 +51,8 @@ def df(objs, labels: list[str] | None = None):
     Args:
       labels: If supplied, retain only the given labels and drop the rest.
     """
-    import pandas as pd
-
-    from .objects import DynamicObject
+    # pandas is an optional dependency, imported only when used.
+    import pandas as pd  # noqa: PLC0415
 
     if objs:
         objs = list(objs)
@@ -60,8 +60,9 @@ def df(objs, labels: list[str] | None = None):
         if is_dataclass(obj):
             df = pd.DataFrame.from_records(dataclassAsTuple(o) for o in objs)
             df.columns = [field.name for field in fields(obj)]
-        elif isinstance(obj, DynamicObject):
-            df = pd.DataFrame.from_records(o.__dict__ for o in objs)
+        elif hasattr(obj, "__dict__"):
+            # attribute records such as objects.DynamicObject (FlexReport rows)
+            df = pd.DataFrame.from_records(vars(o) for o in objs)
         else:
             df = pd.DataFrame.from_records(objs)
 
@@ -335,10 +336,11 @@ def barplot(bars, title="", upColor="blue", downColor="red"):
     Create candlestick plot for the given bars. The bars can be given as
     a DataFrame or as a list of bar objects.
     """
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    from matplotlib.lines import Line2D
-    from matplotlib.patches import Rectangle
+    # matplotlib and pandas are optional dependencies, imported only when used.
+    import matplotlib.pyplot as plt  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+    from matplotlib.lines import Line2D  # noqa: PLC0415
+    from matplotlib.patches import Rectangle  # noqa: PLC0415
 
     if isinstance(bars, pd.DataFrame):
         ohlcTups = [tuple(v) for v in bars[["open", "high", "low", "close"]].values]
@@ -732,8 +734,6 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
 
     if qtLib not in {"PyQt5", "PyQt6", "PySide2", "PySide6"}:
         raise RuntimeError(f"Unknown Qt library: {qtLib}")
-    from importlib import import_module
-
     qc = import_module(qtLib + ".QtCore")
     qw = import_module(qtLib + ".QtWidgets")
     global qApp

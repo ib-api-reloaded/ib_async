@@ -187,8 +187,6 @@ def safe_decimal(value: str | Decimal | float | int | None) -> Decimal | None:
         # ``double`` paths; checking after str() would miss it because
         # ``str(sys.float_info.max)`` does not match the canonical
         # sentinel spelling on every Python build.
-        from ..util import UNSET_DOUBLE
-
         if value == UNSET_DOUBLE:
             return None
         value = str(value)
