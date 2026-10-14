@@ -1,4 +1,4 @@
-from pathlib import Path
+from importlib.metadata import version as package_version
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -22,10 +22,8 @@ project = "ib_async"
 html_show_copyright = False
 author = "Originally Ewald de Wit; Currently Matt Stancliff"
 
-__version__ = ""
-exec(Path("../ib_async/version.py").read_text())
-version = ".".join(__version__.split(".")[:2])
-release = __version__
+release = package_version("ib_async")
+version = ".".join(release.split(".")[:2])
 
 language = "en"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
