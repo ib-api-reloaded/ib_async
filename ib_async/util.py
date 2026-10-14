@@ -20,6 +20,8 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 import eventkit as ev
+import nest_asyncio
+from eventkit.util import get_event_loop as _threadEventLoop
 
 globalErrorEvent = ev.Event()
 """
@@ -670,51 +672,29 @@ async def waitUntilAsync(t: Time_t) -> bool:
 
 def patchAsyncio():
     """Patch asyncio to allow nested event loops."""
-    import nest_asyncio
-
     nest_asyncio.apply()
 
 
-def getLoop():
+def getLoop() -> asyncio.AbstractEventLoop:
     """
-    Get asyncio event loop with smart fallback handling.
+    Get the event loop for the calling thread.
 
-    This function is designed for use in synchronous contexts or when the
-    execution context is unknown. It will:
-    1. Try to get the currently running event loop (if in async context)
-    2. Fall back to getting the current thread's event loop via policy
-    3. Create a new event loop if none exists or if the existing one is closed
+    In order of preference:
 
-    For performance-critical async code paths, prefer using
-    asyncio.get_running_loop() directly instead of this function.
+    1. the running loop;
+    2. the loop set for this thread with ``asyncio.set_event_loop``, so an
+       application's own loop is always the one used;
+    3. otherwise a new loop, which is set for this thread.
 
-    Note: This function does NOT cache the loop to avoid stale loop bugs
-    when loops are closed and recreated (e.g., in testing, Jupyter notebooks).
+    A closed loop is replaced the same way as a missing one, and the loop
+    is never cached across calls. No deprecated asyncio API is used and no
+    DeprecationWarning is emitted on any supported Python version.
+
+    This is eventkit's rule for the loop of a thread, shared so ib_async
+    and eventkit always agree on it. In a coroutine,
+    ``asyncio.get_running_loop()`` returns the same loop more cheaply.
     """
-    try:
-        # Fast path: we're in an async context (coroutine or callback)
-        loop = asyncio.get_running_loop()
-        return loop
-    except RuntimeError:
-        pass
-
-    # We're in a sync context or no loop is running
-    # Use the event loop policy to get the loop for this thread
-    # This avoids deprecation warnings from get_event_loop() in Python 3.10+
-    try:
-        loop = asyncio.get_event_loop_policy().get_event_loop()
-    except RuntimeError:
-        # No event loop exists for this thread, create one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        return loop
-
-    # Check if the loop we got is closed - if so, create a new one
-    if loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    return loop
+    return _threadEventLoop()
 
 
 def startLoop():

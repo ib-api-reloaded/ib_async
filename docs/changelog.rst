@@ -201,6 +201,15 @@ are fixed in v3.0:
   Trader"``), so every completed fill and cancel fell through to the
   ``Inactive`` fallback with a warning. The known phrasings now map to
   their terminal status; the original text stays in the trade log.
+* **Event loop warnings and failures on Python 3.12 - 3.14.**
+  ``util.getLoop`` read the thread's loop through the event loop policy
+  API, which warns on 3.12 / 3.13 and is deprecated on 3.14 (removal in
+  3.16), and ``Watchdog.start`` failed on 3.14 when the thread had no loop
+  set. ``util.getLoop`` now shares eventkit's rule: the running loop, else
+  the loop set for the thread (an application's own loop is always used),
+  else a new loop set for the thread; a closed loop is replaced. It emits
+  no warnings on any supported version. ``Watchdog.start`` schedules
+  through it.
 * **Single-exchange market depth (``isSmartDepth=False``) was
   corrupted.** IBKR inserts and deletes rows in the middle of the book,
   shifting the rows below, but the book was keyed by row number, so an
