@@ -1,7 +1,7 @@
 """TWS API version pin — single source of truth in pyproject.toml.
 
 Reads ``[tool.ib_async.twsapi]`` so ``scripts/generate_protos.py``,
-``scripts/release.py``, and CI all consume one version + SHA256 pin.
+``scripts/twsapi.py``, and CI all consume one version + SHA256 pin.
 No duplication, no drift. From the IBKR TWS API archive only the
 ``.proto`` schemas (``IBJts/source/proto/*.proto``) and the version
 marker are used.
