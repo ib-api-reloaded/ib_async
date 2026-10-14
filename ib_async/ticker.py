@@ -500,6 +500,14 @@ class BarList(list[Bar]):
     def __eq__(self, other) -> bool:
         return self is other
 
+    def __ne__(self, other) -> bool:
+        return self is not other
+
+    # Identity-hashable to match the identity equality above (list itself
+    # is unhashable, hence the override).
+    def __hash__(self) -> int:  # type: ignore[override]
+        return id(self)
+
 
 class TimeBars(Op):
     __slots__ = (
