@@ -98,6 +98,9 @@ Gateway server version 226). The full upgrade guide with examples lives at
   wire.
 * **``ContractDetails.settlementMethod``** (TWS API 10.49): how the
   contract settles on expiry, ``"Physical"`` or ``"Cash"``.
+* **``Execution.submitter``** (server version 198+): the identity of
+  the user who submitted the order, decoded on the binary and protobuf
+  paths.
 * **``Ticker.dom``**, a :class:`DepthBook` holding both sides of the
   market-depth book; ``DepthOperation`` names the insert / update /
   delete row operations.
@@ -137,9 +140,12 @@ Gateway server version 226). The full upgrade guide with examples lives at
   ``dataclasses.asdict()`` / ``dataclasses.replace()``.
 * **``tickByTick*.time``** now uses the wire-supplied exchange epoch
   instead of the local-clock ``lastTime``.
-* **``Wrapper.sendMsg``** signature changed from ``str`` to
+* **``Trade.filled()`` / ``Trade.remaining()``** return ``Decimal``
+  (were ``float``), matching the ``Decimal`` share quantities they sum.
+  ``filled()`` is ``Decimal(0)`` when nothing has filled.
+* **``Client.sendMsg``** signature changed from ``str`` to
   ``bytes | None``. Subclassers must update.
-* **``Client.MaxClientVersion = 225``** (was 178). The 178 cap
+* **``Client.MaxClientVersion = 226``** (was 178). The 178 cap
   silently disabled every gate 201+ feature on v2.x against modern
   TWS / Gateway — no v2.x deployment could reach protobuf.
 * **Cancel-async methods raise ``CancelledError``** on the awaiter
