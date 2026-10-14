@@ -207,6 +207,16 @@ are fixed in v3.0:
   Trader"``), so every completed fill and cancel fell through to the
   ``Inactive`` fallback with a warning. The known phrasings now map to
   their terminal status; the original text stays in the trade log.
+* **Validation that vanished under ``python -O``.** ``Forex`` with a
+  pair that is not 6 letters, ``bracketOrder`` with an action other than
+  BUY / SELL, ``util.timeRange`` with a non-positive step and
+  ``util.formatSI`` with a value beyond the SI prefixes now raise
+  ``ValueError`` (they used ``assert``, so ``-O`` skipped the check).
+  Tick types IBKR adds after this release are skipped with a debug log
+  instead of raising inside the market-data handler. Modifying an order
+  whose last known status is finished is sent to TWS with a warning;
+  it previously raised ``AssertionError`` after the modification had
+  already been sent.
 * **``FlexReport`` fetched any URL scheme.** The configured
   ``IB_FLEXREPORT_URL`` and the statement URL returned by the server are
   now required to be http(s) with a host (``file://`` and the like are

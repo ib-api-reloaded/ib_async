@@ -1446,9 +1446,12 @@ class Wrapper:
             ticker.last = price
             ticker.lastSize = size
         else:
-            assert tickType in PRICE_TICK_MAP, (
-                f"Received tick {tickType=} {price=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-            )
+            if tickType not in PRICE_TICK_MAP:
+                # a tick type IBKR added after this release: skip it
+                self._logger.debug(
+                    "unmapped tickType %s (%r) for %s", tickType, price, ticker.contract
+                )
+                return
 
             setattr(ticker, PRICE_TICK_MAP[tickType], price)
 
@@ -1500,9 +1503,12 @@ class Wrapper:
                 ticker.prevLastSize = ticker.lastSize
                 ticker.lastSize = size
         else:
-            assert tickType in SIZE_TICK_MAP, (
-                f"Received tick {tickType=} {size=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-            )
+            if tickType not in SIZE_TICK_MAP:
+                # a tick type IBKR added after this release: skip it
+                self._logger.debug(
+                    "unmapped tickType %s (%r) for %s", tickType, size, ticker.contract
+                )
+                return
 
             setattr(ticker, SIZE_TICK_MAP[tickType], size)
 
@@ -1697,9 +1703,12 @@ class Wrapper:
             )
             return
 
-        assert tickType in GENERIC_TICK_MAP, (
-            f"Received tick {tickType=} {value=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-        )
+        if tickType not in GENERIC_TICK_MAP:
+            # a tick type IBKR added after this release: skip it
+            self._logger.debug(
+                "unmapped tickType %s (%r) for %s", tickType, value, ticker.contract
+            )
+            return
 
         if tickType in _HALTED_TICKS:
             with suppress(ValueError):
@@ -1803,9 +1812,15 @@ class Wrapper:
             # reply from reqMktData
             # https://interactivebrokers.github.io/tws-api/tick_types.html
 
-            assert tickType in GREEKS_TICK_MAP, (
-                f"Received tick {tickType=} {tickAttrib=} but we don't have an attribute mapping for it? Triggered from {ticker.contract=}"
-            )
+            if tickType not in GREEKS_TICK_MAP:
+                # a tick type IBKR added after this release: skip it
+                self._logger.debug(
+                    "unmapped tickType %s (%r) for %s",
+                    tickType,
+                    tickAttrib,
+                    ticker.contract,
+                )
+                return
 
             setattr(ticker, GREEKS_TICK_MAP[tickType], comp)
             self.pendingTickers.add(ticker)
@@ -2111,7 +2126,7 @@ class Wrapper:
             if isRequest:
                 # the request failed — settle the future via whichever
                 # typed key it was actually registered under
-                assert inflightRequest is not None
+                assert inflightRequest is not None  # noqa: S101 - narrows for the type checker
                 if self.ib.RaiseRequestErrors:
                     error = RequestError(reqId, errorCode, errorString)
                     self.requests.set_error(inflightRequest.key, error)

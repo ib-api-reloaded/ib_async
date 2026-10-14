@@ -347,7 +347,8 @@ class Forex(Contract):
             currency: Quote currency.
         """
         if pair:
-            assert len(pair) == 6
+            if len(pair) != 6:
+                raise ValueError(f"pair must be 6 letters like 'EURUSD', got {pair!r}")
             symbol = symbol or pair[:3]
             currency = currency or pair[3:]
 
