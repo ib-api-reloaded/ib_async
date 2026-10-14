@@ -35,13 +35,13 @@ from ib_async.contract import (
     DeltaNeutralContract,
     ScanData,
 )
+from ib_async.depth import DepthOperation
 from ib_async.objects import (
     AccountValue,
     BarData,
     CommissionReport,
     DepthMktDataDescription,
     Dividends,
-    DOMLevel,
     EfpData,
     Execution,
     FamilyCode,
@@ -1769,44 +1769,12 @@ class Wrapper:
         if ticker is None:
             return
 
-        # 'dom' is a dict so we can address position updates directly
-        dom = ticker.domBidsDict if side else ticker.domAsksDict
-
-        # if you're curious when these operations run and what they do, enable this too:
-        # fmt: off
-        # print("BID" if side else "ASK", "OPERATION", operation, "at position", position, "for price", price, "at qty", size)
-        # assert list(dom.keys()) == list(range(0, len(dom))), f"Keys aren't sequential? {dom} :: {ticker}"
-        # fmt: on
-
-        if operation in {0, 1}:
-            # '0' is INSERT NEW
-            # '1' is UPDATE EXISTING
-            # We are using the same operation for "insert or overwrite" directly.
-            dom[position] = DOMLevel(price, size, marketMaker)
-        elif operation == 2:
-            # '2' is DELETE EXISTING
+        removed = ticker.dom.apply(side, operation, position, price, size, marketMaker)
+        if operation == DepthOperation.DELETE:
+            # A delete tick reports the removed row's price and no size.
             size = 0
-            try:
-                level = dom.pop(position)
-                price = level.price
-            except Exception as _:
-                # invalid position requested for removal, so ignore the request
-                pass
-
-        # To retain the original API structure, we convert all sorted dict
-        # values into lists for users to consume.
-        # Users can also read ticker.domBidsDict or ticker.domAsksDict directly.
-        values = list(dom.values())
-        if side:
-            # Update BID for users
-            ticker.domBids = values
-        else:
-            # Update ASK for users
-            ticker.domAsks = values
-
-        # TODO: add optional debugging check. In a correctly working system, we should
-        #       technically always have sequential bid and ask position entries, but
-        #       in the past we have seen gaps or missing values.
+            if removed is not None:
+                price = removed.price
 
         tick = MktDepthData(
             self.lastTime, position, marketMaker, operation, side, price, size
@@ -2198,19 +2166,16 @@ class Wrapper:
             # Market depth data has been RESET
             ticker = self._get_ticker(reqId)
             if ticker:
-                # clear all DOM levels
+                # clear all DOM levels, reporting each as a delete
+                bids, asks = ticker.dom.clear()
                 ticker.domTicks += [
                     MktDepthData(self.lastTime, 0, "", 2, 0, level.price, 0)
-                    for level in ticker.domAsks
+                    for level in asks
                 ]
                 ticker.domTicks += [
                     MktDepthData(self.lastTime, 0, "", 2, 1, level.price, 0)
-                    for level in ticker.domBids
+                    for level in bids
                 ]
-                ticker.domAsks.clear()
-                ticker.domBids.clear()
-                ticker.domBidsDict.clear()
-                ticker.domAsksDict.clear()
                 self.pendingTickers.add(ticker)
         elif errorCode == 10225:
             # Bust event occurred, current subscription is deactivated.

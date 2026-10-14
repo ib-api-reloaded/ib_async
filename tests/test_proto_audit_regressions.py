@@ -4552,8 +4552,8 @@ def test_concurrent_market_data_subscriptions_only_one_cancel_per_kind():
 
 
 def test_market_depth_l2_delete_out_of_bounds_is_silent_no_op():
-    """``updateMktDepthL2`` operation 2 (delete) at a position not in
-    the dict must be a silent no-op — TWS occasionally sends a delete
+    """``updateMktDepthL2`` operation 2 (delete) at a row past the end of
+    the book must be a no-op — TWS occasionally sends a delete
     for a level that was already removed by a prior reset event."""
     from ib_async._subscriptions import MktDepthSub
 
@@ -4573,7 +4573,7 @@ def test_market_depth_l2_delete_out_of_bounds_is_silent_no_op():
     assert ticker.domBids[0].price == 100.0
     # Delete-of-existing should still work after the no-op delete.
     ib.wrapper.updateMktDepthL2(300, 0, "", 2, 1, 0.0, 0)
-    assert ticker.domBids == []
+    assert ticker.domBids == ()
 
 
 def test_pnl_single_subscription_mutates_in_place_for_user_references():

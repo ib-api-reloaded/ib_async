@@ -98,6 +98,9 @@ Gateway server version 226). The full upgrade guide with examples lives at
   wire.
 * **``ContractDetails.settlementMethod``** (TWS API 10.49): how the
   contract settles on expiry, ``"Physical"`` or ``"Cash"``.
+* **``Ticker.dom``**, a :class:`DepthBook` holding both sides of the
+  market-depth book; ``DepthOperation`` names the insert / update /
+  delete row operations.
 
 **Changed (breaking)**
 
@@ -162,6 +165,14 @@ Gateway server version 226). The full upgrade guide with examples lives at
   ``ScannerSubscription``, ``ExecutionFilter``,
   ``ContractDetails.aggGroup``. Readers updated from
   ``isNan(x)`` / ``x == UNSET_*`` to ``x is None``.
+* **``Ticker.domBids`` / ``domAsks``** are now read-only snapshots
+  (``Sequence[DOMLevel]``, best price first) of ``Ticker.dom`` instead
+  of the book's own lists, so nothing done to a returned value can
+  corrupt the book. Code that sorted or edited them in place should copy
+  first (``list(ticker.domBids)``). ``domBidsDict`` / ``domAsksDict`` are
+  likewise snapshots (``Mapping[int, DOMLevel]``) keyed by row. None of
+  the four are ``Ticker(...)`` constructor arguments any more; assigning
+  ``ticker.domBids = rows`` still replaces that side's rows.
 
 **Removed**
 
@@ -190,6 +201,15 @@ are fixed in v3.0:
   Trader"``), so every completed fill and cancel fell through to the
   ``Inactive`` fallback with a warning. The known phrasings now map to
   their terminal status; the original text stays in the trade log.
+* **Single-exchange market depth (``isSmartDepth=False``) was
+  corrupted.** IBKR inserts and deletes rows in the middle of the book,
+  shifting the rows below, but the book was keyed by row number, so an
+  insert overwrote a level and a delete left a gap. ``domBids`` /
+  ``domAsks`` came out unsorted, with duplicate levels and a first row
+  that was not the best price. Rows now shift as IBKR intends, and
+  an operation on a row below those held is dropped rather than raised
+  on or applied to the wrong row, so a book that is short of TWS's
+  (after a reset race, say) still matches TWS's top rows exactly.
 * **Modifying an order parked from TWS transmitted it.** ``deactivate``
   can be toggled outside the API, but ``trade.order`` never picked the
   change up, so ``placeOrder(trade.order)`` sent the stale

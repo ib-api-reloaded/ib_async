@@ -1,6 +1,7 @@
 """Access to realtime market information."""
 
 from collections import deque
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum
@@ -9,6 +10,7 @@ from typing import Any, ClassVar
 from eventkit import Event, Op
 
 from ib_async.contract import Contract
+from ib_async.depth import DepthBook
 from ib_async.objects import (
     Dividends,
     DOMLevel,
@@ -23,7 +25,7 @@ from ib_async.objects import (
     TickByTickMidPoint,
     TickData,
 )
-from ib_async.util import dataclassRepr
+from ib_async.util import dataclassDisplayFields, dataclassDisplayPairs
 
 # Bounded ring of most-recent per-contract news ticks. NewsTick already
 # fans out through ``IB.tickNewsEvent`` for streaming consumers; this
@@ -55,7 +57,9 @@ class Ticker:
 
     Streaming level-2 ticks of type :class:`.MktDepthData` are stored in the
     ``domTicks`` list. The order book (DOM) is available as lists of
-    :class:`.DOMLevel` in ``domBids`` and ``domAsks``.
+    :class:`.DOMLevel` in ``domBids`` and ``domAsks``, best price first,
+    and keyed by row in ``domBidsDict`` and ``domAsksDict``. Each is a
+    read-only snapshot of the :class:`.DepthBook` in ``dom``.
 
     Streaming tick-by-tick ticks are stored in ``tickByTicks``.
 
@@ -166,10 +170,7 @@ class Ticker:
     tickByTicks: list[TickByTickAllLast | TickByTickBidAsk | TickByTickMidPoint] = (
         field(default_factory=list)
     )
-    domBids: list[DOMLevel] = field(default_factory=list)
-    domBidsDict: dict[int, DOMLevel] = field(default_factory=dict)
-    domAsks: list[DOMLevel] = field(default_factory=list)
-    domAsksDict: dict[int, DOMLevel] = field(default_factory=dict)
+    dom: DepthBook = field(default_factory=DepthBook)
     domTicks: list[MktDepthData] = field(default_factory=list)
     bidGreeks: OptionComputation | None = None
     askGreeks: OptionComputation | None = None
@@ -303,11 +304,48 @@ class Ticker:
     def __eq__(self, other):
         return self is other
 
+    @property
+    def domBids(self) -> Sequence[DOMLevel]:
+        """Snapshot of the bid side of ``dom``, best price first;
+        assigning replaces the bid rows."""
+        return self.dom.bids
+
+    @domBids.setter
+    def domBids(self, rows: Iterable[DOMLevel]) -> None:
+        self.dom.setRows(1, rows)
+
+    @property
+    def domAsks(self) -> Sequence[DOMLevel]:
+        """Snapshot of the ask side of ``dom``, best price first;
+        assigning replaces the ask rows."""
+        return self.dom.asks
+
+    @domAsks.setter
+    def domAsks(self, rows: Iterable[DOMLevel]) -> None:
+        self.dom.setRows(0, rows)
+
+    @property
+    def domBidsDict(self) -> Mapping[int, DOMLevel]:
+        """Snapshot of the bid side of ``dom`` keyed by row."""
+        return self.dom.bidsByRow()
+
+    @property
+    def domAsksDict(self) -> Mapping[int, DOMLevel]:
+        """Snapshot of the ask side of ``dom`` keyed by row."""
+        return self.dom.asksByRow()
+
     def __hash__(self):
         return id(self)
 
-    __repr__ = dataclassRepr
-    __str__ = dataclassRepr
+    def __repr__(self):
+        attrs = dataclassDisplayFields(self)
+        if not self.dom:
+            attrs.pop("dom", None)
+
+        clsName = self.__class__.__qualname__
+        return f"{clsName}({dataclassDisplayPairs(attrs)})"
+
+    __str__ = __repr__
 
     def isUnset(self, value) -> bool:
         # if value is None, it is unset.
