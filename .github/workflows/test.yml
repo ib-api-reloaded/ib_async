@@ -33,7 +33,7 @@ jobs:
 
       - name: Install dependencies with uv
         run: |
-          uv sync --frozen --group dev
+          uv sync --frozen --group dev --group protos
 
       - name: Read TWS API version pin
         id: twsapi
@@ -53,7 +53,7 @@ jobs:
 
       - name: Generate protobuf bindings
         run: |
-          uv run --frozen python scripts/generate_protos.py
+          uv run --frozen --group protos python scripts/generate_protos.py
 
       - name: MyPy static code analysis
         if: ${{ !startsWith(matrix.python-version, 'pypy') }}
@@ -107,7 +107,7 @@ jobs:
 
       - name: Build wheel + sdist with bundled protos
         run: |
-          uv sync --frozen --group dev
+          uv sync --frozen --group dev --group protos
           make build
 
       - name: Clean-venv install + import smoke test
