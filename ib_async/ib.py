@@ -1712,7 +1712,7 @@ class IB:
                        ``auctionImbalance``
                 233    ``last``, ``lastSize``, ``rtVolume``, ``rtTime``,
                        ``vwap`` (Time & Sales)
-                236    ``shortableShares``
+                236    ``shortable``, ``shortableShares``
                 293    ``tradeCount``
                 294    ``tradeRate``
                 295    ``volumeRate``
@@ -1721,6 +1721,9 @@ class IB:
                 456    ``dividends`` (of type
                        :class:`ib_async.objects.Dividends`)
                 588    ``futuresOpenInterest``
+                595    ``volumeRate3Min``, ``volumeRate5Min``,
+                       ``volumeRate10Min`` (the volume traded in the last
+                       3, 5 and 10 minutes)
                 =====  ================================================
 
             snapshot: If True then request a one-time snapshot, otherwise

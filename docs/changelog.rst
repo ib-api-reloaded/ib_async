@@ -717,7 +717,7 @@ This major release includes significant new features, performance improvements, 
 
   * ``timestamp``: Float format timestamp for easier mathematical operations alongside existing ``time`` field
   * ``shortable``: Shortability score (0-3) for instruments
-  * ``volumeRate3Min``, ``volumeRate5Min``, ``volumeRate10Min``: IBKR-provided volume acceleration metrics
+  * ``volumeRate3Min``, ``volumeRate5Min``, ``volumeRate10Min``: the volume traded in the last 3, 5 and 10 minutes (generic tick 595)
   * ``lastTimestamp``: Timestamp of the last trade event
 
 * **OrderStatus Enhancements**: Extended order management capabilities

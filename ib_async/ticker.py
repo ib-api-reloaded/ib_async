@@ -120,6 +120,7 @@ class Ticker:
     tradeCount: float | None = None
     tradeRate: float | None = None
     volumeRate: float | None = None
+    # generic tick 595: the volume traded in the last 3, 5 and 10 minutes
     volumeRate3Min: float | None = None
     volumeRate5Min: float | None = None
     volumeRate10Min: float | None = None
