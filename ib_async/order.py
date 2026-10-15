@@ -150,11 +150,10 @@ class Order:
     # the protobuf order path carries it; the text wire has no slot.
     conditionsIncludeOvernight: bool = False
     extOperator: str = ""
-    # Attached-order (stop-loss / profit-take) cross-references — IBKR
-    # reference ``ibapi/order.py`` carries them; the wire ships them on
-    # the ``PlaceOrderRequest.attachedOrders`` sub-message rather than
-    # ``Order`` itself, but the domain dataclass keeps them here so user
-    # code at the call site has a single object to populate.
+    # Attached-order (stop-loss / profit-take) cross-references. The wire
+    # ships them on the ``PlaceOrderRequest.attachedOrders`` sub-message
+    # rather than ``Order`` itself, but the domain dataclass keeps them
+    # here so user code at the call site has a single object to populate.
     slOrderId: int | None = None
     slOrderType: str = ""
     ptOrderId: int | None = None
@@ -440,11 +439,9 @@ class OrderStatus:
 class OrderCancel:
     """CME-tagging envelope for cancelOrder + reqGlobalCancel.
 
-    IBKR's reference cancelOrder / reqGlobalCancel take this object
-    rather than scalar arguments so callers can attach the
-    ``manualOrderCancelTime`` (gate 169), ``extOperator`` (gate 192),
-    and ``manualOrderIndicator`` (gate 192) fields the wire protocol
-    grew for CME compliance. ``None`` means unset — the wire encoder
+    Carries the ``manualOrderCancelTime`` (gate 169), ``extOperator``
+    (gate 192), and ``manualOrderIndicator`` (gate 192) fields the wire
+    protocol grew for CME compliance. ``None`` means unset — the wire encoder
     skips the field at send time.
     """
 
@@ -456,7 +453,7 @@ class OrderCancel:
 @dataclass(slots=True, frozen=True)
 class OrderAllocation:
     """Per-account allocation snapshot carried on an ``OrderState``
-    for FA / model orders. Mirrors IBKR's reference shape.
+    for FA / model orders.
     """
 
     account: str = ""

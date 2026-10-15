@@ -1146,13 +1146,12 @@ class Wrapper:
 
     def orderBound(self, permId: int, clientId: int, orderId: int):
         # IBKR's contract on this callback is ``(permId, clientId,
-        # orderId)`` (see ibapi/wrapper.py). Both the binary decoder
-        # (``decoder.py`` msgId 100) and the proto decoder
-        # (``_protoOrderBound``) call us with that argument order. The
-        # body stays a no-op — the wrapper has no domain-side bookkeeping
-        # tied to manual-order binding — but the signature matches the
-        # reference contract so subclasses overriding this method see
-        # the values under their documented names.
+        # orderId)``. Both the binary decoder (``decoder.py`` msgId 100)
+        # and the proto decoder (``_protoOrderBound``) call us with that
+        # argument order. The body stays a no-op — the wrapper has no
+        # domain-side bookkeeping tied to manual-order binding — but the
+        # signature follows that contract so subclasses overriding this
+        # method see the values under their documented names.
         pass
 
     def contractDetails(self, reqId: int, contractDetails: ContractDetails):

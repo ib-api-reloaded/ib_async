@@ -105,16 +105,15 @@ def test_combo_leg_proto_reads_from_source_not_target():
     # ``designatedLocation`` is a string; empty string suppresses the
     # write so a default ComboLeg leaves the field unset on the wire.
     assert not proto.HasField("designatedLocation")
-    # ``openClose`` is an int gated by ``isValidIntValue`` (IBKR's
-    # reference) — ``0`` flows through as a real wire value.
+    # ``openClose`` is an int written unless it is the UNSET sentinel
+    # — ``0`` flows through as a real wire value.
     assert proto.HasField("openClose")
     assert proto.openClose == 0
 
 
 def test_combo_leg_proto_emits_default_exempt_code_value():
-    # ``exemptCode`` default is ``-1`` — IBKR's reference treats this
-    # as a real wire value ("not exempt") and emits it via the
-    # ``isValidIntValue`` gate (only ``UNSET_INTEGER`` suppresses).
+    # ``exemptCode`` default is ``-1`` — a real wire value ("not
+    # exempt") that is emitted (only ``UNSET_INTEGER`` suppresses).
     # Skipping the write would let the server's proto3-default fill
     # the field with the sentinel.
     leg = ComboLeg()
@@ -472,13 +471,12 @@ def test_create_contract_description_handles_missing_inner_contract():
 # Send-side "no strike" / "no last trade date" suppression
 #
 # Regression: an option-chain sweep asks the server for EVERY strike of a
-# contract month by sending a contract with no strike set. IBKR's reference
-# gates ``strike`` on ``isValidFloatValue`` because THEIR ``Contract.strike``
-# defaults to ``UNSET_DOUBLE``; ours defaults to ``0.0``, so the bare
-# sentinel check put ``strike: 0`` on the wire for every strikeless contract
-# and the server answered ``Error 200: No security definition has been found
-# for the request``. ``lastTradeDate`` is receive-only in IBKR's reference and
-# was never sent by the binary path.
+# contract month by sending a contract with no strike set. Our
+# ``Contract.strike`` defaults to ``0.0``, so a bare ``!= UNSET_DOUBLE``
+# check put ``strike: 0`` on the wire for every strikeless contract and the
+# server answered ``Error 200: No security definition has been found for
+# the request``. ``lastTradeDate`` is receive-only and was never sent by
+# the binary path.
 # ---------------------------------------------------------------------------
 
 
@@ -515,8 +513,9 @@ def test_create_contract_proto_emits_real_strike():
 
 
 def test_create_contract_proto_still_emits_zero_conid():
-    # conId stays at IBKR's reference gate: their default IS 0, and the
-    # server reads an absent slot as UNSET_INTEGER and rejects the request.
+    # conId is written unless it is the UNSET sentinel, so 0 is emitted:
+    # the server reads an absent slot as UNSET_INTEGER and rejects the
+    # request.
     contract = Contract(secType="FOP", symbol="ES", conId=0)
     proto = createContractProto(contract)
     assert proto.HasField("conId")

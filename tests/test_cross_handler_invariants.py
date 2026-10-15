@@ -1,4 +1,4 @@
-"""Round 6 cross-handler invariant tests.
+"""Cross-handler invariant tests.
 
 These tests verify that ``Trade``'s derived math
 (``filled()``/``remaining()``), the ``OrderStatus`` state machine, and
@@ -6,9 +6,9 @@ the inter-handler choreography (``openOrder`` / ``orderStatus`` /
 ``execDetails`` / ``commissionReport``) hold together across realistic
 multi-callback sequences.
 
-Why a dedicated module: prior audit rounds verified each handler in
+Why a dedicated module: other tests verify each handler in
 isolation (registry plumbing, decimal coercion, malformed-input
-survival). Round 6 verifies invariants that span MULTIPLE handlers
+survival). This module verifies invariants that span MULTIPLE handlers
 firing in observed-on-the-wire orders, including:
 
 * derived totals stay sane across partial fills, BAG legs, and over-fill
@@ -342,7 +342,7 @@ def test_orderStatus_alone_progresses_state_no_openOrder_needed():
 
 
 def test_openOrder_order_and_serverOrder_are_distinct_instances():
-    """Round 6 fix: the new-trade path of ``openOrder`` must NOT alias
+    """The new-trade path of ``openOrder`` must NOT alias
     ``trade.order`` with ``trade.serverOrder``. Until the next
     callback, a write to ``trade.order`` would also mutate the first
     ``serverOrder`` snapshot, masking user intent under TWS data.

@@ -83,8 +83,8 @@ def createComboLegProto(
     price into the wire proto.
 
     ``perLegPrice`` lives on the ``Order.orderComboLegs`` parallel list
-    in our domain model — IBKR's reference encodes it on the
-    ``ComboLeg`` proto's ``perLegPrice`` field. Pass ``None`` (or skip
+    in our domain model — the wire carries it on the ``ComboLeg``
+    proto's ``perLegPrice`` field. Pass ``None`` (or skip
     the arg) when there is no order pricing context.
     """
     normalize_none_scalars(leg)
@@ -93,8 +93,8 @@ def createComboLegProto(
     # target proto (the contributor's PR had this swapped, which made
     # every conditional vacuously true and stomped on the proto with
     # blanks). Zero / empty-string source values are treated as "unset".
-    # IBKR gates these on ``isValidIntValue`` (``!= UNSET_INTEGER``) so
-    # ``0`` flows through to the wire — our ``_isValidInt`` matches.
+    # Only ``UNSET_INTEGER`` is skipped (``_isValidInt``), so ``0`` flows
+    # through to the wire.
     if _isValidInt(leg.conId):
         proto.conId = leg.conId
     if _isValidInt(leg.ratio):
@@ -110,14 +110,14 @@ def createComboLegProto(
     if leg.designatedLocation:
         proto.designatedLocation = leg.designatedLocation
     # ``exemptCode`` defaults to -1 in the domain dataclass — a real wire
-    # value meaning "not exempt". IBKR's gate is ``isValidIntValue`` so
-    # ``-1`` flows through to the wire; suppressing it would re-fill the
-    # field with the UNSET_INTEGER sentinel on the server side.
+    # value meaning "not exempt". Only the UNSET_INTEGER sentinel is
+    # skipped, so ``-1`` flows through to the wire; suppressing it would
+    # re-fill the field with the UNSET_INTEGER sentinel on the server
+    # side.
     if _isValidInt(leg.exemptCode):
         proto.exemptCode = leg.exemptCode
     # ``perLegPrice`` is BAG-secType-only and rides on the contract proto
-    # alongside the leg, NOT the order proto. Mirror IBKR's
-    # ``createComboLegProto(comboLeg, perLegPrice)`` reference.
+    # alongside the leg, NOT the order proto.
     if _isValidFloat(perLegPrice):
         proto.perLegPrice = float(perLegPrice)
     return proto
@@ -220,11 +220,9 @@ def createContractProto(
 
     When ``order`` is provided AND the contract carries combo legs, the
     parallel ``order.orderComboLegs`` list supplies a ``perLegPrice``
-    per leg. IBKR's reference helper signature is
-    ``createContractProto(contract, order)``; only the place-order path
-    has order context. All other call sites (market data, historical
-    data, etc.) pass ``None`` and the wire proto omits ``perLegPrice``
-    on every leg.
+    per leg. Only the place-order path has order context. All other call
+    sites (market data, historical data, etc.) pass ``None`` and the wire
+    proto omits ``perLegPrice`` on every leg.
     """
     # Mirror the binary path's ``NoneType → ""`` wire formatter: callers
     # may stamp ``None`` onto a plain-int / plain-float / plain-str
@@ -234,8 +232,7 @@ def createContractProto(
     normalize_none_scalars(contract)
 
     proto = Contract_pb2.Contract()
-    # IBKR's reference gates ``conId`` and ``strike`` on the sentinel
-    # check (``isValidIntValue`` / ``isValidFloatValue``), so a ``0``
+    # ``conId`` is written unless it is the UNSET sentinel, so a ``0``
     # value is emitted explicitly. Suppressing the field at zero leaves
     # the server reading the proto3-default-absent slot as the IBKR
     # ``UNSET_INTEGER`` / ``UNSET_DOUBLE`` sentinel and rejecting the
@@ -250,8 +247,7 @@ def createContractProto(
         proto.secType = contract.secType
     if contract.lastTradeDateOrContractMonth:
         proto.lastTradeDateOrContractMonth = contract.lastTradeDateOrContractMonth
-    # ``lastTradeDate`` is a RECEIVE-ONLY field. IBKR's reference
-    # ``createContractProto`` never populates it and the binary path's
+    # ``lastTradeDate`` is a RECEIVE-ONLY field; the binary path's
     # contract formatter never sent it either. Echoing a previously
     # qualified contract's exact expiry back on a request contradicts
     # ``lastTradeDateOrContractMonth`` whenever a caller reuses a
@@ -259,11 +255,9 @@ def createContractProto(
     # sweep), and the server answers ``Error 200: No security definition
     # has been found for the request``.
     if contract.strike not in (UNSET_DOUBLE, 0.0):
-        # IBKR's reference gates strike on ``isValidFloatValue``
-        # (``!= UNSET_DOUBLE``) because THEIR ``Contract.strike``
-        # defaults to ``UNSET_DOUBLE``. Ours defaults to ``0.0``, so the
-        # bare sentinel check emits ``strike: 0`` on every contract that
-        # has no strike — the server then searches for an instrument
+        # Our ``Contract.strike`` defaults to ``0.0``, so a bare
+        # ``!= UNSET_DOUBLE`` check would emit ``strike: 0`` on every
+        # contract that has no strike — the server then searches for an instrument
         # whose strike is literally zero and rejects the request with
         # ``Error 200: No security definition has been found``. Both
         # values mean "no strike" here, so both stay off the wire; a
@@ -298,9 +292,9 @@ def createContractProto(
     if contract.comboLegsDescrip:
         proto.comboLegsDescrip = contract.comboLegsDescrip
     # Per-leg pricing rides on ComboLeg.perLegPrice; the parallel list
-    # ``order.orderComboLegs`` carries it on the order side. Match IBKR's
-    # reference ``createComboLegProtoList`` — when there are more contract
-    # legs than order legs, the extras get no per-leg price (i.e. unset
+    # ``order.orderComboLegs`` carries it on the order side. When there
+    # are more contract legs than order legs, the extras get no per-leg
+    # price (i.e. unset
     # on the wire), which is the same behaviour the binary path produced.
     orderLegs = (
         order.orderComboLegs if order is not None and order.orderComboLegs else []
@@ -330,8 +324,7 @@ def createContractProto(
 #
 # Fund-family, ineligibility-reason, event-contract, min-algo-size,
 # and last-price/size-precision fields are also populated here — they
-# arrive on the same wire message and IBKR's reference decoder reads
-# them all in one pass.
+# arrive on the same wire message and are read in one pass.
 
 
 def createContractDetails(

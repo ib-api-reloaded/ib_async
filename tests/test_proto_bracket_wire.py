@@ -119,8 +119,8 @@ def test_parent_envelope_and_order_carry_the_order_id():
 def test_parent_transmit_false_reads_back_as_false():
     """A held parent must arrive as ``transmit == False``.
 
-    IBKR's reference gates the field on truthiness, so the wire carries
-    no ``transmit`` at all; proto3 default-False makes the server read
+    The field is written only when truthy, so the wire carries no
+    ``transmit`` at all; proto3 default-False makes the server read
     the intended value. Pin the round trip, not the presence bit.
     """
     parent_proto, _ = _place_bracket()
@@ -150,11 +150,11 @@ def test_bracket_legs_keep_price_quantity_and_tif():
 
 
 def test_parent_order_id_is_not_stamped_into_the_inner_order():
-    """IBKR's reference ``createOrderProto`` never writes ``Order.orderId``
-    — the envelope's ``PlaceOrderRequest.orderId`` is the identity the
-    server registers. Emitting both lets a stale ``order.orderId`` on a
-    re-placed Order contradict the envelope; pin parity with the
-    reference so the two can never disagree.
+    """``Order.orderId`` is never written on a place request — the
+    envelope's ``PlaceOrderRequest.orderId`` is the identity the server
+    registers. Emitting both lets a stale ``order.orderId`` on a
+    re-placed Order contradict the envelope; pin that the inner field
+    stays absent so the two can never disagree.
     """
     parent_proto, child_proto = _place_bracket()
     assert not parent_proto.order.HasField("orderId")
@@ -190,8 +190,8 @@ def test_fresh_order_id_overrides_a_stale_id_on_a_reused_order():
 def test_place_request_omits_server_owned_open_order_fields():
     """``autoCancelDate`` / ``parentPermId`` / ``shareholder`` /
     ``refFuturesConId`` / ``filledQuantity`` are reported BY the server
-    on ``OpenOrder``; IBKR's reference never sends them on a place or
-    modify request. Re-placing a fetched Order must not echo them back —
+    on ``OpenOrder`` and are never sent on a place or modify request.
+    Re-placing a fetched Order must not echo them back —
     ``filledQuantity`` on a modify is the sharpest case.
     """
     ib = _ibAtVersion(_GATE)

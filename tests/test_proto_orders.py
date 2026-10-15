@@ -222,7 +222,7 @@ def test_create_order_proto_coerces_none_plain_int_fields_to_dataclass_default()
 
 
 def test_create_order_proto_conditions_include_overnight_is_truthy_gated():
-    """Mirrors IBKR's truthy gate: the default stays off the wire, so
+    """Written only when truthy: the default stays off the wire, so
     orders that never set it encode exactly as before the field existed."""
     order = LimitOrder("BUY", 1, 10)
     assert not createOrderProto(order).HasField("conditionsIncludeOvernight")
@@ -692,11 +692,11 @@ def test_cancel_order_request_skips_unset_optional_fields():
 
 
 # ---------------------------------------------------------------------------
-# Parity with IBKR's ``decoder_utils.decodeOrder`` — every field IBKR
-# reads, we read.
+# Every wire field on the Order proto that maps to a domain attribute
+# is read.
 #
-# Wire fields IBKR's reference reads that our domain ``Order`` dataclass
-# does NOT carry (and therefore the converter intentionally drops):
+# Wire fields our domain ``Order`` dataclass does NOT carry (and therefore
+# the converter intentionally drops):
 # ``customerAccount``, ``professionalCustomer``, ``bondAccruedInterest``,
 # ``includeOvernight``, ``manualOrderIndicator``, ``submitter``,
 # ``deactivate``, ``postOnly``, ``allowPreOpen``, ``ignoreOpenAuction``,
@@ -707,13 +707,11 @@ def test_cancel_order_request_skips_unset_optional_fields():
 # ---------------------------------------------------------------------------
 
 
-def test_create_order_reads_every_field_decoder_utils_reads():
-    """Mirror IBKR's ``decoder_utils.decodeOrder`` field list.
-
-    Every wire field IBKR's reference reads (and that maps to a real
-    domain attribute) MUST round-trip here. If this test fails because
-    a field IBKR newly reads landed unread, the converter is silently
-    losing wire state — fail loud.
+def test_create_order_reads_every_order_field():
+    """Every wire field on the Order proto (that maps to a real domain
+    attribute) MUST round-trip here. If this test fails because a
+    field landed unread, the converter is silently losing wire state —
+    fail loud.
     """
 
     proto = Order_pb2.Order()
@@ -1109,8 +1107,8 @@ def test_open_order_envelope_propagates_combo_legs_to_order():
 
 def test_create_order_conditions_decode_each_subclass():
     """Each OrderCondition subclass (price/time/margin/exec/volume/pct)
-    must round-trip the subclass-specific fields. IBKR's reference
-    dispatches on ``type``; we mirror that table."""
+    must round-trip the subclass-specific fields. Decoding dispatches
+    on the wire ``type``."""
 
     proto = Order_pb2.Order()
 

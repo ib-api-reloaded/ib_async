@@ -579,8 +579,8 @@ def test_replace_fa_appends_reqid_at_gate_157():
 def test_request_fa_rejects_profile_faData_at_gate_177():
     """faData=2 (Profiles) was de-supported at server gate 177
     (FA_PROFILE_DESUPPORT). ``requestFA`` must reject the request
-    locally without putting anything on the wire — mirrors IBKR's
-    reference client behaviour and avoids a server bounce.
+    locally without putting anything on the wire, which avoids a server
+    bounce.
     """
     assert MIN_SERVER_VER_FA_PROFILE_DESUPPORT == 177
     ib = _ibAtVersion(MIN_SERVER_VER_FA_PROFILE_DESUPPORT)
@@ -712,8 +712,7 @@ def test_decoder_uses_named_constant_for_duration_gate():
 def test_send_uses_raw_int_msg_id_at_protobuf_gate():
     """At server >= MIN_SERVER_VER_PROTOBUF (201), the binary ``Client.send``
     emits a 4-byte big-endian raw msgId prefix followed by NUL-terminated
-    body bytes. Mirrors IBKR's ``comm.make_msg(msgId, useRawIntMsgId=True,
-    text)``. Sending the legacy NUL-text msgId to a 201+ server makes the
+    body bytes. Sending the legacy NUL-text msgId to a 201+ server makes the
     server fail to decode and silently drop the connection.
     """
     assert MIN_SERVER_VER_PROTOBUF == 201
@@ -1380,8 +1379,8 @@ def test_create_order_proto_exhaustive_parity_round_trip():
     assert len(serialized) > 0, "Serialized proto must carry at least one set field"
 
     # ``orderId`` rides the REQUEST ENVELOPE (``PlaceOrderRequest``),
-    # never ``Order`` itself — IBKR's reference ``createOrderProto``
-    # does not write it, so neither do we. The decoder receives it the
+    # never ``Order`` itself, so ``createOrderProto`` does not write
+    # it. The decoder receives it the
     # way ``createOpenOrder`` passes it: as an explicit argument.
     assert not proto.HasField("orderId")
 

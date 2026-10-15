@@ -445,7 +445,7 @@ def test_start_api_request_proto_empty_optional_capabilities_omitted():
     proto = createStartApiRequestProto(clientId=71, optionalCapabilities="")
     assert proto.clientId == 71
     assert not proto.HasField("optionalCapabilities")
-    # Byte-exact parity with IBKR reference output for clientId=71/empty.
+    # The exact bytes: field 1 (clientId) = 71, nothing else.
     assert proto.SerializeToString() == b"\x08\x47"
 
 

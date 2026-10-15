@@ -550,8 +550,8 @@ class TradingSession(NamedTuple):
 
 @dataclass(slots=True, frozen=True)
 class IneligibilityReason:
-    # ``id_`` (trailing underscore) mirrors IBKR's reference dataclass —
-    # ``id`` shadows the Python builtin so the upstream chose ``id_``.
+    # ``id_`` (trailing underscore) because ``id`` shadows the Python
+    # builtin.
     id_: str = ""
     description: str = ""
 

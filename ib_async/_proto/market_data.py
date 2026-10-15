@@ -12,7 +12,7 @@ working.
 This file plugs the contributor PR's gaps for ``MARKET_DEPTH``,
 ``MARKET_DEPTH_L2``, ``MKT_DEPTH_EXCHANGES``, ``REROUTE_MKT_DATA_REQ``,
 ``REROUTE_MKT_DEPTH_REQ``, and ``DELTA_NEUTRAL_VALIDATION`` — none of
-which the upstream PR touched. The remaining tickOptionComputation
+which that PR touched. The remaining tickOptionComputation
 shape mirrors the binary path's silent treatment of IBKR's sentinels
 (``-1``, ``-2``) so the wrapper's existing ``tickOptionComputation``
 ``if x != -1 else None`` logic continues to apply post-decode.
@@ -254,7 +254,7 @@ TickByTickDispatch: TypeAlias = (
 def decodeTickAttribFromMask(attrMask: int, serverVersion: int) -> TickAttrib:
     """Decode the wire ``attrMask`` bitfield into a ``TickAttrib`` dataclass.
 
-    Bit layout (mirrors IBKR's ``processTickPriceMsg``):
+    Bit layout:
 
     - pre-PAST_LIMIT (109): ``canAutoExecute = (attrMask == 1)``
     - PAST_LIMIT (109)+:    ``canAutoExecute = bit 0``, ``pastLimit = bit 1``
@@ -639,7 +639,7 @@ def createMarketDataRequestProto(
     marketDataOptions: list[TagValue] | None = None,
 ) -> MarketDataRequest_pb2.MarketDataRequest:
     # Each scalar is written only when set, as IBKR's server expects:
-    # reqId is a valid-int check; string is non-empty; bool is truthy.
+    # reqId is ``is_valid_int``; string is non-empty; bool is truthy.
     proto = MarketDataRequest_pb2.MarketDataRequest()
     if reqId != UNSET_INTEGER:
         proto.reqId = reqId

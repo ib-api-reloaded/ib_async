@@ -22,7 +22,7 @@ Wire-shape notes:
   dataclass plus both wire map fields:
   ``scannerSubscriptionFilterOptions`` (the documented per-instrument
   generic filter options shipped on TWS >= MIN_SERVER_VER_SCANNER_GENERIC_OPTS)
-  and ``scannerSubscriptionOptions`` (IBKR-internal, kept for parity).
+  and ``scannerSubscriptionOptions`` (IBKR-internal).
 * The news-side requests (article / historical news) carry trailing
   ``map<string, string>`` option fields
   — these are TagValue lists on the public surface; pass-through must
@@ -208,7 +208,7 @@ def createPnLArgs(proto: PnL_pb2.PnL) -> PnLArgs:
 def createPnLRequestProto(
     reqId: int, account: str, modelCode: str
 ) -> PnLRequest_pb2.PnLRequest:
-    # Mirror IBKR's gating: empty ``modelCode`` MUST NOT reach the wire
+    # Empty ``modelCode`` MUST NOT reach the wire
     # (otherwise the server returns Error 321: Model name '' is incorrect).
     proto = PnLRequest_pb2.PnLRequest()
     if reqId != UNSET_INTEGER:
@@ -259,7 +259,7 @@ def createPnLSingleArgs(proto: PnLSingle_pb2.PnLSingle) -> PnLSingleArgs:
 def createPnLSingleRequestProto(
     reqId: int, account: str, modelCode: str, conId: int
 ) -> PnLSingleRequest_pb2.PnLSingleRequest:
-    # Mirror IBKR's gating; empty modelCode must NOT be written.
+    # Empty modelCode must NOT be written.
     proto = PnLSingleRequest_pb2.PnLSingleRequest()
     if reqId != UNSET_INTEGER:
         proto.reqId = reqId
@@ -295,20 +295,19 @@ def createScannerSubscriptionProto(
     ``marketCapAbove`` etc.) default to ``None`` on the domain
     dataclass — the universal unset marker. ``None`` skips the wire
     write entirely so the proto field stays unset when the user didn't
-    provide a filter; mirrors IBKR's ``isValidFloatValue`` /
-    ``isValidIntValue`` gating. ``Decimal``-typed filters are coerced
+    provide a filter, as the IBKR server expects of unset numbers.
+    ``Decimal``-typed filters are coerced
     through ``float()`` for the proto's wire ``double`` slot.
 
     ``numberOfRows`` keeps its legacy ``int = -1`` default (an explicit
     "all rows" marker the IBKR server understands); the ``_isValidInt``
     gate would also accept ``-1`` so the write goes through unchanged.
 
-    Both option lists are TagValue trailers IBKR's reference encoder
-    writes verbatim into the proto's ``map<string, string>`` fields. The
-    *filter* options carry the documented per-instrument generic filter
-    settings (server >= MIN_SERVER_VER_SCANNER_GENERIC_OPTS); the
-    other is IBKR-internal but accepted for parity. Empty / ``None``
-    lists leave the wire fields unset.
+    Both option lists are TagValue trailers written verbatim into the
+    proto's ``map<string, string>`` fields. The *filter* options carry
+    the documented per-instrument generic filter settings (server >=
+    MIN_SERVER_VER_SCANNER_GENERIC_OPTS); the other is IBKR-internal but
+    accepted. Empty / ``None`` lists leave the wire fields unset.
     """
     # Wire-boundary coalesce: if a caller stomps ``None`` onto a plain-
     # scalar field (e.g. ``sub.numberOfRows = None``), restore the

@@ -437,10 +437,9 @@ def test_proto_tick_by_tick_empty_oneof_is_dropped():
 
 
 def test_create_contract_reads_last_trade_date():
-    """IBKR's reference reads ``contractProto.lastTradeDate`` separately
-    from ``lastTradeDateOrContractMonth``. Our converter must too —
-    silently dropping the field would lose post-2024 IBKR contracts'
-    actual expiry date.
+    """Our converter must read ``contractProto.lastTradeDate``
+    separately from ``lastTradeDateOrContractMonth`` — silently dropping
+    the field would lose post-2024 IBKR contracts' actual expiry date.
     """
     proto = Contract_pb2.Contract()
     proto.symbol = "ESM6"
@@ -540,9 +539,8 @@ def test_contract_details_splits_last_trade_date_for_bond():
 
 def test_open_order_missing_contract_drops_silently():
     """OpenOrder wire frame with no ``contract`` field must NOT
-    deliver a half-formed openOrder to user code. IBKR's reference
-    returns silently in this case (decoder.py:406-418); we now do
-    the same. Prior behavior built an empty Contract()/Order() and
+    deliver a half-formed openOrder to user code; the frame is dropped
+    silently. Prior behavior built an empty Contract()/Order() and
     polluted the trade registry.
     """
     ib = ibi.IB()
@@ -659,8 +657,7 @@ def test_display_group_updated_proto_routes_to_wrapper_method():
 def test_config_response_proto_routes_to_wrapper_proto_method():
     """ConfigResponse carries nested config sub-messages with no flat
     equivalent. The handler delivers the raw proto to a
-    ``configResponseProtoBuf`` wrapper hook, mirroring IBKR's
-    reference behaviour.
+    ``configResponseProtoBuf`` wrapper hook.
     """
     ib = ibi.IB()
     seen: list[object] = []
@@ -1930,7 +1927,7 @@ def test_max_client_version_advertises_modern_protobuf_gates():
 
 
 # ---------------------------------------------------------------------------
-# Round-3 audit regressions — combo-leg per-leg pricing, WshEventData gating,
+# Combo-leg per-leg pricing, WshEventData gating,
 # condition triggerMethod=0 wire emission.
 # ---------------------------------------------------------------------------
 
@@ -1939,10 +1936,9 @@ def test_combo_leg_per_leg_price_propagates_through_place_order():
     """``Order.orderComboLegs[i].price`` must land on the wire as
     ``Contract.comboLegs[i].perLegPrice`` for BAG-secType orders.
 
-    IBKR's reference ``createContractProto(contract, order)`` reads the
-    parallel ``order.orderComboLegs`` list and writes ``perLegPrice``
-    on each ComboLeg proto. Before the round-3 audit fix our converter
-    ignored ``order`` entirely and BAG orders shipped with all leg
+    The encoder reads the parallel ``order.orderComboLegs`` list and
+    writes ``perLegPrice`` on each ComboLeg proto. Before the fix our
+    converter ignored ``order`` entirely and BAG orders shipped with all leg
     prices unset — the server treats unset perLegPrice as zero, which
     silently mis-prices every spread the user submits.
     """
@@ -2055,8 +2051,8 @@ def test_wsh_event_data_request_writes_set_fields():
 
 def test_price_condition_trigger_method_zero_writes_to_wire():
     """``PriceCondition.triggerMethod=0`` means "Default trigger
-    method" — a valid wire value IBKR's reference encoder writes via
-    ``isValidIntValue``. The truthy guard the contributor PR ran with
+    method" — a valid wire value, written unless it is the UNSET
+    sentinel. The truthy guard the contributor PR ran with
     would have skipped 0 entirely, leaving the field unset and risking
     the server falling back to a different default.
     """
@@ -2077,9 +2073,7 @@ def test_price_condition_trigger_method_zero_writes_to_wire():
 def test_combo_leg_more_contract_legs_than_order_legs_safe():
     """Defensive: when ``contract.comboLegs`` has more entries than
     ``order.orderComboLegs``, the extra contract legs must encode
-    cleanly (no IndexError) and simply omit ``perLegPrice``. Mirrors
-    IBKR's ``createComboLegProtoList`` ``i < len(orderComboLegs)``
-    guard.
+    cleanly (no IndexError) and simply omit ``perLegPrice``.
     """
 
     bag = Contract(
@@ -2113,7 +2107,7 @@ def test_combo_leg_more_contract_legs_than_order_legs_safe():
 
 
 def test_binary_open_order_decodes_full_order_preview_block():
-    """Round 3 audit fix: the FULL_ORDER_PREVIEW_FIELDS block on the
+    """The FULL_ORDER_PREVIEW_FIELDS block on the
     binary openOrder path was completely absent. With the gate at 195
     every modern server delivers OutsideRTH margins + suggestedSize +
     orderAllocations through this slot — the missing read shifted the
@@ -2218,7 +2212,7 @@ def test_binary_open_order_decodes_order_allocations():
 
 
 # ---------------------------------------------------------------------------
-# Round-6 cross-version boundary matrix. For every recently-fixed gate, lock
+# Cross-version boundary matrix. For every recently-fixed gate, lock
 # both the pre-gate path (server v=N-1) AND the post-gate path (server v=N)
 # so an off-by-one in the comparison can't pass either side silently.
 # ---------------------------------------------------------------------------
@@ -2612,10 +2606,10 @@ def test_cancel_historical_ticks_emits_proto_only_at_gate_215():
 
 # ---------------------------------------------------------------------------
 # safe_decimal: IBKR UNSET sentinel strings must coerce to None.
-# IBKR's reference ``decode(Decimal, fields)`` rejects max-int / max-long /
-# max-double sentinel strings as "unset" — without matching that semantics
-# user code would receive a 1.7e308 wire-default fake quantity that looks
-# like a real number and pollutes downstream calculations.
+# IBKR's max-int / max-long / max-double sentinel strings mean "unset" —
+# without honouring that, user code would receive a 1.7e308 wire-default
+# fake quantity that looks like a real number and pollutes downstream
+# calculations.
 # ---------------------------------------------------------------------------
 
 
@@ -2649,7 +2643,7 @@ def test_safe_decimal_unset_double_lowercase_e_returns_none():
 
 def test_safe_decimal_negative_long_min_sentinel_returns_none():
     """``"-9223372036854775808"`` is IBKR's most-negative int64 — also
-    rejected as Decimal-unset by the reference decoder."""
+    a Decimal-unset sentinel."""
 
     assert safe_decimal("-9223372036854775808") is None
 
@@ -2665,7 +2659,7 @@ def test_safe_decimal_real_values_round_trip():
 
 
 # ---------------------------------------------------------------------------
-# Round 3: Wrapper state-machine + Trade lifecycle regressions
+# Wrapper state-machine + Trade lifecycle regressions
 # ---------------------------------------------------------------------------
 
 
@@ -2828,8 +2822,8 @@ def test_account_value_decimal_view_returns_none_for_non_currency_tags():
 
 
 def test_order_bound_signature_uses_ibkr_argument_names():
-    """``Wrapper.orderBound``'s signature must match IBKR's reference
-    ``(permId, clientId, orderId)``. Both decoders pass arguments in
+    """``Wrapper.orderBound``'s signature must match IBKR's callback
+    contract ``(permId, clientId, orderId)``. Both decoders pass arguments in
     that order; the parameter names are part of the public contract for
     subclasses overriding this hook.
     """
@@ -2841,16 +2835,16 @@ def test_order_bound_signature_uses_ibkr_argument_names():
 
 
 # ---------------------------------------------------------------------------
-# Round 3 audit: connection lifecycle / cross-cutting concerns
+# Connection lifecycle / cross-cutting concerns
 # ---------------------------------------------------------------------------
 
 
 def test_set_optional_capabilities_stores_value_for_start_api():
-    """``setOptionalCapabilities`` mirrors IBKR ``EClient.setOptionalCapabilities``.
+    """``setOptionalCapabilities`` stores the value ``startApi`` sends.
     The value is read inside ``startApi`` (binary path field 4 / proto
     ``optionalCapabilities``); without the public setter, third-party
-    integrations using the standard ibapi API surface have no way to set
-    it short of reaching into ``client.optCapab`` directly.
+    integrations have no way to set it short of reaching into
+    ``client.optCapab`` directly.
     """
     ib = ibi.IB()
     assert ib.client.optCapab == ""
@@ -2940,8 +2934,7 @@ def test_handshake_prefix_matches_ibkr_make_initial_msg():
 
 def test_set_connect_options_appends_to_handshake_body():
     """``setConnectOptions("+PACEAPI")`` must end up in the v100 banner
-    as ``v{Min}..{Max} +PACEAPI`` — IBKR ``EClient.connect`` does the
-    same with a leading space separator.
+    as ``v{Min}..{Max} +PACEAPI``, with a leading space separator.
     """
     ib = ibi.IB()
     ib.client.setConnectOptions("+PACEAPI")
@@ -2982,7 +2975,7 @@ def test_disconnect_clears_in_flight_futures_with_connection_error():
 
 
 # ---------------------------------------------------------------------------
-# Round 4 — market-data hot path: Ticker state, generic / string / odd-lot
+# Market-data hot path: Ticker state, generic / string / odd-lot
 # ticks, halt-code unset preservation, signed index-future premium.
 # ---------------------------------------------------------------------------
 
@@ -3005,7 +2998,7 @@ def test_tick_generic_halted_unset_minus_one_does_not_collapse_to_zero():
     """``HALTED`` (TickType 49) ships an int code where -1=unset,
     0=not-halted, 1=general halt, 2=volatility halt. The generic-tick
     "value > 0 else emptySize" clamp previously mapped -1 (unset) to 0
-    (not halted), conflating two distinct states. Round 4 added
+    (not halted), conflating two distinct states. The fix added
     ``_GENERIC_TICK_NO_CLAMP`` to bypass the clamp for halt-style ticks.
     """
     ib = ibi.IB()
@@ -3122,7 +3115,7 @@ def test_odd_lot_exchange_routes_through_string_tick_map():
 def test_price_size_tick_attribs_flow_through_to_wrapper():
     """``TickAttrib`` (canAutoExecute / pastLimit / preOpen) should
     arrive in ``priceSizeTick`` so user code can gate on liquidity
-    quality. Round 3 wired it through; this verifies the full path
+    quality. It is wired through; this verifies the full path
     from a synthetic call lands on the ticker as a fresh BID.
     """
 
@@ -3226,7 +3219,7 @@ def test_wrapper_error_warning_classification_in_warning_band():
 
 
 # ---------------------------------------------------------------------------
-# Round 4: account-update / position / FA stream-ordering regressions
+# Account-update / position / FA stream-ordering regressions
 # ---------------------------------------------------------------------------
 
 
@@ -3481,14 +3474,13 @@ def test_account_update_multi_carries_model_code_into_accumulator_key():
 
 
 # ---------------------------------------------------------------------------
-# Round 4: binary-path field encoder + safe_decimal sentinel coverage
+# Binary-path field encoder + safe_decimal sentinel coverage
 # ---------------------------------------------------------------------------
 
 
 def test_send_encodes_positive_infinity_as_ibkr_infinity_string():
     """``math.inf`` on the binary send path must serialize to the literal
-    ``"Infinity"`` (matching IBKR's ``INFINITY_STR`` in ``ibapi/const.py``)
-    — not ``"Infinite"``. Fields like ``competeAgainstBestOffset =
+    ``"Infinity"`` — not ``"Infinite"``. Fields like ``competeAgainstBestOffset =
     COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID`` (an alias for
     ``DOUBLE_INFINITY``) only travel correctly with the IBKR-canonical
     spelling; ``"Infinite"`` is rejected as a parse error server-side
@@ -3530,9 +3522,9 @@ def test_send_encodes_bool_as_zero_or_one_string():
 
 
 def test_send_encodes_none_as_empty_string():
-    """``None`` → empty string on the wire. IBKR's reference raises on
-    ``None``; we permissively serialize as empty so contributor sites that
-    forget to filter ``None`` from their field tuples don't crash.
+    """``None`` → empty string on the wire. We permissively serialize as
+    empty so contributor sites that forget to filter ``None`` from their
+    field tuples don't crash.
     """
 
     assert _FORMAT_HANDLERS_EMPTY[type(None)](None) == ""
@@ -3677,7 +3669,7 @@ def test_send_round_trips_full_field_tuple_with_infinity_and_unset():
 
 
 # ---------------------------------------------------------------------------
-# Round 4 audit: TagValue option-list passthrough on scanner / news
+# TagValue option-list passthrough on scanner / news
 # ---------------------------------------------------------------------------
 
 
@@ -3804,7 +3796,7 @@ def test_news_request_options_default_unset():
 
 
 # ---------------------------------------------------------------------------
-# Round 4 audit: scanner / news receiver semantics confirmation
+# Scanner / news receiver semantics confirmation
 # ---------------------------------------------------------------------------
 
 
@@ -3903,7 +3895,7 @@ def test_scanner_parameters_xml_passes_through_without_truncation():
 
 
 # ---------------------------------------------------------------------------
-# Round-5 audit regressions
+# Wire-gating regressions
 # ---------------------------------------------------------------------------
 
 
@@ -3986,16 +3978,14 @@ def test_proto_contract_data_dispatches_to_plain_wrapper_method():
 
 
 # ---------------------------------------------------------------------------
-# Round-5 audit regressions — complex order-type wire encoding.
+# Complex order-type wire encoding.
 # ---------------------------------------------------------------------------
 
 
 def test_binary_bond_contract_details_explicit_timezone_wins_at_gate_188():
     """Gate 188: when the wire ships an explicit ``timeZoneId`` block AND
     the legacy 3-part split-string in ``lastTradeDateOrContractMonth``,
-    the explicit field MUST win — mirrors IBKR's reference where the
-    explicit decode happens AFTER ``readLastTradeDate`` so the second
-    write wins. Our decoder reads the explicit block first then splits
+    the explicit field MUST win. Our decoder reads the explicit block first then splits
     the legacy string; without the gate guard the split would clobber
     the freshly-decoded explicit value with a stale third component.
     """
@@ -4169,8 +4159,8 @@ def test_proto_margin_and_time_conditions_round_trip():
 
 def test_proto_hedge_param_decode_requires_hedge_type():
     """Decoder pairing rule: ``hedgeParam`` is only consumed when a
-    matching ``hedgeType`` is present, mirroring IBKR's binary path
-    which gates the param read on a non-empty hedgeType. A
+    matching ``hedgeType`` is present, as on the binary path, where
+    the param is read only after a non-empty hedgeType. A
     malformed wire frame with a stray hedgeParam (no hedgeType)
     must NOT surface that param onto the domain object.
     """
@@ -4187,8 +4177,8 @@ def test_proto_hedge_param_decode_requires_hedge_type():
 def test_proto_algo_params_paired_with_algo_strategy():
     """``algoParams`` is meaningful only with a non-empty
     ``algoStrategy``. The decoder must consume algoParams only when
-    algoStrategy is present — mirrors IBKR's binary path which
-    gates the params length read on a non-empty strategy.
+    algoStrategy is present, as on the binary path, where the params
+    length is read only after a non-empty strategy.
     """
 
     # algoStrategy missing, algoParams populated — decoder must not
@@ -4247,9 +4237,9 @@ def test_proto_combo_leg_full_field_set_round_trip():
 def test_proto_combo_leg_default_exempt_code_writes_minus_one():
     """``ComboLeg.exemptCode`` defaults to ``-1`` in the domain
     dataclass — that's the real wire value meaning "not exempt".
-    IBKR's reference gates with ``isValidIntValue`` (only ``UNSET_INTEGER``
-    suppresses) so ``-1`` flows through; skipping the write would let
-    the server's proto3 default fill the field with the sentinel and
+    Only ``UNSET_INTEGER`` suppresses the write, so ``-1`` flows through;
+    skipping the write would let the server's proto3 default fill the
+    field with the sentinel and
     reject the request. An empty inbound proto round-trips back to the
     ``-1`` dataclass default."""
 
@@ -4289,8 +4279,8 @@ def test_proto_scale_family_default_unset_skipped():
 
 def test_proto_what_if_flag_round_trip():
     """``Order.whatIf`` is a bool — must round-trip True intact.
-    Skipped on encode when False (default) since IBKR's reference
-    encoder uses truthy semantics for the bool.
+    Skipped on encode when False (default) since the encoder uses
+    truthy semantics for the bool.
     """
 
     order = LimitOrder("BUY", 1, 50.0)
@@ -4396,7 +4386,7 @@ def test_proto_adjusted_order_family_round_trip():
 
 
 # ---------------------------------------------------------------------------
-# Round-5: Subscription / Ticker lifecycle regressions
+# Subscription / Ticker lifecycle regressions
 # ---------------------------------------------------------------------------
 
 
@@ -4562,7 +4552,7 @@ def test_singleton_request_third_caller_attaches_after_two_sharers():
 
 
 def test_ticker_post_init_resets_every_float_field_to_defaults_unset():
-    """Round 4 added six odd-lot float fields. ``__post_init__`` must
+    """Ticker has six odd-lot float fields. ``__post_init__`` must
     reset every float-typed Ticker field to ``defaults.unset`` so a
     user with a non-NaN ``IBDefaults.unset`` (e.g. ``-1.0``) sees
     consistent unset semantics across the entire Ticker shape."""
@@ -4573,7 +4563,7 @@ def test_ticker_post_init_resets_every_float_field_to_defaults_unset():
     contract.conId = 1
     ticker = Ticker(contract=contract, defaults=defaults)
 
-    # Spot-check the six fields that were added in round 4 plus a few
+    # Spot-check the six odd-lot fields plus a few
     # baseline fields, to lock the post_init coverage in place.
     for field_name in (
         "oddLotBid",
@@ -4651,7 +4641,7 @@ def test_disconnect_during_callback_reentry_does_not_raise():
 
 
 # ---------------------------------------------------------------------------
-# Round 5 audit: rare message handlers + raw-proto wrapper-surface coverage
+# Rare message handlers + raw-proto wrapper-surface coverage
 # ---------------------------------------------------------------------------
 
 
@@ -4669,8 +4659,8 @@ def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
     _initProtoMsgHandlers()
     ours = set(_PROTO_MSG_HANDLERS.keys())
 
-    # Canonical ``IN`` ids from ibapi/decoder.py:msgId2handleInfoProtoBuf
-    # (server-protocol contract — see ibapi/message.py for the names).
+    # Canonical ``IN`` ids the server sends as protobuf
+    # (server-protocol contract).
     ibkrCanonicalProtoIds = {
         # orders / executions
         3,
@@ -4836,7 +4826,7 @@ def test_proto_dispatch_does_not_invoke_raw_proto_wrapper_hooks_we_do_not_expose
     assert not hasattr(ib.wrapper, "historicalDataProtoBuf")
     assert not hasattr(ib.wrapper, "tickByTickDataProtoBuf")
 
-    # The two we DO expose are still present (regression for round 2).
+    # The two we DO expose are still present.
     assert hasattr(ib.wrapper, "configResponseProtoBuf")
     assert hasattr(ib.wrapper, "updateConfigResponseProtoBuf")
 
@@ -4854,7 +4844,7 @@ def test_public_dataclasses_re_exported_at_package_root():
     the package surface for downstream type-checkers to resolve them.
     """
 
-    # Names added to round 6 — guarded against accidental re-hiding.
+    # Names guarded against accidental re-hiding.
     for name in (
         "OrderCancel",
         "OrderAllocation",
@@ -4965,7 +4955,7 @@ def test_order_convenience_constructors_coerce_decimal():
 
 
 # ---------------------------------------------------------------------------
-# Round 6: malformed-input survival (fuzz / corruption / half-disconnect)
+# Malformed-input survival (fuzz / corruption / half-disconnect)
 #
 # A broken TCP, a pre-2.x server in test, or a corrupted stream during
 # recovery can deliver any of the wire shapes below. None of them may

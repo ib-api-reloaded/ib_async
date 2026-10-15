@@ -622,10 +622,9 @@ def createCancelCalculateOptionPriceProto(
 
 
 def createConfigRequestProto(reqId: int) -> ConfigRequest_pb2.ConfigRequest:
-    """Build a ``ConfigRequest`` proto carrying only ``reqId``. Mirrors
-    IBKR's ``client.py:reqConfigProtoBuf`` send shape — the request
-    body is just an int identifier; the full config payload comes
-    back on the response side.
+    """Build a ``ConfigRequest`` proto carrying only ``reqId``. The
+    request body is just an int identifier; the full config payload
+    comes back on the response side.
     """
     proto = ConfigRequest_pb2.ConfigRequest()
     proto.reqId = reqId
@@ -643,8 +642,7 @@ def createUpdateConfigRequestProto(
 ) -> UpdateConfigRequest_pb2.UpdateConfigRequest:
     """Build an ``UpdateConfigRequest`` proto.
 
-    Mirrors IBKR's ``client.py:updateConfigProtoBuf`` send shape — the
-    request carries the full nested config family (lock-and-exit /
+    The request carries the full nested config family (lock-and-exit /
     messages / api / orders) plus a list of warnings the user has
     accepted and an opt-in flag to reset the API order sequence.
 

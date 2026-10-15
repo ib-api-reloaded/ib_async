@@ -460,7 +460,7 @@ def createHistoricalDataRequestProto(
     chartOptions: list[TagValue] | None = None,
 ) -> HistoricalDataRequest_pb2.HistoricalDataRequest:
     # Each scalar is written only when set, as IBKR's server expects:
-    # reqId / formatDate via a valid-int check; strings via non-empty;
+    # reqId / formatDate via ``is_valid_int``; strings via non-empty;
     # bools via truthy.
     proto = HistoricalDataRequest_pb2.HistoricalDataRequest()
     if reqId != UNSET_INTEGER:

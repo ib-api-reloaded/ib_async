@@ -81,10 +81,8 @@ def _make_format_handlers(makeEmpty: bool) -> dict[Any, Callable[[Any], str]]:
 
         # Float conversion has 3 stages:
         #  - Convert 'IBKR unset' double to empty (if requested)
-        #  - Convert positive infinity to the IBKR ``INFINITY_STR``
-        #    constant. IBKR's reference (``ibapi/const.py``) defines this
-        #    as the literal ``"Infinity"`` (not ``"Infinite"``); the
-        #    server parses ``"Infinity"`` for fields like
+        #  - Convert positive infinity to the literal ``"Infinity"``
+        #    (not ``"Infinite"``); the server parses ``"Infinity"`` for fields like
         #    ``competeAgainstBestOffset = COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID``
         #    and rejects any other spelling. Sending ``"Infinite"``
         #    silently corrupts those mid-peg orders.
@@ -125,17 +123,12 @@ _FORMAT_HANDLERS_KEEP: Final[dict[Any, Callable[[Any], str]]] = _make_format_han
 
 class Client:
     """
-    Replacement for ``ibapi.client.EClient`` that uses asyncio.
+    The TWS API client, built on asyncio.
 
-    The client is fully asynchronous and has its own
-    event-driven networking code that replaces the
-    networking code of the standard EClient.
-    It also replaces the infinite loop of ``EClient.run()``
-    with the asyncio event loop. It can be used as a drop-in
-    replacement for the standard EClient as provided by IBAPI.
+    The client is fully asynchronous, has its own event-driven
+    networking code, and runs on the asyncio event loop.
 
-    Compared to the standard EClient this client has the following
-    additional features:
+    This client has the following features:
 
     * ``client.connect()`` will block until the client is ready to
       serve requests; It is not necessary to wait for ``nextValidId``
@@ -250,10 +243,9 @@ class Client:
     def useProtoBuf(self, canonicalMsgId: int) -> bool:
         """True when ``canonicalMsgId`` should be sent as protobuf.
 
-        Consults the ``PROTOBUF_MSG_IDS`` per-message gate table mirrored
-        from IBKR's reference. Messages not in the table (and connections
-        below the per-family minimum server version) stay on the legacy
-        binary path.
+        Consults the ``PROTOBUF_MSG_IDS`` per-message gate table. Messages
+        not in the table (and connections below the per-family minimum
+        server version) stay on the legacy binary path.
         """
         gate = PROTOBUF_MSG_IDS.get(canonicalMsgId)
         if gate is None:
@@ -263,10 +255,9 @@ class Client:
     def sendProto(self, canonicalMsgId: int, serialized: bytes) -> None:
         """Send a protobuf-framed message.
 
-        Wire framing matches IBKR ``ibapi/comm.py:make_msg_proto``:
-        4-byte big-endian length prefix, then 4-byte big-endian wire
-        ``msgId = canonical + PROTOBUF_MSG_ID``, then the serialized
-        protobuf body. Receivers detect the +200 sentinel and route to
+        Wire framing: 4-byte big-endian length prefix, then 4-byte
+        big-endian wire ``msgId = canonical + PROTOBUF_MSG_ID``, then the
+        serialized protobuf body. Receivers detect the +200 sentinel and route to
         the protobuf decoder; everything else stays binary.
 
         Handed to ``sendMsg`` like every binary frame, so protobuf
@@ -354,9 +345,8 @@ class Client:
     def setOptionalCapabilities(self, optCapab: str) -> None:
         """Set the optional capabilities string sent with ``startApi``.
 
-        Mirrors IBKR ``EClient.setOptionalCapabilities``. The value is
-        included in the START_API frame (binary path field 4 / proto
-        ``optionalCapabilities``) and gated server-side by
+        The value is included in the START_API frame (binary path field
+        4 / proto ``optionalCapabilities``) and gated server-side by
         ``MIN_SERVER_VER_OPTIONAL_CAPABILITIES`` (=72). Our
         ``MinClientVersion`` is 157 so the gate is always satisfied.
         Must be called before ``connectAsync`` to take effect — the
@@ -450,9 +440,7 @@ class Client:
         # First field is always the canonical msgId; remaining fields are
         # the body. Pre-201 servers receive both as NUL-terminated text;
         # 201+ servers receive a 4-byte big-endian raw msgId followed by
-        # the NUL-terminated body, mirroring IBKR ``comm.make_msg``'s
-        # ``useRawIntMsgId`` branch (`make_msg(msgId, useRawIntMsgId=True,
-        # text)`). Sending the legacy text msgId to a 201+ server makes
+        # the NUL-terminated body. Sending the legacy text msgId to a 201+ server makes
         # the server fail to decode the frame and silently drop the
         # connection — every binary-path message (startApi, anything
         # that's not in PROTOBUF_MSG_IDS, anything below its proto gate)
@@ -720,7 +708,7 @@ class Client:
         version = self.serverVersion()
 
         # The IBKR API protocol is just a series of in-order arguments denoted by position.
-        # The upstream API parses all fields based on the first value (the message type).
+        # The server parses all fields based on the first value (the message type).
         fields = [
             3,  # PLACE_ORDER message type
             orderId,
@@ -950,7 +938,7 @@ class Client:
             elif order.orderType in {"PEG MID", "PEGMID"}:
                 fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
 
-        # Gates 178+ — mirror IBKR ``client.py:placeOrder`` lines 2746-2763.
+        # Gates 178+.
 
         if version >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
             fields += [order.customerAccount]
@@ -1190,8 +1178,8 @@ class Client:
 
     def requestFA(self, faData):
         # FA Profiles (faData == 2) were de-supported at server gate 177.
-        # IBKR's reference rejects this request locally instead of letting
-        # the server bounce it; mirror that to match wire parity.
+        # Reject this request locally instead of letting the server
+        # bounce it.
         if (
             self.serverVersion() >= MIN_SERVER_VER_FA_PROFILE_DESUPPORT
             and int(faData) == 2
@@ -1221,7 +1209,7 @@ class Client:
             return
         # The trailing ``reqId`` field only exists at server gate 157+
         # (REPLACE_FA_END). Sending it to a sub-157 server desyncs the
-        # frame — IBKR's reference gates this write conditionally.
+        # frame, so the write is gated.
         fields: list[Any] = [19, 1, faData, cxml]
         if self.serverVersion() >= MIN_SERVER_VER_REPLACE_FA_END:
             fields.append(reqId)
@@ -1325,8 +1313,7 @@ class Client:
             account,
             override,
         ]
-        # Gated trailers mirror IBKR ``client.py:exerciseOptions`` lines
-        # 1775-1786.  Each field is only written when the connected
+        # Gated trailers: each field is only written when the connected
         # server actually understands it — sending an extra trailer to a
         # pre-180 server desyncs the wire frame.
         if self.serverVersion() >= MIN_SERVER_VER_MANUAL_ORDER_TIME_EXERCISE_OPTIONS:

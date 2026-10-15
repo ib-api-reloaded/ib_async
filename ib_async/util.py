@@ -45,12 +45,12 @@ Event to emit global exceptions.
 EPOCH: Final = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 UNSET_INTEGER: Final = 2**31 - 1
 UNSET_DOUBLE: Final = sys.float_info.max
-# IBKR's reference client uses ``UNSET_LONG`` for ``optional int64`` proto
+# ``UNSET_LONG`` is IBKR's unset sentinel for ``optional int64`` proto
 # fields (e.g. ``Order.permId``) and ``UNSET_DECIMAL`` for stringly-encoded
-# Decimal wire fields (e.g. ``Order.totalQuantity``). Mirroring the
-# constants here lets the proto send-side reject these sentinels with the
-# same gate IBKR uses, avoiding the server-side default-fill that turns
-# proto3-absent fields back into the magic sentinel value.
+# Decimal wire fields (e.g. ``Order.totalQuantity``). Defining the
+# constants here lets the proto send-side reject these sentinels,
+# avoiding the server-side default-fill that turns proto3-absent fields
+# back into the magic sentinel value.
 UNSET_LONG: Final = 2**63 - 1
 UNSET_DECIMAL: Final = Decimal(2**127 - 1)
 

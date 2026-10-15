@@ -170,7 +170,7 @@ class IB:
     orders, executions, positions, tickers etc. This state is
     automatically kept in sync with the TWS/IBG application.
 
-    This class has most request methods of EClient, with the
+    This class has most request methods of the TWS API, with the
     same names and parameters (except for the reqId parameter
     which is not needed anymore).
     Request methods that return a result come in two versions:
@@ -539,7 +539,7 @@ class IB:
             #        data maintained." Subscriptions survived but the
             #        account-summary feed is restarted regardless.
             # Either way, resync the cached account summary so downstream
-            # consumers see a fresh snapshot. Mirrors IBKR sample behavior.
+            # consumers see a fresh snapshot.
             #
             # Store a strong reference to the spawned task in
             # ``_backgroundTasks``: asyncio holds only a weak ref from
@@ -3290,7 +3290,7 @@ class IB:
         self.client.reqUserInfo(reqId)
         return future
 
-    # --- Public API expansion (parity with IBKR's EClient surface) ----
+    # --- Public API expansion ----
 
     def setServerLogLevel(self, logLevel: int):
         """Set the TWS / IB Gateway server-side log verbosity. 1=SYSTEM,

@@ -42,8 +42,8 @@ def test_protobuf_msg_ids_table_covers_known_messages():
 
 
 def test_protobuf_msg_ids_table_size_matches_ibkr_reference():
-    # IBKR's ibapi/common.py ``getServerVersionForMessage`` gates 77
-    # messages; if the upstream adds or drops a message family, this
+    # The protocol gates 77 messages onto protobuf by server version;
+    # if IBKR adds or drops a message family, this
     # test will fail loudly so we have to make a deliberate decision
     # about syncing.
     assert len(PROTOBUF_MSG_IDS) == 77

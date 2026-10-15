@@ -6,15 +6,14 @@ This is the source of truth for two things:
    bodies from legacy NUL-separated bodies on the wire. Every protobuf
    message is sent with ``wire_msgId = canonical + 200``; receivers
    strip the 200 to recover the canonical id and route to the protobuf
-   decoder. (See IBKR ``ibapi/comm.py:19-33`` and ``ibapi/client.py:601-617``
-   for the authoritative wire framing.)
+   decoder.
 
 2. ``PROTOBUF_MSG_IDS`` — per-canonical-msgId gating dict mapping each
    outbound message to the minimum ``serverVersion`` at which IBKR
    accepts it as protobuf. Below that gate the binary path stays in
    use; above it ``Client.useProtoBuf(msgId)`` returns ``True`` and the
-   caller emits protobuf instead. The table mirrors IBKR's
-   ``ibapi/common.py:55-136`` verbatim and must stay in sync.
+   caller emits protobuf instead. The gates are part of IBKR's protocol,
+   which these values must match.
 
 Both halves of the API (binary and protobuf) coexist indefinitely — a
 TWS / IB Gateway older than the relevant per-family gate keeps working
@@ -70,7 +69,7 @@ __all__ = [
 PROTOBUF_MSG_ID: Final = 200
 
 # --- Canonical outbound message IDs --------------------------------------
-# Mirrored from ibapi/message.py OUT enum. Kept as raw integer constants
+# IBKR's protocol ids for outbound messages. Kept as raw integer constants
 # rather than an Enum so existing call sites that pass integer literals
 # to ``Client.send`` continue to work without renaming.
 REQ_MKT_DATA: Final = 1
@@ -156,7 +155,7 @@ REQ_CONFIG: Final = 108
 UPDATE_CONFIG: Final = 109
 
 # --- Per-msgId gate table -------------------------------------------------
-# Mirror of ibapi/common.py:55-136 PROTOBUF_MSG_IDS. Each entry maps a
+# IBKR's protobuf gates. Each entry maps a
 # canonical outbound msgId to the minimum serverVersion at which the
 # IBKR server accepts it as protobuf. Messages NOT in this table never
 # go protobuf — Client.useProtoBuf(msgId) returns False for them.

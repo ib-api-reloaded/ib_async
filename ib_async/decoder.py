@@ -131,11 +131,11 @@ def _noopHandler(fields: list[str]) -> None:
 
 
 # Per-canonical-msgId protobuf dispatch table for ``Decoder.processProtoBuf``.
-# Each entry is ``(ProtoClass, decoder_handler_method_name)``. Mirrors IBKR's
-# ``decoder.py:msgId2handleInfoProtoBuf`` for the message families covered
-# in the orders / contracts phase. Other phases extend this dict in place
-# as they land. Build is deferred to the first instantiation so the heavy
-# ``_pb`` imports don't fire at decoder-module import time.
+# Each entry is ``(ProtoClass, decoder_handler_method_name)`` for the
+# message families covered in the orders / contracts phase. Other phases
+# extend this dict in place as they land. Build is deferred to the first
+# instantiation so the heavy ``_pb`` imports don't fire at decoder-module
+# import time.
 _PROTO_MSG_HANDLERS: dict[int, tuple[type, str]] = {}
 
 
@@ -533,8 +533,7 @@ class Decoder:
         # An OpenOrder frame missing any of contract / order / orderState
         # is malformed — the binary path delivers an empty-fielded openOrder
         # to user code in that case, which can poison the trade registry
-        # with a half-formed Order. Match IBKR's reference behaviour and
-        # drop the frame silently.
+        # with a half-formed Order. Drop the frame silently.
         if not (
             proto.HasField("contract")
             and proto.HasField("order")
@@ -677,8 +676,7 @@ class Decoder:
     def _protoConfigResponse(self, proto: Any) -> None:
         # ConfigResponse carries nested ``LockAndExitConfig`` / ``ApiConfig``
         # / ``MessageConfig`` / ``OrdersConfig`` sub-messages with no flat
-        # equivalent — the wrapper hook receives the raw proto. IBKR's
-        # reference does the same.
+        # equivalent — the wrapper hook receives the raw proto.
         method = getattr(self.wrapper, "configResponseProtoBuf", None)
         if method is not None:
             method(proto)
@@ -1497,9 +1495,9 @@ class Decoder:
 
         # Pre-188 servers pack the timezone into the third split component
         # of ``lastTradeDateOrContractMonth``; 188+ delivers it as an
-        # explicit ``timeZoneId`` field above. Mirror IBKR's reference:
-        # the explicit field WINS when both are present, so only adopt the
-        # split-derived value below the gate.
+        # explicit ``timeZoneId`` field above. The explicit field WINS
+        # when both are present, so only adopt the split-derived value
+        # below the gate.
         if len(times) > 2 and self.serverVersion < MIN_SERVER_VER_BOND_TRADING_HOURS:
             cd.timeZoneId = times[2]
 
@@ -2218,13 +2216,13 @@ class Decoder:
             *fields,
         ) = fields
 
-        # FULL_ORDER_PREVIEW_FIELDS block — IBKR's reference appends the
+        # FULL_ORDER_PREVIEW_FIELDS block — the server appends the
         # OutsideRTH margin family, suggestedSize / rejectReason, and the
         # repeated orderAllocations between commissionCurrency and
         # warningText starting at server 195. Without this gating block
         # the wire stream shifts left and every gated read past warningText
         # reads from the wrong slot, silently corrupting the rest of the
-        # decode. ``decodeWhatIfInfoAndCommissionAndFees`` mirror.
+        # decode.
         if self.serverVersion >= MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS:
             (
                 st.marginCurrency,
@@ -2339,7 +2337,7 @@ class Decoder:
 
         # Trailing wire fields IBKR appends past gate 170. Each one lands
         # on the matching ``Order`` dataclass field — the order here MUST
-        # match IBKR's reference ``decoder.py:processOpenOrderMsg``.
+        # match the order in which the server writes them.
         if self.serverVersion >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
             o.customerAccount, *fields = fields
         if self.serverVersion >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:

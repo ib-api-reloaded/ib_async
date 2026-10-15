@@ -101,7 +101,7 @@ class Execution:
 @dataclass
 class CommissionReport:
     execId: str = ""
-    # IBKR's reference client renamed ``commission`` → ``commissionAndFees``
+    # IBKR renamed ``commission`` → ``commissionAndFees``
     # to match the wire field name (the combined number IBKR returns
     # includes exchange + regulatory fees in addition to the broker commission).
     # ``commissionAndFees`` is the canonical name in v3.0+. The legacy
@@ -223,7 +223,7 @@ class TickAttribLast:
 
 @dataclass
 class HistogramData:
-    # ``size`` is the wire-name in IBKR's reference (gate >=130).
+    # ``size`` is the wire-name (gate >=130).
     # Earlier ib_async releases coerced this to an integer ``count``,
     # which silently truncated fractional sizes that legitimately ship
     # for crypto / FRACTIONAL_SIZE_SUPPORT (gate 163) instruments.

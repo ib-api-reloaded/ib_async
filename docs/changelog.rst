@@ -8,10 +8,9 @@ Version 3.0.0 (Unreleased)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The v3.0 release lands the protobuf wire-protocol migration, shifts
-financial numerics to ``Decimal | None`` end-to-end, and closes the
-IBKR-parity gap against the reference client of TWS API 10.51 (TWS /
-Gateway server version 226). The full upgrade guide with examples lives at
-``docs/migration/v3.md``.
+financial numerics to ``Decimal | None`` end-to-end, and conforms to
+IBKR's protocol for TWS API 10.51 (TWS / Gateway server version 226).
+The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 
 **The most likely-to-hit changes**
 
@@ -41,8 +40,7 @@ Gateway server version 226). The full upgrade guide with examples lives at
   gate. Per-message gating means a server at version 207 uses
   protobuf for accounts but binary for historical data, etc. The
   binary path remains fully supported for older server versions.
-* **14 new public methods on** ``IB`` **for parity with IBKR's
-  reference** ``EClient``:
+* **14 new public methods on** ``IB``:
 
   * ``IB.reqCurrentTimeInMillisAsync`` (server >= 213)
   * ``IB.setServerLogLevel``
@@ -182,9 +180,9 @@ Gateway server version 226). The full upgrade guide with examples lives at
   ``Decimal('NaN')`` is never used (it is silently truthy in Python
   and corrupted downstream comparisons).
 * **``commission`` → ``commissionAndFees``** on ``CommissionReport``
-  and ``OrderState``. Matches IBKR's reference. Legacy ``commission``
-  attribute and constructor keyword keep working with
-  ``DeprecationWarning`` until v4.0.
+  and ``OrderState``. Legacy ``commission`` attribute and
+  constructor keyword keep working with ``DeprecationWarning`` until
+  v4.0.
 * **``HistogramData.count: int`` → ``HistogramData.size: Decimal | None``**
   — the field was the wrong name and the wrong type. ``count`` was
   always a Decimal-encoded quantity on the wire; the legacy name
@@ -225,8 +223,8 @@ Gateway server version 226). The full upgrade guide with examples lives at
   fields as raw wire strings.
 * **``RealTimeBar.endTime`` removed.** The field was never populated
   from the wire (IBKR's ``RealTimeBarTick`` proto has only
-  ``time`` / OHLC / volume / WAP / count, and their reference Python
-  has no such field) and the wrapper hardcoded ``-1``. If you need
+  ``time`` / OHLC / volume / WAP / count) and the wrapper hardcoded
+  ``-1``. If you need
   an end-of-window timestamp, compute it from ``bar.time``
   (5-second windows).
 * **Universal-unset-is-None sweep**: every magic-value default in
@@ -460,9 +458,8 @@ are fixed in v3.0:
   and Decimal inputs so a stray ``Decimal('NaN')`` from user code
   lands as ``None``.
 * **Binary path msgId framing** at server >= 201 now uses a 4-byte
-  big-endian raw integer prefix (matching IBKR's reference
-  ``comm.make_msg(..., useRawIntMsgId=True)``). The legacy NUL-text
-  framing was silently dropped by server 201+.
+  big-endian raw integer prefix. The legacy NUL-text framing was
+  silently dropped by server 201+.
 * **Wire-boundary None-coalesce** at the protobuf converter entry
   mirrors the binary path's ``_FORMAT_HANDLERS[type(None)] =
   lambda _: ""`` behaviour: callers that stamp ``None`` onto plain-
@@ -506,8 +503,8 @@ are fixed in v3.0:
   single source of truth for IBKR UNSET-sentinel rejection.
 * Comprehensive owned-test suite covering the protobuf seam,
   Decimal coercion, request / subscription lifecycles, dataclass
-  invariants, cross-version decoder gating, and wire-frame parity
-  against IBKR's reference client. Each behavioural fix listed
+  invariants, cross-version decoder gating, and wire-frame
+  conformance with IBKR's protocol. Each behavioural fix listed
   above is pinned by at least one regression test.
 
 2.0

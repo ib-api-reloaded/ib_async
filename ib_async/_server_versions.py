@@ -8,9 +8,8 @@ likewise gate conditional reads. Mismatched gates produce malformed
 wire frames the server can't parse OR mis-decoded responses where we
 read fields the server never sent.
 
-This module mirrors ``ibapi/server_versions.py`` from IBKR's official
-Python reference client. Update by re-syncing against that file
-when bumping ``MAX_CLIENT_VER``.
+This module holds IBKR's server version numbers, which must match the
+protocol IBKR publishes. Update them when bumping ``MAX_CLIENT_VER``.
 
 Constants below the protobuf cutoff (201) are kept too even though our
 modern client only negotiates >= MIN_CLIENT_VER. They're available for
@@ -185,7 +184,7 @@ MIN_SERVER_VER_HEDGE_MAX_SIZE: Final = 223
 MIN_SERVER_VER_USE_PRECISION_FROM_SEC_DEF: Final = 224
 MIN_SERVER_VER_ODD_LOT_BID_ASK_QUOTES: Final = 225
 # IBKR switched gate naming from MIN_SERVER_VER_* to UNIFIED_VERSION_*
-# here; the name mirrors its reference so the two stay greppable.
+# here; the name keeps IBKR's spelling so the two stay greppable.
 UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM: Final = 226
 
 # --- Client-side handshake bounds

@@ -4,7 +4,7 @@ TWS negotiates ``min(server max, client max)`` from the ``v{Min}..{Max}``
 banner, and IBKR has announced TWS API 10.51 (server version 226) as
 the minimum it will accept. Other tests rebuild the banner format by
 hand; these capture the bytes the real connect path sends, so a cap
-that drifts from IBKR's reference shows up here.
+that drifts from the protocol IBKR publishes shows up here.
 """
 
 from __future__ import annotations
