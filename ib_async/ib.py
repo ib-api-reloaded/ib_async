@@ -2235,6 +2235,7 @@ class IB:
         endDateTime: str | datetime.date,
         totalResults: int,
         historicalNewsOptions: Sequence[TagValue] = (),
+        timeout: float = 60,
     ) -> list[HistoricalNews] | None:
         """
         Get historical news headline.
@@ -2257,6 +2258,12 @@ class IB:
                 If no timezone is given then the TWS login timezone is used.
             totalResults: Maximum number of headlines to fetch (300 max).
             historicalNewsOptions: Unknown.
+            timeout: Seconds to wait for the headlines; on timeout the
+                result is None.
+
+        Note: users report, with IBKR's own clients too, that the server
+        does not reliably keep to the date range: results can run back
+        from ``startDateTime`` regardless of ``endDateTime``.
         """
         historicalNewsOptions = _tagValueList(historicalNewsOptions)
         return self._run(
@@ -2267,6 +2274,7 @@ class IB:
                 endDateTime,
                 totalResults,
                 historicalNewsOptions,
+                timeout,
             )
         )
 
@@ -3051,6 +3059,7 @@ class IB:
         endDateTime: str | datetime.date,
         totalResults: int,
         historicalNewsOptions: Sequence[TagValue] = (),
+        timeout: float = 60,
     ) -> list[HistoricalNews] | None:
         """Async sibling of :meth:`reqHistoricalNews`."""
         historicalNewsOptions = _tagValueList(historicalNewsOptions)
@@ -3061,7 +3070,7 @@ class IB:
             reqId, conId, providerCodes, start, end, totalResults, historicalNewsOptions
         )
         return await self._awaitOrTimeout(
-            ReqIdKey(reqId), future, 4, "reqHistoricalNewsAsync"
+            ReqIdKey(reqId), future, timeout, "reqHistoricalNewsAsync"
         )
 
     async def requestFAAsync(self, faDataType: int):

@@ -243,6 +243,11 @@ are fixed in v3.0:
   ``connect`` now logs this, and ``portfolio()`` and ``connect``
   document how to choose the account (``positions()`` covers every
   account). (:issue:`72`, :issue:`165`)
+* **``reqHistoricalNews`` gave up after a fixed 4 seconds**, short for
+  300 headlines; ``timeout`` is now a parameter (default 60, like
+  ``reqHistoricalData``). The docstring notes that IBKR's server does
+  not reliably keep to the date range, as users found with IBKR's own
+  clients too. (:issue:`108`)
 * **``AccountValue.decimalValue``** returned ``None`` for every
   per-currency monetary value on TWS installs with TWS API 10.47's
   ``$LEDGER-`` prefix setting on — the default for new installs. The
