@@ -21,8 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "aeventkit>=2.1.0,<3.0.0",
-    "nest_asyncio",
+    "aeventkit>=3.0.0,<4.0.0",
+    "anest-asyncio>=2.0.0,<3.0.0",
     "protobuf>=5.0.0,<7.0.0",
     "tzdata>=2025.2"
 ]
