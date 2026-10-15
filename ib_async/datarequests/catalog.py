@@ -14,7 +14,16 @@ accepts its values as plain strings and as members of the family's enum.
 
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
+
+
+def _checkUnique(what: str, names: Iterable[str]) -> None:
+    """Refuse a name given twice among ``names`` (``what`` they are)."""
+    twice = sorted(name for name, count in Counter(names).items() if count > 1)
+    if twice:
+        raise ValueError(f"{what} given twice: {', '.join(twice)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +42,11 @@ class Family:
     doc: str
     # In the order to document them.
     members: tuple[Member, ...]
+
+    def __post_init__(self) -> None:
+        # A second member of the same value would be a silent enum alias.
+        _checkUnique(f"{self.name} member names", (m.name for m in self.members))
+        _checkUnique(f"{self.name} member values", (m.value for m in self.members))
 
     @property
     def values(self) -> tuple[str, ...]:
@@ -158,4 +172,10 @@ PARAMETERS: tuple[Parameter, ...] = (
         family=BAR_SIZE,
         values=BAR_SIZE.values,
     ),
+)
+
+# Every family and parameter is one name of the generated module.
+_checkUnique(
+    "family and parameter names",
+    [*(f.name for f in FAMILIES), *(p.name for p in PARAMETERS)],
 )

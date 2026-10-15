@@ -20,7 +20,14 @@ from ib_async.datarequests import (
     WhatToShow,
     checkDuration,
 )
-from ib_async.datarequests.catalog import FAMILIES, PARAMETERS, WHAT_TO_SHOW, Parameter
+from ib_async.datarequests.catalog import (
+    FAMILIES,
+    PARAMETERS,
+    WHAT_TO_SHOW,
+    Family,
+    Member,
+    Parameter,
+)
 
 
 def test_each_family_has_unique_names_and_values() -> None:
@@ -131,3 +138,8 @@ def test_historical_data_refuses_schedule() -> None:
 def test_a_parameter_takes_only_its_familys_values() -> None:
     with pytest.raises(ValueError, match="not in WhatToShow"):
         Parameter(name="X", doc="X", family=WHAT_TO_SHOW, values=("TRADES", "NOPE"))
+
+
+def test_a_family_refuses_a_value_given_twice() -> None:
+    with pytest.raises(ValueError, match="X member values given twice: a"):
+        Family(name="X", doc="X", members=(Member("A", "a"), Member("B", "a")))
