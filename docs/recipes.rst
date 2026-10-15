@@ -125,9 +125,10 @@ volume-weighted average price in ``wap``:
     volumeBars = trades.volumebars(10_000)
 
 Each emits its completed bars; its ``bars`` holds every bar (or, with
-``maxBars=``, the last that many completed ones), the last in progress. An indicator over the bars is a running fold over the completed
-bars, constant time per bar: a session VWAP folds the bars' price × volume
-and volume with ``reduce``, and eventkit's ``ema`` averages their closes.
+``maxBars=``, the last that many completed ones), the last in progress.
+An indicator over the bars is a running fold over the completed bars,
+constant time per bar: a session VWAP folds the bars' price × volume and
+volume with ``reduce``, and eventkit's ``ema`` averages their closes.
 From ``examples/programs/live_bars.py``:
 
 .. literalinclude:: ../examples/programs/live_bars.py

@@ -112,8 +112,9 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   (midpoints without a bid and ask, which used to fail the aggregation)
   are skipped; a time bar before any tick is no bar, and a time bar's
   naive timer time is taken as local time. An operator ends with its
-  source (and a time bar operator with its timer). ``examples/programs/live_bars.py`` and a recipe show indicators
-  on the bars (a session VWAP and an EMA) as running folds.
+  source (and a time bar operator with its timer).
+  ``examples/programs/live_bars.py`` and a recipe show indicators on the
+  bars (a session VWAP and an EMA) as running folds.
   ``RealTimeBar.open_`` is now ``open``, as on ``BarData``.
   (:issue:`127`, thanks to @gnzsnz, and @pavel-slama for the review)
 * **Attached-order linkage on** ``Order``: new ``slOrderId`` /

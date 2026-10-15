@@ -12,9 +12,10 @@ working.
 It covers ``MARKET_DEPTH``, ``MARKET_DEPTH_L2``,
 ``MKT_DEPTH_EXCHANGES``, ``REROUTE_MKT_DATA_REQ``,
 ``REROUTE_MKT_DEPTH_REQ`` and ``DELTA_NEUTRAL_VALIDATION`` too. The
-tickOptionComputation shape mirrors the binary path's silent treatment of IBKR's sentinels
-(``-1``, ``-2``) so the wrapper's existing ``tickOptionComputation``
-``if x != -1 else None`` logic continues to apply post-decode.
+tickOptionComputation shape mirrors the binary path's silent treatment
+of IBKR's sentinels (``-1``, ``-2``) so the wrapper's existing
+``tickOptionComputation`` ``if x != -1 else None`` logic continues to
+apply post-decode.
 
 Wire shapes:
 
