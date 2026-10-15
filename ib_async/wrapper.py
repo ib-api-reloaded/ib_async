@@ -796,24 +796,17 @@ class Wrapper:
         pos: Decimal | None,
         avgCost: Decimal | None,
     ):
-        # ``Client.reqPositionsMulti`` is exposed for advisor accounts.
-        # Surface every row on ``positionEvent`` (same shape as the
-        # ``position`` callback) and accumulate against the request key
-        # so any future ``reqPositionsMultiAsync`` can drain it. Drop
-        # zero / unset positions the same way ``position`` does.
-        contract = Contract.recreate(contract)
-        position = Position(account, contract, pos, avgCost)
-        if not pos:
-            self.positions[account].pop(contract.conId, None)
-        else:
-            self.positions[account][contract.conId] = position
-        self.requests.append(ReqIdKey(reqId), position)
-        self.ib.positionEvent.emit(position)
+        # The rows of IB.reqPositionsMulti, collected for its request. They
+        # stay out of the account-wide ``positions``: a row filtered by
+        # model is that model's share, not the account's position.
+        # Zero positions are left out, as ``positions()`` leaves them out.
+        if pos:
+            position = Position(
+                account, Contract.recreate(contract), pos, avgCost, modelCode
+            )
+            self.requests.append(ReqIdKey(reqId), position)
 
     def positionMultiEnd(self, reqId: int):
-        # Mirrors ``accountUpdateMultiEnd``: settle the request future
-        # so any future async waiter resolves. No-op when no waiter
-        # is registered for this reqId.
         self.requests.set_result(ReqIdKey(reqId))
 
     def pnl(

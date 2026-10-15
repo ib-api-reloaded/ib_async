@@ -1193,6 +1193,24 @@ class IB:
         """
         return self._run(self.reqPositionsAsync())
 
+    def reqPositionsMulti(
+        self, account: str = "", modelCode: str = ""
+    ) -> list[Position]:
+        """
+        Request and return the positions of an account and/or model (for
+        financial advisors), each with its ``modelCode``.
+
+        Unlike :meth:`.positions`, a position here can be one model's share
+        of an account's position; these are not added to :meth:`.positions`.
+
+        This method is blocking.
+
+        Args:
+            account: If specified, the positions of this account or advisor group.
+            modelCode: If specified, the positions of this model.
+        """
+        return self._run(self.reqPositionsMultiAsync(account, modelCode))
+
     def reqPnL(self, account: str, modelCode: str = "") -> PnL:
         """
         Start a subscription for profit and loss events.
@@ -2680,6 +2698,18 @@ class IB:
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
         """Async sibling of :meth:`reqPositions`."""
         return self._startSingletonRequest("positions", self.client.reqPositions)
+
+    async def reqPositionsMultiAsync(
+        self, account: str = "", modelCode: str = ""
+    ) -> list[Position]:
+        """Async sibling of :meth:`reqPositionsMulti`."""
+        reqId, future = self._openReqIdRequest()
+        self.client.reqPositionsMulti(reqId, account, modelCode)
+        try:
+            return await future
+        finally:
+            # a subscription that keeps sending updates; this asks once
+            self.client.cancelPositionsMulti(reqId)
 
     def reqContractDetailsAsync(
         self, contract: Contract

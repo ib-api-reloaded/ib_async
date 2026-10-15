@@ -56,6 +56,10 @@ Gateway server version 226). The full upgrade guide with examples lives at
   * ``IB.cancelHistoricalTicks`` (protobuf-only, server >= 215; settles awaiter)
   * ``IB.reqConfigAsync``, ``IB.updateConfigAsync`` (protobuf-only, server >= 219)
 
+* **``IB.reqPositionsMulti(account, modelCode)``** (and its async sibling)
+  returns the positions of an account, advisor group or model, each with
+  the new ``Position.modelCode``. A model's share of a position is not
+  added to ``positions()``. (:issue:`41`, :issue:`25`, thanks to @paramkr2)
 * **Attached-order linkage on** ``Order``: new ``slOrderId`` /
   ``slOrderType`` / ``ptOrderId`` / ``ptOrderType`` fields preserve
   the stop-loss and profit-target ids of a bracket or OCO group

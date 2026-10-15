@@ -3398,63 +3398,6 @@ def test_position_drops_zero_and_appends_to_live_request():
     assert len(drained) == 2
 
 
-def test_position_multi_emits_event_and_accumulates_per_reqid():
-    """Round 4 fix: ``positionMulti`` was a no-op stub that dropped every
-    row, breaking ``Client.reqPositionsMulti`` callers (advisor accounts
-    with model codes). Each row must now surface on ``positionEvent``
-    and accumulate against ``ReqIdKey(reqId)`` for any future async
-    waiter, with ``positionMultiEnd`` settling that future.
-    """
-
-    ib = ibi.IB()
-    captured: list[ibi.Position] = []
-    ib.positionEvent += captured.append
-
-    req, _is_new = ib.wrapper.requests.open(_ReqIdKey(7), container=[])
-    future = req.future
-
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    contract.conId = 265598
-
-    ib.wrapper.positionMulti(
-        7, "DU1", "Conservative", contract, Decimal(5), Decimal("180.00")
-    )
-
-    assert len(captured) == 1
-    assert captured[0].account == "DU1"
-    assert captured[0].position == Decimal(5)
-    assert 265598 in ib.wrapper.positions["DU1"]
-    assert not future.done()
-
-    ib.wrapper.positionMultiEnd(7)
-
-    assert future.done()
-    drained = future.result()
-    assert len(drained) == 1
-
-
-def test_position_multi_drops_zero_size_row():
-    """Closing a position-multi row (size 0) must drop the cached entry
-    the same way the singular ``position`` handler does, so the user-
-    visible ``positions`` cache stays consistent across both streams.
-    """
-    ib = ibi.IB()
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    contract.conId = 265598
-
-    # Open via positionMulti.
-    ib.wrapper.positionMulti(
-        9, "DU1", "Aggressive", contract, Decimal(3), Decimal("180.00")
-    )
-    assert 265598 in ib.wrapper.positions["DU1"]
-
-    # Close it.
-    ib.wrapper.positionMulti(
-        9, "DU1", "Aggressive", contract, Decimal(0), Decimal("180.00")
-    )
-    assert 265598 not in ib.wrapper.positions["DU1"]
-
-
 def test_managed_accounts_populates_account_list_on_comma_separated_payload():
     """``managedAccounts`` arrives once at startup with a CSV payload.
     Empty entries (trailing comma) must be filtered so user code reading

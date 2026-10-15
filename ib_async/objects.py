@@ -607,6 +607,8 @@ class Position:
     contract: Contract
     position: Decimal | None = None
     avgCost: Decimal | None = None
+    # the model the position belongs to, from reqPositionsMulti; "" otherwise
+    modelCode: str = ""
 
 
 @dataclass(slots=True, frozen=True)
