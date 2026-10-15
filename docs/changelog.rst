@@ -237,6 +237,12 @@ are fixed in v3.0:
   second spread got the first one's ticker and subscription. Bags are now
   identified by their legs, and ``Contract.__eq__`` compares bags by
   their legs too, consistent with their hash. (:issue:`236`)
+* **``portfolio()`` was silently empty with several managed accounts.**
+  IBKR streams portfolio updates for one account at a time, and with
+  several accounts and no ``connect(account=...)`` none was subscribed.
+  ``connect`` now logs this, and ``portfolio()`` and ``connect``
+  document how to choose the account (``positions()`` covers every
+  account). (:issue:`72`, :issue:`165`)
 * **``AccountValue.decimalValue``** returned ``None`` for every
   per-currency monetary value on TWS installs with TWS API 10.47's
   ``$LEDGER-`` prefix setting on — the default for new installs. The

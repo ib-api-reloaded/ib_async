@@ -406,7 +406,10 @@ class IB:
               ``timeout`` seconds then the ``asyncio.TimeoutError`` exception
               is raised. Set to 0 to disable timeout.
             readonly: Set to ``True`` when API is in read-only mode.
-            account: Main account to receive updates for.
+            account: Main account to receive portfolio and account updates
+                for (IBKR streams portfolio updates for one account at a
+                time). Needed for :meth:`portfolio` when the login manages
+                several accounts; with only one, that one is used.
             raiseSyncErrors: When ``True`` this will cause an initial
               sync request error to raise a `ConnectionError``.
               When ``False`` the error will only be logged at error level.
@@ -672,6 +675,12 @@ class IB:
         List of portfolio items for the given account,
         or of all retrieved portfolio items if account is left blank.
 
+        IBKR sends portfolio items for one account at a time: the account
+        given to :meth:`connect`, the only managed account, or the one last
+        passed to :meth:`reqAccountUpdates`. With several managed accounts
+        and none chosen, this stays empty; :meth:`positions` covers every
+        account.
+
         Args:
             account: If specified, filter for this account name.
         """
@@ -679,6 +688,25 @@ class IB:
             return list(self.wrapper.portfolio[account].values())
 
         return [v for d in self.wrapper.portfolio.values() for v in d.values()]
+
+    def _accountForUpdates(self, account: str, accounts: list[str]) -> str:
+        """The account connect subscribes to for portfolio and account
+        updates: the one given, else the only managed one, else none. IBKR
+        streams portfolio updates for one account at a time, so with
+        several accounts and none chosen, :meth:`portfolio` stays empty;
+        say so rather than leave it silent."""
+        if account:
+            return account
+        if len(accounts) == 1:
+            return accounts[0]
+        if accounts:
+            self._logger.info(
+                f"{len(accounts)} managed accounts and none chosen: "
+                "portfolio() stays empty, since IBKR sends portfolio updates "
+                "for one account at a time; choose one with "
+                "connect(account=...) or reqAccountUpdates(account)"
+            )
+        return ""
 
     def positions(self, account: str = "") -> list[Position]:
         """
@@ -2415,8 +2443,7 @@ class IB:
                 self.reqAutoOpenOrders(True)
 
             accounts = self.client.getAccounts()
-            if not account and len(accounts) == 1:
-                account = accounts[0]
+            account = self._accountForUpdates(account, accounts)
 
             # prepare initializing requests
             # name -> request
