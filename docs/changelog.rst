@@ -187,7 +187,9 @@ Gateway server version 226). The full upgrade guide with examples lives at
   as itself. ``labels`` keeps those columns in that order, and an unknown
   label raises instead of being ignored. No objects give an empty
   DataFrame instead of ``None``. ``frame.to_pandas()`` converts where
-  pandas is still needed (it requires pandas and pyarrow).
+  pandas is still needed (it requires pandas and pyarrow). polars runs
+  on CPython only; on PyPy, ``util.pandasDf()`` builds a pandas DataFrame
+  the same way (pandas is not a dependency: install it yourself).
 
 **Removed**
 

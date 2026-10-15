@@ -67,31 +67,24 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> "pl.DataFram
     becomes null, and an ib_async object such as a ``Contract`` is stored
     as itself. With no objects the result has no rows.
 
-    Requires polars: ``pip install "ib_async[polars]"``.
+    Requires polars: ``pip install "ib_async[polars]"``. polars runs on
+    CPython only; on PyPy, :func:`pandasDf` builds a pandas DataFrame.
 
     Args:
       labels: If supplied, keep only these columns, in this order.
     """
     # polars is an optional dependency, imported only when used.
-    import polars as pl  # noqa: PLC0415
+    try:
+        import polars as pl  # noqa: PLC0415
+    except ImportError as e:
+        raise ImportError(
+            'util.df() requires polars: pip install "ib_async[polars]". '
+            "polars runs on CPython only; on PyPy use util.pandasDf()."
+        ) from e
 
-    rows = list(objs)
-    if not rows:
+    columns, data = _table(objs)
+    if not data:
         return pl.DataFrame(schema=list(labels or ()))
-    first = rows[0]
-    if is_dataclass(first):
-        columns = [field.name for field in fields(first)]
-        data = [dataclassAsTuple(o) for o in rows]
-    elif isinstance(first, tuple):
-        columns = list(getattr(first, "_fields", ())) or [
-            f"column_{i}" for i in range(len(first))
-        ]
-        data = rows
-    else:
-        records = rows if isinstance(first, dict) else [vars(o) for o in rows]
-        # every key of every record, in first-seen order; a missing one is null
-        columns = list(dict.fromkeys(key for record in records for key in record))
-        data = [tuple(record.get(c) for c in columns) for record in records]
     frame = pl.DataFrame(
         [
             # strict=False: a column mixing ints and floats (FlexReport
@@ -107,6 +100,47 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> "pl.DataFram
         ]
     )
     return frame.select(labels) if labels else frame
+
+
+def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
+    """
+    Same as :func:`df`, but returns a ``pandas.DataFrame``, for where polars
+    is not available (PyPy). Values are stored as they are (``Decimal`` in
+    object columns). pandas is not a dependency of ib_async: install it
+    yourself.
+
+    Args:
+      labels: If supplied, keep only these columns, in this order.
+    """
+    # pandas is an optional dependency, imported only when used.
+    import pandas as pd  # noqa: PLC0415
+
+    columns, data = _table(objs)
+    if not data:
+        return pd.DataFrame(columns=list(labels or ()))
+    frame = pd.DataFrame.from_records(data, columns=columns)
+    return frame[list(labels)] if labels else frame
+
+
+def _table(objs: Iterable[Any]) -> tuple[list[str], list[tuple[Any, ...]]]:
+    """Column names and one tuple of values per object, for :func:`df`."""
+    rows = list(objs)
+    if not rows:
+        return [], []
+    first = rows[0]
+    if is_dataclass(first):
+        return [field.name for field in fields(first)], [
+            dataclassAsTuple(o) for o in rows
+        ]
+    if isinstance(first, tuple):
+        columns = list(getattr(first, "_fields", ())) or [
+            f"column_{i}" for i in range(len(first))
+        ]
+        return columns, rows
+    records = rows if isinstance(first, dict) else [vars(o) for o in rows]
+    # every key of every record, in first-seen order; a missing one is null
+    columns = list(dict.fromkeys(key for record in records for key in record))
+    return columns, [tuple(record.get(c) for c in columns) for record in records]
 
 
 # Values polars stores in a column of their own type; anything else
@@ -381,10 +415,14 @@ def tree(obj):
 def _ohlcRows(bars) -> list[tuple[Any, Any, Any, Any]]:
     """
     ``(open, high, low, close)`` per bar, from a polars DataFrame (from
-    :func:`df`) or from bar objects (``BarData``, ``RealTimeBar``).
+    :func:`df`), a pandas DataFrame (from :func:`pandasDf`) or bar objects
+    (``BarData``, ``RealTimeBar``).
     """
-    if hasattr(bars, "select"):  # a DataFrame
+    if hasattr(bars, "select"):  # a polars DataFrame
         return bars.select("open", "high", "low", "close").rows()
+    if hasattr(bars, "itertuples"):  # a pandas DataFrame
+        ohlc = bars[["open", "high", "low", "close"]]
+        return list(ohlc.itertuples(index=False, name=None))
     if bars and hasattr(bars[0], "open_"):
         return [(b.open_, b.high, b.low, b.close) for b in bars]
     return [(b.open, b.high, b.low, b.close) for b in bars]
@@ -393,7 +431,8 @@ def _ohlcRows(bars) -> list[tuple[Any, Any, Any, Any]]:
 def barplot(bars, title="", upColor="blue", downColor="red"):
     """
     Create candlestick plot for the given bars. The bars can be given as
-    a polars DataFrame (from :func:`df`) or as a list of bar objects.
+    a DataFrame (from :func:`df` or :func:`pandasDf`) or as a list of bar
+    objects.
     """
     # matplotlib is an optional dependency, imported only when used.
     import matplotlib.pyplot as plt  # noqa: PLC0415
