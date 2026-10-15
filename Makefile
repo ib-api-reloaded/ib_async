@@ -9,7 +9,7 @@
 # bindings bundled into the package without needing ``protoc`` or
 # ``grpcio-tools``.
 
-.PHONY: help sync protos audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-matrix format clean
+.PHONY: help sync protos audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-matrix test-repeat format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -48,6 +48,7 @@ help:
 	@echo "  test-matrix - run the suite on each configured Python version, each in its"
 	@echo "                own .venvs/py<version> environment and time-boxed; logs in"
 	@echo "                .venvs/logs/ (PYTHONS=\"3.13 3.15\" for a subset)"
+	@echo "  test-repeat     - the tests many times, to expose intermittent failures (TIMES, CONCURRENT)"
 	@echo "  ruff     - ruff check + ruff format --check"
 	@echo "  typecheck - mypy"
 	@echo "  lint     - ruff + typecheck"
@@ -120,6 +121,9 @@ test:
 
 test-matrix:
 	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v))
+
+test-repeat:
+	$(RELEASEKIT) repeat $(if $(TIMES),--times $(TIMES)) $(if $(CONCURRENT),--concurrent $(CONCURRENT))
 
 format:
 	uv run python -m ruff format ib_async/ tests/
