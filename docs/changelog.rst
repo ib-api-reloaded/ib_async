@@ -104,12 +104,15 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   volume-weighted average price, kept in constant time per tick (and
   ``None`` for a bar without volume, such as a midpoint bar). All three
   share one builder and one event contract: each emits its completed bars,
-  and ``bars.updateEvent(bars, hasNewBar)`` fires on every tick (False)
-  and on each completion (True). A completed bar never changes. Their
-  ``bars`` keeps every bar, or with ``maxBars=`` at most that many
-  completed bars besides the one in progress, the oldest dropped. Midpoint
-  ticks without a bid and ask, which used to fail the aggregation, are
-  skipped. ``examples/programs/live_bars.py`` and a recipe show indicators
+  and ``bars.updateEvent(bars, hasNewBar)`` fires True on each completion
+  and False whenever the bar in progress otherwise changes. A completed
+  bar never changes, and is a frozen ``RealTimeBar``. Their ``bars`` keeps
+  every bar, or with ``maxBars=`` at most that many completed bars besides
+  the one in progress, the oldest dropped. Ticks without a finite price
+  (midpoints without a bid and ask, which used to fail the aggregation)
+  are skipped; a time bar before any tick is no bar, and a time bar's
+  naive timer time is taken as local time. An operator ends with its
+  source (and a time bar operator with its timer). ``examples/programs/live_bars.py`` and a recipe show indicators
   on the bars (a session VWAP and an EMA) as running folds.
   ``RealTimeBar.open_`` is now ``open``, as on ``BarData``.
   (:issue:`127`, thanks to @gnzsnz, and @pavel-slama for the review)

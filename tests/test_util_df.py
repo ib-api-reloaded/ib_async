@@ -5,11 +5,13 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 from typing import NamedTuple
+from zoneinfo import ZoneInfo
 
 import pytest
 
 pl = pytest.importorskip("polars")
 
+import ib_async as ibi
 from ib_async import BarData, Position, RealTimeBar, Stock, util
 from ib_async.flexreport import FlexReport
 
@@ -162,3 +164,16 @@ def test_ohlc_rows_from_realtime_bars():
 def test_a_missing_optional_dependency_says_how_to_install_it():
     with pytest.raises(ImportError, match="pip install the-thing"):
         util._optional("ib_async_no_such_module", "pip install the-thing")
+
+
+def test_values_polars_cannot_hold_keep_their_column_as_objects():
+    """An infinite Decimal (Pegged to Best up to Midpoint's offset), and
+    datetimes in different time zones, are kept as they are."""
+    upToMid = ibi.Order(competeAgainstBestOffset=Decimal("Infinity"))
+    frame = util.df([ibi.Order(), upToMid], ["competeAgainstBestOffset"])
+    assert frame["competeAgainstBestOffset"].to_list() == [None, Decimal("Infinity")]
+    times = [
+        dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
+        dt.datetime(2026, 1, 1, tzinfo=ZoneInfo("US/Eastern")),
+    ]
+    assert util.df([(t,) for t in times])["column_0"].to_list() == times

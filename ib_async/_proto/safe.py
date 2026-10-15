@@ -136,9 +136,7 @@ def fill_tag_value_map(items: object, target: object) -> None:
     """Copy a domain ``list[TagValue]`` into a proto ``map<string,string>``.
 
     Empty / ``None`` inputs leave the proto map field unset on the wire
-    (matching the
-    binary path's "skip the options block when the list is empty"
-    behaviour). Each ``TagValue`` is unpacked positionally so any
+    (as the binary path skips the options block when the list is empty). Each ``TagValue`` is unpacked positionally so any
     ``NamedTuple`` / dataclass / 2-tuple shape works.
 
     Both args are typed ``object`` because the protobuf generated stubs

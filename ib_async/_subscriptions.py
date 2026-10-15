@@ -424,21 +424,21 @@ class SubscriptionRegistry:
 
         return list(self._tickers.values())
 
-    def find_market_data(self, conId: int, kind: str) -> Subscription | None:
+    def find_market_data(self, identity: int, kind: str) -> Subscription | None:
         """Low-level lookup of a market-data subscription by its index
         *identity int* and ``kind``.
 
-        The identity is a contract's ``conId`` for qualified contracts and
-        a bag's synthetic comboLeg hash for spreads (see
-        :meth:`_market_data_identity`). Callers that hold the
-        :class:`Contract` should prefer :meth:`find_market_data_for_contract`,
-        which resolves the identity for them — critically for bags, which
-        are indexed by their legs, never by their ``conId`` (often 0, and
-        shared by many different spreads), and so can never be found by
-        ``conId`` here.
+        The identity is a contract's hash (see
+        :meth:`_market_data_identity`): its ``conId`` for a qualified
+        contract, negated for a CONTFUT, and a bag's synthetic comboLeg
+        hash. Callers that hold the :class:`Contract` should prefer
+        :meth:`find_market_data_for_contract`, which resolves the identity
+        for them — critically for bags, which are indexed by their legs,
+        never by their ``conId`` (often 0, and shared by many different
+        spreads), and so can never be found by ``conId`` here.
         """
 
-        return self._by_market_data_key.get((conId, kind))
+        return self._by_market_data_key.get((identity, kind))
 
     def find_market_data_for_contract(
         self, contract: Contract, kind: str
@@ -578,11 +578,10 @@ class SubscriptionRegistry:
         """Stable identity int used as the first element of the
         ``(identity, kind)`` market-data index key.
 
-          * Qualified contracts → their ``conId``. This is the historical
-            key (the index used to be ``(conId, kind)``), so qualified
-            contracts — including CONTFUT, which keeps its positive
-            ``conId`` here rather than the negated value
-            :meth:`Contract.__hash__` produces — behave exactly as before.
+          * Qualified contracts → ``hash(contract)``: their ``conId``,
+            negated for a CONTFUT, which is not the front future it shares
+            its conId with (as :meth:`Contract.__eq__` says, and as the
+            Ticker pool keys it), so the two never share a subscription.
           * Bags/spreads → ``hash(contract)``, the conId-independent
             synthetic comboLeg hash from :meth:`Contract.__hash__`, whatever its
             conId: a bag often has ``conId == 0``, and IBKR gives many different
@@ -601,10 +600,8 @@ class SubscriptionRegistry:
             entry (``hash()`` of such a contract also raises).
         """
 
-        # BAG first: IBKR reports one combo conId (such as 28812380) on many
-        # different spreads, so a bag's conId does not identify it
-        if contract.secType == "BAG":
+        # A bag hashes by its legs whatever its conId: IBKR reports one
+        # combo conId (such as 28812380) on many different spreads.
+        if contract.secType == "BAG" or contract.conId:
             return hash(contract)
-        if contract.conId:
-            return contract.conId
         return None

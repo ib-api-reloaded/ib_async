@@ -190,7 +190,7 @@ class BarData:
     barCount: int = 0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class RealTimeBar:
     time: datetime = EPOCH
     open: Decimal | None = None

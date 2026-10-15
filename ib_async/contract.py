@@ -147,19 +147,18 @@ class Contract:
         return Contract.create(**util.dataclassAsDict(c))
 
     def isHashable(self) -> bool:
-        """
-        See if this contract can be hashed by conId.
-
-        Note: Bag contracts always get conId=28812380, so they're not hashable by conId,
-              but we generate a synthetic hash for them based on leg details instead.
-        """
-        return bool(self.conId)
+        """Whether this contract can be hashed: a bag always (by its legs,
+        whatever its conId: IBKR gives many different spreads one combo
+        conId, such as 28812380, and a bag of the user's own often has 0),
+        any other contract once qualified (by its conId)."""
+        return self.secType == "BAG" or bool(self.conId)
 
     def __eq__(self, other):
-        # Equal as they hash: by conId, except for a bag, which compares by
-        # its legs (IBKR gives many different spreads the same combo conId),
-        # and a continuous future, never the front contract it shares its
-        # conId with.
+        # Equal by conId, as they hash, except for a bag (IBKR gives many
+        # different spreads the same combo conId) and a continuous future
+        # against the front contract it shares its conId with: those compare
+        # every field. (Equal contracts hash alike; a bag of the user's own
+        # and IBKR's copy of it hash alike by their legs, but differ in conId.)
         if not isinstance(other, Contract):
             return False
         kinds = (self.secType, other.secType)

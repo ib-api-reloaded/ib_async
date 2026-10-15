@@ -91,13 +91,12 @@ class Annotated:
 
 
 def annotate(bars: Event, emaBars: int) -> Event:
-    """Each completed bar with a price, as an :class:`Annotated`: the
-    session VWAP is a running fold (``reduce``) over the bars, the EMA
-    eventkit's own operator over their closes."""
-    priced = bars.filter(lambda bar: bar.close is not None)
-    vwap = priced.reduce(SessionVwap.add, SessionVwap()).map(lambda s: s.value)
-    ema = priced.map(lambda bar: float(bar.close)).ema(emaBars)
-    return priced.zip(vwap, ema).map(Annotated)
+    """Each completed bar, as an :class:`Annotated`: the session VWAP is
+    a running fold (``reduce``) over the bars, the EMA eventkit's own
+    operator over their closes (a completed bar always has one)."""
+    vwap = bars.reduce(SessionVwap.add, SessionVwap()).map(lambda s: s.value)
+    ema = bars.map(lambda bar: float(bar.close)).ema(emaBars)
+    return bars.zip(vwap, ema).map(Annotated)
 
 
 def formatBar(annotated: Annotated) -> str:

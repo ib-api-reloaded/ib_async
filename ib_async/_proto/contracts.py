@@ -235,8 +235,7 @@ def createContractProto(
     # ``conId`` is written unless it is the UNSET sentinel, so a ``0``
     # value is emitted explicitly. Suppressing the field at zero leaves
     # the server reading the proto3-default-absent slot as the IBKR
-    # ``UNSET_INTEGER`` / ``UNSET_DOUBLE`` sentinel and rejecting the
-    # request — e.g. ``Error 135: Can't find order with id =
+    # ``UNSET_INTEGER`` sentinel and rejecting the request — e.g. ``Error 135: Can't find order with id =
     # 2147483647`` on a placeOrder whose contract has not been
     # qualified yet (conId still at the dataclass default).
     if contract.conId != UNSET_INTEGER:
@@ -294,8 +293,7 @@ def createContractProto(
     # Per-leg pricing rides on ComboLeg.perLegPrice; the parallel list
     # ``order.orderComboLegs`` carries it on the order side. When there
     # are more contract legs than order legs, the extras get no per-leg
-    # price (i.e. unset
-    # on the wire), which is the same behaviour the binary path produced.
+    # price (unset on the wire), as on the binary path.
     orderLegs = (
         order.orderComboLegs if order is not None and order.orderComboLegs else []
     )

@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     import polars as pl
 
 globalErrorEvent: Event = Event()
+"""
+Event to emit global exceptions.
+"""
 
 
 def _optional(module: str, needed: str) -> Any:
@@ -48,10 +51,6 @@ def _optional(module: str, needed: str) -> Any:
     except ImportError as e:
         raise ImportError(needed) from e
 
-
-"""
-Event to emit global exceptions.
-"""
 
 EPOCH: Final = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 UNSET_INTEGER: Final = 2**31 - 1
@@ -172,7 +171,21 @@ _POLARS_SCALARS: Final = (
 
 
 def _polarsNative(values: list[Any]) -> bool:
-    return all(v is None or isinstance(v, _POLARS_SCALARS) for v in values)
+    """Whether polars holds the column of ``values`` as a typed column:
+    scalars of its types, with no non-finite Decimal (polars has none) and
+    datetimes in one time zone at most (a column has one); else it is an
+    Object column of the values as they are."""
+    zones = set()
+    for value in values:
+        if value is None:
+            continue
+        if not isinstance(value, _POLARS_SCALARS):
+            return False
+        if isinstance(value, Decimal) and not value.is_finite():
+            return False
+        if isinstance(value, dt.datetime):
+            zones.add(str(value.tzinfo))
+    return len(zones) <= 1
 
 
 def dataclassAsDict(obj) -> dict:

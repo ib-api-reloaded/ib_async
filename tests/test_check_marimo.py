@@ -94,3 +94,42 @@ def test_main_exit_code(checker, tmp_path, capsys):
     bad = write(tmp_path, NOTEBOOK.replace("BARS_PARAMETER", "barz"))
     assert checker.main([str(bad)]) == 1
     assert "'barz'" in capsys.readouterr().out
+
+
+def test_setup_with_arguments_and_top_level_definitions_define_names(checker, tmp_path):
+    source = """\
+import marimo
+
+app = marimo.App()
+
+with app.setup(hide_code=True):
+    PORT = 7497
+
+
+@app.function
+def double(x):
+    return 2 * x
+
+
+@app.class_definition
+class Holder:
+    pass
+
+
+@app.cell
+def _():
+    holder = Holder()
+    return (holder,)
+
+
+@app.cell
+def _(holder):
+    print(double(PORT), holder)
+    return
+"""
+    assert checker.problems(write(tmp_path, source)) == []
+    source = source.replace("print(double(PORT), holder)", "print(PORT)").replace(
+        "def _(holder):", "def _(holder, double2):"
+    )
+    [problem] = checker.problems(write(tmp_path, source))
+    assert "'double2'" in problem and "nothing at the top level defines" in problem

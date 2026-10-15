@@ -638,7 +638,8 @@ def createMarketDataRequestProto(
     marketDataOptions: list[TagValue] | None = None,
 ) -> MarketDataRequest_pb2.MarketDataRequest:
     # Each scalar is written only when set, as IBKR's server expects:
-    # reqId is ``is_valid_int``; string is non-empty; bool is truthy.
+    # reqId unless the UNSET_INTEGER sentinel; strings when non-empty;
+    # bools when true.
     proto = MarketDataRequest_pb2.MarketDataRequest()
     if reqId != UNSET_INTEGER:
         proto.reqId = reqId

@@ -9,8 +9,9 @@ catch it, and ruff cannot, since to ruff a parameter is always defined.
 
 This reads each notebook without running it and reports:
 
-* a cell parameter that no other cell returns and the setup cell does
-  not define;
+* a cell parameter that no other cell returns, and that neither the
+  setup cell nor an ``@app.function`` / ``@app.class_definition``
+  defines;
 * a variable returned by more than one cell (marimo refuses to run).
 
 Usage::
@@ -34,12 +35,13 @@ class Cell:
     returns: tuple[str, ...]
 
 
-def _isCell(decorator: ast.expr) -> bool:
-    """``@app.cell`` or ``@app.cell(...)``."""
-    target = decorator.func if isinstance(decorator, ast.Call) else decorator
+def _isApp(expression: ast.expr, *attributes: str) -> bool:
+    """``app.<attribute>`` or ``app.<attribute>(...)``, for one of
+    ``attributes``."""
+    target = expression.func if isinstance(expression, ast.Call) else expression
     return (
         isinstance(target, ast.Attribute)
-        and target.attr == "cell"
+        and target.attr in attributes
         and isinstance(target.value, ast.Name)
         and target.value.id == "app"
     )
@@ -71,11 +73,8 @@ def _setupNames(statement: ast.With) -> set[str]:
 
 
 def _isSetup(statement: ast.With) -> bool:
-    return any(
-        isinstance(item.context_expr, ast.Attribute)
-        and item.context_expr.attr == "setup"
-        for item in statement.items
-    )
+    """``with app.setup:`` or ``with app.setup(...):``."""
+    return any(_isApp(item.context_expr, "setup") for item in statement.items)
 
 
 def problems(path: Path) -> list[str]:
@@ -86,8 +85,17 @@ def problems(path: Path) -> list[str]:
     for statement in module.body:
         if isinstance(statement, ast.With) and _isSetup(statement):
             setup |= _setupNames(statement)
-        elif isinstance(statement, ast.FunctionDef | ast.AsyncFunctionDef) and any(
-            _isCell(d) for d in statement.decorator_list
+        elif not isinstance(
+            statement, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+        ):
+            continue
+        elif any(
+            _isApp(d, "function", "class_definition") for d in statement.decorator_list
+        ):
+            # a top-level function or class every cell can use by name
+            setup.add(statement.name)
+        elif not isinstance(statement, ast.ClassDef) and any(
+            _isApp(d, "cell") for d in statement.decorator_list
         ):
             parameters = tuple(a.arg for a in statement.args.args)
             cells.append(Cell(statement.lineno, parameters, _returned(statement)))
@@ -107,7 +115,7 @@ def problems(path: Path) -> list[str]:
             if name not in definedBy and name not in setup:
                 found.append(
                     f"{path}:{cell.line}: the cell asks for {name!r}, which no "
-                    "cell returns and the setup cell does not define"
+                    "cell returns and nothing at the top level defines"
                 )
     return found
 

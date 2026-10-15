@@ -46,7 +46,7 @@ DECLARED_FIELDS = {
     TickerUpdateEvent: set(),
     Tickfilter: {"_tickTypes"},
     Midpoints: set(),
-    _Bars: {"bars", "maxBars", "_builder", "_published", "_lastClose"},
+    _Bars: {"bars", "_maxBars", "_builder", "_published", "_lastClose"},
     TimeBars: {"_timer"},
     TickBars: {"_count"},
     VolumeBars: {"_volume"},
@@ -276,7 +276,9 @@ def test_timebars_from_synthetic_ticks():
     assert emitted == expected
     # the bar in progress is flat at the last close until its first tick
     assert list(timeBars.bars) == [*expected, bar(6, ("8",) * 4, "0", None, 0)]
-    assert flags == [False, True, False, False, True, True]
+    # False on each tick, and as a new bar starts flat at the last close;
+    # True as each bar completes
+    assert flags == [False, True, False, False, False, True, False, True, False]
 
     timer.set_done()
     assert timeBars.done()
@@ -403,7 +405,7 @@ def test_a_time_bar_before_any_tick_is_no_bar():
     timer.emit(_at(3))
 
     assert emitted == [bar(1, ("12",) * 4, "2", Decimal(12), 1)]
-    assert flags == [False, True]
+    assert flags == [False, True, False]
     assert [b.time for b in timeBars.bars] == [_at(1), _at(3)]
 
 
@@ -428,3 +430,72 @@ def test_clearing_bars_leaves_the_operator_working():
     _feed(ticker, TICKS[3:4])
     timer.emit(_at(4))
     assert [b.time for b in timeBars.bars] == [_at(0), _at(4)]
+
+
+def test_time_bars_end_with_their_source():
+    """After the ticks end (a disconnect), the timer no longer completes
+    bars: nothing is emitted, and bars stays as it was."""
+    ticker = Ticker()
+    timer = Event("timer")
+    timeBars = ticker.updateEvent.trades().timebars(timer)
+    emitted, flags = record(timeBars)
+    timer.emit(_at(0))
+    _feed(ticker, TICKS[2:3])
+    ticker.updateEvent.set_done()
+
+    assert timeBars.done()
+    held = list(timeBars.bars)
+    timer.emit(_at(60))
+    timer.emit(_at(120))
+    assert (emitted, flags, list(timeBars.bars)) == ([], [False], held)
+
+
+def test_time_bars_end_with_their_timer():
+    ticker = Ticker()
+    timer = Event("timer")
+    timeBars = ticker.updateEvent.trades().timebars(timer)
+    _, flags = record(timeBars)
+    timer.emit(_at(0))
+    timer.set_done()
+
+    assert timeBars.done()
+    _feed(ticker, TICKS)
+    assert flags == [] and list(timeBars.bars) == []
+
+
+def test_a_naive_timer_time_is_local_time():
+    ticker = Ticker()
+    timer = Event("timer")
+    timeBars = ticker.updateEvent.trades().timebars(timer)
+    timer.emit(datetime(2026, 10, 15, 9, 30))
+    _feed(ticker, TICKS[2:3])
+    (bar,) = timeBars.bars
+    assert bar.time == datetime(2026, 10, 15, 9, 30).astimezone()
+
+
+def test_ticks_without_a_finite_price_or_size():
+    ticker = Ticker()
+    tickBars = ticker.updateEvent.trades().tickbars(2)
+    _feed(ticker, [(0, 4, float("inf"), 1), (1, 4, 10.0, float("inf"))])
+    _feed(ticker, [(2, 4, 11.0, 2)])
+    assert list(tickBars.bars) == [
+        bar(1, ("10", "11", "10", "11"), "2", Decimal(11), 2)
+    ]
+
+
+@pytest.mark.parametrize("volume", [float("nan"), float("inf"), 0, -1])
+def test_a_volume_bar_needs_a_finite_positive_volume(volume):
+    with pytest.raises(ValueError, match="positive volume"):
+        VolumeBars(volume)
+
+
+def test_max_bars_is_checked_when_changed():
+    tickBars = TickBars(1, maxBars=2)
+    tickBars.maxBars = None
+    with pytest.raises(ValueError, match="at least 1 bar"):
+        tickBars.maxBars = 0
+
+
+def test_a_bar_cannot_be_changed():
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        bar(0, None, "0", None, 0).close = Decimal(1)  # type: ignore[misc]

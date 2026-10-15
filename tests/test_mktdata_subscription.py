@@ -237,3 +237,13 @@ def test_contract_equality_agrees_with_its_hash_both_ways():
     continuous = Contract(secType="CONTFUT", conId=7)
     assert front != continuous and continuous != front
     assert Contract(conId=7) == front and hash(Contract(conId=7)) == hash(front)
+
+
+def test_a_continuous_future_and_its_front_future_are_separate_subscriptions():
+    ib = _wired_ib()
+    front = Contract(secType="FUT", symbol="ES", conId=7, exchange="CME")
+    continuous = Contract(secType="CONTFUT", symbol="ES", conId=7, exchange="CME")
+    ib.reqMktData(continuous)
+    subs = ib.wrapper.subscriptions
+    assert subs.find_market_data_for_contract(continuous, "mktData") is not None
+    assert subs.find_market_data_for_contract(front, "mktData") is None

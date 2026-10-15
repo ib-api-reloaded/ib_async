@@ -330,9 +330,9 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # CRITICAL: ``transmit`` defaults to True in the domain. If we don't
     # write it through, the server treats absent==False and stages every
     # order without transmitting. The bool-truthy guard lets users
-    # override to False (proto3 default-False
-    # then leaves the field unset, which the server reads as not
-    # transmitted — the desired behavior for staged-order workflows).
+    # override to False (proto3 default-False then leaves the field
+    # unset, which the server reads as not transmitted — the desired
+    # behavior for staged-order workflows).
     if order.whatIf:
         proto.whatIf = order.whatIf
     if order.transmit:
@@ -474,9 +474,8 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.discretionaryUpToLimitPrice = order.discretionaryUpToLimitPrice
 
     # ``usePriceMgmtAlgo`` is wire-int (0/1/UNSET) but our domain types
-    # it as ``bool``. Write 1/0 when the bool is set to a truthy/falsy
-    # value. Domain default ``False`` would
-    # otherwise leave the field absent and mean "use server default".
+    # it as ``bool``: True is written as 1; the domain default ``False``
+    # leaves the field absent, which means "use the server default".
     if order.usePriceMgmtAlgo:
         proto.usePriceMgmtAlgo = 1
 
