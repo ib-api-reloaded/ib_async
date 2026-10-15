@@ -167,8 +167,10 @@ _POLARS_SCALARS: Final = (
 
 
 # The kind of a column of ints and floats both (FlexReport numbers),
-# which polars holds as Float64.
+# which polars holds as Float64: only when every int is one a float holds
+# exactly.
 _NUMBER = "number"
+_FLOAT_EXACT_INT = 2**53
 # The most digits a polars Decimal column holds, whole and fractional
 # together: a value needing more is stored as null.
 _POLARS_DECIMAL_DIGITS = 38
@@ -177,11 +179,13 @@ _POLARS_DECIMAL_DIGITS = 38
 def _columnKind(values: list[Any]) -> type | str | None:
     """The one kind of the column's values polars holds as a typed column
     without changing any: a scalar type of its own (ints and floats
-    together are numbers), with no non-finite Decimal (polars has none)
-    and datetimes in one time zone at most (a column has one). None for
-    any other column, which is kept as objects, values as they are."""
+    together are numbers, while every int is exact as a float), with no
+    non-finite Decimal (polars has none) and datetimes in one time zone at
+    most (a column has one). None for any other column, which is kept as
+    objects, values as they are."""
     kinds: set[type | str] = set()
     zones = set()
+    largestInt = 0
     # The most whole and fractional digits of the column's Decimals, which
     # its one precision and scale must hold together.
     whole = fraction = 0
@@ -199,8 +203,11 @@ def _columnKind(values: list[Any]) -> type | str | None:
             fraction = max(fraction, -exponent)
         if isinstance(value, dt.datetime):
             zones.add(str(value.tzinfo))
-        number = isinstance(value, int | float) and not isinstance(value, bool)
-        kinds.add(_NUMBER if number else type(value))
+        if isinstance(value, int) and not isinstance(value, bool):
+            largestInt = max(largestInt, abs(value))
+        kinds.add(type(value))
+    if kinds == {int, float}:
+        return _NUMBER if largestInt <= _FLOAT_EXACT_INT else None
     if len(kinds) > 1 or len(zones) > 1 or whole + fraction > _POLARS_DECIMAL_DIGITS:
         return None
     return next(iter(kinds), _NUMBER)
@@ -212,9 +219,9 @@ def _series(pl: Any, name: str, values: list[Any]) -> Any:
     kind = _columnKind(values)
     if kind is not None:
         try:
-            # Only ints and floats convert, to Float64; any other value
-            # polars cannot hold as it is (an int past 64 bits) fails, and
-            # the column is objects.
+            # Only ints beside floats convert, to Float64 (exactly); any
+            # other value polars cannot hold as it is (an int past its
+            # widest integer type) fails, and the column is objects.
             return pl.Series(name, values, strict=kind != _NUMBER)
         except (pl.exceptions.PolarsError, TypeError, ValueError, OverflowError):
             pass

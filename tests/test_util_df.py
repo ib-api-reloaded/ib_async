@@ -192,3 +192,13 @@ def test_a_mixed_column_keeps_its_values_as_they_are():
 
 def test_ints_and_floats_together_are_numbers():
     assert util.df([{"x": 1}, {"x": 2.5}])["x"].to_list() == [1.0, 2.5]
+
+
+def test_ints_are_never_nulled_or_rounded():
+    """An int polars cannot hold, or one beside floats that a float would
+    round, keeps its column as objects."""
+    huge = [2**130, 1]
+    assert util.df([{"n": v} for v in huge])["n"].to_list() == huge
+    exact = [2**53 + 1, 0.5]
+    assert util.df([{"n": v} for v in exact])["n"].to_list() == exact
+    assert util.df([{"n": 2**70}, {"n": 1}])["n"].to_list() == [2**70, 1]
