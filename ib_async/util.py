@@ -116,9 +116,11 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
 def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
     """
     Same as :func:`df`, but returns a ``pandas.DataFrame``, for where polars
-    is not available (PyPy). Values are stored as they are (``Decimal`` in
-    object columns). pandas is not a dependency of ib_async: install it
-    yourself.
+    is not available (PyPy). pandas infers each column's type itself:
+    ``Decimal`` values stay ``Decimal`` (an object column), but a numeric
+    column with a ``None`` becomes float (``NaN`` for the ``None``) and an
+    aware ``datetime`` a pandas ``Timestamp``. pandas is not a dependency
+    of ib_async: install it yourself.
 
     Args:
       labels: If supplied, keep only these columns, in this order.
