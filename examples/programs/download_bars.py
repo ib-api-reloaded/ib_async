@@ -21,12 +21,14 @@ import datetime as dt
 import logging
 import sys
 from pathlib import Path
+from typing import get_args
 
 from ib_async import (
     IB,
     BarData,
     BarSize,
     Contract,
+    HistoricalData,
     Stock,
     WhatToShow,
     checkDuration,
@@ -55,7 +57,11 @@ def parseArgs(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--chunks", type=int, default=3, help="requests to make")
     parser.add_argument(
-        "--what", type=WhatToShow, choices=list(WhatToShow), default=WhatToShow.TRADES
+        "--what",
+        type=WhatToShow,
+        # The data bars are built from: every whatToShow but SCHEDULE.
+        choices=[w for w in WhatToShow if w in get_args(HistoricalData)],
+        default=WhatToShow.TRADES,
     )
     parser.add_argument(
         "--all-hours",
@@ -86,7 +92,7 @@ async def downloadBars(
     barSize: BarSize,
     chunk: str,
     chunks: int,
-    what: WhatToShow,
+    what: HistoricalData,
     useRTH: bool,
     pause: float,
 ) -> list[BarData]:

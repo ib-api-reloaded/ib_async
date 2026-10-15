@@ -35,7 +35,6 @@ from eventkit import Event
 from eventkit.util import get_event_loop as _threadEventLoop
 
 if TYPE_CHECKING:
-    import pandas as pd
     import polars as pl
 
 globalErrorEvent: Event = Event()
@@ -113,7 +112,9 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
     return frame.select(labels) if labels else frame
 
 
-def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pd.DataFrame:
+# Returns a pandas.DataFrame, typed Any: pandas is not a dependency, not
+# even for type checking or the docs.
+def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
     """
     Same as :func:`df`, but returns a ``pandas.DataFrame``, for where polars
     is not available (PyPy). Values are stored as they are (``Decimal`` in
