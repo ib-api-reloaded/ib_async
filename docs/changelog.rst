@@ -234,8 +234,8 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   the domain dataclasses (``UNSET_INTEGER`` / ``UNSET_DOUBLE`` /
   ``UNSET_LONG`` / ``UNSET_DECIMAL`` / ``nan``) replaced with
   ``T | None = None``. Affected: ``Order`` (~25 fields),
-  ``OrderStateNumeric`` (18 fields), ``Ticker`` (80 fields), ``Bar``
-  (4 fields), ``PnL`` / ``PnLSingle`` (7 fields),
+  ``OrderStateNumeric`` (18 fields), ``Ticker`` (80 fields),
+  ``RealTimeBar`` (which replaced ``ticker.Bar``), ``PnL`` / ``PnLSingle`` (7 fields),
   ``ScannerSubscription``, ``ExecutionFilter``,
   ``ContractDetails.aggGroup``. Readers updated from
   ``isNan(x)`` / ``x == UNSET_*`` to ``x is None``.
