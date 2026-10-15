@@ -699,13 +699,6 @@ class _Bars(Op):
         self.bars.updateEvent.emit(self.bars, True)
         self.emit(bar)
 
-    def _withdraw(self) -> None:
-        """Drop the bar in progress, unemitted."""
-        if self._shown():
-            self.bars.pop()
-        self._builder = None
-        self._published = None
-
 
 @event_class
 class TimeBars(_Bars):
@@ -737,12 +730,10 @@ class TimeBars(_Bars):
             # local time
             time = time.astimezone()
         builder = self._builder
-        if builder is not None:
-            if builder.hasPrice:
-                self._complete(builder)
-            else:
-                # No tick yet and no close to repeat: no bar to give.
-                self._withdraw()
+        # A bar with no tick and no close to repeat was never shown: it is
+        # no bar, and the next one starts in its place.
+        if builder is not None and builder.hasPrice:
+            self._complete(builder)
         builder = self._begin(time)
         if builder.hasPrice:
             # flat at the last close until its first tick
