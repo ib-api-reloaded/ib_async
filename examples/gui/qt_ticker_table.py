@@ -2,11 +2,13 @@ import PyQt5.QtWidgets as qt
 
 # import PySide6.QtWidgets as qt
 from ib_async import IB, util
-from ib_async.contract import *  # noqa
+
+# every contract class, for eval() of the contract the user types
+from ib_async.contract import *  # noqa: F403
 
 
 class TickerTable(qt.QTableWidget):
-    headers = [
+    headers = (
         "symbol",
         "bidSize",
         "bid",
@@ -15,7 +17,7 @@ class TickerTable(qt.QTableWidget):
         "last",
         "lastSize",
         "close",
-    ]
+    )
 
     def __init__(self, parent=None):
         qt.QTableWidget.__init__(self, parent)
@@ -25,7 +27,8 @@ class TickerTable(qt.QTableWidget):
         self.setAlternatingRowColors(True)
 
     def __contains__(self, contract):
-        assert contract.conId
+        if not contract.conId:
+            raise ValueError("qualify the contract first")
         return contract.conId in self.conId2Row
 
     def addTicker(self, ticker):

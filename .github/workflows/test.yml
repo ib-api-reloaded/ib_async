@@ -65,6 +65,12 @@ jobs:
       - name: Tests
         run: make test
 
+      - name: Examples
+        # The examples are checked, never run (they need a TWS / IB
+        # Gateway), so one interpreter is enough.
+        if: ${{ matrix.python-version == '3.14' }}
+        run: make examples-check
+
   # Catches the "google module not found" class of release-engineering
   # regression: build the wheel, install it into a clean venv, import
   # the package. If ``_pb/`` is missing from the wheel manifest (or

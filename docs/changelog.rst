@@ -104,6 +104,14 @@ Gateway server version 226). The full upgrade guide with examples lives at
 * **``Ticker.dom``**, a :class:`DepthBook` holding both sides of the
   market-depth book; ``DepthOperation`` names the insert / update /
   delete row operations.
+* **Examples** under ``examples/``: reference programs
+  (``download_bars.py``, ``stream_quotes.py``, ``order_lifecycle.py``),
+  typed and async, with their logic tested without a server; and a
+  `marimo <https://marimo.io>`_ notebook for each topic of the Jupyter
+  notebooks, using the async API without ``util.startLoop()``.
+  ``make examples-check`` lints, type-checks and structure-checks them in
+  CI. The Jupyter notebooks stay in ``notebooks/`` for comparison and
+  will be removed.
 
 **Changed (breaking)**
 

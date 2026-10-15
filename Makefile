@@ -9,7 +9,7 @@
 # bindings bundled into the package without needing ``protoc`` or
 # ``grpcio-tools``.
 
-.PHONY: help sync protos audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-matrix test-repeat format clean
+.PHONY: help sync protos audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-matrix test-repeat examples-check format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -48,6 +48,7 @@ help:
 	@echo "                own .venvs/py<version> environment and time-boxed; logs in"
 	@echo "                .venvs/logs/ (PYTHONS=\"3.13 3.15\" for a subset)"
 	@echo "  test-repeat     - the tests many times, to expose intermittent failures (TIMES, CONCURRENT)"
+	@echo "  examples-check  - lint, typecheck and structure-check examples/ (never connects)"
 	@echo "  ruff     - ruff check + ruff format --check"
 	@echo "  typecheck - mypy"
 	@echo "  lint     - ruff + typecheck"
@@ -120,6 +121,21 @@ test-matrix:
 
 test-repeat:
 	$(RELEASEKIT) repeat $(if $(TIMES),--times $(TIMES)) $(if $(CONCURRENT),--concurrent $(CONCURRENT))
+
+# examples/: ruff, mypy on the programs, marimo's own checks and
+# scripts/check_marimo.py on the notebooks,
+# and each program's --help (imports and argument parsing). Nothing here
+# connects to TWS / IB Gateway.
+EXAMPLES := uv run --group examples
+examples-check:
+	uv run ruff check examples/
+	uv run ruff format --check examples/
+	$(EXAMPLES) mypy --pretty examples/programs/
+	$(EXAMPLES) marimo check --strict examples/notebooks/
+	$(PYTHON) scripts/check_marimo.py examples/notebooks/*.py
+	for program in examples/programs/*.py; do \
+		$(EXAMPLES) $$program --help > /dev/null || exit 1; \
+	done
 
 format:
 	uv run python -m ruff format ib_async/ tests/

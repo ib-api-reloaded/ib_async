@@ -1,7 +1,9 @@
 import tkinter as tk
 
 from ib_async import IB, util
-from ib_async.contract import *  # noqa
+
+# every contract class, for eval() of the contract the user types
+from ib_async.contract import *  # noqa: F403
 
 util.patchAsyncio()
 

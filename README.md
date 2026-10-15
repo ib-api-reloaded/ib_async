@@ -21,11 +21,11 @@
 - **Simple and Intuitive**: Write straightforward Python code without dealing with callback complexity
 - **Automatic Synchronization**: The [IB component](https://ib-api-reloaded.github.io/ib_async/api.html#module-ib_async.ib) stays in sync with TWS/Gateway automatically
 - **Async-Ready**: Built on [asyncio](https://docs.python.org/3/library/asyncio.html) and [eventkit](https://github.com/erdewit/eventkit) for high-performance applications
-- **Jupyter-Friendly**: Interactive development with live data in notebooks
+- **Notebook-Friendly**: Explore live data interactively in [marimo](https://marimo.io) or Jupyter notebooks
 - **Production-Ready**: Robust error handling, reconnection logic, and comprehensive logging
 
 Be sure to take a look at the
-[notebooks](https://ib-api-reloaded.github.io/ib_async/notebooks.html),
+[examples and notebooks](https://ib-api-reloaded.github.io/ib_async/notebooks.html),
 the [recipes](https://ib-api-reloaded.github.io/ib_async/recipes.html)
 and the [API docs](https://ib-api-reloaded.github.io/ib_async/api.html).
 
@@ -223,12 +223,27 @@ ib.connect("127.0.0.1", 7497, clientId=1)
 ib.disconnect()
 ```
 
-### Jupyter Notebook Usage
+### Notebook Usage
+
+In a [marimo](https://marimo.io) notebook, cells run inside an event loop, so
+use the async API directly. The [examples](examples/) include a marimo
+notebook for each topic:
+
+```python
+ib = IB()
+await ib.connectAsync("127.0.0.1", 7497, clientId=1)
+bars = await ib.reqHistoricalDataAsync(
+    Stock("TSLA", "SMART", "USD"), "", "1 D", "1 hour", "TRADES", True
+)
+```
+
+In Jupyter, `util.startLoop()` lets the synchronous API run inside the
+notebook's event loop:
 
 ```python
 from ib_async import *
 
-util.startLoop()  # Required for notebooks
+util.startLoop()  # Required for Jupyter notebooks
 
 ib = IB()
 ib.connect("127.0.0.1", 7497, clientId=1)
