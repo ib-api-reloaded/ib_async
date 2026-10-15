@@ -277,7 +277,7 @@ class SubscriptionRegistry:
     # Per-contract Ticker pool. The same Ticker is shared across all
     # market-data shapes (mktData / tickByTick / mktDepth / snapshot)
     # for a given contract so a single Ticker reflects every live
-    # tick stream. Keyed by ``hash(contract)`` (which uses conId).
+    # tick stream. Keyed by ``hash(contract)``, as the market-data index.
     _tickers: dict[int, Ticker] = field(default_factory=dict, init=False)
     # (identity, kind) -> Subscription, where identity is the
     # contract's hash (see _market_data_identity) and kind is the
