@@ -758,11 +758,11 @@ def test_a_bag_fill_keeps_the_legs_of_its_order():
     of the order it fills, legs and all."""
     ib = ibi.IB()
     ib.wrapper.clientId = 0
+    # built by the user: conId 0, where IBKR reports the combo conId
     bag = ibi.Bag(
         symbol="SPY",
         exchange="SMART",
         currency="USD",
-        conId=28812380,
         comboLegs=[ibi.ComboLeg(conId=1, ratio=1, action="BUY")],
     )
     order = ibi.Order(orderId=8, clientId=0, permId=88, action="BUY")

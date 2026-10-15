@@ -1061,15 +1061,12 @@ class Wrapper:
             key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
             trade = self.trades.get(key)
 
-        # A combo's execution contract has no legs (its order's has): the
-        # same bag is the trade's by its conId, as legs cannot tell.
+        # A combo's execution contract has no legs (its order's has, and
+        # a bag the user built has conId 0): the trade, found by its
+        # order, says which bag it is.
         if trade and (
             contract == trade.contract
-            or (
-                contract.secType == "BAG"
-                and trade.contract.secType == "BAG"
-                and contract.conId == trade.contract.conId
-            )
+            or contract.secType == trade.contract.secType == "BAG"
         ):
             contract = trade.contract
         else:
