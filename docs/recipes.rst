@@ -100,7 +100,7 @@ Order book
 
 .. code-block:: python
 
-    eurusd = Forex('EURUSD')
+    [eurusd] = ib.qualifyContracts(Forex('EURUSD'))
     ticker = ib.reqMktDepth(eurusd)
     while ib.sleep(5):
         print(
@@ -117,7 +117,8 @@ volume-weighted average price in ``wap``:
 
 .. code-block:: python
 
-    ticker = ib.reqMktData(Stock('AAPL', 'SMART', 'USD'))
+    [aapl] = ib.qualifyContracts(Stock('AAPL', 'SMART', 'USD'))
+    ticker = ib.reqMktData(aapl)
     trades = ticker.updateEvent.trades()
     minuteBars = trades.timebars(Event.timerange(start=0, step=60))
     tickBars = trades.tickbars(100)
@@ -218,7 +219,7 @@ Dividends
 
 .. code-block:: python
 
-    contract = Stock('INTC', 'SMART', 'USD')
+    [contract] = ib.qualifyContracts(Stock('INTC', 'SMART', 'USD'))
     ticker = ib.reqMktData(contract, '456')
     ib.sleep(2)
     print(ticker.dividends)
@@ -306,7 +307,7 @@ run for short whiles and keep up to date:
 
     ib = ibi.IB()
     ib.connect()
-    contract = ibi.Forex('EURUSD')
+    [contract] = ib.qualifyContracts(ibi.Forex('EURUSD'))
     ticker = ib.reqMktData(contract)
     ticker.updateEvent += onTicker
 

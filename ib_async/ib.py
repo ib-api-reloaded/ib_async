@@ -1829,10 +1829,10 @@ class IB:
         # Idempotent re-subscribe: a second call for the same qualified
         # contract — or the same spread/bag, matched by its synthetic
         # comboLeg identity — returns the existing ticker without issuing a
-        # second IB request. Genuinely-unqualified contracts (conId=0 and
-        # non-bag) skip the dedup index entirely (see
-        # SubscriptionRegistry._market_data_identity), so concurrent callers
-        # on the same blank conId stay distinct.
+        # second IB request. A stream needs a qualified contract (or a
+        # bag): its Ticker is pooled by the contract's hash, which an
+        # unqualified one does not have; only a snapshot, with a Ticker of
+        # its own, takes an unqualified contract.
         # This also covers ``snapshot=True`` while a stream is live: the
         # stream keeps the pooled Ticker fresh, so reusing it is safe and
         # avoids a redundant snapshot request.
@@ -1912,9 +1912,8 @@ class IB:
         # Idempotent re-subscribe per (contract, tickType): a second
         # call for the same qualified contract+kind (or the same
         # spread/bag, matched by its synthetic comboLeg identity) returns
-        # the existing Ticker without issuing a duplicate IB request.
-        # Genuinely-unqualified contracts skip the dedup index (see
-        # _market_data_identity).
+        # the existing Ticker without issuing a duplicate IB request. A
+        # stream needs a qualified contract (or a bag), as for reqMktData.
         existing = self.wrapper.subscriptions.find_market_data_for_contract(
             contract, tickType
         )
@@ -2737,7 +2736,7 @@ class IB:
         """
         # Each contract gets its own snapshot subscription. Snapshot
         # MktDataSubs are registered by reqId only — they are
-        # deliberately not indexed at ``(conId, "mktData")`` so that
+        # deliberately not indexed by contract and kind, so that
         # concurrent snapshots for the same contract coexist with each
         # other (and with any live streaming subscription).
         futures: list[Awaitable[Any]] = []
