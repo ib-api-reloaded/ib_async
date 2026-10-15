@@ -1,5 +1,7 @@
 """Every Decimal field of Order is coerced on construction, not a hand-kept subset."""
 
+from __future__ import annotations
+
 import dataclasses
 import math
 from decimal import Decimal

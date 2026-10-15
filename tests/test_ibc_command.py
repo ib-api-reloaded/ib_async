@@ -1,5 +1,7 @@
 """The IBC start command."""
 
+from __future__ import annotations
+
 from ib_async.ibcontroller import IBC
 
 

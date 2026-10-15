@@ -1,9 +1,11 @@
 """Financial instrument types used by Interactive Brokers."""
 
+from __future__ import annotations
+
 import datetime as dt
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from ib_async import util
 
@@ -102,11 +104,11 @@ class Contract:
     description: str = ""
     issuerId: str = ""
     comboLegsDescrip: str = ""
-    comboLegs: list["ComboLeg"] = field(default_factory=list)
-    deltaNeutralContract: Optional["DeltaNeutralContract"] = None
+    comboLegs: list[ComboLeg] = field(default_factory=list)
+    deltaNeutralContract: DeltaNeutralContract | None = None
 
     @staticmethod
-    def create(**kwargs) -> "Contract":
+    def create(**kwargs) -> Contract:
         """
         Create and a return a specialized contract based on the given secType,
         or a general Contract if secType is not given.
@@ -140,7 +142,7 @@ class Contract:
         return cls(**kwargs)
 
     @staticmethod
-    def recreate(c) -> "Contract":
+    def recreate(c) -> Contract:
         """Convert an existing generic Contract into its most specific type."""
         return Contract.create(**util.dataclassAsDict(c))
 

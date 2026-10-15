@@ -1,5 +1,7 @@
 """Wrapper to handle incoming messages."""
 
+from __future__ import annotations
+
 import asyncio
 import dataclasses
 import logging
@@ -348,7 +350,7 @@ class Wrapper:
     """Wrapper implementation for use with the IB class."""
 
     # reference back to IB so wrapper can access API methods
-    ib: "IB"
+    ib: IB
 
     accountValues: dict[tuple[str, str, str, str], AccountValue] = field(init=False)
     """ (account, tag, currency, modelCode) -> AccountValue """
@@ -383,7 +385,7 @@ class Wrapper:
     # cross-client / orphan reports never paired by an execDetails on
     # this client cannot grow this dict without limit. Cleared on reset
     # alongside ``fills``.
-    _pendingCommissionReports: "OrderedDict[str, CommissionReport]" = field(init=False)
+    _pendingCommissionReports: OrderedDict[str, CommissionReport] = field(init=False)
 
     newsTicks: list[NewsTick] = field(init=False)
 

@@ -7,6 +7,8 @@ caller who wanted ``'1 Y'`` -- or any of ``'W'`` / ``'M'`` -- had no way
 to ask for it short of dropping down to ``IB.client``.
 """
 
+from __future__ import annotations
+
 import asyncio
 from unittest.mock import MagicMock
 

@@ -1,5 +1,7 @@
 """connect and connectAsync are annotated as returning the IB itself."""
 
+from __future__ import annotations
+
 from typing import Self, get_type_hints
 
 import ib_async as ibi

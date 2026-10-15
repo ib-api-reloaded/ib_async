@@ -8,6 +8,8 @@ orderId would otherwise:
 Both are wrong: a Filled or Cancelled order is final.
 """
 
+from __future__ import annotations
+
 import ib_async as ibi
 from ib_async.order import Order, OrderStatus, Trade
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import PyQt5.QtWidgets as qt
 
 # import PySide6.QtWidgets as qt

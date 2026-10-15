@@ -7,6 +7,8 @@ sentinel into user-visible objects — an openOrder echo previously stamped
 ``volatility=1.7976931348623157e+308`` onto every plain LMT order.
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
 
 from ib_async import IB

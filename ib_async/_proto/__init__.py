@@ -14,6 +14,8 @@ therefore stays fast and works where the bindings have not been
 generated (documentation builds, tooling).
 """
 
+from __future__ import annotations
+
 from importlib import import_module
 from types import ModuleType
 from typing import TYPE_CHECKING

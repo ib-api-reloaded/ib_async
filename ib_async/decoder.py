@@ -1,5 +1,7 @@
 """Deserialize and dispatch messages."""
 
+from __future__ import annotations
+
 import dataclasses
 import importlib
 import logging

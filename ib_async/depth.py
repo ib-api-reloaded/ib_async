@@ -1,5 +1,7 @@
 """Market-depth (DOM) order book maintained from IBKR row operations."""
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field

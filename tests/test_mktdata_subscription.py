@@ -11,6 +11,8 @@ Two correctness properties to verify:
      every bookkeeping trace.
 """
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import ib_async as ibi

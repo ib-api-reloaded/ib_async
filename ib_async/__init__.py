@@ -1,5 +1,7 @@
 """Python sync/async framework for Interactive Brokers API"""
 
+from __future__ import annotations
+
 import dataclasses
 import sys
 

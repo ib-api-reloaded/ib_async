@@ -1,5 +1,7 @@
 """Access to realtime market information."""
 
+from __future__ import annotations
+
 import math
 from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
@@ -400,24 +402,24 @@ class Ticker:
 
 @event_class
 class TickerUpdateEvent(Event):
-    def trades(self) -> "Tickfilter":
+    def trades(self) -> Tickfilter:
         """Emit trade ticks."""
         # 48 RT Volume, 77 RT Trade Volume (without unreportable trades)
         return Tickfilter((4, 5, 48, 68, 71, 77), self)
 
-    def bids(self) -> "Tickfilter":
+    def bids(self) -> Tickfilter:
         """Emit bid ticks."""
         return Tickfilter((0, 1, 66, 69), self)
 
-    def asks(self) -> "Tickfilter":
+    def asks(self) -> Tickfilter:
         """Emit ask ticks."""
         return Tickfilter((2, 3, 67, 70), self)
 
-    def bidasks(self) -> "Tickfilter":
+    def bidasks(self) -> Tickfilter:
         """Emit bid and ask ticks."""
         return Tickfilter((0, 1, 66, 69, 2, 3, 67, 70), self)
 
-    def midpoints(self) -> "Tickfilter":
+    def midpoints(self) -> Tickfilter:
         """Emit midpoint ticks."""
         return Midpoints((), self)
 
@@ -437,7 +439,7 @@ class Tickfilter(Op):
             if t.tickType in self._tickTypes:
                 self.emit(t.time, t.price, t.size)
 
-    def timebars(self, timer: Event, maxBars: int | None = None) -> "TimeBars":
+    def timebars(self, timer: Event, maxBars: int | None = None) -> TimeBars:
         """
         Aggregate the ticks into bars of equal time: a bar completes, and
         the next starts, on each event of ``timer``, whose value is the new
@@ -457,7 +459,7 @@ class Tickfilter(Op):
         """
         return TimeBars(timer, self, maxBars)
 
-    def tickbars(self, count: int, maxBars: int | None = None) -> "TickBars":
+    def tickbars(self, count: int, maxBars: int | None = None) -> TickBars:
         """
         Aggregate the ticks into bars of ``count`` ticks each.
 
@@ -473,7 +475,7 @@ class Tickfilter(Op):
 
     def volumebars(
         self, volume: Decimal | float, maxBars: int | None = None
-    ) -> "VolumeBars":
+    ) -> VolumeBars:
         """
         Aggregate the ticks into bars of at least ``volume`` each: a bar
         completes with the tick that brings it to ``volume``, which can

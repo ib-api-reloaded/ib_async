@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ib_async as ibi
 from ib_async import IB, Stock
 from ib_async._requests import ReqIdKey

@@ -1,5 +1,7 @@
 """util.getLoop: the loop of the calling thread, on every Python version."""
 
+from __future__ import annotations
+
 import asyncio
 import subprocess
 import sys

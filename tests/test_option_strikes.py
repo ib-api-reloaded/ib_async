@@ -1,5 +1,7 @@
 """IB.reqOptionStrikes: the strikes each expiration lists, from contract details."""
 
+from __future__ import annotations
+
 import asyncio
 import copy
 from collections.abc import Mapping, Sequence

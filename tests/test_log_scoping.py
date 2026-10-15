@@ -14,6 +14,8 @@ These tests pin the scope, the third-party isolation, the idempotent
 repeat-call behaviour, and the optional format override.
 """
 
+from __future__ import annotations
+
 import logging
 import sys
 

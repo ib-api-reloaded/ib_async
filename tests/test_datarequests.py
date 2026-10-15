@@ -1,6 +1,8 @@
 """The data request value types: generated from one catalog, accepting each
 value as a string or an enum member, and the durationStr check."""
 
+from __future__ import annotations
+
 import asyncio
 from typing import get_args
 

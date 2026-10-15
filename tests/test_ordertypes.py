@@ -1,5 +1,7 @@
 """The order types built from the catalog: construction, validation, lookup."""
 
+from __future__ import annotations
+
 import dataclasses
 import inspect
 import itertools

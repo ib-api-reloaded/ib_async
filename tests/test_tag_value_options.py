@@ -1,5 +1,7 @@
 """TagValue option parameters: immutable defaults, any sequence accepted."""
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import ib_async as ibi

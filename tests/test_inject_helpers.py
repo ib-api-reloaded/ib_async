@@ -2,6 +2,8 @@
 in the helper signature or in Wrapper's internal trade/fill keying that
 would silently break dependent tests."""
 
+from __future__ import annotations
+
 import ib_async as ibi
 from ib_async.order import OrderStatus
 from tests._helpers import inject_fill, inject_trade

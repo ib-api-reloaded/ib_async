@@ -8,6 +8,8 @@ bounds do not share a frame with the bars on any server at or above
 ``MIN_SERVER_VER_HISTORICAL_DATA_END`` nor in the protobuf transport.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from zoneinfo import ZoneInfo
 

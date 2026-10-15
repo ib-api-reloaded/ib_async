@@ -2,6 +2,8 @@
 ``catalog.py`` by ``scripts/generate_datarequests.py``. Do not edit: change
 the catalog and regenerate."""
 
+from __future__ import annotations
+
 from enum import StrEnum
 from typing import Literal
 

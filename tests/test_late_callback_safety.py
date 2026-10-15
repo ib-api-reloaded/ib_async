@@ -9,6 +9,8 @@ completedOrdersEnd raised KeyError. The Stage-B migration through
 ``self.requests.append(...)`` makes this safe by construction.
 """
 
+from __future__ import annotations
+
 import ib_async as ibi
 from ib_async._requests import ReqIdKey, SingletonKey
 from ib_async.contract import ContractDetails

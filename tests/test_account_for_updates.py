@@ -1,5 +1,7 @@
 """Which account connect subscribes to for portfolio and account updates."""
 
+from __future__ import annotations
+
 import logging
 
 import ib_async as ibi

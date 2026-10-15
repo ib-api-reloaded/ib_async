@@ -1,5 +1,7 @@
 """util.df builds polars DataFrames from ib_async objects."""
 
+from __future__ import annotations
+
 import datetime as dt
 from decimal import Decimal
 from typing import NamedTuple

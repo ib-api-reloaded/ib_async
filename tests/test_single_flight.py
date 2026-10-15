@@ -7,6 +7,8 @@ first caller's future and the first caller would block forever on the next
 end-of-stream callback.
 """
 
+from __future__ import annotations
+
 import asyncio
 
 import pytest

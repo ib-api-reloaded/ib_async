@@ -10,6 +10,8 @@ placeholders stripped), so callers who need a yet-to-be-allowlisted
 field can still reach it.
 """
 
+from __future__ import annotations
+
 import ib_async as ibi
 from ib_async.order import Order, OrderState, OrderStatus, Trade
 

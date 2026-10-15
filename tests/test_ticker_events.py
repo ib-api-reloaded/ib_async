@@ -7,6 +7,8 @@ These tests pin that layout and check the bars the operators build from
 ticks.
 """
 
+from __future__ import annotations
+
 import dataclasses
 import inspect
 from collections.abc import Callable
@@ -51,15 +53,41 @@ DECLARED_FIELDS = {
     VolumeBars: {"_volume"},
 }
 
+REQUIRED = inspect.Parameter.empty
+
+
+def parameters(function: Callable[..., object]) -> list[tuple[str, object]]:
+    """A function's parameters as (name, default) pairs: what a caller
+    depends on, whatever the annotations."""
+    return [
+        (p.name, p.default) for p in inspect.signature(function).parameters.values()
+    ]
+
+
 SIGNATURES = {
     # Inherited unchanged from eventkit.
-    TickerUpdateEvent: str(inspect.signature(Event.__init__)),
-    Tickfilter: "(self, tickTypes, source=None)",
-    Midpoints: "(self, tickTypes, source=None)",
-    _Bars: "(self, source=None, maxBars: int | None = None)",
-    TimeBars: "(self, timer: eventkit.event.Event, source=None, maxBars: int | None = None)",
-    TickBars: "(self, count: int, source=None, maxBars: int | None = None)",
-    VolumeBars: "(self, volume: decimal.Decimal | float, source=None, maxBars: int | None = None)",
+    TickerUpdateEvent: parameters(Event.__init__),
+    Tickfilter: [("self", REQUIRED), ("tickTypes", REQUIRED), ("source", None)],
+    Midpoints: [("self", REQUIRED), ("tickTypes", REQUIRED), ("source", None)],
+    _Bars: [("self", REQUIRED), ("source", None), ("maxBars", None)],
+    TimeBars: [
+        ("self", REQUIRED),
+        ("timer", REQUIRED),
+        ("source", None),
+        ("maxBars", None),
+    ],
+    TickBars: [
+        ("self", REQUIRED),
+        ("count", REQUIRED),
+        ("source", None),
+        ("maxBars", None),
+    ],
+    VolumeBars: [
+        ("self", REQUIRED),
+        ("volume", REQUIRED),
+        ("source", None),
+        ("maxBars", None),
+    ],
 }
 
 CLASSES = list(FACTORIES)
@@ -89,7 +117,7 @@ def test_instances_have_no_dict(cls):
 
 @pytest.mark.parametrize("cls", CLASSES, ids=lambda c: c.__name__)
 def test_constructor_signature_unchanged(cls):
-    assert str(inspect.signature(cls.__init__)) == SIGNATURES[cls]
+    assert parameters(cls.__init__) == SIGNATURES[cls]
 
 
 @pytest.mark.parametrize("cls", CLASSES, ids=lambda c: c.__name__)

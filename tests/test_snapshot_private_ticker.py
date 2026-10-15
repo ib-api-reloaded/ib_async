@@ -22,6 +22,8 @@ Streaming (``snapshot=False``) is unchanged: it still returns the shared
 pooled Ticker so one object reflects every live tick stream.
 """
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import ib_async as ibi

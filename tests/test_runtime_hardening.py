@@ -1,6 +1,8 @@
 """Behavior behind the lint hardening: non-blocking termination, identity
 hashing for result lists, and error chaining in util.run."""
 
+from __future__ import annotations
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 

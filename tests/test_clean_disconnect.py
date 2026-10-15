@@ -6,6 +6,8 @@ trade.statusEvent, etc. — otherwise user code blocks forever past
 the daily server-side reset.
 """
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import pytest

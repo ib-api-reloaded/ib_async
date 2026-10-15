@@ -1,5 +1,7 @@
 """A single-flight request whose send fails is withdrawn, never left open."""
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import pytest

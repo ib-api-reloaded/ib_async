@@ -14,6 +14,8 @@ requests so a stray contract-details error on the same numeric id
 cannot accidentally resolve a margin-impact future.
 """
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import pytest

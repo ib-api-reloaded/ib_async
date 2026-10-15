@@ -8,6 +8,8 @@ the Event slot is unpicklable, that's a regression we want to catch
 before they hit it.
 """
 
+from __future__ import annotations
+
 import copy
 import pickle
 

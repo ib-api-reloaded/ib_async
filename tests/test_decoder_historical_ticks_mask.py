@@ -6,6 +6,8 @@ Per the IB TWS API spec: bit 0 (mask & 1) is bidPastLow, bit 1 (mask & 2)
 is askPastHigh. Both decoder paths must follow this.
 """
 
+from __future__ import annotations
+
 import ib_async as ibi
 from ib_async._requests import ReqIdKey
 from ib_async.decoder import Decoder

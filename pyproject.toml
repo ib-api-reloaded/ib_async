@@ -219,12 +219,17 @@ select = [
   # no assert for runtime checks in the library (python -O strips them)
   "S101",
 ]
-per-file-ignores = { "tests/**" = ["S101"], "scripts/**" = ["S101"] }
+per-file-ignores = { "tests/**" = ["S101"], "scripts/**" = ["S101"], "examples/notebooks/**" = ["I002"] }
 ignore = [
   "E402", # Module level import not at top of file
   "SIM102", # collapsible-if: nested ifs often read clearer
   "SIM110", # reimplemented-builtin: explicit loops often read clearer
 ]
+
+[tool.ruff.lint.isort]
+# Every module defers annotations, so none is ever quoted (UP037 then
+# unquotes any that are): I002 requires the import in each file.
+required-imports = ["from __future__ import annotations"]
 
 [tool.releasekit]
 smoke = "ib_async.IB()"

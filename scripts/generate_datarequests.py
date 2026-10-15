@@ -50,7 +50,7 @@ def module() -> str:
         '"""The values historical and real-time data requests take, '
         "generated from\n``catalog.py`` by ``scripts/generate_datarequests.py``. "
         'Do not edit: change\nthe catalog and regenerate."""\n\n'
-        "from enum import StrEnum\nfrom typing import Literal\n\n"
+        "from __future__ import annotations\n\nfrom enum import StrEnum\nfrom typing import Literal\n\n"
         "__all__ = [" + ", ".join(repr(n) for n in sorted(names)) + "]\n"
     )
     source = (

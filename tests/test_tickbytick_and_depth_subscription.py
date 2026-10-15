@@ -9,6 +9,8 @@ SubscriptionRegistry the same way mktData does after Stage E.
     via the IB client, and removes every bookkeeping trace.
 """
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import ib_async as ibi

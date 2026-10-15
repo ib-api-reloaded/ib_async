@@ -1,6 +1,8 @@
 """Public input validation raises ValueError (asserts vanish under -O), and
 unknown wire data is tolerated."""
 
+from __future__ import annotations
+
 import logging
 from unittest.mock import MagicMock
 

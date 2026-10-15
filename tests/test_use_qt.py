@@ -1,5 +1,7 @@
 """util.useQt runs Qt's event loop with each library's own exec name."""
 
+from __future__ import annotations
+
 from types import SimpleNamespace
 from typing import ClassVar
 

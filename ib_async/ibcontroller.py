@@ -1,5 +1,7 @@
 """Programmatic control over the TWS/gateway client software."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import sys

@@ -10,6 +10,8 @@ Properties verified:
     (replacing the previous hard ``assert`` that crashed retries).
 """
 
+from __future__ import annotations
+
 import asyncio
 from unittest.mock import MagicMock
 

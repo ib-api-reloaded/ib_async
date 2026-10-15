@@ -6,6 +6,8 @@ add/lookup/close lifecycle, and Wrapper holds a fresh instance after
 paths to use it.
 """
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import pytest

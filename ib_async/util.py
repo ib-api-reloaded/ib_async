@@ -1,5 +1,7 @@
 """Utilities."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import datetime as dt
@@ -55,7 +57,7 @@ UNSET_DECIMAL: Final = Decimal(2**127 - 1)
 Time_t: TypeAlias = dt.time | dt.datetime
 
 
-def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> "pl.DataFrame":
+def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame:
     """
     Create a polars DataFrame with one row per object. The objects are of
     one kind: dataclasses (such as ``BarData``), namedtuples, dicts,

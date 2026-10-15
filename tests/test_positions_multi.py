@@ -1,5 +1,7 @@
 """IB.reqPositionsMulti: the positions of an account and/or model, once."""
 
+from __future__ import annotations
+
 import asyncio
 from decimal import Decimal
 from unittest.mock import MagicMock

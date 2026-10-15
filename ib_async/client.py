@@ -1,5 +1,7 @@
 """Socket client for communicating with Interactive Brokers."""
 
+from __future__ import annotations
+
 import asyncio
 import io
 import logging

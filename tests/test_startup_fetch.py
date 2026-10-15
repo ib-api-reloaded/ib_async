@@ -1,5 +1,7 @@
 """connect syncs only what StartupFetch asks for."""
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import ib_async as ibi

@@ -10,6 +10,8 @@ handler) and its ``by_market_data_key`` index (used by the cancel
 path) must both be dropped on ``Subscription.close()``.
 """
 
+from __future__ import annotations
+
 import ib_async as ibi
 from ib_async._subscriptions import MktDataSub
 

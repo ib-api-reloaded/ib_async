@@ -10,6 +10,8 @@ it creates or touches must satisfy ``Trade.isDone()``, preserve the raw
 broker status in the trade log, and carry the owning clientId.
 """
 
+from __future__ import annotations
+
 import pytest
 
 import ib_async as ibi

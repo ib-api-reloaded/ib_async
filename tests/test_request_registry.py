@@ -10,6 +10,8 @@ network. They cover the documented invariants:
   * fail_all wakes every awaiter and empties the registry
 """
 
+from __future__ import annotations
+
 import asyncio
 
 import pytest
