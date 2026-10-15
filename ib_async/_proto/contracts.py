@@ -335,8 +335,8 @@ def createContractDetails(
         details.marketName = proto.marketName
     # ``minTick`` is wire-string carrying a Decimal value. ``safe_decimal``
     # handles empty / "nan" / malformed inputs by returning the default
-    # rather than raising — a malformed value here used to crash the
-    # converter and hang the awaiter.
+    # rather than raising, which would crash the converter and leave the
+    # awaiter hanging.
     if proto.HasField("minTick"):
         details.minTick = safe_decimal(proto.minTick)
     if proto.HasField("orderTypes"):

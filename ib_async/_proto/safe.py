@@ -38,9 +38,9 @@ def normalize_none_scalars(obj: Any) -> Any:
     field's wire-default (typically ``0`` for plain ``int`` fields like
     ``parentId``, ``ocaType``, ``triggerMethod``).
 
-    Without this normalization, a caller (e.g. icli's whatIf-preview path
-    which stamps ``parentId = None`` to suppress the parent link)
-    produces a wire frame missing the field entirely; TWS reads
+    Without this normalization, a caller that sets ``parentId = None``
+    (to send no parent link) produces a wire frame missing the field
+    entirely; TWS reads
     proto3-absent as its own ``UNSET_INTEGER = 2147483647`` sentinel and
     rejects the request with ``Error 135: Can't find order with id =
     2147483647``. The binary path always emits ``""`` for None and the

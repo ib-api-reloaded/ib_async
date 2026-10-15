@@ -128,19 +128,18 @@ def _parseTagValueList(source: object) -> list[TagValue]:
 def createOrderProto(order: Order) -> Order_pb2.Order:
     """Encode a domain ``Order`` into its protobuf representation.
 
-    Writes every order parameter the server expects, field by field.
-    The previous implementation only wrote ~30 of ~140 fields — most
-    catastrophically dropping ``transmit`` (domain default ``True``),
-    which made every outbound protobuf-path order land as a
-    non-transmitted staged order on the broker.
+    Writes every order parameter the server expects, field by field;
+    one left out is one the server reads as unset, and for ``transmit``
+    (domain default ``True``) that stages the order instead of
+    transmitting it.
 
     Every IBKR order field maps to an ``Order_pb2`` field at this
     proto version. Compliance / origination fields
     (``customerAccount``, ``professionalCustomer``,
     ``bondAccruedInterest``, ``includeOvernight``, ``submitter``) are
     written on send so a user's re-place of a fetched order preserves
-    the originating session — silent data loss before, regulatory-
-    relevant. Specialized order-behavior flags (``allowPreOpen``,
+    the originating session, as regulation requires. Specialized
+    order-behavior flags (``allowPreOpen``,
     ``deactivate``, ``postOnly``, ``ignoreOpenAuction``,
     ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``) are
     written too.
@@ -150,9 +149,9 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     # parses as the wire-default (``0`` for ``parentId`` / ``ocaType``
     # / ``triggerMethod`` / …). The protobuf path can't emit ``""`` for
     # an ``optional int32`` slot, so we coerce ``None → field default``
-    # here before the per-field gates run. Without this, callers that
-    # explicitly set ``order.parentId = None`` (icli's whatIf-preview
-    # path) produce a wire frame missing the field; TWS reads
+    # here before the per-field gates run. Without this, a caller that
+    # sets ``order.parentId = None`` (to send no parent link) produces
+    # a wire frame missing the field; TWS reads
     # proto3-absent as its own ``UNSET_INTEGER = 2147483647`` sentinel
     # and rejects with ``Error 135: Can't find order with id =
     # 2147483647``.
