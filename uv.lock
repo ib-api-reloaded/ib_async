@@ -9,14 +9,11 @@ resolution-markers = [
 
 [[package]]
 name = "aeventkit"
-version = "2.1.0"
+version = "3.0.0"
 source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/8c/c08db1a1910f8d04ec6a524de522edd0bac181bdf94dbb01183f7685cd77/aeventkit-2.1.0.tar.gz", hash = "sha256:4e7d81bb0a67227121da50a23e19e5bbf13eded541a9f4857eeb6b7b857b738a", size = 24703, upload-time = "2025-06-22T15:54:03.961Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/32/4e13bc9727183e4d4878953a302d36154fc6283dd726c4ce1e91188469b8/aeventkit-3.0.0.tar.gz", hash = "sha256:16616fef98ba04aec6de8ea5e66b3cd0ad99a4de8f57a3878bff43d1dfb31ea2", size = 33491, upload-time = "2026-10-15T03:05:27.784Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8d/8c/2a4b912b1afa201b25bdd0f5bccf96d5a8b5dccb6131316a8dd2d9cabcc1/aeventkit-2.1.0-py3-none-any.whl", hash = "sha256:962d43f79e731ac43527f2d0defeed118e6dbaa85f1487f5667540ebb8f00729", size = 26678, upload-time = "2025-06-22T15:54:02.141Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/ec/c1783542a0e752547a7a3da4627c483ebe2648e6e98141c877e349c453f8/aeventkit-3.0.0-py3-none-any.whl", hash = "sha256:b36c54ca7ca6393ce48312568ea5e7b58003af0669abf1c700bba3ce16fd1d1b", size = 36841, upload-time = "2026-10-15T03:05:26.809Z" },
 ]
 
 [[package]]
@@ -26,6 +23,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c9/3e/13dd8e5ed9094e734ac430b5d0eb4f2bb001708a8b7856cbf8e084e001ba/alabaster-0.7.16.tar.gz", hash = "sha256:75a8b99c28a5dad50dd7f8ccdd447a121ddb3892da9e53d1ca5cca3106d58d65", size = 23776, upload-time = "2024-01-10T00:56:10.189Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/34/d4e1c02d3bee589efb5dfa17f88ea08bdb3e3eac12bc475462aec52ed223/alabaster-0.7.16-py3-none-any.whl", hash = "sha256:b46733c07dce03ae4e150330b975c75737fa60f0a7c591b6c8bf4928a28e2c92", size = 13511, upload-time = "2024-01-10T00:56:08.388Z" },
+]
+
+[[package]]
+name = "anest-asyncio"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/f4/e7e791f777b60a02baf8134a4d5ae3355a229716004742b7bd38bee40952/anest_asyncio-2.0.0.tar.gz", hash = "sha256:01f09e29bc48e47136319582c33bc07826450f033b285d89e01b271af73f0015", size = 10675, upload-time = "2026-10-14T23:59:53.144Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/d1/0d0985c664acf9e791ca27c622f7a75fb403d0801f6b888825862cc6713b/anest_asyncio-2.0.0-py3-none-any.whl", hash = "sha256:b9c866b7ca604d93360f579e0bb001f7560ccde06849bd7b0624ff011ffa288b", size = 9110, upload-time = "2026-10-14T23:59:51.867Z" },
 ]
 
 [[package]]
@@ -317,7 +323,7 @@ version = "3.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aeventkit" },
-    { name = "nest-asyncio" },
+    { name = "anest-asyncio" },
     { name = "protobuf" },
     { name = "tzdata" },
 ]
@@ -351,8 +357,8 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aeventkit", specifier = ">=2.1.0,<3.0.0" },
-    { name = "nest-asyncio" },
+    { name = "aeventkit", specifier = ">=3.0.0,<4.0.0" },
+    { name = "anest-asyncio", specifier = ">=2.0.0,<3.0.0" },
     { name = "protobuf", specifier = ">=5.0.0,<7.0.0" },
     { name = "tzdata", specifier = ">=2025.2" },
 ]
@@ -677,15 +683,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/21/dc/603751677fff302f34396e206b610f556a59d7fe58b9a2145f54e96b48e8/myst_parser-5.1.0.tar.gz", hash = "sha256:ab69322dc6719dcc7f296479dbb70181b66df6ed315064f92dbc85c0e1bf2f02", size = 101182, upload-time = "2026-05-13T09:38:19.361Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/09/dc/f3dfb7488b770f3f67e6545085bf2abea5172e88f57b8ad25ef860ca704c/myst_parser-5.1.0-py3-none-any.whl", hash = "sha256:9c91c52b3cdb4d94a6506e4fab4e2f296c7623a0da0dcbe6de1565c3dad67a8a", size = 85817, upload-time = "2026-05-13T09:38:17.904Z" },
-]
-
-[[package]]
-name = "nest-asyncio"
-version = "1.6.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/83/f8/51569ac65d696c8ecbee95938f89d4abf00f47d58d48f6fbabfe8f0baefe/nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe", size = 7418, upload-time = "2024-01-21T14:25:19.227Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/c4/c2971a3ba4c6103a3d10c4b0f24f461ddc027f0f09763220cf35ca1401b3/nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c", size = 5195, upload-time = "2024-01-21T14:25:17.223Z" },
 ]
 
 [[package]]
