@@ -21,8 +21,9 @@ class IBC:
     using IBC (https://github.com/IbcAlpha/IBC).
 
     Args:
-        twsVersion (int): (required) The major version number for
-            TWS or gateway.
+        twsVersion (int | str): (required) The major version number for
+            TWS or gateway: 1019 on Windows and Linux, "10.19" on macOS
+            (a string, with the period, as in the macOS install folder).
         gateway (bool):
             * True = gateway
             * False = TWS
@@ -83,7 +84,7 @@ class IBC:
 
     IbcLogLevel: ClassVar = logging.DEBUG
 
-    twsVersion: int = 0
+    twsVersion: int | str = 0
     gateway: bool = False
     tradingMode: str = ""
     twsPath: str = ""
@@ -124,7 +125,13 @@ class IBC:
         if self._proc:
             return
         self._logger.info("Starting")
+        self._proc = await asyncio.create_subprocess_exec(
+            *self._command(), stdout=asyncio.subprocess.PIPE
+        )
+        self._monitor = asyncio.ensure_future(self.monitorAsync())
 
+    def _command(self) -> list[str]:
+        """The IBC start command for this configuration."""
         # map from field names to cmd arguments; key=(UnixArg, WindowsArg)
         args = {
             "twsVersion": ("", ""),
@@ -159,12 +166,7 @@ class IBC:
                     cmd.append(arg)
                 else:
                     cmd.append(str(v))
-
-        # run shell command
-        self._proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE
-        )
-        self._monitor = asyncio.ensure_future(self.monitorAsync())
+        return cmd
 
     async def terminateAsync(self):
         if not self._proc:
