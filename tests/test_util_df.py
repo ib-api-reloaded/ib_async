@@ -214,3 +214,10 @@ def test_fixed_offsets_are_one_utc_column():
     column = util.df([(t,) for t in times])["column_0"]
     assert column.dtype == pl.Datetime("us", "UTC")
     assert column.to_list() == times
+
+
+def test_enum_members_and_aware_times_are_kept_as_they_are():
+    halted = [ibi.HaltedStatus.NOT_HALTED, ibi.HaltedStatus.VOLATILITY]
+    assert util.df([(h,) for h in halted])["column_0"].to_list() == halted
+    aware = dt.time(9, 30, tzinfo=dt.UTC)
+    assert util.df([(aware,)])["column_0"].to_list() == [aware]

@@ -77,8 +77,11 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
     Values keep their types: ``Decimal`` and ``datetime`` (with its time
     zone; a fixed offset, as from ``datetime.astimezone()``, as UTC, the
     same instant) become polars ``Decimal`` and ``Datetime`` columns, ``None``
-    becomes null, and an ib_async object such as a ``Contract`` is stored
-    as itself. With no objects the result has no rows.
+    becomes null, and an ib_async object such as a ``Contract`` (or an
+    enum member) is stored as itself. A column of ints and floats both
+    becomes ``Float64`` when every int is exact as a float; any other
+    column polars cannot hold value for value is stored as objects. With
+    no objects the result has no rows.
 
     Requires polars: ``pip install "ib_async[polars]"``. polars runs on
     CPython only; on PyPy, :func:`pandasDf` builds a pandas DataFrame.
@@ -154,16 +157,10 @@ def _table(objs: Iterable[Any]) -> tuple[list[str], list[tuple[Any, ...]]]:
 
 # Values polars stores in a column of their own type; anything else
 # (a Contract, a list of TagValues) is kept as the Python object.
-_POLARS_SCALARS: Final = (
-    bool,
-    int,
-    float,
-    str,
-    bytes,
-    Decimal,
-    dt.date,
-    dt.time,
-    dt.timedelta,
+# The exact types polars holds as they are (a subclass, such as an enum
+# member, it would convert to its base type).
+_POLARS_SCALARS: Final = frozenset(
+    {bool, int, float, str, bytes, Decimal, dt.date, dt.datetime, dt.time, dt.timedelta}
 )
 
 
@@ -193,8 +190,10 @@ def _columnKind(values: list[Any]) -> type | str | None:
     for value in values:
         if value is None:
             continue
-        if not isinstance(value, _POLARS_SCALARS):
+        if type(value) not in _POLARS_SCALARS:
             return None
+        if isinstance(value, dt.time) and value.tzinfo is not None:
+            return None  # a polars Time has no zone
         if isinstance(value, Decimal):
             if not value.is_finite():
                 return None
