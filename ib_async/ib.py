@@ -8,7 +8,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from enum import Flag, auto
-from typing import Any
+from typing import Any, Self
 
 from eventkit import Event
 
@@ -388,7 +388,7 @@ class IB:
         account: str = "",
         raiseSyncErrors: bool = False,
         fetchFields: StartupFetch = StartupFetchALL,
-    ):
+    ) -> Self:
         """
         Connect to a running TWS or IB gateway application.
         After the connection is made the client is fully synchronized
@@ -2487,7 +2487,7 @@ class IB:
         account: str = "",
         raiseSyncErrors: bool = False,
         fetchFields: StartupFetch = StartupFetchALL,
-    ):
+    ) -> Self:
         """Async sibling of :meth:`connect`."""
         clientId = int(clientId)
         self.wrapper.clientId = clientId

@@ -56,6 +56,9 @@ Gateway server version 226). The full upgrade guide with examples lives at
   * ``IB.cancelHistoricalTicks`` (protobuf-only, server >= 215; settles awaiter)
   * ``IB.reqConfigAsync``, ``IB.updateConfigAsync`` (protobuf-only, server >= 219)
 
+* **``IB.connect`` and ``connectAsync`` are annotated ``-> Self``**, so
+  ``ib = IB().connect(...)`` type-checks. (:issue:`215`, thanks to
+  @jchaffraix)
 * **``IB.exerciseOptions``** takes ``manualOrderTime``, ``customerAccount``
   and ``professionalCustomer``, which the request already carried.
   (:issue:`166`, thanks to @li-plus)
