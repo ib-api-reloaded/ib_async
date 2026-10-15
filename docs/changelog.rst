@@ -299,8 +299,9 @@ are fixed in v3.0:
   reports the same conId (such as ``28812380``) on many BAG contracts;
   market data was indexed by that conId before the bag's legs, so a
   second spread got the first one's ticker and subscription. Bags are now
-  identified by their legs, and ``Contract.__eq__`` compares bags by
-  their legs too, consistent with their hash. (:issue:`236`)
+  identified by their legs, as they hash, and ``Contract.__eq__`` no
+  longer counts two bags equal for their shared combo conId: it compares
+  them on every field. (:issue:`236`)
 * **``portfolio()`` was silently empty with several managed accounts.**
   IBKR streams portfolio updates for one account at a time, and with
   several accounts and no ``connect(account=...)`` none was subscribed.
