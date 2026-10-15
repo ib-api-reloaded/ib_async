@@ -252,6 +252,8 @@ are fixed in v3.0:
 * **``connect`` requested positions whatever ``fetchFields`` said**;
   ``StartupFetch.POSITIONS`` now controls it like the other fields.
   (:issue:`84`)
+* **``util.useQt`` with PySide6** runs Qt's loop with ``exec()``; it used
+  the deprecated ``exec_()``. (:issue:`134`, thanks to @Flippo24)
 * **``IBC(twsVersion=...)`` takes a string**, as macOS needs: ``"10.19"``,
   with the period, as in the macOS install folder (1019 on Windows and
   Linux). It was typed and documented as an integer. (:issue:`57`)

@@ -830,7 +830,8 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
             stack.append((qloop, timer))
         qloop, timer = stack.pop()
         timer.start(0)
-        qloop.exec() if qtLib == "PyQt6" else qloop.exec_()
+        # Qt 6 names it exec(); exec_() is the Qt 5 name, deprecated in PySide6
+        qloop.exec() if qtLib in ("PyQt6", "PySide6") else qloop.exec_()
         timer.stop()
         stack.append((qloop, timer))
         qApp.processEvents()  # type: ignore[name-defined]
