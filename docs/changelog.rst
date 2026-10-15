@@ -100,6 +100,19 @@ Gateway server version 226). The full upgrade guide with examples lives at
   enums, so a type checker catches a typo. ``durationStr`` is checked
   before a request is sent (``checkDuration``), with a message naming the
   units. (:issue:`114`, thanks to @totkeks and @gnzsnz)
+* **Bars from live ticks are ``RealTimeBar``s, with ``wap``.**
+  ``timebars``, ``tickbars`` and ``volumebars`` build the same bar type
+  IBKR's real-time bars use, ``Decimal``-valued, now with each bar's
+  volume-weighted average price, kept in constant time per tick (and
+  ``None`` for a bar without volume, such as a midpoint bar). All three
+  share one builder and one event contract: each emits its completed bars,
+  and ``bars.updateEvent(bars, hasNewBar)`` fires on every tick (False)
+  and on each completion (True). A completed bar never changes. Midpoint
+  ticks without a bid and ask, which used to fail the aggregation, are
+  skipped. ``examples/programs/live_bars.py`` and a recipe show indicators
+  on the bars (a session VWAP and an EMA) as running folds.
+  ``RealTimeBar.open_`` is now ``open``, as on ``BarData``.
+  (:issue:`127`, thanks to @gnzsnz, and @pavel-slama for the review)
 * **Attached-order linkage on** ``Order``: new ``slOrderId`` /
   ``slOrderType`` / ``ptOrderId`` / ``ptOrderType`` fields preserve
   the stop-loss and profit-target ids of a bracket or OCO group

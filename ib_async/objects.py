@@ -193,7 +193,7 @@ class BarData:
 @dataclass
 class RealTimeBar:
     time: datetime = EPOCH
-    open_: Decimal | None = None
+    open: Decimal | None = None
     high: Decimal | None = None
     low: Decimal | None = None
     close: Decimal | None = None

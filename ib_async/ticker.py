@@ -1,9 +1,11 @@
 """Access to realtime market information."""
 
+import math
 from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from enum import IntEnum
 from typing import Any, ClassVar
 
@@ -19,6 +21,7 @@ from ib_async.objects import (
     MktDepthData,
     NewsTick,
     OptionComputation,
+    RealTimeBar,
     TickAttrib,
     TickByTickAllLast,
     TickByTickBidAsk,
@@ -436,41 +439,45 @@ class Tickfilter(Op):
 
     def timebars(self, timer: Event) -> "TimeBars":
         """
-        Aggregate ticks into time bars, where the timing of new bars
-        is derived from a timer event.
-        Emits a completed :class:`Bar`.
+        Aggregate the ticks into bars of equal time: a bar completes, and
+        the next starts, on each event of ``timer``, whose value is the new
+        bar's time; ``Event.timerange(start=0, step=60)`` gives a bar per
+        minute, starting on the minute. A bar without ticks repeats the
+        previous bar's close, with no volume. Ticks before the first timer
+        event are in no bar.
 
-        This event stores a :class:`BarList` of all created bars in the
-        ``bars`` property.
+        Emits each completed :class:`~ib_async.objects.RealTimeBar`; see
+        :class:`BarList` for ``bars`` and its ``updateEvent``.
 
         Args:
-            timer: Event for timing when a new bar starts.
+            timer: The event that ends one bar and starts the next, emitting
+                the next bar's ``datetime``.
         """
         return TimeBars(timer, self)
 
     def tickbars(self, count: int) -> "TickBars":
         """
-        Aggregate ticks into bars that have the same number of ticks.
-        Emits a completed :class:`Bar`.
+        Aggregate the ticks into bars of ``count`` ticks each.
 
-        This event stores a :class:`BarList` of all created bars in the
-        ``bars`` property.
+        Emits each completed :class:`~ib_async.objects.RealTimeBar`; see
+        :class:`BarList` for ``bars`` and its ``updateEvent``.
 
         Args:
-            count: Number of ticks to use to form one bar.
+            count: The number of ticks in a bar.
         """
         return TickBars(count, self)
 
-    def volumebars(self, volume: int) -> "VolumeBars":
+    def volumebars(self, volume: Decimal | float) -> "VolumeBars":
         """
-        Aggregate ticks into bars that have the same volume.
-        Emits a completed :class:`Bar`.
+        Aggregate the ticks into bars of at least ``volume`` each: a bar
+        completes with the tick that brings it to ``volume``, which can
+        take it past (a tick is not split).
 
-        This event stores a :class:`BarList` of all created bars in the
-        ``bars`` property.
+        Emits each completed :class:`~ib_async.objects.RealTimeBar`; see
+        :class:`BarList` for ``bars`` and its ``updateEvent``.
 
         Args:
-            count: Number of ticks to use to form one bar.
+            volume: The volume of a bar.
         """
         return VolumeBars(volume, self)
 
@@ -482,18 +489,14 @@ class Midpoints(Tickfilter):
             self.emit(ticker.time, ticker.midpoint(), 0)
 
 
-@dataclass
-class Bar:
-    time: datetime | None
-    open: float | None = None
-    high: float | None = None
-    low: float | None = None
-    close: float | None = None
-    volume: int = 0
-    count: int = 0
+class BarList(list[RealTimeBar]):
+    """The bars of a bar operator, oldest first; the last is in progress
+    until it completes.
 
+    ``updateEvent(bars, hasNewBar)`` fires with ``hasNewBar`` False when a
+    tick changes the bar in progress, and True when the last bar has just
+    completed."""
 
-class BarList(list[Bar]):
     def __init__(self, *args):
         super().__init__(*args)
         self.updateEvent = Event("updateEvent")
@@ -510,51 +513,129 @@ class BarList(list[Bar]):
         return id(self)
 
 
+def _decimal(value: Decimal | float) -> Decimal:
+    """A float (a tick's price or size) as the Decimal it reads as."""
+    return Decimal(str(value))
+
+
+@dataclass(slots=True)
+class _BarBuilder:
+    """The bar in progress, updated in constant time per tick: its prices,
+    volume and tick count, and the running sum of price × size its WAP
+    (volume-weighted average price) comes from. Each :meth:`bar` is a new
+    snapshot, so a bar already handed out never changes."""
+
+    time: datetime
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    close: Decimal | None = None
+    volume: Decimal = Decimal(0)
+    count: int = 0
+    priceVolume: Decimal = Decimal(0)
+
+    def add(self, price: Decimal, size: Decimal) -> None:
+        if self.open is None or self.high is None or self.low is None:
+            self.open = self.high = self.low = price
+        else:
+            self.high = max(self.high, price)
+            self.low = min(self.low, price)
+        self.close = price
+        self.volume += size
+        self.count += 1
+        self.priceVolume += price * size
+
+    def repeat(self, close: Decimal | None) -> None:
+        """A bar without ticks: flat at ``close``, with no volume."""
+        self.open = self.high = self.low = self.close = close
+
+    def bar(self) -> RealTimeBar:
+        return RealTimeBar(
+            time=self.time,
+            open=self.open,
+            high=self.high,
+            low=self.low,
+            close=self.close,
+            volume=self.volume,
+            wap=self.priceVolume / self.volume if self.volume else None,
+            count=self.count,
+        )
+
+
 @event_class
-class TimeBars(Op):
+class _Bars(Op):
+    """Aggregates ``(time, price, size)`` ticks into bars; each kind of
+    bar says when one completes. Ticks without a price (a midpoint without
+    a bid and ask) are skipped."""
+
+    bars: BarList
+    _builder: _BarBuilder | None
+
+    def __init__(self, source=None):
+        Op.__init__(self, source)
+        self.bars = BarList()
+        self._builder = None
+
+    def on_source(self, time: datetime, price: float | None, size: float | None):
+        if price is None or math.isnan(price):
+            return
+        builder = self._builder
+        if builder is None:
+            if not self._startsOnTick():
+                return
+            builder = self._begin(time)
+        quantity = Decimal(0) if size is None or math.isnan(size) else _decimal(size)
+        builder.add(_decimal(price), quantity)
+        self.bars[-1] = builder.bar()
+        if self._isComplete(builder):
+            self._complete()
+        else:
+            self.bars.updateEvent.emit(self.bars, False)
+
+    def _startsOnTick(self) -> bool:
+        """Whether a tick starts a bar when none is in progress."""
+        return True
+
+    def _isComplete(self, builder: _BarBuilder) -> bool:
+        """Whether the bar in progress is complete after a tick."""
+        return False
+
+    def _begin(self, time: datetime) -> _BarBuilder:
+        self._builder = _BarBuilder(time)
+        self.bars.append(self._builder.bar())
+        return self._builder
+
+    def _complete(self) -> None:
+        bar = self.bars[-1]
+        self._builder = None
+        self.bars.updateEvent.emit(self.bars, True)
+        self.emit(bar)
+
+
+@event_class
+class TimeBars(_Bars):
     __doc__ = Tickfilter.timebars.__doc__
 
     _timer: Event | None
-    bars: BarList
 
-    def __init__(self, timer, source=None):
-        Op.__init__(self, source)
+    def __init__(self, timer: Event, source=None):
+        _Bars.__init__(self, source)
         self._timer = timer
         self._timer.connect(self._on_timer, None, self._on_timer_done)
-        self.bars = BarList()
 
-    def on_source(self, time, price, size):
-        if not self.bars:
-            return
-        bar = self.bars[-1]
+    def _startsOnTick(self) -> bool:
+        # A time bar starts on the timer; ticks before the first are not
+        # in any bar.
+        return False
 
-        if bar.open is None:
-            bar.open = bar.high = bar.low = price
-
-        if bar.high is not None:
-            bar.high = max(bar.high, price)
-        else:
-            bar.high = price
-        if bar.low is not None:
-            bar.low = min(bar.low, price)
-        else:
-            bar.low = price
-        bar.close = price
-        bar.volume += size
-        bar.count += 1
-        self.bars.updateEvent.emit(self.bars, False)
-
-    def _on_timer(self, time):
-        if self.bars:
-            bar = self.bars[-1]
-            if bar.close is None and len(self.bars) > 1:
-                prev_close = self.bars[-2].close
-                bar.open = bar.high = bar.low = bar.close = prev_close
-
-            self.bars.updateEvent.emit(self.bars, True)
-            self.emit(bar)
-
-        self.bars.append(Bar(time))
+    def _on_timer(self, time: datetime) -> None:
+        builder = self._builder
+        if builder is not None:
+            if builder.count == 0 and len(self.bars) > 1:
+                builder.repeat(self.bars[-2].close)
+                self.bars[-1] = builder.bar()
+            self._complete()
+        self._begin(time)
 
     def _on_timer_done(self, timer):
         self._timer = None
@@ -562,56 +643,32 @@ class TimeBars(Op):
 
 
 @event_class
-class TickBars(Op):
+class TickBars(_Bars):
     __doc__ = Tickfilter.tickbars.__doc__
 
     _count: int
-    bars: BarList
 
-    def __init__(self, count, source=None):
-        Op.__init__(self, source)
+    def __init__(self, count: int, source=None):
+        if count < 1:
+            raise ValueError(f"a tick bar has at least 1 tick, not {count}")
+        _Bars.__init__(self, source)
         self._count = count
-        self.bars = BarList()
 
-    def on_source(self, time, price, size):
-        if not self.bars or self.bars[-1].count == self._count:
-            bar = Bar(time, price, price, price, price, size, 1)
-            self.bars.append(bar)
-        else:
-            bar = self.bars[-1]
-            bar.high = max(bar.high, price)
-            bar.low = min(bar.low, price)
-            bar.close = price
-            bar.volume += size
-            bar.count += 1
-        if bar.count == self._count:
-            self.bars.updateEvent.emit(self.bars, True)
-            self.emit(self.bars)
+    def _isComplete(self, builder: _BarBuilder) -> bool:
+        return builder.count >= self._count
 
 
 @event_class
-class VolumeBars(Op):
+class VolumeBars(_Bars):
     __doc__ = Tickfilter.volumebars.__doc__
 
-    _volume: int
-    bars: BarList
+    _volume: Decimal
 
-    def __init__(self, volume, source=None):
-        Op.__init__(self, source)
-        self._volume = volume
-        self.bars = BarList()
+    def __init__(self, volume: Decimal | float, source=None):
+        if volume <= 0:
+            raise ValueError(f"a volume bar has a positive volume, not {volume}")
+        _Bars.__init__(self, source)
+        self._volume = _decimal(volume)
 
-    def on_source(self, time, price, size):
-        if not self.bars or self.bars[-1].volume >= self._volume:
-            bar = Bar(time, price, price, price, price, size, 1)
-            self.bars.append(bar)
-        else:
-            bar = self.bars[-1]
-            bar.high = max(bar.high, price)
-            bar.low = min(bar.low, price)
-            bar.close = price
-            bar.volume += size
-            bar.count += 1
-        if bar.volume >= self._volume:
-            self.bars.updateEvent.emit(self.bars, True)
-            self.emit(self.bars)
+    def _isComplete(self, builder: _BarBuilder) -> bool:
+        return builder.volume >= self._volume

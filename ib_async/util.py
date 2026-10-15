@@ -423,8 +423,6 @@ def _ohlcRows(bars) -> list[tuple[Any, Any, Any, Any]]:
     if hasattr(bars, "itertuples"):  # a pandas DataFrame
         ohlc = bars[["open", "high", "low", "close"]]
         return list(ohlc.itertuples(index=False, name=None))
-    if bars and hasattr(bars[0], "open_"):
-        return [(b.open_, b.high, b.low, b.close) for b in bars]
     return [(b.open, b.high, b.low, b.close) for b in bars]
 
 

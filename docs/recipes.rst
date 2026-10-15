@@ -107,6 +107,34 @@ Order book
             [d.price for d in ticker.domBids],
             [d.price for d in ticker.domAsks])
 
+Bars from live ticks, and indicators on them
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A ticker's trades (or midpoints) can be aggregated into bars locally, for
+the bars IBKR does not offer: any time interval, a number of ticks, or an
+amount of volume. Each bar is a ``RealTimeBar``, with the bar's
+volume-weighted average price in ``wap``:
+
+.. code-block:: python
+
+    ticker = ib.reqMktData(Stock('AAPL', 'SMART', 'USD'))
+    trades = ticker.updateEvent.trades()
+    minuteBars = trades.timebars(Event.timerange(start=0, step=60))
+    tickBars = trades.tickbars(100)
+    volumeBars = trades.volumebars(10_000)
+
+Each emits its completed bars; its ``bars`` holds every bar, the last in
+progress. An indicator over the bars is a running fold over the completed
+bars, constant time per bar: a session VWAP folds the bars' price × volume
+and volume with ``reduce``, and eventkit's ``ema`` averages their closes.
+From ``examples/programs/live_bars.py``:
+
+.. literalinclude:: ../examples/programs/live_bars.py
+   :pyobject: SessionVwap
+
+.. literalinclude:: ../examples/programs/live_bars.py
+   :pyobject: annotate
+
 Minimum price increments
 ^^^^^^^^^^^^^^^^^^^^^^^^
 

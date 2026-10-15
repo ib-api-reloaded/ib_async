@@ -19,7 +19,7 @@ from types import ModuleType
 import pytest
 from eventkit import Event
 
-from ib_async import BarData, BarDataList, LimitOrder, Stock, Ticker, Trade
+from ib_async import BarData, BarDataList, LimitOrder, Stock, TickData, Ticker, Trade
 
 PROGRAMS = Path(__file__).resolve().parent.parent / "examples" / "programs"
 
@@ -36,6 +36,7 @@ def load(name: str) -> ModuleType:
 download_bars = load("download_bars")
 stream_quotes = load("stream_quotes")
 order_lifecycle = load("order_lifecycle")
+live_bars = load("live_bars")
 
 T0 = dt.datetime(2026, 10, 1, 14, tzinfo=dt.UTC)
 
@@ -165,3 +166,42 @@ async def test_waiting_stops_when_the_trade_events_end():
     asyncio.get_running_loop().call_later(0.01, trade.statusEvent.set_done)
     reached = await order_lifecycle.waitUntil(trade, trade.isDone, 5)
     assert reached is False
+
+
+def trade(ticker: Ticker, seconds: int, price: float, size: float) -> None:
+    """Deliver one trade tick to the ticker's update stream."""
+    at = T0 + dt.timedelta(seconds=seconds)
+    ticker.time = at
+    ticker.ticks = [TickData(at, 4, price, size)]
+    ticker.updateEvent.emit(ticker)
+
+
+def test_live_bars_annotates_each_completed_bar():
+    ticker = Ticker(contract=Stock("AAPL"))
+    timer = Event("timer")
+    bars = ticker.updateEvent.trades().timebars(timer)
+    annotated: list = []
+    live_bars.annotate(bars, emaBars=3).connect(annotated.append)
+
+    timer.emit(T0)
+    trade(ticker, 1, 10.0, 100)
+    trade(ticker, 2, 12.0, 300)  # bar 1: wap (1000 + 3600) / 400 = 11.5
+    timer.emit(T0 + dt.timedelta(minutes=1))
+    timer.emit(T0 + dt.timedelta(minutes=2))  # bar 2: no trades, close 12
+    trade(ticker, 121, 11.0, 100)  # bar 3: wap 11
+    timer.emit(T0 + dt.timedelta(minutes=3))
+
+    assert [a.bar.close for a in annotated] == [Decimal(12), Decimal(12), Decimal(11)]
+    # the empty bar adds no volume, so the session VWAP holds
+    assert [a.vwap for a in annotated] == [
+        Decimal("11.5"),
+        Decimal("11.5"),
+        Decimal("5700.0") / 500,
+    ]
+    # EMA over 3 bars weighs each new close by 2 / (3 + 1)
+    assert [a.ema for a in annotated] == [12.0, 12.0, 11.5]
+    assert "session vwap 11.5000  ema 12.0000" in live_bars.formatBar(annotated[0])
+
+
+def test_session_vwap_starts_unset():
+    assert live_bars.SessionVwap().value is None

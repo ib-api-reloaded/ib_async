@@ -3,21 +3,21 @@
 ``TickerUpdateEvent`` and the tick/bar operators built on it are declared
 with ``eventkit.event_class``: typed fields instead of hand-written
 ``__slots__``, identity comparison, and the original constructors.
-These tests pin that layout and check the bar operators still aggregate
-ticks the same way.
+These tests pin that layout and check the bars the operators build from
+ticks.
 """
 
 import dataclasses
 import inspect
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from eventkit import Event
 
-from ib_async.objects import TickData
+from ib_async.objects import RealTimeBar, TickData
 from ib_async.ticker import (
-    Bar,
     Midpoints,
     TickBars,
     Ticker,
@@ -25,6 +25,7 @@ from ib_async.ticker import (
     Tickfilter,
     TimeBars,
     VolumeBars,
+    _Bars,
 )
 
 T0 = datetime(2024, 1, 2, 14, 30, tzinfo=UTC)
@@ -33,6 +34,7 @@ FACTORIES: dict[type, Callable[[], Event]] = {
     TickerUpdateEvent: lambda: TickerUpdateEvent("updateEvent"),
     Tickfilter: lambda: Tickfilter((4, 5)),
     Midpoints: lambda: Midpoints(()),
+    _Bars: lambda: _Bars(),
     TimeBars: lambda: TimeBars(Event("timer")),
     TickBars: lambda: TickBars(2),
     VolumeBars: lambda: VolumeBars(3),
@@ -42,9 +44,10 @@ DECLARED_FIELDS = {
     TickerUpdateEvent: set(),
     Tickfilter: {"_tickTypes"},
     Midpoints: set(),
-    TimeBars: {"_timer", "bars"},
-    TickBars: {"_count", "bars"},
-    VolumeBars: {"_volume", "bars"},
+    _Bars: {"bars", "_builder"},
+    TimeBars: {"_timer"},
+    TickBars: {"_count"},
+    VolumeBars: {"_volume"},
 }
 
 SIGNATURES = {
@@ -52,9 +55,10 @@ SIGNATURES = {
     TickerUpdateEvent: str(inspect.signature(Event.__init__)),
     Tickfilter: "(self, tickTypes, source=None)",
     Midpoints: "(self, tickTypes, source=None)",
-    TimeBars: "(self, timer, source=None)",
-    TickBars: "(self, count, source=None)",
-    VolumeBars: "(self, volume, source=None)",
+    _Bars: "(self, source=None)",
+    TimeBars: "(self, timer: eventkit.event.Event, source=None)",
+    TickBars: "(self, count: int, source=None)",
+    VolumeBars: "(self, volume: decimal.Decimal | float, source=None)",
 }
 
 CLASSES = list(FACTORIES)
@@ -162,67 +166,143 @@ def test_midpoints_emit_ticker_midpoint():
     assert received == [(_at(0), 100.5, 0)]
 
 
+def bar(
+    seconds: int,
+    ohlc: tuple[str, str, str, str] | None,
+    volume: str,
+    wap: Decimal | None,
+    count: int,
+) -> RealTimeBar:
+    """The bar expected at ``seconds``; prices as the Decimals they read as."""
+    open_, high, low, close = (
+        (Decimal(p) for p in ohlc) if ohlc else (None, None, None, None)
+    )
+    return RealTimeBar(
+        _at(seconds), open_, high, low, close, Decimal(volume), wap, count
+    )
+
+
+def record(bars: _Bars) -> tuple[list[RealTimeBar], list[bool]]:
+    """What a bar operator emits, and its updateEvent's hasNewBar flags."""
+    emitted: list[RealTimeBar] = []
+    flags: list[bool] = []
+    bars.connect(emitted.append)
+    bars.bars.updateEvent += lambda _, hasNewBar: flags.append(hasNewBar)
+    return emitted, flags
+
+
 def test_tickbars_from_synthetic_ticks():
     ticker = Ticker()
     tickBars = ticker.updateEvent.trades().tickbars(2)
-    emitted: list = []
-    tickBars.connect(emitted.append)
+    emitted, flags = record(tickBars)
 
     _feed(ticker, TICKS)
 
-    assert list(tickBars.bars) == [
-        Bar(_at(0), 10.0, 12.0, 10.0, 12.0, 3, 2),
-        Bar(_at(3), 11.0, 11.0, 8.0, 8.0, 4, 2),
-        Bar(_at(5), 9.0, 9.0, 9.0, 9.0, 4, 1),
-    ]
-    # Emits the bar list once per completed bar.
-    assert len(emitted) == 2
-    assert all(e is tickBars.bars for e in emitted)
+    # WAP is sum(price * size) / volume: (10 * 1 + 12 * 2) / 3, ...
+    first = bar(0, ("10", "12", "10", "12"), "3", Decimal("34.0") / 3, 2)
+    second = bar(3, ("11", "11", "8", "8"), "4", Decimal("10.25"), 2)
+    inProgress = bar(5, ("9", "9", "9", "9"), "4", Decimal(9), 1)
+    assert list(tickBars.bars) == [first, second, inProgress]
+    assert emitted == [first, second]
+    # in progress (False) on each tick, True as the last bar completes
+    assert flags == [False, True, False, True, False]
 
 
 def test_volumebars_from_synthetic_ticks():
     ticker = Ticker()
     volumeBars = ticker.updateEvent.trades().volumebars(3)
-    emitted: list = []
-    volumeBars.connect(emitted.append)
+    emitted, flags = record(volumeBars)
 
     _feed(ticker, TICKS)
 
-    assert list(volumeBars.bars) == [
-        Bar(_at(0), 10.0, 12.0, 10.0, 12.0, 3, 2),
-        Bar(_at(3), 11.0, 11.0, 11.0, 11.0, 3, 1),
-        Bar(_at(4), 8.0, 9.0, 8.0, 9.0, 5, 2),
+    expected = [
+        bar(0, ("10", "12", "10", "12"), "3", Decimal("34.0") / 3, 2),
+        bar(3, ("11", "11", "11", "11"), "3", Decimal(11), 1),
+        # the last tick takes the bar past 3: a tick is not split
+        bar(4, ("8", "9", "8", "9"), "5", Decimal("8.8"), 2),
     ]
-    assert len(emitted) == 3
-    assert all(e is volumeBars.bars for e in emitted)
+    assert list(volumeBars.bars) == expected
+    assert emitted == expected
+    assert flags == [False, True, True, False, True]
 
 
 def test_timebars_from_synthetic_ticks():
     ticker = Ticker()
     timer = Event("timer")
     timeBars = ticker.updateEvent.trades().timebars(timer)
-    emitted: list[Bar] = []
-    timeBars.connect(emitted.append)
+    emitted, flags = record(timeBars)
 
-    _feed(ticker, TICKS[:1])  # before the first timer tick: ignored
+    _feed(ticker, TICKS[:1])  # before the first timer event: in no bar
     timer.emit(_at(0))
     _feed(ticker, TICKS[1:3])
     timer.emit(_at(3))
     _feed(ticker, TICKS[3:5])
     timer.emit(_at(5))
-    timer.emit(_at(6))  # empty interval carries the previous close
+    timer.emit(_at(6))  # an empty interval repeats the previous close
 
     expected = [
-        Bar(_at(0), 12.0, 12.0, 12.0, 12.0, 2, 1),
-        Bar(_at(3), 11.0, 11.0, 8.0, 8.0, 4, 2),
-        Bar(_at(5), 8.0, 8.0, 8.0, 8.0, 0, 0),
+        bar(0, ("12", "12", "12", "12"), "2", Decimal(12), 1),
+        bar(3, ("11", "11", "8", "8"), "4", Decimal("10.25"), 2),
+        bar(5, ("8", "8", "8", "8"), "0", None, 0),
     ]
     assert emitted == expected
-    assert list(timeBars.bars) == [*expected, Bar(_at(6))]
+    assert list(timeBars.bars) == [*expected, bar(6, None, "0", None, 0)]
+    assert flags == [False, True, False, False, True, True]
 
     timer.set_done()
     assert timeBars.done()
     assert timeBars._timer is None
+
+
+def test_a_completed_bar_never_changes():
+    ticker = Ticker()
+    tickBars = ticker.updateEvent.trades().tickbars(2)
+    emitted, _ = record(tickBars)
+    _feed(ticker, TICKS[:3])
+    (completed,) = emitted
+    snapshot = dataclasses.replace(completed)
+
+    _feed(ticker, TICKS[3:])
+
+    assert completed == snapshot
+    assert tickBars.bars[0] is completed
+
+
+def test_midpoint_bars_have_no_volume_and_no_wap():
+    ticker = Ticker()
+    ticker.bid, ticker.ask = 100.0, 101.0
+    ticker.bidSize, ticker.askSize = 1, 1
+    tickBars = ticker.updateEvent.midpoints().tickbars(2)
+
+    _feed(ticker, TICKS[:2])
+
+    assert list(tickBars.bars) == [
+        bar(0, ("100.5", "100.5", "100.5", "100.5"), "0", None, 2)
+    ]
+
+
+def test_ticks_without_a_price_are_skipped():
+    """A midpoint without a bid and ask has no price: it is in no bar."""
+    ticker = Ticker()
+    tickBars = ticker.updateEvent.midpoints().tickbars(1)
+
+    _feed(ticker, TICKS[:2])
+
+    assert list(tickBars.bars) == []
+
+
+@pytest.mark.parametrize(
+    ("make", "message"),
+    [
+        (lambda: TickBars(0), "at least 1 tick"),
+        (lambda: VolumeBars(0), "positive volume"),
+    ],
+)
+def test_bar_sizes_are_refused_when_empty(
+    make: Callable[[], _Bars], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        make()
 
 
 def test_trades_filter_includes_rt_volume_and_rt_trade_volume():
@@ -233,3 +313,14 @@ def test_trades_filter_includes_rt_volume_and_rt_trade_volume():
     ticker.updateEvent.trades().connect(lambda *args: received.append(args))
     _feed(ticker, [(0, 48, 10.0, 100), (1, 77, 10.5, 50)])
     assert received == [(_at(0), 10.0, 100), (_at(1), 10.5, 50)]
+
+
+def test_a_tick_without_a_size_adds_no_volume():
+    ticker = Ticker()
+    tickBars = ticker.updateEvent.trades().tickbars(2)
+
+    _feed(ticker, [(0, 4, 10.0, float("nan")), (1, 4, 11.0, 2)])
+
+    assert list(tickBars.bars) == [
+        bar(0, ("10", "11", "10", "11"), "2", Decimal(11), 2)
+    ]

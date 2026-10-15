@@ -149,7 +149,7 @@ def test_ohlc_rows_from_frame_and_from_bars():
 def test_ohlc_rows_from_realtime_bars():
     bar = RealTimeBar(
         time=T0,
-        open_=Decimal(1),
+        open=Decimal(1),
         high=Decimal(3),
         low=Decimal(0),
         close=Decimal(2),

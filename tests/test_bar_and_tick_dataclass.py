@@ -61,7 +61,7 @@ def test_bar_data_default_numerics_are_none():
 
 def test_real_time_bar_default_numerics_are_none():
     rt = RealTimeBar()
-    assert rt.open_ is None
+    assert rt.open is None
     assert rt.high is None
     assert rt.low is None
     assert rt.close is None
