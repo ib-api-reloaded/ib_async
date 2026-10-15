@@ -9,11 +9,19 @@ import os
 import signal
 import sys
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterable,
+    Iterator,
+    Sequence,
+)
 from dataclasses import fields, is_dataclass
 from decimal import Decimal
 from importlib import import_module
 from typing import (
+    TYPE_CHECKING,
     Any,
     Final,
     TypeAlias,
@@ -23,6 +31,9 @@ from zoneinfo import ZoneInfo
 import nest_asyncio
 from eventkit import Event
 from eventkit.util import get_event_loop as _threadEventLoop
+
+if TYPE_CHECKING:
+    import polars as pl
 
 globalErrorEvent: Event = Event()
 """
@@ -44,41 +55,77 @@ UNSET_DECIMAL: Final = Decimal(2**127 - 1)
 Time_t: TypeAlias = dt.time | dt.datetime
 
 
-def df(objs, labels: list[str] | None = None):
+def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> "pl.DataFrame":
     """
-    Create pandas DataFrame from the sequence of same-type objects.
+    Create a polars DataFrame with one row per object. The objects are of
+    one kind: dataclasses (such as ``BarData``), namedtuples, dicts,
+    attribute records (``FlexReport`` rows) or plain tuples (columns
+    ``column_0``, ``column_1``, ...).
+
+    Values keep their types: ``Decimal`` and ``datetime`` (with its time
+    zone) become polars ``Decimal`` and ``Datetime`` columns, ``None``
+    becomes null, and an ib_async object such as a ``Contract`` is stored
+    as itself. With no objects the result has no rows.
+
+    Requires polars: ``pip install "ib_async[polars]"``.
 
     Args:
-      labels: If supplied, retain only the given labels and drop the rest.
+      labels: If supplied, keep only these columns, in this order.
     """
-    # pandas is an optional dependency, imported only when used.
-    import pandas as pd  # noqa: PLC0415
+    # polars is an optional dependency, imported only when used.
+    import polars as pl  # noqa: PLC0415
 
-    if objs:
-        objs = list(objs)
-        obj = objs[0]
-        if is_dataclass(obj):
-            df = pd.DataFrame.from_records(dataclassAsTuple(o) for o in objs)
-            df.columns = [field.name for field in fields(obj)]
-        elif hasattr(obj, "__dict__"):
-            # attribute records such as objects.DynamicObject (FlexReport rows)
-            df = pd.DataFrame.from_records(vars(o) for o in objs)
-        else:
-            df = pd.DataFrame.from_records(objs)
-
-        if isinstance(obj, tuple):
-            _fields = getattr(obj, "_fields", None)
-            if _fields:
-                # assume it's a namedtuple
-                df.columns = _fields
+    rows = list(objs)
+    if not rows:
+        return pl.DataFrame(schema=list(labels or ()))
+    first = rows[0]
+    if is_dataclass(first):
+        columns = [field.name for field in fields(first)]
+        data = [dataclassAsTuple(o) for o in rows]
+    elif isinstance(first, tuple):
+        columns = list(getattr(first, "_fields", ())) or [
+            f"column_{i}" for i in range(len(first))
+        ]
+        data = rows
     else:
-        df = None
+        records = rows if isinstance(first, dict) else [vars(o) for o in rows]
+        # every key of every record, in first-seen order; a missing one is null
+        columns = list(dict.fromkeys(key for record in records for key in record))
+        data = [tuple(record.get(c) for c in columns) for record in records]
+    frame = pl.DataFrame(
+        [
+            # strict=False: a column mixing ints and floats (FlexReport
+            # numbers) becomes Float64 instead of failing
+            pl.Series(name, values, strict=False)
+            if _polarsNative(values)
+            else pl.Series(name, values, dtype=pl.Object)
+            for name, values in zip(
+                columns,
+                (list(column) for column in zip(*data, strict=True)),
+                strict=True,
+            )
+        ]
+    )
+    return frame.select(labels) if labels else frame
 
-    if labels:
-        exclude = [label for label in df if label not in labels]
-        df = df.drop(exclude, axis=1)
 
-    return df
+# Values polars stores in a column of their own type; anything else
+# (a Contract, a list of TagValues) is kept as the Python object.
+_POLARS_SCALARS: Final = (
+    bool,
+    int,
+    float,
+    str,
+    bytes,
+    Decimal,
+    dt.date,
+    dt.time,
+    dt.timedelta,
+)
+
+
+def _polarsNative(values: list[Any]) -> bool:
+    return all(v is None or isinstance(v, _POLARS_SCALARS) for v in values)
 
 
 def dataclassAsDict(obj) -> dict:
@@ -331,23 +378,29 @@ def tree(obj):
     return str(obj)
 
 
+def _ohlcRows(bars) -> list[tuple[Any, Any, Any, Any]]:
+    """
+    ``(open, high, low, close)`` per bar, from a polars DataFrame (from
+    :func:`df`) or from bar objects (``BarData``, ``RealTimeBar``).
+    """
+    if hasattr(bars, "select"):  # a DataFrame
+        return bars.select("open", "high", "low", "close").rows()
+    if bars and hasattr(bars[0], "open_"):
+        return [(b.open_, b.high, b.low, b.close) for b in bars]
+    return [(b.open, b.high, b.low, b.close) for b in bars]
+
+
 def barplot(bars, title="", upColor="blue", downColor="red"):
     """
     Create candlestick plot for the given bars. The bars can be given as
-    a DataFrame or as a list of bar objects.
+    a polars DataFrame (from :func:`df`) or as a list of bar objects.
     """
-    # matplotlib and pandas are optional dependencies, imported only when used.
+    # matplotlib is an optional dependency, imported only when used.
     import matplotlib.pyplot as plt  # noqa: PLC0415
-    import pandas as pd  # noqa: PLC0415
     from matplotlib.lines import Line2D  # noqa: PLC0415
     from matplotlib.patches import Rectangle  # noqa: PLC0415
 
-    if isinstance(bars, pd.DataFrame):
-        ohlcTups = [tuple(v) for v in bars[["open", "high", "low", "close"]].values]
-    elif bars and hasattr(bars[0], "open_"):
-        ohlcTups = [(b.open_, b.high, b.low, b.close) for b in bars]
-    else:
-        ohlcTups = [(b.open, b.high, b.low, b.close) for b in bars]
+    ohlcTups = _ohlcRows(bars)
 
     fig, ax = plt.subplots()
     ax.set_title(title)

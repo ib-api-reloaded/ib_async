@@ -39,6 +39,12 @@ and the [API docs](https://ib-api-reloaded.github.io/ib_async/api.html).
 pip install ib_async
 ```
 
+`util.df()` and `FlexReport.df()` return [polars](https://pola.rs) DataFrames; install the extra to use them:
+
+```
+pip install "ib_async[polars]"
+```
+
 ### Install with uv
 
 ```
@@ -299,7 +305,7 @@ bars = ib.reqHistoricalData(
     useRTH=True,
 )
 
-# Convert to pandas dataframe (pandas needs to be installed):
+# Convert to a polars DataFrame (pip install "ib_async[polars]"):
 df = util.df(bars)
 print(df.head())
 
@@ -446,7 +452,7 @@ ib.disconnect()
 
 ```python
 from ib_async import *
-import pandas as pd
+import polars as pl
 
 ib = IB()
 ib.connect("127.0.0.1", 7497, clientId=1)
@@ -482,8 +488,8 @@ print(f"Daily bars: {len(daily_df)} rows")
 print(f"Intraday bars: {len(intraday_df)} rows")
 
 # Calculate simple moving average
-daily_df["SMA_20"] = daily_df["close"].rolling(20).mean()
-print(daily_df[["date", "close", "SMA_20"]].tail())
+daily_df = daily_df.with_columns(pl.col("close").rolling_mean(20).alias("SMA_20"))
+print(daily_df.select("date", "close", "SMA_20").tail())
 
 ib.disconnect()
 ```

@@ -100,7 +100,8 @@ class FlexReport:
         return results
 
     def df(self, topic: str, parseNumbers=True):
-        """Same as extract but return the result as a pandas DataFrame."""
+        """Same as extract but return the result as a polars DataFrame
+        (requires polars: ``pip install "ib_async[polars]"``)."""
         return util.df(self.extract(topic, parseNumbers))
 
     def get_url(self):

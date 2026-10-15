@@ -179,6 +179,15 @@ Gateway server version 226). The full upgrade guide with examples lives at
   likewise snapshots (``Mapping[int, DOMLevel]``) keyed by row. None of
   the four are ``Ticker(...)`` constructor arguments any more; assigning
   ``ticker.domBids = rows`` still replaces that side's rows.
+* **polars replaces pandas.** ``util.df()`` and ``FlexReport.df()``
+  return a polars ``DataFrame`` (polars 2.0+, installed with
+  ``pip install "ib_async[polars]"``), and ``util.barplot()`` accepts
+  one. ``Decimal`` and time-zone-aware ``datetime`` values keep their
+  types; an ib_async object in a field (``Position.contract``) is stored
+  as itself. ``labels`` keeps those columns in that order, and an unknown
+  label raises instead of being ignored. No objects give an empty
+  DataFrame instead of ``None``. ``frame.to_pandas()`` converts where
+  pandas is still needed (it requires pandas and pyarrow).
 
 **Removed**
 
