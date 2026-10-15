@@ -232,8 +232,10 @@ notebook for each topic:
 ```python
 ib = IB()
 await ib.connectAsync("127.0.0.1", 7497, clientId=1)
+contract = Stock("TSLA", "SMART", "USD")
+await ib.qualifyContractsAsync(contract)
 bars = await ib.reqHistoricalDataAsync(
-    Stock("TSLA", "SMART", "USD"), "", "1 D", "1 hour", "TRADES", True
+    contract, "", "1 D", "1 hour", "TRADES", True
 )
 ```
 
@@ -311,6 +313,7 @@ ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Request historical data
 contract = Forex("EURUSD")
+ib.qualifyContracts(contract)
 bars = ib.reqHistoricalData(
     contract,
     endDateTime="",
@@ -338,6 +341,7 @@ ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Subscribe to live market data
 contract = Stock("AAPL", "SMART", "USD")
+ib.qualifyContracts(contract)
 ticker = ib.reqMktData(contract, "", False, False)
 
 # Print live quotes for 30 seconds
@@ -359,6 +363,7 @@ ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Create a contract and order
 contract = Stock("AAPL", "SMART", "USD")
+ib.qualifyContracts(contract)
 order = MarketOrder("BUY", 100)
 
 # Place the order
@@ -435,6 +440,7 @@ ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Create a bracket order (entry + stop loss + take profit)
 contract = Stock("TSLA", "SMART", "USD")
+ib.qualifyContracts(contract)
 
 # Parent order
 parent = LimitOrder("BUY", 100, 250.00)
@@ -474,6 +480,7 @@ ib.connect("127.0.0.1", 7497, clientId=1)
 
 # Get multiple timeframes
 contract = Stock("SPY", "SMART", "USD")
+ib.qualifyContracts(contract)
 
 # Daily bars for 1 year
 daily_bars = ib.reqHistoricalData(
