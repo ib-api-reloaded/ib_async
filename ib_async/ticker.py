@@ -437,7 +437,7 @@ class Tickfilter(Op):
             if t.tickType in self._tickTypes:
                 self.emit(t.time, t.price, t.size)
 
-    def timebars(self, timer: Event) -> "TimeBars":
+    def timebars(self, timer: Event, maxBars: int | None = None) -> "TimeBars":
         """
         Aggregate the ticks into bars of equal time: a bar completes, and
         the next starts, on each event of ``timer``, whose value is the new
@@ -452,10 +452,12 @@ class Tickfilter(Op):
         Args:
             timer: The event that ends one bar and starts the next, emitting
                 the next bar's ``datetime``.
+            maxBars: Keep at most this many bars in ``bars``, dropping the
+                oldest; all of them by default.
         """
-        return TimeBars(timer, self)
+        return TimeBars(timer, self, maxBars)
 
-    def tickbars(self, count: int) -> "TickBars":
+    def tickbars(self, count: int, maxBars: int | None = None) -> "TickBars":
         """
         Aggregate the ticks into bars of ``count`` ticks each.
 
@@ -464,10 +466,14 @@ class Tickfilter(Op):
 
         Args:
             count: The number of ticks in a bar.
+            maxBars: Keep at most this many bars in ``bars``, dropping the
+                oldest; all of them by default.
         """
-        return TickBars(count, self)
+        return TickBars(count, self, maxBars)
 
-    def volumebars(self, volume: Decimal | float) -> "VolumeBars":
+    def volumebars(
+        self, volume: Decimal | float, maxBars: int | None = None
+    ) -> "VolumeBars":
         """
         Aggregate the ticks into bars of at least ``volume`` each: a bar
         completes with the tick that brings it to ``volume``, which can
@@ -478,8 +484,10 @@ class Tickfilter(Op):
 
         Args:
             volume: The volume of a bar.
+            maxBars: Keep at most this many bars in ``bars``, dropping the
+                oldest; all of them by default.
         """
-        return VolumeBars(volume, self)
+        return VolumeBars(volume, self, maxBars)
 
 
 @event_class
@@ -495,11 +503,29 @@ class BarList(list[RealTimeBar]):
 
     ``updateEvent(bars, hasNewBar)`` fires with ``hasNewBar`` False when a
     tick changes the bar in progress, and True when the last bar has just
-    completed."""
+    completed.
 
-    def __init__(self, *args):
+    Without ``maxlen`` it keeps every bar. With one, it keeps at most that
+    many, as a ``deque(maxlen=...)`` does: appending a bar to a full list
+    drops the oldest."""
+
+    maxlen: int | None
+
+    def __init__(self, *args, maxlen: int | None = None):
+        if maxlen is not None and maxlen < 1:
+            raise ValueError(f"maxlen keeps at least 1 bar, not {maxlen}")
         super().__init__(*args)
+        self.maxlen = maxlen
         self.updateEvent = Event("updateEvent")
+        self._trim()
+
+    def append(self, bar: RealTimeBar) -> None:
+        super().append(bar)
+        self._trim()
+
+    def _trim(self) -> None:
+        if self.maxlen is not None and len(self) > self.maxlen:
+            del self[: len(self) - self.maxlen]
 
     def __eq__(self, other) -> bool:
         return self is other
@@ -570,11 +596,15 @@ class _Bars(Op):
 
     bars: BarList
     _builder: _BarBuilder | None
+    # The close of the last completed bar, which an empty time bar repeats;
+    # kept here, since a capped ``bars`` may have dropped that bar.
+    _lastClose: Decimal | None
 
-    def __init__(self, source=None):
+    def __init__(self, source=None, maxBars: int | None = None):
         Op.__init__(self, source)
-        self.bars = BarList()
+        self.bars = BarList(maxlen=maxBars)
         self._builder = None
+        self._lastClose = None
 
     def on_source(self, time: datetime, price: float | None, size: float | None):
         if price is None or math.isnan(price):
@@ -608,6 +638,7 @@ class _Bars(Op):
     def _complete(self) -> None:
         bar = self.bars[-1]
         self._builder = None
+        self._lastClose = bar.close
         self.bars.updateEvent.emit(self.bars, True)
         self.emit(bar)
 
@@ -618,8 +649,8 @@ class TimeBars(_Bars):
 
     _timer: Event | None
 
-    def __init__(self, timer: Event, source=None):
-        _Bars.__init__(self, source)
+    def __init__(self, timer: Event, source=None, maxBars: int | None = None):
+        _Bars.__init__(self, source, maxBars)
         self._timer = timer
         self._timer.connect(self._on_timer, None, self._on_timer_done)
 
@@ -631,8 +662,8 @@ class TimeBars(_Bars):
     def _on_timer(self, time: datetime) -> None:
         builder = self._builder
         if builder is not None:
-            if builder.count == 0 and len(self.bars) > 1:
-                builder.repeat(self.bars[-2].close)
+            if builder.count == 0 and self._lastClose is not None:
+                builder.repeat(self._lastClose)
                 self.bars[-1] = builder.bar()
             self._complete()
         self._begin(time)
@@ -648,10 +679,10 @@ class TickBars(_Bars):
 
     _count: int
 
-    def __init__(self, count: int, source=None):
+    def __init__(self, count: int, source=None, maxBars: int | None = None):
         if count < 1:
             raise ValueError(f"a tick bar has at least 1 tick, not {count}")
-        _Bars.__init__(self, source)
+        _Bars.__init__(self, source, maxBars)
         self._count = count
 
     def _isComplete(self, builder: _BarBuilder) -> bool:
@@ -664,10 +695,12 @@ class VolumeBars(_Bars):
 
     _volume: Decimal
 
-    def __init__(self, volume: Decimal | float, source=None):
+    def __init__(
+        self, volume: Decimal | float, source=None, maxBars: int | None = None
+    ):
         if volume <= 0:
             raise ValueError(f"a volume bar has a positive volume, not {volume}")
-        _Bars.__init__(self, source)
+        _Bars.__init__(self, source, maxBars)
         self._volume = _decimal(volume)
 
     def _isComplete(self, builder: _BarBuilder) -> bool:

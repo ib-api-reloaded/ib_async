@@ -18,6 +18,7 @@ from eventkit import Event
 
 from ib_async.objects import RealTimeBar, TickData
 from ib_async.ticker import (
+    BarList,
     Midpoints,
     TickBars,
     Ticker,
@@ -44,7 +45,7 @@ DECLARED_FIELDS = {
     TickerUpdateEvent: set(),
     Tickfilter: {"_tickTypes"},
     Midpoints: set(),
-    _Bars: {"bars", "_builder"},
+    _Bars: {"bars", "_builder", "_lastClose"},
     TimeBars: {"_timer"},
     TickBars: {"_count"},
     VolumeBars: {"_volume"},
@@ -55,10 +56,10 @@ SIGNATURES = {
     TickerUpdateEvent: str(inspect.signature(Event.__init__)),
     Tickfilter: "(self, tickTypes, source=None)",
     Midpoints: "(self, tickTypes, source=None)",
-    _Bars: "(self, source=None)",
-    TimeBars: "(self, timer: eventkit.event.Event, source=None)",
-    TickBars: "(self, count: int, source=None)",
-    VolumeBars: "(self, volume: decimal.Decimal | float, source=None)",
+    _Bars: "(self, source=None, maxBars: int | None = None)",
+    TimeBars: "(self, timer: eventkit.event.Event, source=None, maxBars: int | None = None)",
+    TickBars: "(self, count: int, source=None, maxBars: int | None = None)",
+    VolumeBars: "(self, volume: decimal.Decimal | float, source=None, maxBars: int | None = None)",
 }
 
 CLASSES = list(FACTORIES)
@@ -324,3 +325,43 @@ def test_a_tick_without_a_size_adds_no_volume():
     assert list(tickBars.bars) == [
         bar(0, ("10", "11", "10", "11"), "2", Decimal(11), 2)
     ]
+
+
+def test_max_bars_keeps_the_newest_like_a_deque():
+    ticker = Ticker()
+    tickBars = ticker.updateEvent.trades().tickbars(1, maxBars=2)
+    emitted, _ = record(tickBars)
+
+    _feed(ticker, TICKS)
+
+    # five trades, five one-tick bars, all emitted; the last two are kept
+    assert len(emitted) == 5
+    assert list(tickBars.bars) == emitted[-2:]
+    assert tickBars.bars.maxlen == 2
+
+
+def test_an_empty_time_bar_repeats_the_close_with_one_bar_kept():
+    """The close an empty bar repeats is kept by the operator, not read
+    from a bar the cap has dropped."""
+    ticker = Ticker()
+    timer = Event("timer")
+    timeBars = ticker.updateEvent.trades().timebars(timer, maxBars=1)
+    emitted, _ = record(timeBars)
+
+    timer.emit(_at(0))
+    _feed(ticker, TICKS[2:3])  # close 12
+    timer.emit(_at(3))
+    timer.emit(_at(5))  # empty
+
+    assert emitted[-1] == bar(3, ("12", "12", "12", "12"), "0", None, 0)
+    assert len(timeBars.bars) == 1
+
+
+def test_bar_list_caps_appends_and_refuses_an_empty_cap():
+    bars = BarList([bar(0, None, "0", None, 0), bar(1, None, "0", None, 0)], maxlen=1)
+    assert [b.time for b in bars] == [_at(1)]
+    bars.append(bar(2, None, "0", None, 0))
+    assert [b.time for b in bars] == [_at(2)]
+    assert len(BarList()) == 0 and BarList().maxlen is None
+    with pytest.raises(ValueError, match="at least 1 bar"):
+        BarList(maxlen=0)
