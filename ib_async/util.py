@@ -1001,6 +1001,9 @@ def parseIBDatetime(s: str, *, year: int | None = None) -> dt.date | dt.datetime
         t = dt.date(y, m, d)
     elif s.isdigit():
         t = dt.datetime.fromtimestamp(int(s), dt.UTC)
+    elif len(s) == 17 and s[8] == "-":
+        # 20260824-20:00:12: IBKR's zone-less form is UTC.
+        t = dt.datetime.strptime(s, "%Y%m%d-%H:%M:%S").replace(tzinfo=dt.UTC)
     elif s.count(" ") >= 2 and "  " not in s:
         # 20221125 10:00:00 Europe/Amsterdam
         s0, s1, s2 = s.split(" ", 2)

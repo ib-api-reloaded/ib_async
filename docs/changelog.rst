@@ -215,6 +215,12 @@ Gateway server version 226). The full upgrade guide with examples lives at
 These were broken on v2.x against modern TWS / Gateway versions and
 are fixed in v3.0:
 
+* **``Execution.time`` off by the host's or TimezoneTWS's UTC offset.**
+  TWS reports execution times as ``YYYYmmdd-HH:MM:SS``, IBKR's zone-less
+  UTC form, which was read as TimezoneTWS or host-local time; it is now
+  UTC (``util.parseIBDatetime`` returns it UTC-aware). The gateway's
+  configured time zone does not change this form. (:issue:`230`,
+  :issue:`232`, thanks to @giorgi1324)
 * **``AccountValue.decimalValue``** returned ``None`` for every
   per-currency monetary value on TWS installs with TWS API 10.47's
   ``$LEDGER-`` prefix setting on — the default for new installs. The

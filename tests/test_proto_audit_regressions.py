@@ -275,6 +275,28 @@ def test_normalize_execution_time_explicit_tz_in_string():
     assert utc.minute == 30
 
 
+def test_hyphenated_ib_datetime_is_utc():
+    """``YYYYmmdd-HH:MM:SS`` is IBKR's zone-less UTC form (the reference
+    client: "yyyyMMdd-HH:mm:ss" (UTC) or "yyyyMMdd HH:mm:ss timezone");
+    the other forms parse as before."""
+    assert ibi.util.parseIBDatetime("20260824-20:00:12") == datetime(
+        2026, 8, 24, 20, 0, 12, tzinfo=ZoneInfo("UTC")
+    )
+    # TWS-local form: still zone-less, for the caller's TimezoneTWS
+    assert ibi.util.parseIBDatetime("20260824  16:00:12").tzinfo is None
+
+
+@pytest.mark.parametrize("timezoneTWS", ["US/Eastern", "Asia/Tokyo", None])
+def test_execution_time_in_the_hyphenated_form_is_the_utc_instant(timezoneTWS):
+    """An execution TWS reports as ``20260824-20:00:12`` happened at 20:00:12
+    UTC (16:00 New York), whatever TimezoneTWS or the host's zone is."""
+    ib = ibi.IB()
+    ib.TimezoneTWS = timezoneTWS
+    result = ib.client.decoder._normalizeExecutionTime("20260824-20:00:12")
+    assert result == datetime(2026, 8, 24, 20, 0, 12, tzinfo=ZoneInfo("UTC"))
+    assert result.astimezone(ZoneInfo("America/New_York")).hour == 16
+
+
 def test_normalize_execution_time_date_only_combines_with_midnight():
     """An 8-char ``YYYYmmdd`` wire string lacks time-of-day. The
     helper combines with midnight rather than raising.
