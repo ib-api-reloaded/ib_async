@@ -223,3 +223,13 @@ def test_timebars_from_synthetic_ticks():
     timer.set_done()
     assert timeBars.done()
     assert timeBars._timer is None
+
+
+def test_trades_filter_includes_rt_volume_and_rt_trade_volume():
+    """Ticks 48 (RT Volume) and 77 (RT Trade Volume, which leaves out
+    unreportable trades) are both trades the wrapper records as such."""
+    ticker = Ticker()
+    received: list[tuple] = []
+    ticker.updateEvent.trades().connect(lambda *args: received.append(args))
+    _feed(ticker, [(0, 48, 10.0, 100), (1, 77, 10.5, 50)])
+    assert received == [(_at(0), 10.0, 100), (_at(1), 10.5, 50)]

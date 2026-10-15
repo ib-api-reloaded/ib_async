@@ -398,7 +398,8 @@ class Ticker:
 class TickerUpdateEvent(Event):
     def trades(self) -> "Tickfilter":
         """Emit trade ticks."""
-        return Tickfilter((4, 5, 48, 68, 71), self)
+        # 48 RT Volume, 77 RT Trade Volume (without unreportable trades)
+        return Tickfilter((4, 5, 48, 68, 71, 77), self)
 
     def bids(self) -> "Tickfilter":
         """Emit bid ticks."""
