@@ -36,6 +36,13 @@ from ib_async._subscriptions import (
 )
 from ib_async.client import Client
 from ib_async.contract import Contract, ContractDescription, ContractDetails
+from ib_async.datarequests import (
+    BarSizeSetting,
+    HistoricalData,
+    HistoricalTicksData,
+    RealTimeBarsData,
+    checkDuration,
+)
 from ib_async.objects import (
     AccountValue,
     BarDataList,
@@ -1442,7 +1449,7 @@ class IB:
         self,
         contract: Contract,
         barSize: int,
-        whatToShow: str,
+        whatToShow: RealTimeBarsData,
         useRTH: bool,
         realTimeBarsOptions: Sequence[TagValue] = (),
     ) -> RealTimeBarList:
@@ -1454,8 +1461,9 @@ class IB:
         Args:
             contract: Contract of interest.
             barSize: Must be 5.
-            whatToShow: Specifies the source for constructing bars.
-                Can be 'TRADES', 'MIDPOINT', 'BID' or 'ASK'.
+            whatToShow: The data the bars are built from: one of
+                :data:`~ib_async.datarequests.RealTimeBarsData`, as a string
+                or a :class:`~ib_async.datarequests.WhatToShow`.
             useRTH: If True then only show data from within Regular
                 Trading Hours, if False then show all data.
             realTimeBarsOptions: Unknown.
@@ -1497,8 +1505,8 @@ class IB:
         contract: Contract,
         endDateTime: datetime.datetime | datetime.date | str | None,
         durationStr: str,
-        barSizeSetting: str,
-        whatToShow: str,
+        barSizeSetting: BarSizeSetting,
+        whatToShow: HistoricalData,
         useRTH: bool,
         formatDate: int = 1,
         keepUpToDate: bool = False,
@@ -1518,21 +1526,18 @@ class IB:
                 or it can be given as a datetime.date or datetime.datetime,
                 or it can be given as a string in 'yyyyMMdd HH:mm:ss' format.
                 If no timezone is given then the TWS login timezone is used.
-            durationStr: Time span of all the bars. Examples:
-                '60 S', '30 D', '13 W', '6 M', '10 Y'.
-            barSizeSetting: Time period of one bar. Must be one of:
-                '1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-                '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-                '20 mins', '30 mins',
-                '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
-                '1 day', '1 week', '1 month'.
-            whatToShow: Specifies the source for constructing bars.
-                Must be one of:
-                'TRADES', 'MIDPOINT', 'BID', 'ASK', 'BID_ASK',
-                'ADJUSTED_LAST', 'HISTORICAL_VOLATILITY',
-                'OPTION_IMPLIED_VOLATILITY', 'REBATE_RATE', 'FEE_RATE',
-                'YIELD_BID', 'YIELD_ASK', 'YIELD_BID_ASK', 'YIELD_LAST'.
-                For 'SCHEDULE' use :meth:`.reqHistoricalSchedule`.
+            durationStr: Time span of all the bars: a positive whole
+                number, a space and a unit
+                (:class:`~ib_async.datarequests.DurationUnit`), such as
+                '60 S', '30 D', '13 W', '6 M', '10 Y'. Anything else raises
+                ValueError before the request is sent.
+            barSizeSetting: Time period of one bar: one of
+                :data:`~ib_async.datarequests.BarSizeSetting`, as a string
+                or a :class:`~ib_async.datarequests.BarSize`.
+            whatToShow: The data the bars are built from: one of
+                :data:`~ib_async.datarequests.HistoricalData`, as a string
+                or a :class:`~ib_async.datarequests.WhatToShow`. For
+                'SCHEDULE' use :meth:`.reqHistoricalSchedule`.
             useRTH: If True then only show data from within Regular
                 Trading Hours, if False then show all data.
             formatDate: For an intraday request setting to 2 will cause
@@ -1588,7 +1593,7 @@ class IB:
         numDays: int | str,
         endDateTime: datetime.datetime | datetime.date | str | None = "",
         useRTH: bool = True,
-        barSizeSetting: str = "1 day",
+        barSizeSetting: BarSizeSetting = "1 day",
         formatDate: int = 1,
         chartOptions: list[TagValue] | None = None,
         timeout: float = 60,
@@ -1601,20 +1606,21 @@ class IB:
         Args:
             contract: Contract of interest.
             numDays: Span of the schedule. An int is a number of days and is
-                sent as IBKR's ``'<n> D'`` duration; a str is sent verbatim
-                as the duration, so any unit IBKR accepts can be requested
-                directly — ``'2 W'``, ``'6 M'``, ``'1 Y'``. IBKR caps a
-                request at one year and rejects a day count beyond that,
-                which is only expressible through the str form.
+                sent as IBKR's ``'<n> D'`` duration; a str is the duration
+                itself, checked as ``durationStr`` of
+                :meth:`reqHistoricalData` is, so any unit IBKR accepts can
+                be requested directly — ``'2 W'``, ``'6 M'``, ``'1 Y'``.
+                IBKR caps a request at one year and rejects a day count
+                beyond that, which is only expressible through the str form.
             endDateTime: Can be set to '' to indicate the current time,
                 or it can be given as a datetime.date or datetime.datetime,
                 or it can be given as a string in 'yyyyMMdd HH:mm:ss' format.
                 If no timezone is given then the TWS login timezone is used.
             useRTH: If True then show schedule for Regular Trading Hours,
                 if False then for extended hours.
-            barSizeSetting: Bar size the schedule is built against. IBKR
-                documents '1 day' for schedule requests; overridable for
-                callers who need a different granularity.
+            barSizeSetting: Bar size the schedule is built against, one of
+                :data:`~ib_async.datarequests.BarSizeSetting`. IBKR returns
+                schedules only on '1 day' bars, the default.
             formatDate: Date format IBKR stamps on the returned schedule
                 strings. :class:`.HistoricalSchedule` carries them
                 unparsed, so this passes straight through.
@@ -1642,7 +1648,7 @@ class IB:
         startDateTime: str | datetime.date,
         endDateTime: str | datetime.date,
         numberOfTicks: int,
-        whatToShow: str,
+        whatToShow: HistoricalTicksData,
         useRth: bool,
         ignoreSize: bool = False,
         miscOptions: Sequence[TagValue] = (),
@@ -1666,7 +1672,9 @@ class IB:
             numberOfTicks: Number of ticks to request (1000 max). The actual
                 result can contain a bit more to accommodate all ticks in
                 the latest second.
-            whatToShow: One of 'Bid_Ask', 'Midpoint' or 'Trades'.
+            whatToShow: The ticks to return: one of
+                :data:`~ib_async.datarequests.HistoricalTicksData`, as a
+                string or a :class:`~ib_async.datarequests.WhatToShow`.
             useRth: If True then only show data from within Regular
                 Trading Hours, if False then show all data.
             ignoreSize: Ignore bid/ask ticks that only update the size.
@@ -1703,7 +1711,11 @@ class IB:
         self.client.reqMarketDataType(marketDataType)
 
     def reqHeadTimeStamp(
-        self, contract: Contract, whatToShow: str, useRTH: bool, formatDate: int = 1
+        self,
+        contract: Contract,
+        whatToShow: HistoricalData,
+        useRTH: bool,
+        formatDate: int = 1,
     ) -> datetime.datetime:
         """
         Get the datetime of earliest available historical data
@@ -1711,6 +1723,9 @@ class IB:
 
         Args:
             contract: Contract of interest.
+            whatToShow: The data whose start to find: one of
+                :data:`~ib_async.datarequests.HistoricalData`, as a string
+                or a :class:`~ib_async.datarequests.WhatToShow`.
             useRTH: If True then only show data from within Regular
                 Trading Hours, if False then show all data.
             formatDate: If set to 2 then the result is returned as a
@@ -2894,8 +2909,8 @@ class IB:
         contract: Contract,
         endDateTime: datetime.datetime | datetime.date | str | None,
         durationStr: str,
-        barSizeSetting: str,
-        whatToShow: str,
+        barSizeSetting: BarSizeSetting,
+        whatToShow: HistoricalData,
         useRTH: bool,
         formatDate: int = 1,
         keepUpToDate: bool = False,
@@ -2903,6 +2918,7 @@ class IB:
         timeout: float = 60,
     ) -> BarDataList:
         """Async sibling of :meth:`reqHistoricalData`."""
+        checkDuration(durationStr)
         chartOptions = _tagValueList(chartOptions)
         bars = BarDataList()
         bars.contract = contract
@@ -2958,19 +2974,21 @@ class IB:
         numDays: int | str,
         endDateTime: datetime.datetime | datetime.date | str | None = "",
         useRTH: bool = True,
-        barSizeSetting: str = "1 day",
+        barSizeSetting: BarSizeSetting = "1 day",
         formatDate: int = 1,
         chartOptions: list[TagValue] | None = None,
         timeout: float = 60,
     ) -> HistoricalSchedule:
         """Async sibling of :meth:`reqHistoricalSchedule`."""
-        reqId, future = self._openReqIdRequest(contract=contract)
-        end = util.formatIBDatetime(endDateTime)
         # An int keeps the historical shorthand; a str is the caller's own
-        # duration and goes out untouched, which is the only way to ask for
+        # duration and goes out as given, which is the only way to ask for
         # a unit other than days — IBKR rejects a day count past its
         # one-year ceiling and wants '1 Y' instead.
-        duration = numDays if isinstance(numDays, str) else f"{numDays} D"
+        duration = checkDuration(
+            numDays if isinstance(numDays, str) else f"{numDays} D"
+        )
+        reqId, future = self._openReqIdRequest(contract=contract)
+        end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalData(
             reqId,
             contract,
@@ -3002,7 +3020,7 @@ class IB:
         startDateTime: str | datetime.date,
         endDateTime: str | datetime.date,
         numberOfTicks: int,
-        whatToShow: str,
+        whatToShow: HistoricalTicksData,
         useRth: bool,
         ignoreSize: bool = False,
         miscOptions: Sequence[TagValue] = (),
@@ -3026,7 +3044,11 @@ class IB:
         return future
 
     async def reqHeadTimeStampAsync(
-        self, contract: Contract, whatToShow: str, useRTH: bool, formatDate: int
+        self,
+        contract: Contract,
+        whatToShow: HistoricalData,
+        useRTH: bool,
+        formatDate: int,
     ) -> datetime.datetime:
         """Async sibling of :meth:`reqHeadTimeStamp`."""
         reqId, future = self._openReqIdRequest(contract=contract)

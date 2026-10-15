@@ -39,6 +39,14 @@ Ticker
 
 .. automodule:: ib_async.ticker
 
+Data request values
+-------------------
+
+.. automodule:: ib_async.datarequests
+   :members: checkDuration
+
+.. automodule:: ib_async.datarequests.generated
+
 Objects
 -------
 

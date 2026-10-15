@@ -5,7 +5,7 @@ import sys
 
 from eventkit import Event
 
-from . import ordertypes, util
+from . import datarequests, ordertypes, util
 from .client import Client
 from .contract import (
     CFD,
@@ -32,6 +32,8 @@ from .contract import (
     TradingSession,
     Warrant,
 )
+from .datarequests import checkDuration
+from .datarequests.generated import *  # noqa: F403  (data request value types)
 from .depth import DepthBook, DepthOperation
 from .flexreport import FlexError, FlexReport
 from .ib import IB, StartupFetch, StartupFetchALL, StartupFetchNONE
@@ -115,11 +117,14 @@ from .wrapper import RequestError, Wrapper
 __all__ = [
     # The constructors; the catalog and its tools stay in ib_async.ordertypes.
     *generated.__all__,
+    *datarequests.generated.__all__,
+    "checkDuration",
     *attached.__all__,
     "OrderTypeError",
     "Event",
     "util",
     "ordertypes",
+    "datarequests",
     "Client",
     "Bag",
     "Bond",

@@ -22,7 +22,16 @@ import logging
 import sys
 from pathlib import Path
 
-from ib_async import IB, BarData, Contract, Stock, util
+from ib_async import (
+    IB,
+    BarData,
+    BarSize,
+    Contract,
+    Stock,
+    WhatToShow,
+    checkDuration,
+    util,
+)
 
 log = logging.getLogger("download_bars")
 
@@ -35,13 +44,18 @@ def parseArgs(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("symbol", help="stock symbol, e.g. TSLA")
     parser.add_argument("--exchange", default="SMART")
     parser.add_argument("--currency", default="USD")
-    parser.add_argument("--bar-size", default="1 hour", help='e.g. "1 min", "1 day"')
     parser.add_argument(
-        "--chunk", default="30 D", help="duration of each request, e.g. 5 D, 1 W"
+        "--bar-size", type=BarSize, choices=list(BarSize), default=BarSize.HOUR_1
+    )
+    parser.add_argument(
+        "--chunk",
+        type=checkDuration,
+        default="30 D",
+        help="duration of each request, e.g. 5 D, 1 W",
     )
     parser.add_argument("--chunks", type=int, default=3, help="requests to make")
     parser.add_argument(
-        "--what", default="TRADES", help="TRADES, MIDPOINT, BID, ASK, ..."
+        "--what", type=WhatToShow, choices=list(WhatToShow), default=WhatToShow.TRADES
     )
     parser.add_argument(
         "--all-hours",
@@ -69,10 +83,10 @@ async def downloadBars(
     ib: IB,
     contract: Contract,
     *,
-    barSize: str,
+    barSize: BarSize,
     chunk: str,
     chunks: int,
-    what: str,
+    what: WhatToShow,
     useRTH: bool,
     pause: float,
 ) -> list[BarData]:

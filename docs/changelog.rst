@@ -93,6 +93,13 @@ Gateway server version 226). The full upgrade guide with examples lives at
   every strike crossed with every expiration. The option chain example
   notebook now walks through futures options with it. (:issue:`38`,
   thanks to @ilan-pinto, @maqifrnswa and @westonplatter)
+* **Typed data request values** in ``ib_async.datarequests``: ``whatToShow``
+  and ``barSizeSetting`` of the historical, real-time and tick data
+  requests accept exactly the values IBKR documents for each request, as
+  plain strings or as members of the ``WhatToShow`` and ``BarSize``
+  enums, so a type checker catches a typo. ``durationStr`` is checked
+  before a request is sent (``checkDuration``), with a message naming the
+  units. (:issue:`114`, thanks to @totkeks and @gnzsnz)
 * **Attached-order linkage on** ``Order``: new ``slOrderId`` /
   ``slOrderType`` / ``ptOrderId`` / ``ptOrderType`` fields preserve
   the stop-loss and profit-target ids of a bracket or OCO group

@@ -18,12 +18,11 @@ Usage::
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
-import subprocess
 import sys
 import textwrap
-from pathlib import Path
+
+import generating
 
 from ib_async.order import Order
 from ib_async.ordertypes.catalog import (
@@ -43,7 +42,7 @@ from ib_async.ordertypes.spec import (
     Stability,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = generating.ROOT
 MODULE = ROOT / "ib_async" / "ordertypes" / "generated.py"
 DOCS = ROOT / "docs" / "ordertypes.rst"
 
@@ -229,18 +228,6 @@ def ComboRouting(
 '''
 
 
-def formatted(source: str) -> str:
-    """``source`` as ``ruff format`` writes it, so the generated module is
-    exactly what the project's formatter keeps."""
-    return subprocess.run(
-        ["ruff", "format", "--stdin-filename", str(MODULE), "-"],
-        input=source,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-
-
 def module() -> str:
     names = sorted([*(s.className for s in (*CATALOG, *ALGOS)), "ComboRouting"])
     header = (
@@ -268,11 +255,12 @@ __all__ = [
         + "".join(f'    "{name}",\n' for name in names)
         + "]\n"
     )
-    return formatted(
+    return generating.formatted(
         header
         + "".join(functionSource(spec) for spec in CATALOG)
         + "".join(algoSource(spec) for spec in ALGOS)
-        + routingSource()
+        + routingSource(),
+        MODULE,
     )
 
 
@@ -561,26 +549,12 @@ def coverageDocs() -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument(
-        "--check", action="store_true", help="exit 1 if a file is out of date"
+    return generating.main(
+        __doc__.split("\n\n")[0],
+        "generate_ordertypes.py",
+        lambda: {MODULE: module(), DOCS: docs()},
+        argv,
     )
-    args = parser.parse_args(argv)
-    stale = []
-    for path, text in ((MODULE, module()), (DOCS, docs())):
-        current = path.read_text() if path.exists() else None
-        if current == text:
-            continue
-        stale.append(path.relative_to(ROOT))
-        if not args.check:
-            path.write_text(text)
-    if args.check and stale:
-        print("out of date: " + ", ".join(map(str, stale)))
-        print("run: uv run python scripts/generate_ordertypes.py")
-        return 1
-    for path in stale:
-        print(f"wrote {path}")
-    return 0
 
 
 if __name__ == "__main__":
