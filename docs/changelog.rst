@@ -302,6 +302,13 @@ are fixed in v3.0:
   identified by their legs, as they hash, and ``Contract.__eq__`` no
   longer counts two bags equal for their shared combo conId: it compares
   them on every field. (:issue:`236`)
+* **A continuous future shared its front future's market data.** A
+  CONTFUT has its front contract's conId; market data was indexed by
+  that conId, so ``reqMktData`` for the future after the CONTFUT returned
+  the CONTFUT's ticker, and ``cancelMktData`` for one cancelled the
+  other's stream. Each now has its own subscription and ticker, and
+  ``Contract.__eq__`` no longer counts a CONTFUT equal to the contract
+  whose conId it shares (they never hashed alike).
 * **``portfolio()`` was silently empty with several managed accounts.**
   IBKR streams portfolio updates for one account at a time, and with
   several accounts and no ``connect(account=...)`` none was subscribed.
