@@ -454,7 +454,7 @@ class SubscriptionRegistry:
         ``IB.reqMktDepth`` for idempotent re-subscribe (the second call
         returns the existing subscription instead of double-billing) and by
         the matching ``IB.cancel*`` methods to find the subscription to
-        close. Bags/spreads carry ``conId == 0`` but resolve to their
+        close. Bags/spreads (whatever their ``conId``) resolve to their
         conId-independent synthetic comboLeg hash, so they are found here
         (a raw ``find_market_data(contract.conId, kind)`` call could never
         locate them). Returns ``None`` for unindexable contracts
@@ -588,8 +588,9 @@ class SubscriptionRegistry:
             ``conId`` here rather than the negated value
             :meth:`Contract.__hash__` produces — behave exactly as before.
           * Bags/spreads → ``hash(contract)``, the conId-independent
-            synthetic comboLeg hash from :meth:`Contract.__hash__`. A bag
-            always carries ``conId == 0``, so under the raw-conId scheme it
+            synthetic comboLeg hash from :meth:`Contract.__hash__`, whatever its
+            conId: a bag often has ``conId == 0``, and IBKR gives many different
+            spreads the same combo conId. Under the raw-conId scheme a bag
             could never be indexed — and therefore never deduped on
             re-subscribe, nor *cancelled by contract*
             (``IB.cancelMktData(bag)`` silently returned False and leaked
@@ -604,8 +605,10 @@ class SubscriptionRegistry:
             entry (``hash()`` of such a contract also raises).
         """
 
-        if contract.conId:
-            return contract.conId
+        # BAG first: IBKR reports one combo conId (such as 28812380) on many
+        # different spreads, so a bag's conId does not identify it
         if contract.secType == "BAG":
             return hash(contract)
+        if contract.conId:
+            return contract.conId
         return None

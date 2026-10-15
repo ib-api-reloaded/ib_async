@@ -227,6 +227,12 @@ are fixed in v3.0:
   back to the contract and TWS refused the order (error 10330). Values
   with whitespace now split on whitespace, on the binary and protobuf
   paths (``util.splitIBLastTradeDate``). (:issue:`120`)
+* **Different spreads sharing a combo conId got one ticker.** IBKR
+  reports the same conId (such as ``28812380``) on many BAG contracts;
+  market data was indexed by that conId before the bag's legs, so a
+  second spread got the first one's ticker and subscription. Bags are now
+  identified by their legs, and ``Contract.__eq__`` compares bags by
+  their legs too, consistent with their hash. (:issue:`236`)
 * **``AccountValue.decimalValue``** returned ``None`` for every
   per-currency monetary value on TWS installs with TWS API 10.47's
   ``$LEDGER-`` prefix setting on — the default for new installs. The

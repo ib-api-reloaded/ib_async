@@ -154,8 +154,10 @@ class Contract:
         return bool(self.conId)
 
     def __eq__(self, other):
+        # A bag compares by its legs, as it hashes: IBKR gives many different
+        # spreads the same combo conId.
         return isinstance(other, Contract) and (
-            (self.conId and self.conId == other.conId)
+            (self.conId and self.secType != "BAG" and self.conId == other.conId)
             or util.dataclassAsDict(self) == util.dataclassAsDict(other)
         )
 

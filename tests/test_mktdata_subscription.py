@@ -175,3 +175,40 @@ def test_cancel_distinct_bag_leaves_other_bag_live():
         ib.wrapper.subscriptions.find_market_data_for_contract(bag_b, "mktData")
         is not None
     )
+
+
+def _bag(conId: int, firstLeg: int) -> Bag:
+    return Bag(
+        conId=conId,
+        symbol="CL",
+        exchange="NYMEX",
+        currency="USD",
+        comboLegs=[
+            ComboLeg(conId=firstLeg, ratio=1, action="BUY", exchange="NYMEX"),
+            ComboLeg(conId=firstLeg + 1, ratio=1, action="SELL", exchange="NYMEX"),
+        ],
+    )
+
+
+def test_distinct_bags_sharing_a_conid_are_distinct_subscriptions():
+    """IBKR reports one combo conId (such as 28812380) on many spreads: two
+    BAGs with different legs are still two subscriptions with two tickers."""
+    ib = _wired_ib()
+    first, second = _bag(28812380, 1000), _bag(28812380, 2000)
+    firstTicker = ib.reqMktData(first)
+    secondTicker = ib.reqMktData(second)
+    assert firstTicker is not secondTicker
+    assert ib.client.reqMktData.call_count == 2
+    assert ib.ticker(first) is firstTicker
+    assert ib.ticker(second) is secondTicker
+    assert ib.cancelMktData(second) is True
+    assert ib.ticker(first) is firstTicker
+
+
+def test_bags_compare_by_legs_not_by_a_shared_conid():
+    """Equal contracts must hash equal: BAGs hash by their legs, so they
+    compare by them too."""
+    first, second = _bag(28812380, 1000), _bag(28812380, 2000)
+    assert first != second
+    assert first == _bag(28812380, 1000)
+    assert hash(first) == hash(_bag(28812380, 1000))
