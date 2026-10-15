@@ -6,6 +6,7 @@ Contents
 
    readme
    api
+   ordertypes
    notebooks
    recipes
    code

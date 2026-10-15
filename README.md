@@ -531,9 +531,14 @@ ib.disconnect()
 - `Contract` - Base class for all instruments
 - `ComboLeg`, `DeltaNeutralContract` - Complex instruments
 
-**`ib_async.order`** - Order types and management
+**`ib_async.ordertypes`** - Order types
 
-- `MarketOrder`, `LimitOrder`, `StopOrder`, `StopLimitOrder`
+- One constructor per IBKR order type: `MarketOrder`, `LimitOrder`, `StopOrder`, `StopLimitOrder`, `MarketOnCloseOrder`, `TrailingStopOrder`, `MidpriceOrder`, `SnapToMidpointOrder`, `RelativeOrder` and more; each returns an `Order` with the fields IBKR expects, validated ([Order types](https://ib-api-reloaded.github.io/ib_async/ordertypes.html))
+- IB algos, combo routing and adjustable stops as modifiers of an order type: `LimitOrder("BUY", 100, 50.00, algo=Adaptive(priority="Urgent"))`
+- `specOf(order)` names an order's type; `checkOrder(contract or details, order)` lists what IBKR's documentation and the contract's details say against it; `modifiedOrder(trade.order, ...)` prepares a live order for modification
+
+**`ib_async.order`** - Order management
+
 - `Order` - Base order class with all parameters
 - `OrderStatus`, `OrderState` - Order execution tracking
 - `Trade` - Complete order lifecycle tracking

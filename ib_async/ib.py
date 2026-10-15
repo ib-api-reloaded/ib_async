@@ -65,14 +65,13 @@ from ib_async.objects import (
 )
 from ib_async.order import (
     BracketOrder,
-    LimitOrder,
     Order,
     OrderCancel,
     OrderState,
     OrderStatus,
-    StopOrder,
     Trade,
 )
+from ib_async.ordertypes import LimitOrder, StopOrder
 from ib_async.ticker import Ticker
 from ib_async.wrapper import Wrapper
 

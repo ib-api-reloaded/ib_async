@@ -237,29 +237,23 @@ class Order:
     def __hash__(self):
         return id(self)
 
-    # Quantity / price fields that must be ``Decimal`` (or ``None``).
-    # ``__post_init__`` coerces user-supplied ``float`` / ``int`` /
-    # ``str`` values for these to ``Decimal`` via ``str()`` so a clean
-    # ``Order(lmtPrice=50.5)`` user-construction lands the right type
-    # without forcing every caller to write ``Decimal('50.5')``.
-    _DECIMAL_FIELDS: ClassVar[tuple[str, ...]] = (
-        "totalQuantity",
-        "filledQuantity",
-        "lmtPrice",
-        "auxPrice",
-        "trailStopPrice",
-        "trailingPercent",
-        "lmtPriceOffset",
-        "triggerPrice",
-        "adjustedStopPrice",
-        "adjustedStopLimitPrice",
-        "adjustedTrailingAmount",
-    )
+    # The fields annotated ``Decimal | None`` (set below the class, from
+    # its fields). ``__post_init__`` coerces user-supplied ``float`` /
+    # ``int`` / ``str`` values for these to ``Decimal`` via ``str()`` so
+    # ``Order(lmtPrice=50.5)`` lands the right type without forcing every
+    # caller to write ``Decimal('50.5')``.
+    _DECIMAL_FIELDS: ClassVar[tuple[str, ...]] = ()
+    # The Decimal fields where IBKR gives +Infinity a meaning, kept instead
+    # of unset: COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID.
+    _INFINITE_FIELDS: ClassVar[frozenset[str]] = frozenset({"competeAgainstBestOffset"})
 
     def __post_init__(self) -> None:
         for name in self._DECIMAL_FIELDS:
             v = getattr(self, name)
             if v is None:
+                continue
+            if name in self._INFINITE_FIELDS:
+                setattr(self, name, decimalOrInfinity(v))
                 continue
             # Always route through ``_toDecimal`` — even pre-coerced
             # ``Decimal`` inputs — so a stray ``Decimal('NaN')`` /
@@ -269,6 +263,11 @@ class Order:
             # corrupts ``_decimalToWireString`` to emit ``"NaN"`` on
             # the wire.
             setattr(self, name, _toDecimal(v))
+
+
+Order._DECIMAL_FIELDS = tuple(
+    f.name for f in dataclasses.fields(Order) if f.type == "Decimal | None"
+)
 
 
 def _toDecimal(value: Decimal | float | str | None) -> Decimal | None:
@@ -299,76 +298,21 @@ def _toDecimal(value: Decimal | float | str | None) -> Decimal | None:
     return result
 
 
-class LimitOrder(Order):
-    def __init__(
-        self,
-        action: str,
-        totalQuantity: Decimal | float | str,
-        lmtPrice: Decimal | float | str,
-        **kwargs,
-    ):
-        Order.__init__(
-            self,
-            orderType="LMT",
-            action=action,
-            totalQuantity=_toDecimal(totalQuantity),
-            lmtPrice=_toDecimal(lmtPrice),
-            **kwargs,
-        )
+# competeAgainstBestOffset for a Pegged to Best order that competes up to the
+# midpoint; sent as "Infinity".
+COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID = Decimal("Infinity")
 
 
-class MarketOrder(Order):
-    def __init__(
-        self,
-        action: str,
-        totalQuantity: Decimal | float | str,
-        **kwargs,
-    ):
-        Order.__init__(
-            self,
-            orderType="MKT",
-            action=action,
-            totalQuantity=_toDecimal(totalQuantity),
-            **kwargs,
-        )
-
-
-class StopOrder(Order):
-    def __init__(
-        self,
-        action: str,
-        totalQuantity: Decimal | float | str,
-        stopPrice: Decimal | float | str,
-        **kwargs,
-    ):
-        Order.__init__(
-            self,
-            orderType="STP",
-            action=action,
-            totalQuantity=_toDecimal(totalQuantity),
-            auxPrice=_toDecimal(stopPrice),
-            **kwargs,
-        )
-
-
-class StopLimitOrder(Order):
-    def __init__(
-        self,
-        action: str,
-        totalQuantity: Decimal | float | str,
-        lmtPrice: Decimal | float | str,
-        stopPrice: Decimal | float | str,
-        **kwargs,
-    ):
-        Order.__init__(
-            self,
-            orderType="STP LMT",
-            action=action,
-            totalQuantity=_toDecimal(totalQuantity),
-            lmtPrice=_toDecimal(lmtPrice),
-            auxPrice=_toDecimal(stopPrice),
-            **kwargs,
-        )
+def decimalOrInfinity(value: Decimal | float | str | None) -> Decimal | None:
+    """``_toDecimal``, except that +Infinity (as IBKR sends and reads it, in
+    any spelling) stays Decimal("Infinity"), for the fields where it means
+    something."""
+    try:
+        if Decimal(str(value)) == COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID:
+            return COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID
+    except (InvalidOperation, ValueError, TypeError):
+        pass
+    return _toDecimal(value)
 
 
 # TWS API 10.51 reports a completed order's outcome as descriptive text

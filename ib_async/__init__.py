@@ -5,7 +5,7 @@ import sys
 
 from eventkit import Event
 
-from . import util
+from . import ordertypes, util
 from .client import Client
 from .contract import (
     CFD,
@@ -89,9 +89,7 @@ from .objects import (
 from .order import (
     BracketOrder,
     ExecutionCondition,
-    LimitOrder,
     MarginCondition,
-    MarketOrder,
     Order,
     OrderAllocation,
     OrderCancel,
@@ -102,19 +100,25 @@ from .order import (
     OrderStatus,
     PercentChangeCondition,
     PriceCondition,
-    StopLimitOrder,
-    StopOrder,
     TimeCondition,
     Trade,
     VolumeCondition,
 )
+from .ordertypes import OrderTypeError, attached, generated
+from .ordertypes.attached import *  # noqa: F403  (adjustable stops, FX hedge)
+from .ordertypes.generated import *  # noqa: F403  (order types, algos, routing)
 from .ticker import HaltedStatus, Ticker
 from .version import __version__, __version_info__
 from .wrapper import RequestError, Wrapper
 
 __all__ = [
+    # The constructors; the catalog and its tools stay in ib_async.ordertypes.
+    *generated.__all__,
+    *attached.__all__,
+    "OrderTypeError",
     "Event",
     "util",
+    "ordertypes",
     "Client",
     "Bag",
     "Bond",
@@ -195,9 +199,7 @@ __all__ = [
     "TradeLogEntry",
     "BracketOrder",
     "ExecutionCondition",
-    "LimitOrder",
     "MarginCondition",
-    "MarketOrder",
     "Order",
     "OrderAllocation",
     "OrderCancel",
@@ -207,8 +209,6 @@ __all__ = [
     "OrderStatus",
     "PercentChangeCondition",
     "PriceCondition",
-    "StopLimitOrder",
-    "StopOrder",
     "TimeCondition",
     "Trade",
     "VolumeCondition",

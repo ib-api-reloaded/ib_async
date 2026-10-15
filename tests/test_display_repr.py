@@ -27,7 +27,8 @@ from decimal import Decimal
 
 from ib_async.contract import Contract, Forex, Future, Stock
 from ib_async.objects import CommissionReport, Execution, Fill, TradeLogEntry
-from ib_async.order import LimitOrder, Order, OrderStatus, Trade
+from ib_async.order import Order, OrderStatus, Trade
+from ib_async.ordertypes import LimitOrder
 from ib_async.util import (
     DISPLAY_BOILERPLATE_STRINGS,
     DISPLAY_KEEP_ZERO_FIELDS,
@@ -118,8 +119,8 @@ CONTRACT_REPR = (
 )
 
 ORDER_REPR = (
-    "LimitOrder(orderId=10282, clientId=169, permId=1275529321, "
-    "action='BUY', totalQuantity=1, lmtPrice=29403.25, tif='GTC')"
+    "Order(orderId=10282, clientId=169, permId=1275529321, "
+    "action='BUY', totalQuantity=1, orderType='LMT', lmtPrice=29403.25, tif='GTC')"
 )
 
 ORDER_STATUS_REPR = (

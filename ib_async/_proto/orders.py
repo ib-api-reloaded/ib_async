@@ -59,6 +59,7 @@ from ..order import (
     PriceCondition,
     TimeCondition,
     VolumeCondition,
+    decimalOrInfinity,
 )
 from ..util import UNSET_INTEGER
 from .contracts import createContract, createContractProto
@@ -1030,7 +1031,9 @@ def createOrder(
     if proto.HasField("minCompeteSize"):
         order.minCompeteSize = proto.minCompeteSize
     if proto.HasField("competeAgainstBestOffset"):
-        order.competeAgainstBestOffset = safe_decimal(proto.competeAgainstBestOffset)
+        order.competeAgainstBestOffset = decimalOrInfinity(
+            proto.competeAgainstBestOffset
+        )
     if proto.HasField("midOffsetAtWhole"):
         order.midOffsetAtWhole = safe_decimal(proto.midOffsetAtWhole)
     if proto.HasField("midOffsetAtHalf"):

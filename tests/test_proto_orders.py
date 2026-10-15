@@ -19,6 +19,7 @@ Additional negative coverage:
 
 from __future__ import annotations
 
+import math
 from decimal import Decimal
 
 import pytest
@@ -55,15 +56,14 @@ from ib_async.contract import Stock, TagValue
 from ib_async.objects import ExecutionFilter
 from ib_async.order import (
     ExecutionCondition,
-    LimitOrder,
     MarginCondition,
-    MarketOrder,
     Order,
     PercentChangeCondition,
     PriceCondition,
     TimeCondition,
     VolumeCondition,
 )
+from ib_async.ordertypes import LimitOrder, MarketOrder
 
 # ---------------------------------------------------------------------------
 # CRITICAL regression: clientId must round-trip
@@ -1279,3 +1279,10 @@ def test_execution_request_proto_carries_filter_with_new_fields():
     assert parsed.executionFilter.clientId == 3
     assert parsed.executionFilter.lastNDays == 2
     assert list(parsed.executionFilter.specificDates) == [20260101]
+
+
+def test_compete_up_to_mid_round_trips_through_proto():
+    order = Order(orderType="PEG BEST", competeAgainstBestOffset=math.inf)
+    proto = createOrderProto(order)
+    assert proto.competeAgainstBestOffset == math.inf
+    assert createOrder(proto).competeAgainstBestOffset == Decimal("Infinity")

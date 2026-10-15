@@ -62,6 +62,26 @@ Gateway server version 226). The full upgrade guide with examples lives at
 * **``IB.exerciseOptions``** takes ``manualOrderTime``, ``customerAccount``
   and ``professionalCustomer``, which the request already carried.
   (:issue:`166`, thanks to @li-plus)
+* **39 order types** in ``ib_async.ordertypes``, one constructor each, from
+  Market on Close, Limit on Open and Trailing Stop to Midprice, the Snap
+  types, the IBKR ATS pegs and the combo types, generated with their
+  documentation from one catalog. Each validates its required values;
+  ``specOf(order)`` names the type of any ``Order``, and
+  ``checkOrder(contract, order)`` lists what IBKR documents against an
+  order for a contract. IB algos work the order types they apply to:
+  ``LimitOrder("BUY", 100, 50.00, algo=Adaptive(priority="Urgent"))``, typed
+  and checked (Adaptive refuses a GTC order); combo orders take
+  ``routing=ComboRouting(nonGuaranteed=True)``, and stops
+  ``adjust=AdjustToTrail(...)`` for a one-time adjustment; ``FxHedgeOrder``
+  attaches an FX hedge. Given ``ContractDetails``, ``checkOrder`` also
+  names an order type its ``orderTypes`` does not list (in any of IBKR's
+  spellings), and ``modifiedOrder(trade.order, lmtPrice=...)`` prepares a
+  live order for modification as live trading found IBKR requires (an
+  algo order's ``IBALGO`` sent as LMT, the fields TWS fills in reset,
+  parentId cleared unless kept, never below the filled quantity). The docs
+  page also covers the order options (time in force, cash quantity,
+  overnight, CME tagging, ...) and every IBKR order type code, built or
+  why not. (:issue:`14`, :issue:`109`, thanks to @flepied and @maxicus)
 * **``IB.reqPositionsMulti(account, modelCode)``** (and its async sibling)
   returns the positions of an account, advisor group or model, each with
   the new ``Position.modelCode``. A model's share of a position is not
@@ -197,6 +217,14 @@ Gateway server version 226). The full upgrade guide with examples lives at
   likewise snapshots (``Mapping[int, DOMLevel]``) keyed by row. None of
   the four are ``Ticker(...)`` constructor arguments any more; assigning
   ``ticker.domBids = rows`` still replaces that side's rows.
+* **Order types are constructors that return ``Order``.** ``MarketOrder``,
+  ``LimitOrder``, ``StopOrder`` and ``StopLimitOrder`` were ``Order``
+  subclasses; they are now functions in ``ib_async.ordertypes`` (exported
+  from ``ib_async``, no longer from ``ib_async.order``) returning a plain
+  ``Order``, so ``dataclasses.replace`` works on them, ``repr`` shows
+  ``orderType``, and ``isinstance(order, LimitOrder)`` no longer applies:
+  use ``order.orderType`` or ``ordertypes.specOf(order)``. Construction is
+  validated (``OrderTypeError``). See ``docs/migration/v3.md`` section 6a.
 * **polars replaces pandas.** ``util.df()`` and ``FlexReport.df()``
   return a polars ``DataFrame`` (polars 2.0+, installed with
   ``pip install "ib_async[polars]"``), and ``util.barplot()`` accepts

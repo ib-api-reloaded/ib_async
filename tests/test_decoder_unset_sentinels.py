@@ -12,7 +12,8 @@ from decimal import Decimal
 from ib_async import IB
 from ib_async.contract import Future
 from ib_async.decoder import Decoder
-from ib_async.order import LimitOrder, Order
+from ib_async.order import Order
+from ib_async.ordertypes import LimitOrder
 from ib_async.util import UNSET_DOUBLE, UNSET_INTEGER
 
 
@@ -69,3 +70,13 @@ def test_place_order_never_stamps_a_sentinel_onto_the_callers_order() -> None:
     client.placeOrder(9999, contract, order)
     assert order.volatility is None
     del sent
+
+
+def test_compete_up_to_mid_is_a_value_not_a_sentinel() -> None:
+    """IBKR sends COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID as "Infinity"."""
+    order = Order()
+    order.competeAgainstBestOffset = "Infinity"
+    order.midOffsetAtWhole = "Infinity"
+    _parse(order)
+    assert order.competeAgainstBestOffset == Decimal("Infinity")
+    assert order.midOffsetAtWhole is None

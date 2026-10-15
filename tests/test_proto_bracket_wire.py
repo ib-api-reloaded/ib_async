@@ -32,7 +32,7 @@ from ib_async._pb_msgids import (
     PLACE_ORDER,
     REQ_CURRENT_TIME,
 )
-from ib_async.order import LimitOrder
+from ib_async.ordertypes import LimitOrder
 from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
 #: The live incident ran against a current IB Gateway; every gate in

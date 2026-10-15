@@ -69,7 +69,14 @@ from .objects import (
     TickAttribBidAsk,
     TickAttribLast,
 )
-from .order import Order, OrderAllocation, OrderComboLeg, OrderCondition, OrderState
+from .order import (
+    Order,
+    OrderAllocation,
+    OrderComboLeg,
+    OrderCondition,
+    OrderState,
+    decimalOrInfinity,
+)
 from .util import (
     UNSET_DOUBLE,
     UNSET_INTEGER,
@@ -1104,7 +1111,9 @@ class Decoder:
                     unset = float(v) == UNSET_DOUBLE
                 except (TypeError, ValueError):
                     unset = False
-                setattr(obj, name, default if unset else safe_decimal(v))
+                infinite = name in getattr(cls, "_INFINITE_FIELDS", ())
+                parsed = decimalOrInfinity(v) if infinite else safe_decimal(v)
+                setattr(obj, name, default if unset else parsed)
             else:  # bool
                 setattr(obj, name, bool(int(v)))
 

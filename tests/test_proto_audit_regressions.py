@@ -133,7 +133,6 @@ from ib_async.objects import (
 )
 from ib_async.order import (
     ExecutionCondition,
-    LimitOrder,
     MarginCondition,
     Order,
     OrderCancel,
@@ -145,6 +144,7 @@ from ib_async.order import (
     Trade,
     VolumeCondition,
 )
+from ib_async.ordertypes import LimitOrder
 from ib_async.ticker import Ticker
 from ib_async.util import UNSET_INTEGER
 from ib_async.wrapper import (
