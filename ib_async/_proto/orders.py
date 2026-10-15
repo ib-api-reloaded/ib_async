@@ -738,12 +738,9 @@ def createOrder(
     window (``customerAccount``, ``professionalCustomer``,
     ``bondAccruedInterest``, ``includeOvernight``, ``manualOrderIndicator``,
     ``submitter``) land on the corresponding ``Order`` dataclass
-    fields. Other wire fields not currently modelled on
-    ``Order`` (``deactivate``, ``postOnly``, ``allowPreOpen``,
-    ``ignoreOpenAuction``, ``seekPriceImprovement``, ``whatIfType``,
-    ``hedgeMaxSize``) are not surfaced here because the dataclass
-    has no slot for them — silently swallowing the wire data would
-    just hide user-invisible state.
+    fields, as do ``deactivate``, ``postOnly``, ``allowPreOpen``,
+    ``ignoreOpenAuction``, ``seekPriceImprovement``, ``whatIfType`` and
+    ``hedgeMaxSize``.
     """
     order = Order()
 
@@ -926,8 +923,6 @@ def createOrder(
         order.hedgeType = proto.hedgeType
         if proto.HasField("hedgeParam") and proto.hedgeType:
             order.hedgeParam = proto.hedgeParam
-    # ``hedgeMaxSize`` is on the wire but NOT on the Order dataclass —
-    # intentionally dropped here (see top-level docstring for the list).
 
     if proto.HasField("optOutSmartRouting"):
         order.optOutSmartRouting = proto.optOutSmartRouting
