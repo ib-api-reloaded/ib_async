@@ -119,10 +119,11 @@ def test_dicts_with_missing_keys_give_nulls():
     assert frame["b"].to_list() == [None, "x"]
 
 
-def test_mixed_decimal_and_float_gives_a_float_column():
+def test_mixed_decimal_and_float_keep_their_values():
+    """A float column would make the Decimal inexact: objects keep both."""
     frame = util.df([{"v": Decimal("1.25")}, {"v": 2.5}, {"v": None}])
-    assert frame.schema["v"] == pl.Float64
-    assert frame["v"].to_list() == [1.25, 2.5, None]
+    assert frame.schema["v"] == pl.Object
+    assert frame["v"].to_list() == [Decimal("1.25"), 2.5, None]
 
 
 def test_flexreport_rows(tmp_path):
@@ -177,3 +178,17 @@ def test_values_polars_cannot_hold_keep_their_column_as_objects():
         dt.datetime(2026, 1, 1, tzinfo=ZoneInfo("US/Eastern")),
     ]
     assert util.df([(t,) for t in times])["column_0"].to_list() == times
+
+
+def test_a_mixed_column_keeps_its_values_as_they_are():
+    """A FlexReport column mixing a stock's empty strike with an option's
+    number stays objects, numbers and all; a Decimal polars cannot hold
+    at its column's precision is not nulled."""
+    frame = util.df([{"strike": ""}, {"strike": 150.0}])
+    assert frame["strike"].to_list() == ["", 150.0]
+    wide = [Decimal("0.1234567890123456789012345678"), Decimal("12345678901234.5")]
+    assert util.df([{"x": v} for v in wide])["x"].to_list() == wide
+
+
+def test_ints_and_floats_together_are_numbers():
+    assert util.df([{"x": 1}, {"x": 2.5}])["x"].to_list() == [1.0, 2.5]

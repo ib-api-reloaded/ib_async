@@ -96,11 +96,7 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
         return pl.DataFrame(schema=list(labels or ()))
     frame = pl.DataFrame(
         [
-            # strict=False: a column mixing ints and floats (FlexReport
-            # numbers) becomes Float64 instead of failing
-            pl.Series(name, values, strict=False)
-            if _polarsNative(values)
-            else pl.Series(name, values, dtype=pl.Object)
+            _series(pl, name, values)
             for name, values in zip(
                 columns,
                 (list(column) for column in zip(*data, strict=True)),
@@ -170,22 +166,59 @@ _POLARS_SCALARS: Final = (
 )
 
 
-def _polarsNative(values: list[Any]) -> bool:
-    """Whether polars holds the column of ``values`` as a typed column:
-    scalars of its types, with no non-finite Decimal (polars has none) and
-    datetimes in one time zone at most (a column has one); else it is an
-    Object column of the values as they are."""
+# The kind of a column of ints and floats both (FlexReport numbers),
+# which polars holds as Float64.
+_NUMBER = "number"
+# The most digits a polars Decimal column holds, whole and fractional
+# together: a value needing more is stored as null.
+_POLARS_DECIMAL_DIGITS = 38
+
+
+def _columnKind(values: list[Any]) -> type | str | None:
+    """The one kind of the column's values polars holds as a typed column
+    without changing any: a scalar type of its own (ints and floats
+    together are numbers), with no non-finite Decimal (polars has none)
+    and datetimes in one time zone at most (a column has one). None for
+    any other column, which is kept as objects, values as they are."""
+    kinds: set[type | str] = set()
     zones = set()
+    # The most whole and fractional digits of the column's Decimals, which
+    # its one precision and scale must hold together.
+    whole = fraction = 0
     for value in values:
         if value is None:
             continue
         if not isinstance(value, _POLARS_SCALARS):
-            return False
-        if isinstance(value, Decimal) and not value.is_finite():
-            return False
+            return None
+        if isinstance(value, Decimal):
+            if not value.is_finite():
+                return None
+            _, digits, exponent = value.as_tuple()
+            assert isinstance(exponent, int)  # noqa: S101 - finite, so an int
+            whole = max(whole, len(digits) + exponent)
+            fraction = max(fraction, -exponent)
         if isinstance(value, dt.datetime):
             zones.add(str(value.tzinfo))
-    return len(zones) <= 1
+        number = isinstance(value, int | float) and not isinstance(value, bool)
+        kinds.add(_NUMBER if number else type(value))
+    if len(kinds) > 1 or len(zones) > 1 or whole + fraction > _POLARS_DECIMAL_DIGITS:
+        return None
+    return next(iter(kinds), _NUMBER)
+
+
+def _series(pl: Any, name: str, values: list[Any]) -> Any:
+    """The polars Series of a df column: typed when polars holds every
+    value as it is (see :func:`_columnKind`), else objects."""
+    kind = _columnKind(values)
+    if kind is not None:
+        try:
+            # Only ints and floats convert, to Float64; any other value
+            # polars cannot hold as it is (an int past 64 bits) fails, and
+            # the column is objects.
+            return pl.Series(name, values, strict=kind != _NUMBER)
+        except (pl.exceptions.PolarsError, TypeError, ValueError, OverflowError):
+            pass
+    return pl.Series(name, values, dtype=pl.Object)
 
 
 def dataclassAsDict(obj) -> dict:
