@@ -90,9 +90,9 @@ def createComboLegProto(
     normalize_none_scalars(leg)
     proto = ComboLeg_pb2.ComboLeg()
     # Read every field from the SOURCE leg, never from the freshly-empty
-    # target proto (the contributor's PR had this swapped, which made
-    # every conditional vacuously true and stomped on the proto with
-    # blanks). Zero / empty-string source values are treated as "unset".
+    # target proto (where every conditional is vacuously true, stomping
+    # the proto with blanks). Zero / empty-string source values are
+    # treated as "unset".
     # Only ``UNSET_INTEGER`` is skipped (``_isValidInt``), so ``0`` flows
     # through to the wire.
     if _isValidInt(leg.conId):

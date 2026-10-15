@@ -493,14 +493,11 @@ class AccountValue:
         return safe_decimal(self.value)
 
 
-# Tick / bar / depth records — slotted frozen dataclasses for v3.0.
-# Numeric ``price`` / ``size`` fields stay ``float`` here pending the
-# Ticker hot-path benchmark in the same phase. Migrating these to
-# ``Decimal | None`` is coherent with the framework-wide direction but
-# coupled to ``Ticker``'s field types (these tick records are stored
-# verbatim onto ``ticker.ticks`` / ``ticker.tickByTicks`` lists, so the
-# inner type tracks Ticker exactly). The dataclass-shape change here is
-# structural only and adds slots for per-record memory savings.
+# Tick / bar / depth records — slotted frozen dataclasses. Numeric
+# ``price`` / ``size`` fields are ``float``, as ``Ticker``'s are: these
+# tick records are stored verbatim onto ``ticker.ticks`` /
+# ``ticker.tickByTicks``, so the inner type tracks Ticker exactly, and
+# the per-tick path stays float for speed.
 
 
 @dataclass(slots=True, frozen=True)

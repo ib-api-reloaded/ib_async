@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 
 import ib_async as ibi
 from ib_async._subscriptions import MktDataSub
-from ib_async.contract import Bag, ComboLeg
+from ib_async.contract import Bag, ComboLeg, Contract
 
 
 def _wired_ib():
@@ -214,3 +214,26 @@ def test_bags_compare_by_legs_not_by_a_shared_conid():
     assert first != second
     assert first == _bag(28812380, 1000)
     assert hash(first) == hash(_bag(28812380, 1000))
+
+
+def _spread(*conIds: int) -> Contract:
+    return Contract(
+        secType="BAG",
+        symbol="SPY",
+        exchange="SMART",
+        conId=28812380,
+        comboLegs=[ComboLeg(conId=c, ratio=1, action="BUY") for c in conIds],
+    )
+
+
+def test_contract_equality_agrees_with_its_hash_both_ways():
+    """Contracts that compare equal hash alike, whichever side asks."""
+    bag = _spread(1, 2)
+    single = Contract(secType="STK", conId=bag.conId)
+    assert bag != single and single != bag
+    assert _spread(1, 2) == bag and hash(_spread(1, 2)) == hash(bag)
+
+    front = Contract(secType="FUT", conId=7)
+    continuous = Contract(secType="CONTFUT", conId=7)
+    assert front != continuous and continuous != front
+    assert Contract(conId=7) == front and hash(Contract(conId=7)) == hash(front)

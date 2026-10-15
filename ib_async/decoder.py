@@ -104,12 +104,24 @@ _CONV: Final[dict[type, Callable[[str], Any]]] = {
     Decimal: safe_decimal,
 }
 
-# Cache of dataclass-field coercion plans keyed by class. Each entry is a tuple
-# of ``(field_name, target_type, default_value)`` for the int/float/bool fields
-# that Decoder.parse() needs to coerce; str fields are skipped entirely. The
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ParseField:
+    """How Decoder.parse() coerces one int/float/Decimal/bool field."""
+
+    name: str
+    typ: type
+    default: Any
+    # A Decimal field where +Infinity is a value, not unset (the class's
+    # ``_INFINITE_FIELDS``).
+    infinite: bool = False
+
+
+# Cache of dataclass-field coercion plans keyed by class: the fields
+# Decoder.parse() needs to coerce; str fields are skipped entirely. The
 # cache populates lazily on first parse() of each class so we pay the
 # dataclasses.fields() introspection once per class instead of per call.
-_PARSE_FIELDS: dict[type, tuple[tuple[str, type, Any], ...]] = {}
+_PARSE_FIELDS: dict[type, tuple[_ParseField, ...]] = {}
 
 # Sentinel module-like object used when a class's ``__module__`` is missing
 # from ``sys.modules`` — keeps ``vars()`` from raising on dataclasses defined
@@ -1073,7 +1085,8 @@ class Decoder:
             # not in ``dataclasses.fields()`` so the broken annotations
             # are never touched.
             module_globals = vars(sys.modules.get(cls.__module__, None) or _NULL_MOD)
-            plan: list[tuple[str, type, Any]] = []
+            plan: list[_ParseField] = []
+            infinite: frozenset[str] = getattr(cls, "_INFINITE_FIELDS", frozenset())
             for field in dataclasses.fields(obj):
                 raw = field.type
                 if isinstance(raw, str):
@@ -1083,11 +1096,16 @@ class Decoder:
                         continue
                 typ = _resolveCoerceType(raw)
                 if typ is not None:
-                    plan.append((field.name, typ, field.default))
+                    plan.append(
+                        _ParseField(
+                            field.name, typ, field.default, field.name in infinite
+                        )
+                    )
             entries = tuple(plan)
             _PARSE_FIELDS[cls] = entries
 
-        for name, typ, default in entries:
+        for entry in entries:
+            name, typ, default = entry.name, entry.typ, entry.default
             v = getattr(obj, name)
             if not v:
                 setattr(obj, name, default)
@@ -1111,8 +1129,7 @@ class Decoder:
                     unset = float(v) == UNSET_DOUBLE
                 except (TypeError, ValueError):
                     unset = False
-                infinite = name in getattr(cls, "_INFINITE_FIELDS", ())
-                parsed = decimalOrInfinity(v) if infinite else safe_decimal(v)
+                parsed = decimalOrInfinity(v) if entry.infinite else safe_decimal(v)
                 setattr(obj, name, default if unset else parsed)
             else:  # bool
                 setattr(obj, name, bool(int(v)))

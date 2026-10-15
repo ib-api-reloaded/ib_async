@@ -206,8 +206,8 @@ def wire_size_to_float(s: str) -> float:
     garbage land as ``0.0`` instead of raising. The wrapper's
     ``size == 0`` checks are semantically equivalent to "size is unset"
     on the binary path, so dropping unparseable values to zero matches
-    that behaviour exactly. Used by tick / market-depth / historical-
-    tick converters pending the Ticker hot-path Decimal benchmark.
+    that behaviour exactly. Used by the tick, market-depth and
+    historical-tick converters, whose wrapper methods take floats.
     """
     d = safe_decimal(s)
     return float(d) if d is not None else 0.0

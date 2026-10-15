@@ -437,9 +437,10 @@ class SubscriptionRegistry:
         a bag's synthetic comboLeg hash for spreads (see
         :meth:`_market_data_identity`). Callers that hold the
         :class:`Contract` should prefer :meth:`find_market_data_for_contract`,
-        which resolves the identity for them — critically for bags, whose
-        ``conId`` is always ``0`` and so can never be found via this
-        raw-conId entry point.
+        which resolves the identity for them — critically for bags, which
+        are indexed by their legs, never by their ``conId`` (often 0, and
+        shared by many different spreads), and so can never be found by
+        ``conId`` here.
         """
 
         return self._by_market_data_key.get((conId, kind))

@@ -118,7 +118,7 @@ StartupFetchALL = (
 )
 
 # The options of each underlying type reqOptionStrikes takes.
-_OPTION_SEC_TYPES: Mapping[str, str] = {"STK": "OPT", "FUT": "FOP"}
+_OPTION_SEC_TYPES: Mapping[str, str] = {"STK": "OPT", "FUT": "FOP", "CONTFUT": "FOP"}
 
 
 @dataclass(slots=True, frozen=True)
@@ -145,8 +145,14 @@ def _optionSearches(underlying: Contract, months: Sequence[str]) -> list[Contrac
             f"reqOptionStrikes takes a stock or future, not {underlying.secType!r}; "
             "for index options use reqSecDefOptParams and filter by tradingClass"
         )
-    if not months or not all(m.isdigit() and len(m) in (6, 8) for m in months):
-        raise ValueError(f"months are YYYYMM or YYYYMMDD, not {months!r}")
+    if not underlying.symbol:
+        raise ValueError(
+            "reqOptionStrikes searches by the underlying's symbol: qualify it first"
+        )
+    if isinstance(months, str) or not months:
+        raise ValueError(f"reqOptionStrikes needs a list of months, not {months!r}")
+    if not all(isinstance(m, str) and m.isdigit() and len(m) in (6, 8) for m in months):
+        raise ValueError(f"months are YYYYMM or YYYYMMDD strings, not {months!r}")
     if secType == "FOP" and not underlying.exchange:
         raise ValueError("a future's options need the future's exchange, such as CME")
     exchange = underlying.exchange if secType == "FOP" else "SMART"
@@ -746,17 +752,20 @@ class IB:
 
         return [v for d in self.wrapper.portfolio.values() for v in d.values()]
 
-    def _accountForUpdates(self, account: str, accounts: list[str]) -> str:
+    def _accountForUpdates(
+        self, account: str, accounts: list[str], fetchFields: StartupFetch
+    ) -> str:
         """The account connect subscribes to for portfolio and account
         updates: the one given, else the only managed one, else none. IBKR
         streams portfolio updates for one account at a time, so with
         several accounts and none chosen, :meth:`portfolio` stays empty;
-        say so rather than leave it silent."""
+        say so, when connect fetches account updates at all, rather than
+        leave it silent."""
         if account:
             return account
         if len(accounts) == 1:
             return accounts[0]
-        if accounts:
+        if accounts and fetchFields & StartupFetch.ACCOUNT_UPDATES:
             self._logger.info(
                 f"{len(accounts)} managed accounts and none chosen: "
                 "portfolio() stays empty, since IBKR sends portfolio updates "
@@ -2262,7 +2271,8 @@ class IB:
         This method is blocking.
 
         Args:
-            underlying: The stock or future (secType STK or FUT).
+            underlying: The stock or future (secType STK, FUT or CONTFUT),
+                with its symbol.
             months: Expiration months as YYYYMM, or single expiration days
                 as YYYYMMDD.
 
@@ -2605,7 +2615,7 @@ class IB:
                 self.reqAutoOpenOrders(True)
 
             accounts = self.client.getAccounts()
-            account = self._accountForUpdates(account, accounts)
+            account = self._accountForUpdates(account, accounts, fetchFields)
 
             reqs = self._startupRequests(fetchFields, readonly, account, accounts)
 

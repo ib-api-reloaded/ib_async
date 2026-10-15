@@ -156,12 +156,17 @@ class Contract:
         return bool(self.conId)
 
     def __eq__(self, other):
-        # A bag compares by its legs, as it hashes: IBKR gives many different
-        # spreads the same combo conId.
-        return isinstance(other, Contract) and (
-            (self.conId and self.secType != "BAG" and self.conId == other.conId)
-            or util.dataclassAsDict(self) == util.dataclassAsDict(other)
-        )
+        # Equal as they hash: by conId, except for a bag, which compares by
+        # its legs (IBKR gives many different spreads the same combo conId),
+        # and a continuous future, never the front contract it shares its
+        # conId with.
+        if not isinstance(other, Contract):
+            return False
+        kinds = (self.secType, other.secType)
+        byConId = "BAG" not in kinds and kinds.count("CONTFUT") != 1
+        if byConId and self.conId and self.conId == other.conId:
+            return True
+        return util.dataclassAsDict(self) == util.dataclassAsDict(other)
 
     def __hash__(self) -> int:
         if self.secType == "BAG":

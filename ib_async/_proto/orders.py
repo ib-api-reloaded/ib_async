@@ -7,13 +7,11 @@ unset values land as ``None`` so user code's ``if order.lmtPrice:``
 keeps working.
 
 The send-side ``create*Proto`` helpers always read from the source
-domain object — never from the freshly-empty target proto. That
-discipline guards against the contributor's PR bug where
-``createOrderProto`` had ``if isValidIntValue(order.clientId):
-order.clientId = order.clientId`` (note ``=`` self-assignment) and
-silently dropped ``clientId`` from every outbound order. The
-``test_orders_proto_round_trips_clientId`` regression test exercises
-that exact path.
+domain object and write to the target proto — never read the
+freshly-empty target, whose every field is unset, nor assign a field to
+itself: either silently drops the field (``clientId`` from every
+outbound order, say). ``test_orders_proto_round_trips_clientId``
+exercises that path.
 """
 
 from __future__ import annotations
@@ -163,10 +161,9 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     proto = Order_pb2.Order()
 
     # Order ids — set even at zero where IBKR treats zero as a valid
-    # identifier. ``clientId`` MUST round-trip; the contributor's PR
-    # had a typo here that silently dropped it from every outbound
-    # order, sending fills to the wrong client bucket. Only the UNSET
-    # sentinel is skipped, so ``0`` flows through.
+    # identifier. ``clientId`` MUST round-trip: an order without it
+    # sends its fills to the wrong client. Only the UNSET sentinel is
+    # skipped, so ``0`` flows through.
     #
     # ``orderId`` is deliberately NOT written here. On a REQUEST the
     # order's identity is carried by the ENVELOPE

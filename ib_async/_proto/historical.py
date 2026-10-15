@@ -18,9 +18,9 @@ Wire shape notes:
   takes positional args ``(reqId, time, open, high, low, close, volume,
   wap, count)``.
 * ``HistoricalTick`` family ``size`` fields are strings; ``time`` is
-  int64 (epoch seconds). ``HistoricalTick`` records remain
-  ``float``-typed in this commit pending the Ticker hot-path benchmark
-  (see ``_proto/market_data.py`` rationale).
+  int64 (epoch seconds). ``HistoricalTick`` records are
+  ``float``-typed, as the Ticker's tick path is (see
+  ``_proto/market_data.py``).
 * ``HistoricalSchedule`` carries a repeated ``HistoricalSession`` slot;
   the converter unpacks it into the existing domain ``HistoricalSchedule``
   dataclass with ``HistoricalSession`` children.

@@ -157,3 +157,8 @@ def test_ohlc_rows_from_realtime_bars():
         close=Decimal(2),
     )
     assert util._ohlcRows([bar]) == [(Decimal(1), Decimal(3), Decimal(0), Decimal(2))]
+
+
+def test_a_missing_optional_dependency_says_how_to_install_it():
+    with pytest.raises(ImportError, match="pip install the-thing"):
+        util._optional("ib_async_no_such_module", "pip install the-thing")

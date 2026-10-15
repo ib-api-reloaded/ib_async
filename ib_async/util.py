@@ -35,9 +35,21 @@ from eventkit import Event
 from eventkit.util import get_event_loop as _threadEventLoop
 
 if TYPE_CHECKING:
+    import pandas as pd
     import polars as pl
 
 globalErrorEvent: Event = Event()
+
+
+def _optional(module: str, needed: str) -> Any:
+    """The optional dependency ``module``, imported when first used;
+    refused with ``needed``, which says how to install it."""
+    try:
+        return import_module(module)
+    except ImportError as e:
+        raise ImportError(needed) from e
+
+
 """
 Event to emit global exceptions.
 """
@@ -75,14 +87,11 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
     Args:
       labels: If supplied, keep only these columns, in this order.
     """
-    # polars is an optional dependency, imported only when used.
-    try:
-        import polars as pl  # noqa: PLC0415
-    except ImportError as e:
-        raise ImportError(
-            'util.df() requires polars: pip install "ib_async[polars]". '
-            "polars runs on CPython only; on PyPy use util.pandasDf()."
-        ) from e
+    pl = _optional(
+        "polars",
+        'util.df() requires polars: pip install "ib_async[polars]". '
+        "polars runs on CPython only; on PyPy use util.pandasDf().",
+    )
 
     columns, data = _table(objs)
     if not data:
@@ -104,7 +113,7 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
     return frame.select(labels) if labels else frame
 
 
-def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
+def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pd.DataFrame:
     """
     Same as :func:`df`, but returns a ``pandas.DataFrame``, for where polars
     is not available (PyPy). Values are stored as they are (``Decimal`` in
@@ -114,8 +123,9 @@ def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
     Args:
       labels: If supplied, keep only these columns, in this order.
     """
-    # pandas is an optional dependency, imported only when used.
-    import pandas as pd  # noqa: PLC0415
+    pd = _optional(
+        "pandas", "util.pandasDf() requires pandas, which ib_async does not install."
+    )
 
     columns, data = _table(objs)
     if not data:
@@ -434,10 +444,10 @@ def barplot(bars, title="", upColor="blue", downColor="red"):
     a DataFrame (from :func:`df` or :func:`pandasDf`) or as a list of bar
     objects.
     """
-    # matplotlib is an optional dependency, imported only when used.
-    import matplotlib.pyplot as plt  # noqa: PLC0415
-    from matplotlib.lines import Line2D  # noqa: PLC0415
-    from matplotlib.patches import Rectangle  # noqa: PLC0415
+    needed = "util.barplot() requires matplotlib, which ib_async does not install."
+    plt = _optional("matplotlib.pyplot", needed)
+    Line2D = _optional("matplotlib.lines", needed).Line2D
+    Rectangle = _optional("matplotlib.patches", needed).Rectangle
 
     ohlcTups = _ohlcRows(bars)
 

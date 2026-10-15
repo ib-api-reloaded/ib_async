@@ -109,7 +109,7 @@ from .order import (
     Trade,
     VolumeCondition,
 )
-from .ordertypes import OrderTypeError, attached, generated
+from .ordertypes import OrderTypeError
 from .ordertypes.attached import *  # noqa: F403  (adjustable stops, FX hedge)
 from .ordertypes.generated import *  # noqa: F403  (order types, algos, routing)
 from .ticker import HaltedStatus, Ticker
@@ -118,10 +118,10 @@ from .wrapper import RequestError, Wrapper
 
 __all__ = [
     # The constructors; the catalog and its tools stay in ib_async.ordertypes.
-    *generated.__all__,
+    *ordertypes.generated.__all__,
     *datarequests.generated.__all__,
     "checkDuration",
-    *attached.__all__,
+    *ordertypes.attached.__all__,
     "OrderTypeError",
     "Event",
     "util",

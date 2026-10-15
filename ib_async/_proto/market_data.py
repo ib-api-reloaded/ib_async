@@ -4,16 +4,15 @@ Pure functions: every converter takes only proto inputs (or domain
 inputs on the send side). No reads from module-level state. ``HasField``
 guards every optional read; ``safe_decimal`` handles every wire string
 that carries a Decimal-shaped numeric. Where the wrapper signature
-takes ``float`` (the Ticker hot path is still float pending the P3b
-benchmark), wire ``string``-encoded sizes are routed through ``float``
+takes ``float`` (the Ticker's per-tick path is float, for speed),
+wire ``string``-encoded sizes are routed through ``float``
 at the converter boundary so the wrapper's existing comparisons keep
 working.
 
-This file plugs the contributor PR's gaps for ``MARKET_DEPTH``,
-``MARKET_DEPTH_L2``, ``MKT_DEPTH_EXCHANGES``, ``REROUTE_MKT_DATA_REQ``,
-``REROUTE_MKT_DEPTH_REQ``, and ``DELTA_NEUTRAL_VALIDATION`` — none of
-which that PR touched. The remaining tickOptionComputation
-shape mirrors the binary path's silent treatment of IBKR's sentinels
+It covers ``MARKET_DEPTH``, ``MARKET_DEPTH_L2``,
+``MKT_DEPTH_EXCHANGES``, ``REROUTE_MKT_DATA_REQ``,
+``REROUTE_MKT_DEPTH_REQ`` and ``DELTA_NEUTRAL_VALIDATION`` too. The
+tickOptionComputation shape mirrors the binary path's silent treatment of IBKR's sentinels
 (``-1``, ``-2``) so the wrapper's existing ``tickOptionComputation``
 ``if x != -1 else None`` logic continues to apply post-decode.
 

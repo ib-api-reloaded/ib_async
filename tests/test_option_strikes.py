@@ -125,6 +125,11 @@ def test_a_stock_is_searched_on_smart() -> None:
     assert (search.currency, search.tradingClass) == ("USD", "")
 
 
+def test_a_continuous_future_is_searched_as_its_future() -> None:
+    (search,) = lookUp(ibi.ContFuture("ES", exchange="CME"), "202612").searches
+    assert (search.secType, search.symbol, search.exchange) == ("FOP", "ES", "CME")
+
+
 def test_each_month_is_searched_once() -> None:
     searches = lookUp(Future("ES", exchange="CME"), "202612", "202612").searches
     assert len(searches) == 1
@@ -135,8 +140,10 @@ def test_each_month_is_searched_once() -> None:
     [
         (ibi.Index("SPX", "CBOE"), ("202612",), "stock or future"),
         (Future("ES"), ("202612",), "the future's exchange"),
-        (Future("ES", exchange="CME"), (), "YYYYMM"),
+        (Future("ES", exchange="CME"), (), "a list of months"),
         (Future("ES", exchange="CME"), ("2026-12",), "YYYYMM"),
+        (Future("ES", exchange="CME"), (202612,), "strings"),
+        (Contract(secType="STK", conId=265598), ("202612",), "qualify it first"),
     ],
 )
 def test_refusals(underlying: Contract, months: tuple[str, ...], message: str) -> None:
