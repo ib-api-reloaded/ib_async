@@ -614,12 +614,16 @@ class _Bars(Op):
     _lastClose: Decimal | None
 
     def __init__(self, source=None, maxBars: int | None = None):
-        Op.__init__(self, source)
+        Op.__init__(self)
         self.bars = BarList()
         self.maxBars = maxBars
         self._builder = None
         self._published = None
         self._lastClose = None
+        # Last: an ended source ends the operator at once, which needs
+        # its state.
+        if source is not None:
+            self.set_source(source)
 
     @property
     def maxBars(self) -> int | None:
@@ -710,9 +714,17 @@ class TimeBars(_Bars):
     _timer: Event | None
 
     def __init__(self, timer: Event, source=None, maxBars: int | None = None):
-        _Bars.__init__(self, source, maxBars)
+        _Bars.__init__(self, None, maxBars)
+        self._timer = None
+        if timer.done():
+            # no bar would ever start
+            self.set_done()
+            return
         self._timer = timer
-        self._timer.connect(self._on_timer, None, self._on_timer_done)
+        timer.connect(self._on_timer, None, self._on_timer_done)
+        # Last: an ended source ends the operator at once, timer and all.
+        if source is not None:
+            self.set_source(source)
 
     def _startsOnTick(self) -> bool:
         # A time bar starts on the timer; ticks before the first are not
@@ -762,8 +774,8 @@ class TickBars(_Bars):
     def __init__(self, count: int, source=None, maxBars: int | None = None):
         if count < 1:
             raise ValueError(f"a tick bar has at least 1 tick, not {count}")
-        _Bars.__init__(self, source, maxBars)
         self._count = count
+        _Bars.__init__(self, source, maxBars)
 
     def _isComplete(self, builder: _BarBuilder) -> bool:
         return builder.count >= self._count
@@ -780,8 +792,8 @@ class VolumeBars(_Bars):
     ):
         if not (math.isfinite(volume) and volume > 0):
             raise ValueError(f"a volume bar has a positive volume, not {volume}")
-        _Bars.__init__(self, source, maxBars)
         self._volume = _decimal(volume)
+        _Bars.__init__(self, source, maxBars)
 
     def _isComplete(self, builder: _BarBuilder) -> bool:
         return builder.volume >= self._volume

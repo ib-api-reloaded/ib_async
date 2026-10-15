@@ -499,3 +499,25 @@ def test_max_bars_is_checked_when_changed():
 def test_a_bar_cannot_be_changed():
     with pytest.raises(dataclasses.FrozenInstanceError):
         bar(0, None, "0", None, 0).close = Decimal(1)  # type: ignore[misc]
+
+
+def test_time_bars_on_an_ended_source_end_at_once():
+    """After a disconnect ends a ticker's updateEvent, time bars made from
+    it are ended, not broken."""
+    ticker = Ticker()
+    ticker.updateEvent.set_done()
+    timer = Event("timer")
+    timeBars = ticker.updateEvent.trades().timebars(timer)
+    assert timeBars.done()
+    timer.emit(_at(0))
+    assert list(timeBars.bars) == []
+
+
+def test_time_bars_on_an_ended_timer_end_at_once():
+    ticker = Ticker()
+    timer = Event("timer")
+    timer.set_done()
+    timeBars = ticker.updateEvent.trades().timebars(timer)
+    assert timeBars.done()
+    _feed(ticker, TICKS)
+    assert list(timeBars.bars) == []
