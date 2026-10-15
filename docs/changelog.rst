@@ -243,6 +243,9 @@ are fixed in v3.0:
   ``connect`` now logs this, and ``portfolio()`` and ``connect``
   document how to choose the account (``positions()`` covers every
   account). (:issue:`72`, :issue:`165`)
+* **``connect`` requested positions whatever ``fetchFields`` said**;
+  ``StartupFetch.POSITIONS`` now controls it like the other fields.
+  (:issue:`84`)
 * **``IBC(twsVersion=...)`` takes a string**, as macOS needs: ``"10.19"``,
   with the period, as in the macOS install folder (1019 on Windows and
   Linux). It was typed and documented as an integer. (:issue:`57`)

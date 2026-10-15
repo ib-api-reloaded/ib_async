@@ -2427,6 +2427,38 @@ class IB:
 
     # now entering the parallel async universe
 
+    def _startupRequests(
+        self,
+        fetchFields: StartupFetch,
+        readonly: bool,
+        account: str,
+        accounts: list[str],
+    ) -> dict[str, Awaitable[Any]]:
+        """The requests connect sends to sync its state, by name; each one
+        only if ``fetchFields`` asks for it."""
+        reqs: dict[str, Awaitable[Any]] = {}
+        if fetchFields & StartupFetch.POSITIONS:
+            reqs["positions"] = self.reqPositionsAsync()
+        if not readonly and fetchFields & StartupFetch.ORDERS_OPEN:
+            reqs["open orders"] = self.reqOpenOrdersAsync()
+        if (
+            not readonly
+            and self.client.serverVersion() >= 150
+            and fetchFields & StartupFetch.ORDERS_COMPLETE
+        ):
+            reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
+        if account and fetchFields & StartupFetch.ACCOUNT_UPDATES:
+            reqs["account updates"] = self.reqAccountUpdatesAsync(account)
+        if (
+            len(accounts) <= self.MaxSyncedSubAccounts
+            and fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES
+        ):
+            for acc in accounts:
+                reqs[f"account updates for {acc}"] = self.reqAccountUpdatesMultiAsync(
+                    acc
+                )
+        return reqs
+
     async def connectAsync(
         self,
         host: str = "127.0.0.1",
@@ -2453,28 +2485,7 @@ class IB:
             accounts = self.client.getAccounts()
             account = self._accountForUpdates(account, accounts)
 
-            # prepare initializing requests
-            # name -> request
-            reqs: dict[str, Awaitable[Any]] = {}
-            reqs["positions"] = self.reqPositionsAsync()
-            if not readonly:
-                if fetchFields & StartupFetch.ORDERS_OPEN:
-                    reqs["open orders"] = self.reqOpenOrdersAsync()
-
-            if not readonly and self.client.serverVersion() >= 150:
-                if fetchFields & StartupFetch.ORDERS_COMPLETE:
-                    reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
-
-            if account:
-                if fetchFields & StartupFetch.ACCOUNT_UPDATES:
-                    reqs["account updates"] = self.reqAccountUpdatesAsync(account)
-
-            if len(accounts) <= self.MaxSyncedSubAccounts:
-                if fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES:
-                    for acc in accounts:
-                        reqs[f"account updates for {acc}"] = (
-                            self.reqAccountUpdatesMultiAsync(acc)
-                        )
+            reqs = self._startupRequests(fetchFields, readonly, account, accounts)
 
             # run initializing requests concurrently and log if any times out
             tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
