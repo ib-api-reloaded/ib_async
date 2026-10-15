@@ -202,3 +202,15 @@ def test_ints_are_never_nulled_or_rounded():
     exact = [2**53 + 1, 0.5]
     assert util.df([{"n": v} for v in exact])["n"].to_list() == exact
     assert util.df([{"n": 2**70}, {"n": 1}])["n"].to_list() == [2**70, 1]
+
+
+def test_fixed_offsets_are_one_utc_column():
+    """Bar times from a naive timer are fixed local offsets, EST and EDT
+    across a DST change: polars holds them all as UTC, same instants."""
+    times = [
+        dt.datetime(2026, 3, 7, 12, tzinfo=dt.timezone(dt.timedelta(hours=-5))),
+        dt.datetime(2026, 3, 9, 12, tzinfo=dt.timezone(dt.timedelta(hours=-4))),
+    ]
+    column = util.df([(t,) for t in times])["column_0"]
+    assert column.dtype == pl.Datetime("us", "UTC")
+    assert column.to_list() == times

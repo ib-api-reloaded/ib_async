@@ -75,7 +75,8 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
     ``column_0``, ``column_1``, ...).
 
     Values keep their types: ``Decimal`` and ``datetime`` (with its time
-    zone) become polars ``Decimal`` and ``Datetime`` columns, ``None``
+    zone; a fixed offset, as from ``datetime.astimezone()``, as UTC, the
+    same instant) become polars ``Decimal`` and ``Datetime`` columns, ``None``
     becomes null, and an ib_async object such as a ``Contract`` is stored
     as itself. With no objects the result has no rows.
 
@@ -202,7 +203,9 @@ def _columnKind(values: list[Any]) -> type | str | None:
             whole = max(whole, len(digits) + exponent)
             fraction = max(fraction, -exponent)
         if isinstance(value, dt.datetime):
-            zones.add(str(value.tzinfo))
+            # polars stores every fixed offset (datetime.timezone) as UTC
+            fixed = isinstance(value.tzinfo, dt.timezone)
+            zones.add("UTC" if fixed else str(value.tzinfo))
         if isinstance(value, int) and not isinstance(value, bool):
             largestInt = max(largestInt, abs(value))
         kinds.add(type(value))
