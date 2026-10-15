@@ -106,8 +106,8 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   share one builder and one event contract: each emits its completed bars,
   and ``bars.updateEvent(bars, hasNewBar)`` fires on every tick (False)
   and on each completion (True). A completed bar never changes. Their
-  ``bars`` keeps every bar, or with ``maxBars=`` at most that many, the
-  oldest dropped as from a ``deque(maxlen=...)``. Midpoint
+  ``bars`` keeps every bar, or with ``maxBars=`` at most that many
+  completed bars besides the one in progress, the oldest dropped. Midpoint
   ticks without a bid and ask, which used to fail the aggregation, are
   skipped. ``examples/programs/live_bars.py`` and a recipe show indicators
   on the bars (a session VWAP and an EMA) as running folds.

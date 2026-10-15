@@ -403,8 +403,15 @@ class Ticker:
 @event_class
 class TickerUpdateEvent(Event):
     def trades(self) -> Tickfilter:
-        """Emit trade ticks."""
-        # 48 RT Volume, 77 RT Trade Volume (without unreportable trades)
+        """Emit trade ticks: last price and size (ticks 4 and 5, delayed
+        68 and 71), RT Volume (48, generic tick 233) and RT Trade Volume
+        (77, generic tick 375, which leaves out unreportable trades).
+
+        Each of these streams reports the same trades, so bars built on a
+        subscription carrying more than one count a trade once per
+        stream. For bars that count each trade once, request one of
+        233 or 375 and filter its tick alone:
+        ``Tickfilter((48,), ticker.updateEvent)``."""
         return Tickfilter((4, 5, 48, 68, 71, 77), self)
 
     def bids(self) -> Tickfilter:
@@ -445,8 +452,9 @@ class Tickfilter(Op):
         the next starts, on each event of ``timer``, whose value is the new
         bar's time; ``Event.timerange(start=0, step=60)`` gives a bar per
         minute, starting on the minute. A bar without ticks repeats the
-        previous bar's close, with no volume. Ticks before the first timer
-        event are in no bar.
+        previous bar's close, with no volume; without a previous close
+        (no tick yet) there is no bar. Ticks before the first timer event
+        are in no bar.
 
         Emits each completed :class:`~ib_async.objects.RealTimeBar`; see
         :class:`BarList` for ``bars`` and its ``updateEvent``.
@@ -454,8 +462,9 @@ class Tickfilter(Op):
         Args:
             timer: The event that ends one bar and starts the next, emitting
                 the next bar's ``datetime``.
-            maxBars: Keep at most this many bars in ``bars``, dropping the
-                oldest; all of them by default.
+            maxBars: Keep at most this many completed bars in ``bars``,
+                besides the one in progress, dropping the oldest; all of
+                them by default.
         """
         return TimeBars(timer, self, maxBars)
 
@@ -468,8 +477,9 @@ class Tickfilter(Op):
 
         Args:
             count: The number of ticks in a bar.
-            maxBars: Keep at most this many bars in ``bars``, dropping the
-                oldest; all of them by default.
+            maxBars: Keep at most this many completed bars in ``bars``,
+                besides the one in progress, dropping the oldest; all of
+                them by default.
         """
         return TickBars(count, self, maxBars)
 
@@ -486,8 +496,9 @@ class Tickfilter(Op):
 
         Args:
             volume: The volume of a bar.
-            maxBars: Keep at most this many bars in ``bars``, dropping the
-                oldest; all of them by default.
+            maxBars: Keep at most this many completed bars in ``bars``,
+                besides the one in progress, dropping the oldest; all of
+                them by default.
         """
         return VolumeBars(volume, self, maxBars)
 
@@ -505,29 +516,11 @@ class BarList(list[RealTimeBar]):
 
     ``updateEvent(bars, hasNewBar)`` fires with ``hasNewBar`` False when a
     tick changes the bar in progress, and True when the last bar has just
-    completed.
+    completed."""
 
-    Without ``maxlen`` it keeps every bar. With one, it keeps at most that
-    many, as a ``deque(maxlen=...)`` does: appending a bar to a full list
-    drops the oldest."""
-
-    maxlen: int | None
-
-    def __init__(self, *args, maxlen: int | None = None):
-        if maxlen is not None and maxlen < 1:
-            raise ValueError(f"maxlen keeps at least 1 bar, not {maxlen}")
+    def __init__(self, *args):
         super().__init__(*args)
-        self.maxlen = maxlen
         self.updateEvent = Event("updateEvent")
-        self._trim()
-
-    def append(self, bar: RealTimeBar) -> None:
-        super().append(bar)
-        self._trim()
-
-    def _trim(self) -> None:
-        if self.maxlen is not None and len(self) > self.maxlen:
-            del self[: len(self) - self.maxlen]
 
     def __eq__(self, other) -> bool:
         return self is other
@@ -551,9 +544,13 @@ class _BarBuilder:
     """The bar in progress, updated in constant time per tick: its prices,
     volume and tick count, and the running sum of price × size its WAP
     (volume-weighted average price) comes from. Each :meth:`bar` is a new
-    snapshot, so a bar already handed out never changes."""
+    snapshot, so a bar already handed out never changes.
+
+    Until its first tick the bar is flat at ``previousClose``, the close of
+    the bar before it, with no volume."""
 
     time: datetime
+    previousClose: Decimal | None = None
     open: Decimal | None = None
     high: Decimal | None = None
     low: Decimal | None = None
@@ -573,11 +570,14 @@ class _BarBuilder:
         self.count += 1
         self.priceVolume += price * size
 
-    def repeat(self, close: Decimal | None) -> None:
-        """A bar without ticks: flat at ``close``, with no volume."""
-        self.open = self.high = self.low = self.close = close
+    @property
+    def hasPrice(self) -> bool:
+        return self.count > 0 or self.previousClose is not None
 
     def bar(self) -> RealTimeBar:
+        if not self.count:
+            flat = self.previousClose
+            return RealTimeBar(self.time, flat, flat, flat, flat, Decimal(0), None, 0)
         return RealTimeBar(
             time=self.time,
             open=self.open,
@@ -594,18 +594,32 @@ class _BarBuilder:
 class _Bars(Op):
     """Aggregates ``(time, price, size)`` ticks into bars; each kind of
     bar says when one completes. Ticks without a price (a midpoint without
-    a bid and ask) are skipped."""
+    a bid and ask) are skipped.
+
+    The operator keeps its own state (the bar in progress, the last close),
+    so ``bars`` is the user's: clearing or trimming it changes nothing but
+    the bars it holds."""
 
     bars: BarList
+    # The completed bars ``bars`` keeps, the oldest dropped first; None
+    # keeps every bar.
+    maxBars: int | None
     _builder: _BarBuilder | None
-    # The close of the last completed bar, which an empty time bar repeats;
-    # kept here, since a capped ``bars`` may have dropped that bar.
+    # The snapshot of the bar in progress in ``bars``, which each tick's
+    # snapshot replaces while it is still the last bar there.
+    _published: RealTimeBar | None
+    # The close of the last completed bar, which the next bar is flat at
+    # until its first tick.
     _lastClose: Decimal | None
 
     def __init__(self, source=None, maxBars: int | None = None):
+        if maxBars is not None and maxBars < 1:
+            raise ValueError(f"maxBars keeps at least 1 bar, not {maxBars}")
         Op.__init__(self, source)
-        self.bars = BarList(maxlen=maxBars)
+        self.bars = BarList()
+        self.maxBars = maxBars
         self._builder = None
+        self._published = None
         self._lastClose = None
 
     def on_source(self, time: datetime, price: float | None, size: float | None):
@@ -618,10 +632,10 @@ class _Bars(Op):
             builder = self._begin(time)
         quantity = Decimal(0) if size is None or math.isnan(size) else _decimal(size)
         builder.add(_decimal(price), quantity)
-        self.bars[-1] = builder.bar()
         if self._isComplete(builder):
-            self._complete()
+            self._complete(builder)
         else:
+            self._publish(builder.bar())
             self.bars.updateEvent.emit(self.bars, False)
 
     def _startsOnTick(self) -> bool:
@@ -632,17 +646,45 @@ class _Bars(Op):
         """Whether the bar in progress is complete after a tick."""
         return False
 
+    def _publish(self, bar: RealTimeBar) -> None:
+        """Show ``bar`` as the bar in progress: in place of its previous
+        snapshot, or appended if ``bars`` no longer ends with that."""
+        if self._shown():
+            self.bars[-1] = bar
+        else:
+            self.bars.append(bar)
+        self._published = bar
+
+    def _shown(self) -> bool:
+        """Whether ``bars`` still ends with the bar in progress."""
+        return (
+            self._published is not None
+            and bool(self.bars)
+            and self.bars[-1] is self._published
+        )
+
     def _begin(self, time: datetime) -> _BarBuilder:
-        self._builder = _BarBuilder(time)
-        self.bars.append(self._builder.bar())
+        self._builder = _BarBuilder(time, self._lastClose)
+        self._publish(self._builder.bar())
         return self._builder
 
-    def _complete(self) -> None:
-        bar = self.bars[-1]
+    def _complete(self, builder: _BarBuilder) -> None:
+        bar = builder.bar()
+        self._publish(bar)
         self._builder = None
+        self._published = None
         self._lastClose = bar.close
+        if self.maxBars is not None and len(self.bars) > self.maxBars:
+            del self.bars[: len(self.bars) - self.maxBars]
         self.bars.updateEvent.emit(self.bars, True)
         self.emit(bar)
+
+    def _withdraw(self) -> None:
+        """Drop the bar in progress, unemitted."""
+        if self._shown():
+            self.bars.pop()
+        self._builder = None
+        self._published = None
 
 
 @event_class
@@ -664,10 +706,11 @@ class TimeBars(_Bars):
     def _on_timer(self, time: datetime) -> None:
         builder = self._builder
         if builder is not None:
-            if builder.count == 0 and self._lastClose is not None:
-                builder.repeat(self._lastClose)
-                self.bars[-1] = builder.bar()
-            self._complete()
+            if builder.hasPrice:
+                self._complete(builder)
+            else:
+                # No tick yet and no close to repeat: no bar to give.
+                self._withdraw()
         self._begin(time)
 
     def _on_timer_done(self, timer):

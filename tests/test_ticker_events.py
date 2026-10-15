@@ -20,7 +20,6 @@ from eventkit import Event
 
 from ib_async.objects import RealTimeBar, TickData
 from ib_async.ticker import (
-    BarList,
     Midpoints,
     TickBars,
     Ticker,
@@ -47,7 +46,7 @@ DECLARED_FIELDS = {
     TickerUpdateEvent: set(),
     Tickfilter: {"_tickTypes"},
     Midpoints: set(),
-    _Bars: {"bars", "_builder", "_lastClose"},
+    _Bars: {"bars", "maxBars", "_builder", "_published", "_lastClose"},
     TimeBars: {"_timer"},
     TickBars: {"_count"},
     VolumeBars: {"_volume"},
@@ -275,7 +274,8 @@ def test_timebars_from_synthetic_ticks():
         bar(5, ("8", "8", "8", "8"), "0", None, 0),
     ]
     assert emitted == expected
-    assert list(timeBars.bars) == [*expected, bar(6, None, "0", None, 0)]
+    # the bar in progress is flat at the last close until its first tick
+    assert list(timeBars.bars) == [*expected, bar(6, ("8",) * 4, "0", None, 0)]
     assert flags == [False, True, False, False, True, True]
 
     timer.set_done()
@@ -355,7 +355,7 @@ def test_a_tick_without_a_size_adds_no_volume():
     ]
 
 
-def test_max_bars_keeps_the_newest_like_a_deque():
+def test_max_bars_keeps_the_newest_completed_bars():
     ticker = Ticker()
     tickBars = ticker.updateEvent.trades().tickbars(1, maxBars=2)
     emitted, _ = record(tickBars)
@@ -365,10 +365,10 @@ def test_max_bars_keeps_the_newest_like_a_deque():
     # five trades, five one-tick bars, all emitted; the last two are kept
     assert len(emitted) == 5
     assert list(tickBars.bars) == emitted[-2:]
-    assert tickBars.bars.maxlen == 2
+    assert tickBars.maxBars == 2
 
 
-def test_an_empty_time_bar_repeats_the_close_with_one_bar_kept():
+def test_max_bars_does_not_count_the_bar_in_progress():
     """The close an empty bar repeats is kept by the operator, not read
     from a bar the cap has dropped."""
     ticker = Ticker()
@@ -381,15 +381,50 @@ def test_an_empty_time_bar_repeats_the_close_with_one_bar_kept():
     timer.emit(_at(3))
     timer.emit(_at(5))  # empty
 
-    assert emitted[-1] == bar(3, ("12", "12", "12", "12"), "0", None, 0)
-    assert len(timeBars.bars) == 1
+    flat = ("12",) * 4
+    assert emitted[-1] == bar(3, flat, "0", None, 0)
+    assert list(timeBars.bars) == [emitted[-1], bar(5, flat, "0", None, 0)]
 
 
-def test_bar_list_caps_appends_and_refuses_an_empty_cap():
-    bars = BarList([bar(0, None, "0", None, 0), bar(1, None, "0", None, 0)], maxlen=1)
-    assert [b.time for b in bars] == [_at(1)]
-    bars.append(bar(2, None, "0", None, 0))
-    assert [b.time for b in bars] == [_at(2)]
-    assert len(BarList()) == 0 and BarList().maxlen is None
+def test_max_bars_keeps_at_least_one_bar():
     with pytest.raises(ValueError, match="at least 1 bar"):
-        BarList(maxlen=0)
+        TickBars(1, maxBars=0)
+
+
+def test_a_time_bar_before_any_tick_is_no_bar():
+    ticker = Ticker()
+    timer = Event("timer")
+    timeBars = ticker.updateEvent.trades().timebars(timer)
+    emitted, flags = record(timeBars)
+
+    timer.emit(_at(0))
+    timer.emit(_at(1))  # no tick and no close to repeat
+    _feed(ticker, TICKS[2:3])
+    timer.emit(_at(3))
+
+    assert emitted == [bar(1, ("12",) * 4, "2", Decimal(12), 1)]
+    assert flags == [False, True]
+    assert [b.time for b in timeBars.bars] == [_at(1), _at(3)]
+
+
+def test_clearing_bars_leaves_the_operator_working():
+    """bars is the user's: emptying it mid-bar loses the bars it held,
+    and the bar in progress carries on into it."""
+    ticker = Ticker()
+    tickBars = ticker.updateEvent.trades().tickbars(2)
+    emitted, _ = record(tickBars)
+
+    _feed(ticker, TICKS[:1])
+    tickBars.bars.clear()
+    _feed(ticker, TICKS[1:3])
+
+    assert emitted == [bar(0, ("10", "12", "10", "12"), "3", Decimal("34.0") / 3, 2)]
+    assert list(tickBars.bars) == emitted
+
+    timer = Event("timer")
+    timeBars = ticker.updateEvent.trades().timebars(timer)
+    timer.emit(_at(0))
+    timeBars.bars.clear()
+    _feed(ticker, TICKS[3:4])
+    timer.emit(_at(4))
+    assert [b.time for b in timeBars.bars] == [_at(0), _at(4)]
