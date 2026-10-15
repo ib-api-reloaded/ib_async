@@ -488,11 +488,13 @@ def _ohlcRows(bars) -> list[tuple[Any, Any, Any, Any]]:
     :func:`df`), a pandas DataFrame (from :func:`pandasDf`) or bar objects
     (``BarData``, ``RealTimeBar``).
     """
-    if hasattr(bars, "select"):  # a polars DataFrame
-        return bars.select("open", "high", "low", "close").rows()
+    # pandas first: a polars DataFrame has no itertuples, but a pandas one
+    # may have a select
     if hasattr(bars, "itertuples"):  # a pandas DataFrame
         ohlc = bars[["open", "high", "low", "close"]]
         return list(ohlc.itertuples(index=False, name=None))
+    if hasattr(bars, "select"):  # a polars DataFrame
+        return bars.select("open", "high", "low", "close").rows()
     return [(b.open, b.high, b.low, b.close) for b in bars]
 
 
