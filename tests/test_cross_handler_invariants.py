@@ -751,3 +751,28 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
     # rather than ``trade.order.permId`` because this lifecycle did
     # not include an ``openOrder`` callback to mutate the latter.
     assert all(f.execution.permId == trade.orderStatus.permId for f in trade.fills)
+
+
+def test_a_bag_fill_keeps_the_legs_of_its_order():
+    """A combo's execution contract has no legs; its fill takes the bag
+    of the order it fills, legs and all."""
+    ib = ibi.IB()
+    ib.wrapper.clientId = 0
+    bag = ibi.Bag(
+        symbol="SPY",
+        exchange="SMART",
+        currency="USD",
+        conId=28812380,
+        comboLegs=[ibi.ComboLeg(conId=1, ratio=1, action="BUY")],
+    )
+    order = ibi.Order(orderId=8, clientId=0, permId=88, action="BUY")
+    trade = ibi.Trade(bag, order, ibi.OrderStatus(orderId=8), [], [])
+    ib.wrapper.trades[(0, 8)] = trade
+    ib.wrapper.permId2Trade[88] = trade
+
+    legless = ibi.Contract(secType="BAG", symbol="SPY", conId=28812380)
+    execution = ibi.Execution(
+        execId="bag-fill", permId=88, clientId=0, orderId=8, shares=Decimal(1)
+    )
+    ib.wrapper.execDetails(reqId=-1, contract=legless, execution=execution)
+    assert ib.wrapper.fills["bag-fill"].contract is bag

@@ -1061,8 +1061,16 @@ class Wrapper:
             key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
             trade = self.trades.get(key)
 
-        # TODO: debug why spread contracts aren't fully detailed here. They have no legs in execDetails, but they do in orderStatus?
-        if trade and contract == trade.contract:
+        # A combo's execution contract has no legs (its order's has): the
+        # same bag is the trade's by its conId, as legs cannot tell.
+        if trade and (
+            contract == trade.contract
+            or (
+                contract.secType == "BAG"
+                and trade.contract.secType == "BAG"
+                and contract.conId == trade.contract.conId
+            )
+        ):
             contract = trade.contract
         else:
             contract = Contract.recreate(contract)
