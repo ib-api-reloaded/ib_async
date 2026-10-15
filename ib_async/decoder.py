@@ -70,7 +70,13 @@ from .objects import (
     TickAttribLast,
 )
 from .order import Order, OrderAllocation, OrderComboLeg, OrderCondition, OrderState
-from .util import UNSET_DOUBLE, UNSET_INTEGER, ZoneInfo, parseIBDatetime
+from .util import (
+    UNSET_DOUBLE,
+    UNSET_INTEGER,
+    ZoneInfo,
+    parseIBDatetime,
+    splitIBLastTradeDate,
+)
 from .wrapper import Wrapper
 
 # Per-type wire-string-to-typed-value converters. The empty-string-to-default
@@ -1366,7 +1372,7 @@ class Decoder:
                         IneligibilityReason(id_=rid, description=rdesc)
                     )
 
-        times = lastTimes.split("-" if "-" in lastTimes else None)
+        times = splitIBLastTradeDate(lastTimes)
 
         if len(times) > 0:
             c.lastTradeDateOrContractMonth = times[0]
@@ -1470,7 +1476,7 @@ class Decoder:
                 *fields,
             ) = fields
 
-        times = lastTimes.split("-" if "-" in lastTimes else None)
+        times = splitIBLastTradeDate(lastTimes)
 
         if len(times) > 0:
             cd.maturity = times[0]

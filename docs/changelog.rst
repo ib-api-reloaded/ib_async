@@ -221,6 +221,12 @@ are fixed in v3.0:
   UTC (``util.parseIBDatetime`` returns it UTC-aware). The gateway's
   configured time zone does not change this form. (:issue:`230`,
   :issue:`232`, thanks to @giorgi1324)
+* **Qualified contracts with a hyphenated time zone were rejected.** A
+  last trade date such as ``20250331 19:30:00 GB-Eire`` was split on the
+  zone's hyphen, so ``qualifyContracts`` wrote ``20250331 19:30:00 GB``
+  back to the contract and TWS refused the order (error 10330). Values
+  with whitespace now split on whitespace, on the binary and protobuf
+  paths (``util.splitIBLastTradeDate``). (:issue:`120`)
 * **``AccountValue.decimalValue``** returned ``None`` for every
   per-currency monetary value on TWS installs with TWS API 10.47's
   ``$LEDGER-`` prefix setting on — the default for new installs. The

@@ -35,7 +35,7 @@ from ..contract import (
     IneligibilityReason,
     TagValue,
 )
-from ..util import UNSET_DOUBLE, UNSET_INTEGER
+from ..util import UNSET_DOUBLE, UNSET_INTEGER, splitIBLastTradeDate
 from .safe import (
     format_proto_double,
     normalize_none_scalars,
@@ -517,7 +517,7 @@ def _setLastTradeDate(details: ContractDetails, isBond: bool) -> None:
     raw = contract.lastTradeDateOrContractMonth
     if not raw:
         return
-    parts = raw.split("-") if "-" in raw else raw.split()
+    parts = splitIBLastTradeDate(raw)
     if parts:
         if isBond:
             details.maturity = parts[0]

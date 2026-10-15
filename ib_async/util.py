@@ -985,6 +985,20 @@ def parseIBShortDatetimes(
     return out
 
 
+def splitIBLastTradeDate(value: str) -> list[str]:
+    """A contract's ``lastTradeDateOrContractMonth`` wire value as
+    ``[date, time, zone]``, as many as it has.
+
+    A whitespace-separated value (``20250331 19:30:00 GB-Eire``) splits on
+    whitespace only, since a zone name can contain ``-``; otherwise the
+    hyphenated form (``20260619-15:00:00``, optionally ``-zone``) splits on
+    ``-``.
+    """
+    if any(c.isspace() for c in value):
+        return value.split(None, 2)
+    return value.split("-", 2)
+
+
 def parseIBDatetime(s: str, *, year: int | None = None) -> dt.date | dt.datetime:
     """Parse string in IB date or datetime format to datetime.
 

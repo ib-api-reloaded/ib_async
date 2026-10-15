@@ -453,6 +453,50 @@ def test_create_contract_reads_last_trade_date():
     assert contract.lastTradeDate == "20260619-15:00:00"
 
 
+# Every lastTradeDateOrContractMonth wire form, with the date, time and zone
+# it splits into. A zone name can contain '-' (GB-Eire, Etc/GMT-5): a
+# whitespace-separated value is split on whitespace only.
+LAST_TRADE_DATE_FORMS = [
+    ("20250331 19:30:00 GB-Eire", "20250331", "19:30:00", "GB-Eire"),
+    ("20250331 19:30:00 Etc/GMT-5", "20250331", "19:30:00", "Etc/GMT-5"),
+    ("20250331 19:30:00 US/Eastern", "20250331", "19:30:00", "US/Eastern"),
+    ("20260619-15:00:00", "20260619", "15:00:00", None),
+    ("20300515-09:30:00-Asia/Tokyo", "20300515", "09:30:00", "Asia/Tokyo"),
+    ("202505", "202505", None, None),
+]
+
+
+@pytest.mark.parametrize(("wire", "date", "time", "zone"), LAST_TRADE_DATE_FORMS)
+def test_binary_contract_details_splits_every_last_trade_date_form(
+    wire, date, time, zone
+):
+    ib = ibi.IB()
+    ib.client._serverVersion = 182
+    ib.client.decoder.serverVersion = 182
+    seen: list = []
+    ib.wrapper.contractDetails = lambda reqId, cd: seen.append(cd)
+    ib.client.decoder.contractDetails(_binary_contract_details_fields(last_times=wire))
+    [cd] = seen
+    assert cd.contract.lastTradeDateOrContractMonth == date
+    assert cd.lastTradeTime == (time or "")
+    if zone:
+        assert cd.timeZoneId == zone
+
+
+@pytest.mark.parametrize(("wire", "date", "time", "zone"), LAST_TRADE_DATE_FORMS)
+def test_proto_contract_details_splits_every_last_trade_date_form(
+    wire, date, time, zone
+):
+    proto = ContractData_pb2.ContractData()
+    proto.contract.symbol = "COILK5"
+    proto.contract.secType = "FUT"
+    proto.contract.lastTradeDateOrContractMonth = wire
+    proto.contractDetails.marketName = "COIL"
+    details = createContractDetailsFromContractData(proto)
+    assert details.contract.lastTradeDateOrContractMonth == date
+    assert details.lastTradeTime == (time or "")
+
+
 def test_contract_details_splits_last_trade_date_for_non_bond():
     """ContractDetails wire packs date+time as a single string in
     ``contract.lastTradeDateOrContractMonth``. The binary path
@@ -981,6 +1025,7 @@ def _binary_contract_details_fields(
     *,
     secType: str = "STK",
     last_trade_date: str = "",
+    last_times: str = "20260619",
     fund_block: list[str] | None = None,
     ineligibility_count: int = 0,
     ineligibility_pairs: list[tuple[str, str]] | None = None,
@@ -994,7 +1039,7 @@ def _binary_contract_details_fields(
         "7",  # reqId
         "ESM6",  # symbol
         secType,
-        "20260619",  # lastTimes (lastTradeDateOrContractMonth)
+        last_times,  # lastTimes (lastTradeDateOrContractMonth)
     ]
     if not pre_182:
         head.append(last_trade_date)
