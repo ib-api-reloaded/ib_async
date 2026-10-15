@@ -46,8 +46,8 @@ _S = TypeVar("_S", bound="Subscription")
 class Subscription:
     """Lifecycle-aware base class for live IB data flows.
 
-    Subclasses fill in ``KIND`` (used by the registry to index by
-    ``(conId, kind)`` for market-data-style subscriptions), ``ticker``
+    Subclasses fill in ``KIND`` (used by the registry to index
+    market-data-style subscriptions by contract identity and kind), ``ticker``
     or another accumulator field, and the two protocol hooks
     ``_send_cancel`` and ``_set_done``.
 
@@ -280,8 +280,7 @@ class SubscriptionRegistry:
     # tick stream. Keyed by ``hash(contract)`` (which uses conId).
     _tickers: dict[int, Ticker] = field(default_factory=dict, init=False)
     # (identity, kind) -> Subscription, where identity is the
-    # contract's market-data identity (its conId, or a bag's synthetic
-    # comboLeg hash — see _market_data_identity) and kind is the
+    # contract's hash (see _market_data_identity) and kind is the
     # IB-level market-data type ("mktData", "Last", "AllLast",
     # "BidAsk", "MidPoint", "mktDepth").
     _by_market_data_key: dict[tuple[int, str], Subscription] = field(
@@ -600,8 +599,4 @@ class SubscriptionRegistry:
             entry (``hash()`` of such a contract also raises).
         """
 
-        # A bag hashes by its legs whatever its conId: IBKR reports one
-        # combo conId (such as 28812380) on many different spreads.
-        if contract.secType == "BAG" or contract.conId:
-            return hash(contract)
-        return None
+        return hash(contract) if contract.isHashable() else None
