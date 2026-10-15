@@ -56,6 +56,9 @@ Gateway server version 226). The full upgrade guide with examples lives at
   * ``IB.cancelHistoricalTicks`` (protobuf-only, server >= 215; settles awaiter)
   * ``IB.reqConfigAsync``, ``IB.updateConfigAsync`` (protobuf-only, server >= 219)
 
+* **``IB.exerciseOptions``** takes ``manualOrderTime``, ``customerAccount``
+  and ``professionalCustomer``, which the request already carried.
+  (:issue:`166`, thanks to @li-plus)
 * **``IB.reqPositionsMulti(account, modelCode)``** (and its async sibling)
   returns the positions of an account, advisor group or model, each with
   the new ``Position.modelCode``. A model's share of a position is not

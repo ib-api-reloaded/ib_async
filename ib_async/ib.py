@@ -2174,6 +2174,9 @@ class IB:
         exerciseQuantity: int,
         account: str,
         override: int,
+        manualOrderTime: str = "",
+        customerAccount: str = "",
+        professionalCustomer: bool = False,
     ):
         """
         Exercise an options contract.
@@ -2190,10 +2193,22 @@ class IB:
             override:
                 * 0 = no override
                 * 1 = override the system's natural action
+            manualOrderTime: The time the exercise was decided, for
+                regulatory reporting (``yyyyMMdd HH:mm:ss zone``).
+            customerAccount: The customer account, for advisors.
+            professionalCustomer: Whether the customer is a professional.
         """
         reqId = self.client.getReqId()
         self.client.exerciseOptions(
-            reqId, contract, exerciseAction, exerciseQuantity, account, override
+            reqId,
+            contract,
+            exerciseAction,
+            exerciseQuantity,
+            account,
+            override,
+            manualOrderTime=manualOrderTime,
+            customerAccount=customerAccount,
+            professionalCustomer=professionalCustomer,
         )
 
     def reqNewsProviders(self) -> list[NewsProvider]:

@@ -234,9 +234,7 @@ ib = IB()
 await ib.connectAsync("127.0.0.1", 7497, clientId=1)
 contract = Stock("TSLA", "SMART", "USD")
 await ib.qualifyContractsAsync(contract)
-bars = await ib.reqHistoricalDataAsync(
-    contract, "", "1 D", "1 hour", "TRADES", True
-)
+bars = await ib.reqHistoricalDataAsync(contract, "", "1 D", "1 hour", "TRADES", True)
 ```
 
 In Jupyter, `util.startLoop()` lets the synchronous API run inside the
