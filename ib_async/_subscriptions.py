@@ -252,6 +252,7 @@ class PnLSingleSub(Subscription):
 # --------------------------------------------------------------------------
 
 
+@dataclass(slots=True, eq=False)
 class SubscriptionRegistry:
     """Owns lifecycle and lookup for every live :class:`Subscription`.
 
@@ -266,38 +267,32 @@ class SubscriptionRegistry:
     its cancel. The reference is set at construction time.
     """
 
-    __slots__ = (
-        "_wrapper",
-        "_by_reqid",
-        "_ticker_by_reqid",
-        "_tickers",
-        "_by_market_data_key",
-        "_by_pnl_key",
-        "_by_pnl_single_key",
+    # The owning Wrapper, for a Subscription.close to find the IB client.
+    _wrapper: Wrapper | None = field(default=None, repr=False)
+    _by_reqid: dict[int, Subscription] = field(default_factory=dict, init=False)
+    # Hot-path view; equal value identity to ``MktDataSub.ticker`` /
+    # ``TickByTickSub.ticker`` / ``MktDepthSub.ticker`` for the same
+    # reqId. Tick handlers do one dict.get on this map.
+    _ticker_by_reqid: dict[int, Ticker] = field(default_factory=dict, init=False)
+    # Per-contract Ticker pool. The same Ticker is shared across all
+    # market-data shapes (mktData / tickByTick / mktDepth / snapshot)
+    # for a given contract so a single Ticker reflects every live
+    # tick stream. Keyed by ``hash(contract)`` (which uses conId).
+    _tickers: dict[int, Ticker] = field(default_factory=dict, init=False)
+    # (identity, kind) -> Subscription, where identity is the
+    # contract's market-data identity (its conId, or a bag's synthetic
+    # comboLeg hash — see _market_data_identity) and kind is the
+    # IB-level market-data type ("mktData", "Last", "AllLast",
+    # "BidAsk", "MidPoint", "mktDepth").
+    _by_market_data_key: dict[tuple[int, str], Subscription] = field(
+        default_factory=dict, init=False
     )
-
-    def __init__(self, wrapper: Wrapper | None = None) -> None:
-        self._wrapper: Wrapper | None = wrapper
-        self._by_reqid: dict[int, Subscription] = {}
-        # Hot-path view; equal value identity to ``MktDataSub.ticker`` /
-        # ``TickByTickSub.ticker`` / ``MktDepthSub.ticker`` for the same
-        # reqId. Tick handlers do one dict.get on this map.
-        self._ticker_by_reqid: dict[int, Ticker] = {}
-        # Per-contract Ticker pool. The same Ticker is shared across all
-        # market-data shapes (mktData / tickByTick / mktDepth / snapshot)
-        # for a given contract so a single Ticker reflects every live
-        # tick stream. Keyed by ``hash(contract)`` (which uses conId).
-        self._tickers: dict[int, Ticker] = {}
-        # (identity, kind) -> Subscription, where identity is the
-        # contract's market-data identity (its conId, or a bag's synthetic
-        # comboLeg hash — see _market_data_identity) and kind is the
-        # IB-level market-data type ("mktData", "Last", "AllLast",
-        # "BidAsk", "MidPoint", "mktDepth").
-        self._by_market_data_key: dict[tuple[int, str], Subscription] = {}
-        # (account, modelCode) -> PnLSub.
-        self._by_pnl_key: dict[tuple[str, str], PnLSub] = {}
-        # (account, modelCode, conId) -> PnLSingleSub.
-        self._by_pnl_single_key: dict[tuple[str, str, int], PnLSingleSub] = {}
+    # (account, modelCode) -> PnLSub.
+    _by_pnl_key: dict[tuple[str, str], PnLSub] = field(default_factory=dict, init=False)
+    # (account, modelCode, conId) -> PnLSingleSub.
+    _by_pnl_single_key: dict[tuple[str, str, int], PnLSingleSub] = field(
+        default_factory=dict, init=False
+    )
 
     # ---- registration ---------------------------------------------------
 

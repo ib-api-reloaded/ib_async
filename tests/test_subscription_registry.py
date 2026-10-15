@@ -361,3 +361,7 @@ def test_wrapper_reset_replaces_subscription_registry():
     ib.wrapper.reset()
     assert ib.wrapper.subscriptions is not first
     assert len(ib.wrapper.subscriptions) == 0
+
+
+def test_the_registry_repr_does_not_print_its_wrapper():
+    assert "Wrapper(" not in repr(ibi.IB().wrapper.subscriptions)
