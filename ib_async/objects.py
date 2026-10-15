@@ -493,7 +493,7 @@ class AccountValue:
         return safe_decimal(self.value)
 
 
-# Tick / bar / depth records — slotted frozen dataclasses. Numeric
+# Tick and depth records — slotted frozen dataclasses. Numeric
 # ``price`` / ``size`` fields are ``float``, as ``Ticker``'s are: these
 # tick records are stored verbatim onto ``ticker.ticks`` /
 # ``ticker.tickByTicks``, so the inner type tracks Ticker exactly, and
