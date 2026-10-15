@@ -86,7 +86,7 @@ class IBC:
 
     IbcLogLevel: ClassVar = logging.DEBUG
 
-    twsVersion: int | str = 0
+    twsVersion: int | str
     gateway: bool = False
     tradingMode: str = ""
     twsPath: str = ""
@@ -101,6 +101,10 @@ class IBC:
     on2fatimeout: str = ""
 
     def __post_init__(self):
+        if not self.twsVersion:
+            # IBC's script fails without it, saying so only in its output;
+            # refused here, it cannot be retried for good by a Watchdog
+            raise ValueError("IBC needs twsVersion, the TWS or Gateway major version")
         self._isWindows = sys.platform == "win32"
         if not self.ibcPath:
             self.ibcPath = "/opt/ibc" if not self._isWindows else "C:\\IBC"

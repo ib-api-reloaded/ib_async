@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from ib_async.ibcontroller import IBC
 
 
@@ -17,3 +19,11 @@ def test_macos_tws_version_keeps_its_period():
 
 def test_integer_tws_version():
     assert "1030" in IBC(twsVersion=1030)._command()
+
+
+def test_the_tws_version_is_required():
+    with pytest.raises(TypeError, match="twsVersion"):
+        IBC(gateway=True)  # type: ignore[call-arg]
+    for empty in (0, ""):
+        with pytest.raises(ValueError, match="twsVersion"):
+            IBC(twsVersion=empty)

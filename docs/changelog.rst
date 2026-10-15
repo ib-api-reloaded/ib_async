@@ -323,7 +323,9 @@ are fixed in v3.0:
   the deprecated ``exec_()``. (:issue:`134`, thanks to @Flippo24)
 * **``IBC(twsVersion=...)`` takes a string**, as macOS needs: ``"10.19"``,
   with the period, as in the macOS install folder (1019 on Windows and
-  Linux). It was typed and documented as an integer. (:issue:`57`)
+  Linux). It was typed and documented as an integer. An ``IBC`` without
+  it now raises ``ValueError`` when made, where IBC's start script failed
+  on it, saying so only in its output. (:issue:`57`)
 * **``TickerUpdateEvent.trades()`` left out RT Trade Volume** (tick 77)
   while it passed RT Volume (tick 48), so tick, volume and time bars built
   on it missed those trades. (:issue:`45`)
