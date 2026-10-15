@@ -86,6 +86,13 @@ Gateway server version 226). The full upgrade guide with examples lives at
   returns the positions of an account, advisor group or model, each with
   the new ``Position.modelCode``. A model's share of a position is not
   added to ``positions()``. (:issue:`41`, :issue:`25`, thanks to @paramkr2)
+* **``IB.reqOptionStrikes(underlying, *months)``** (and its async sibling)
+  returns the strikes each expiration of a stock's or future's options
+  actually lists, as ``OptionStrikes`` per expiration, trading class,
+  multiplier and underlying contract, where ``reqSecDefOptParams`` gives
+  every strike crossed with every expiration. The option chain example
+  notebook now walks through futures options with it. (:issue:`38`,
+  thanks to @ilan-pinto, @maqifrnswa and @westonplatter)
 * **Attached-order linkage on** ``Order``: new ``slOrderId`` /
   ``slOrderType`` / ``ptOrderId`` / ``ptOrderType`` fields preserve
   the stop-loss and profit-target ids of a bracket or OCO group

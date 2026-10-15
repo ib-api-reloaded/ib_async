@@ -6,7 +6,7 @@ app = marimo.App(width="medium")
 with app.setup:
     import marimo as mo
 
-    from ib_async import IB, Index, Option, util
+    from ib_async import IB, Future, FuturesOption, Index, Option, util
 
     # TWS paper trading listens on 7497, IB Gateway paper trading on 4002.
     HOST = "127.0.0.1"
@@ -199,6 +199,110 @@ def _():
     in `bidGreeks`, `askGreeks` and `lastGreeks`. For a streaming ticker
     (`ib.reqMktData`) the greeks are kept up to date with the market.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    # Futures options
+
+    Options on a future work differently:
+
+    * a future needs its exchange (CME for ES): IBKR does not look it up;
+    * the options expiring in a month come in several trading classes
+      (quarterly, weekly, end of month), and can be on more than one
+      futures month;
+    * `reqSecDefOptParams` returns each chain's expirations and strikes as
+      two separate lists, many of whose combinations do not exist.
+
+    `reqOptionStrikesAsync` asks contract details instead, and returns the
+    strikes each expiration actually lists. First, the front ES future, the
+    one expiring first:
+    """)
+    return
+
+
+@app.cell
+async def _(ib):
+    _details = await ib.reqContractDetailsAsync(Future("ES", exchange="CME"))
+    es = min(
+        (_d.contract for _d in _details if _d.contract),
+        key=lambda _c: _c.lastTradeDateOrContractMonth,
+    )
+    es
+    return (es,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    The strikes of the options expiring in the future's own month, one row
+    per expiration, trading class and underlying future:
+    """)
+    return
+
+
+@app.cell
+async def _(es, ib):
+    esStrikes = await ib.reqOptionStrikesAsync(es, es.lastTradeDateOrContractMonth[:6])
+    util.df(esStrikes)
+    return (esStrikes,)
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    Keep the quarterly options (trading class ES) on this future, the ones
+    whose `underlyingConId` is the future's `conId`, at the five strikes
+    nearest the future's price:
+    """)
+    return
+
+
+@app.cell
+async def _(es, esStrikes, ib):
+    ib.reqMarketDataType(4)  # delayed frozen, as for SPX above
+    [_ticker] = await ib.reqTickersAsync(es)
+    _price = _ticker.marketPrice() or _ticker.close
+    esChain = next(
+        _c
+        for _c in esStrikes
+        if _c.underlyingConId == es.conId and _c.tradingClass == "ES"
+    )
+    esNearest = sorted(esChain.strikes, key=lambda _s: abs(_s - _price))[:5]
+    esChain.expiration, sorted(esNearest)
+    return esChain, esNearest
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    Build those options with their trading class and exchange, and qualify
+    them. Without `tradingClass`, a lookup can match several contracts,
+    such as a quarterly and a weekly option expiring the same day:
+    `returnAll=True` returns those matches as a list in place of a single
+    contract, instead of only logging them, so they can be told apart.
+    """)
+    return
+
+
+@app.cell
+async def _(es, esChain, esNearest, ib):
+    _candidates = [
+        FuturesOption(
+            symbol="ES",
+            lastTradeDateOrContractMonth=esChain.expiration,
+            strike=_strike,
+            right=_right,
+            exchange=es.exchange,
+            tradingClass=esChain.tradingClass,
+        )
+        for _strike in sorted(esNearest)
+        for _right in ("P", "C")
+    ]
+    esOptions = await ib.qualifyContractsAsync(*_candidates, returnAll=True)
+    esOptions
     return
 
 

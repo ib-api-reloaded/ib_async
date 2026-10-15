@@ -724,6 +724,21 @@ class OptionChain:
 
 
 @dataclass(slots=True, frozen=True)
+class OptionStrikes:
+    """The strikes listed for one expiration of one trading class, from
+    :meth:`IB.reqOptionStrikes`. Unlike an :class:`OptionChain`, whose
+    strikes are those of all its expirations together, every strike here
+    exists for this expiration."""
+
+    expiration: str  # YYYYMMDD, as Contract.lastTradeDateOrContractMonth
+    tradingClass: str
+    multiplier: Decimal | None  # None when IBKR gives none
+    # The contract the options are on, such as one futures month.
+    underlyingConId: int
+    strikes: tuple[float, ...]
+
+
+@dataclass(slots=True, frozen=True)
 class Dividends:
     past12Months: float | None
     next12Months: float | None

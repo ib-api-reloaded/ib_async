@@ -6,8 +6,11 @@ import copy
 import datetime
 import logging
 import time
-from collections.abc import Awaitable, Callable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
+from decimal import Decimal
 from enum import Flag, auto
+from operator import attrgetter
 from typing import Any, Self
 
 from eventkit import Event
@@ -50,6 +53,7 @@ from ib_async.objects import (
     NewsTick,
     OptionChain,
     OptionComputation,
+    OptionStrikes,
     PnL,
     PnLSingle,
     PortfolioItem,
@@ -102,6 +106,50 @@ StartupFetchALL = (
     | StartupFetch.SUB_ACCOUNT_UPDATES
     | StartupFetch.EXECUTIONS
 )
+
+# The options of each underlying type reqOptionStrikes takes.
+_OPTION_SEC_TYPES: Mapping[str, str] = {"STK": "OPT", "FUT": "FOP"}
+
+
+@dataclass(slots=True, frozen=True)
+class _OptionListing:
+    """What reqOptionStrikes groups strikes by: one expiration of one
+    trading class and multiplier, on one underlying contract."""
+
+    expiration: str
+    tradingClass: str
+    multiplier: Decimal | None
+    underlyingConId: int
+
+
+def _optionSearches(underlying: Contract, months: Sequence[str]) -> list[Contract]:
+    """The contract details searches for the options on ``underlying``
+    expiring in ``months``: built new, with only what scopes the search
+    (symbol, month, exchange, currency). A conId, localSymbol or trading
+    class taken from the underlying would pin the search to the
+    underlying itself; without a month it lists every expiration there
+    is."""
+    secType = _OPTION_SEC_TYPES.get(underlying.secType)
+    if secType is None:
+        raise ValueError(
+            f"reqOptionStrikes takes a stock or future, not {underlying.secType!r}; "
+            "for index options use reqSecDefOptParams and filter by tradingClass"
+        )
+    if not months or not all(m.isdigit() and len(m) in (6, 8) for m in months):
+        raise ValueError(f"months are YYYYMM or YYYYMMDD, not {months!r}")
+    if secType == "FOP" and not underlying.exchange:
+        raise ValueError("a future's options need the future's exchange, such as CME")
+    exchange = underlying.exchange if secType == "FOP" else "SMART"
+    return [
+        Contract(
+            secType=secType,
+            symbol=underlying.symbol,
+            lastTradeDateOrContractMonth=month,
+            exchange=exchange,
+            currency=underlying.currency,
+        )
+        for month in dict.fromkeys(months)
+    ]
 
 
 class IB:
@@ -2169,6 +2217,45 @@ class IB:
             )
         )
 
+    def reqOptionStrikes(
+        self, underlying: Contract, *months: str
+    ) -> list[OptionStrikes]:
+        """
+        The strikes listed for each expiration of the options on a stock or
+        future, expiring in the given months.
+
+        :meth:`reqSecDefOptParams` returns each chain's expirations and
+        strikes as two lists, so its strikes are those of all its
+        expirations together, many of which a given expiration does not
+        list. This asks contract details for the options of each month
+        instead, and groups what exists: one :class:`OptionStrikes` per
+        expiration, trading class, multiplier and underlying contract,
+        sorted by expiration.
+
+        A stock's options are looked up on SMART; a future's on the
+        future's exchange, which the future must carry (such as
+        ``Future("ES", exchange="CME")``). A future's options expiring in a
+        month can be on several futures months: ``underlyingConId`` tells
+        them apart. ``underlying`` itself is not changed.
+
+        IBKR paces these lookups: a large one can hold the next for up to
+        a minute, so ask for the months needed rather than many.
+
+        This method is blocking.
+
+        Args:
+            underlying: The stock or future (secType STK or FUT).
+            months: Expiration months as YYYYMM, or single expiration days
+                as YYYYMMDD.
+
+        Example::
+
+            es = Future("ES", "202612", "CME")
+            for chain in ib.reqOptionStrikes(es, "202612"):
+                print(chain.expiration, chain.tradingClass, chain.strikes[:3])
+        """
+        return self._run(self.reqOptionStrikesAsync(underlying, *months))
+
     def exerciseOptions(
         self,
         contract: Contract,
@@ -3060,6 +3147,41 @@ class IB:
             reqId, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
         )
         return future
+
+    async def reqOptionStrikesAsync(
+        self, underlying: Contract, *months: str
+    ) -> list[OptionStrikes]:
+        """Async sibling of :meth:`reqOptionStrikes`."""
+        strikes: dict[_OptionListing, set[float]] = {}
+        # One month at a time: IBKR paces these lookups anyway.
+        for search in _optionSearches(underlying, months):
+            for details in await self.reqContractDetailsAsync(search):
+                option = details.contract
+                # A futures option search also finds CME event contracts
+                # (secType EC): binary payouts, not options.
+                if option is None or option.secType != search.secType:
+                    continue
+                multiplier = Decimal(option.multiplier) if option.multiplier else None
+                listing = _OptionListing(
+                    expiration=option.lastTradeDateOrContractMonth,
+                    tradingClass=option.tradingClass,
+                    multiplier=multiplier,
+                    underlyingConId=details.underConId,
+                )
+                strikes.setdefault(listing, set()).add(option.strike)
+        chains = [
+            OptionStrikes(
+                expiration=listing.expiration,
+                tradingClass=listing.tradingClass,
+                multiplier=listing.multiplier,
+                underlyingConId=listing.underlyingConId,
+                strikes=tuple(sorted(found)),
+            )
+            for listing, found in strikes.items()
+        ]
+        return sorted(
+            chains, key=attrgetter("expiration", "tradingClass", "underlyingConId")
+        )
 
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
         """Async sibling of :meth:`reqNewsProviders`."""
