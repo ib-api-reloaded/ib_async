@@ -18,17 +18,25 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
+class Member:
+    """One value of a family, and the name of its enum member."""
+
+    name: str
+    value: str
+
+
+@dataclass(frozen=True, slots=True)
 class Family:
     """The values of one kind, generated as a ``StrEnum``."""
 
     name: str
     doc: str
-    # (member name, value) pairs, in the order to document them.
-    members: tuple[tuple[str, str], ...]
+    # In the order to document them.
+    members: tuple[Member, ...]
 
     @property
     def values(self) -> tuple[str, ...]:
-        return tuple(value for _, value in self.members)
+        return tuple(member.value for member in self.members)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,10 +52,15 @@ class Parameter:
     # strings only.
     spellings: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        unknown = [v for v in self.values if v not in self.family.values]
+        if unknown:
+            raise ValueError(f"{self.name}: not in {self.family.name}: {unknown}")
 
-def _named(*values: str) -> tuple[tuple[str, str], ...]:
+
+def _named(*values: str) -> tuple[Member, ...]:
     """Members named as their values."""
-    return tuple((value, value) for value in values)
+    return tuple(Member(value, value) for value in values)
 
 
 WHAT_TO_SHOW = Family(
@@ -77,28 +90,28 @@ BAR_SIZE = Family(
     name="BarSize",
     doc="The time period of one historical bar.",
     members=(
-        ("SEC_1", "1 secs"),
-        ("SEC_5", "5 secs"),
-        ("SEC_10", "10 secs"),
-        ("SEC_15", "15 secs"),
-        ("SEC_30", "30 secs"),
-        ("MIN_1", "1 min"),
-        ("MIN_2", "2 mins"),
-        ("MIN_3", "3 mins"),
-        ("MIN_4", "4 mins"),
-        ("MIN_5", "5 mins"),
-        ("MIN_10", "10 mins"),
-        ("MIN_15", "15 mins"),
-        ("MIN_20", "20 mins"),
-        ("MIN_30", "30 mins"),
-        ("HOUR_1", "1 hour"),
-        ("HOUR_2", "2 hours"),
-        ("HOUR_3", "3 hours"),
-        ("HOUR_4", "4 hours"),
-        ("HOUR_8", "8 hours"),
-        ("DAY_1", "1 day"),
-        ("WEEK_1", "1 week"),
-        ("MONTH_1", "1 month"),
+        Member("SEC_1", "1 secs"),
+        Member("SEC_5", "5 secs"),
+        Member("SEC_10", "10 secs"),
+        Member("SEC_15", "15 secs"),
+        Member("SEC_30", "30 secs"),
+        Member("MIN_1", "1 min"),
+        Member("MIN_2", "2 mins"),
+        Member("MIN_3", "3 mins"),
+        Member("MIN_4", "4 mins"),
+        Member("MIN_5", "5 mins"),
+        Member("MIN_10", "10 mins"),
+        Member("MIN_15", "15 mins"),
+        Member("MIN_20", "20 mins"),
+        Member("MIN_30", "30 mins"),
+        Member("HOUR_1", "1 hour"),
+        Member("HOUR_2", "2 hours"),
+        Member("HOUR_3", "3 hours"),
+        Member("HOUR_4", "4 hours"),
+        Member("HOUR_8", "8 hours"),
+        Member("DAY_1", "1 day"),
+        Member("WEEK_1", "1 week"),
+        Member("MONTH_1", "1 month"),
     ),
 )
 
@@ -106,11 +119,11 @@ DURATION_UNIT = Family(
     name="DurationUnit",
     doc="The unit of a historical data request's durationStr, such as the D of '30 D'.",
     members=(
-        ("SECONDS", "S"),
-        ("DAYS", "D"),
-        ("WEEKS", "W"),
-        ("MONTHS", "M"),
-        ("YEARS", "Y"),
+        Member("SECONDS", "S"),
+        Member("DAYS", "D"),
+        Member("WEEKS", "W"),
+        Member("MONTHS", "M"),
+        Member("YEARS", "Y"),
     ),
 )
 
@@ -120,10 +133,11 @@ PARAMETERS: tuple[Parameter, ...] = (
     Parameter(
         name="HistoricalData",
         doc="The whatToShow of reqHistoricalData and reqHeadTimeStamp. "
-        "SCHEDULE is for reqHistoricalSchedule; AGGTRADES is for crypto; "
-        "the ``YIELD_*`` values are for bonds.",
+        "AGGTRADES is for crypto; the ``YIELD_*`` values are for bonds. "
+        "SCHEDULE, answered with a schedule rather than bars, is "
+        "reqHistoricalSchedule's.",
         family=WHAT_TO_SHOW,
-        values=WHAT_TO_SHOW.values,
+        values=tuple(v for v in WHAT_TO_SHOW.values if v != "SCHEDULE"),
     ),
     Parameter(
         name="RealTimeBarsData",

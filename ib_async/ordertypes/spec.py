@@ -6,32 +6,46 @@ field each one sets, the fields that define the type besides the code, the
 products and exchanges IBKR documents it for, and how stable it is. The
 catalog of specs is the single source of truth: the order type
 constructors and their documentation are generated from it, and
-:func:`build` enforces it when an order is constructed.
+:func:`build` enforces it when an order is constructed. Each spec checks
+the names it refers to when it is defined, so a mistake in the catalog
+fails on import, not on first use.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import enum
-from collections.abc import Mapping
+import math
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, ClassVar
+from types import MappingProxyType
+from typing import Any, ClassVar, Protocol
 
 from ..contract import TagValue
 from ..order import Order, OrderComboLeg
 
-# Every Order field's default: a field holding its default is unset.
-ORDER_DEFAULTS: Mapping[str, Any] = {
-    f.name: f.default_factory() if callable(f.default_factory) else f.default
-    for f in dataclasses.fields(Order)
-}
+# Every Order field's default, read-only: a field holding its default is
+# unset. A list default here is only compared against, never handed out.
+ORDER_DEFAULTS: Mapping[str, Any] = MappingProxyType(
+    {
+        f.name: f.default_factory() if callable(f.default_factory) else f.default
+        for f in dataclasses.fields(Order)
+    }
+)
 
 
 def isSet(field: str, value: Any) -> bool:
     """Whether ``value`` of Order ``field`` is set: anything but its
-    default (so a price of 0 is set; an empty list or string is not)."""
+    default. A price of 0 is set where the field's default is None; where
+    the default is 0 (a field 0 means "none" for), 0 is unset."""
     return value != ORDER_DEFAULTS[field]
+
+
+def _checkFields(owner: str, fields: Iterable[str]) -> None:
+    unknown = [f for f in fields if f not in ORDER_DEFAULTS]
+    if unknown:
+        raise ValueError(f"{owner}: Order has no field {', '.join(unknown)}")
 
 
 # How TWS reports back an order an IB algo works, whatever its type; IBKR
@@ -43,6 +57,22 @@ def baseOrderType(order: Order) -> str:
     """``order.orderType``, except "LMT" for an algo order TWS reported as
     "IBALGO", as an application modifying live algo orders sends it."""
     return "LMT" if order.orderType == ALGO_ORDER_TYPE else order.orderType
+
+
+@dataclass(frozen=True, slots=True)
+class FieldValue:
+    """An Order field and the value it holds."""
+
+    field: str
+    value: Any
+
+
+@dataclass(frozen=True, slots=True)
+class FieldIn:
+    """An Order field that must hold one of ``allowed``."""
+
+    field: str
+    allowed: tuple[Any, ...]
 
 
 class Stability(enum.StrEnum):
@@ -101,8 +131,7 @@ class Param:
             raise ValueError(f"{self.name}: a tag needs a tag kind, and only a tag")
         if self.allowed and not self.tag:
             raise ValueError(f"{self.name}: only tag values have allowed values")
-        if self.field not in ORDER_DEFAULTS:
-            raise ValueError(f"{self.name}: Order has no field {self.field}")
+        _checkFields(self.name, (self.field,))
 
     def encode(self, value: Any) -> str:
         """``value`` as the tag value IBKR expects, checked against the
@@ -112,6 +141,8 @@ class Param:
             isinstance(value, bool) and self.kind is not Kind.BOOL
         ):
             raise OrderTypeError(f"{self.name} must be {self.kind}, not {value!r}")
+        if isinstance(value, float | Decimal) and not math.isfinite(value):
+            raise OrderTypeError(f"{self.name} must be a finite number, not {value!r}")
         if self.allowed and value not in self.allowed:
             raise OrderTypeError(
                 f"{self.name} is one of {', '.join(self.allowed)}, not {value!r}"
@@ -120,12 +151,33 @@ class Param:
             return "1" if value else "0"
         return str(value)
 
+    def given(self, value: Any) -> bool:
+        """Whether ``value`` gives this parameter: not None, and for a
+        plain field not the field's unset default either, as
+        :func:`isSet` judges an order's fields."""
+        if value is None:
+            return False
+        return bool(self.tag) or self.kind is not Kind.FIELD or isSet(self.field, value)
+
 
 def required(owner: str, params: tuple[Param, ...], values: Mapping[str, Any]) -> None:
-    """Refuse a required parameter left None."""
-    missing = [p.name for p in params if p.required and values[p.name] is None]
+    """Refuse a required parameter not given."""
+    missing = [p.name for p in params if p.required and not p.given(values[p.name])]
     if missing:
         raise OrderTypeError(f"{owner} needs {', '.join(missing)}")
+
+
+def _legs(param: Param, prices: Any) -> list[OrderComboLeg]:
+    """One OrderComboLeg per price, each a finite number."""
+    if isinstance(prices, str) or not isinstance(prices, Iterable):
+        raise OrderTypeError(f"{param.name} is one price per leg, not {prices!r}")
+    legs = []
+    for index, price in enumerate(prices):
+        leg = OrderComboLeg(price=price)
+        if leg.price is None:
+            raise OrderTypeError(f"{param.name}[{index}] is not a price: {price!r}")
+        legs.append(leg)
+    return legs
 
 
 def paramFields(params: tuple[Param, ...], values: Mapping[str, Any]) -> dict[str, Any]:
@@ -139,7 +191,7 @@ def paramFields(params: tuple[Param, ...], values: Mapping[str, Any]) -> dict[st
         if p.tag:
             fields.setdefault(p.field, []).append(TagValue(p.tag, p.encode(value)))
         elif p.kind is Kind.LEG_PRICES:
-            fields[p.field] = [OrderComboLeg(price=Decimal(str(v))) for v in value]
+            fields[p.field] = _legs(p, value)
         else:
             fields[p.field] = value
     return fields
@@ -157,7 +209,7 @@ class OrderTypeSpec:
     params: tuple[Param, ...] = ()
     # Fields besides orderType whose values define the type, such as
     # tif="OPG" for Market on Open; they cannot be overridden.
-    defining: tuple[tuple[str, Any], ...] = ()
+    defining: tuple[FieldValue, ...] = ()
     # Groups of optional parameters of which exactly one must be given.
     exactlyOne: tuple[tuple[str, ...], ...] = ()
     usage: str = ""
@@ -167,12 +219,19 @@ class OrderTypeSpec:
     # Constructor arguments for the generated example, as source text.
     example: str = ""
 
+    def __post_init__(self) -> None:
+        _checkFields(self.className, [d.field for d in self.defining])
+        optional = {p.name for p in self.params if not p.required}
+        for group in self.exactlyOne:
+            if not set(group) <= optional:
+                raise ValueError(
+                    f"{self.className}: exactlyOne names {group}, not all optional "
+                    "parameters"
+                )
+
     @property
     def definingFields(self) -> Mapping[str, Any]:
-        return dict(self.defining)
-
-    def param(self, name: str) -> Param:
-        return next(p for p in self.params if p.name == name)
+        return {d.field: d.value for d in self.defining}
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,12 +246,15 @@ class AlgoSpec:
     # The order types (orderType codes) it can work.
     orderTypes: tuple[str, ...]
     params: tuple[Param, ...] = ()  # every one tag-valued, field algoParams
-    # Order fields that must hold one of these values for the algo, such as
-    # tif in ("", "DAY") for Adaptive.
-    conditions: tuple[tuple[str, tuple[Any, ...]], ...] = ()
+    # Order fields that must hold one of the allowed values for the algo,
+    # such as tif "" or "DAY" for Adaptive.
+    conditions: tuple[FieldIn, ...] = ()
     usage: str = ""
     products: tuple[str, ...] = ()
     example: str = ""
+
+    def __post_init__(self) -> None:
+        _checkFields(self.className, [c.field for c in self.conditions])
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,10 +271,27 @@ class OptionSpec:
     # An order type call using the option, as source text.
     example: str = ""
 
+    def __post_init__(self) -> None:
+        _checkFields(self.title, self.fields)
 
-# Algo, Routing and Adjustment modify an order type: each sets Order fields
-# the order type then cannot also be given, and may work only certain order
-# types (orderType codes; empty for any) or need certain field values.
+
+class Modifier(Protocol):
+    """What modifies an order type (an Algo, a Routing, an Adjustment): the
+    Order fields it sets, which the order type then cannot also be given;
+    the order types (orderType codes) it works, empty for any; and the
+    values it needs other fields to hold."""
+
+    @property
+    def title(self) -> str: ...
+
+    @property
+    def orderTypes(self) -> tuple[str, ...]: ...
+
+    @property
+    def conditions(self) -> tuple[FieldIn, ...]: ...
+
+    @property
+    def orderFields(self) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,7 +303,7 @@ class Routing:
 
     title: ClassVar[str] = "Combo routing"
     orderTypes: ClassVar[tuple[str, ...]] = ()
-    conditions: ClassVar[tuple[tuple[str, tuple[Any, ...]], ...]] = ()
+    conditions: ClassVar[tuple[FieldIn, ...]] = ()
 
     @property
     def orderFields(self) -> dict[str, Any]:
@@ -254,7 +333,7 @@ class Algo:
         return self.spec.orderTypes
 
     @property
-    def conditions(self) -> tuple[tuple[str, tuple[Any, ...]], ...]:
+    def conditions(self) -> tuple[FieldIn, ...]:
         return self.spec.conditions
 
     @property
@@ -273,14 +352,17 @@ class Adjustment:
     stop order (usually attached to a parent)."""
 
     title: str
-    fields: tuple[tuple[str, Any], ...]
+    fields: tuple[FieldValue, ...]
 
     orderTypes: ClassVar[tuple[str, ...]] = ADJUSTABLE
-    conditions: ClassVar[tuple[tuple[str, tuple[Any, ...]], ...]] = ()
+    conditions: ClassVar[tuple[FieldIn, ...]] = ()
+
+    def __post_init__(self) -> None:
+        _checkFields(self.title, [f.field for f in self.fields])
 
     @property
     def orderFields(self) -> dict[str, Any]:
-        return dict(self.fields)
+        return {f.field: f.value for f in self.fields}
 
 
 class OrderTypeError(ValueError):
@@ -314,11 +396,19 @@ def build(
 
     Refuses a missing required parameter, a broken exactly-one group,
     ``extra`` fields the order type or a modifier sets itself (its code,
-    its defining fields, its parameters' fields), and a modifier that does
-    not apply to the order type or whose conditions the order breaks."""
-    modifiers = [m for m in (algo, routing, adjust) if m is not None]
-    owned = _CORE | set(spec.definingFields) | {p.field for p in spec.params}
-    owned |= {field for m in modifiers for field in m.orderFields}
+    its defining fields, its parameters' fields), a modifier that sets one
+    of the order type's own fields, and a modifier that does not apply to
+    the order type or whose conditions the order breaks."""
+    modifiers: list[Modifier] = [m for m in (algo, routing, adjust) if m is not None]
+    typeFields = _CORE | set(spec.definingFields) | {p.field for p in spec.params}
+    for m in modifiers:
+        overlap = sorted(set(m.orderFields) & typeFields)
+        if overlap:
+            raise OrderTypeError(
+                f"{m.title} sets {', '.join(overlap)}, which {spec.className} "
+                "sets itself"
+            )
+    owned = typeFields | {field for m in modifiers for field in m.orderFields}
     clash = sorted(set(extra) & owned)
     if clash:
         raise OrderTypeError(
@@ -326,8 +416,9 @@ def build(
             "pass them as its parameters or use Order(...)"
         )
     required(spec.className, spec.params, values)
+    params = {p.name: p for p in spec.params}
     for group in spec.exactlyOne:
-        given = [name for name in group if values[name] is not None]
+        given = [name for name in group if params[name].given(values[name])]
         if len(given) != 1:
             raise OrderTypeError(
                 f"{spec.className} needs exactly one of {', '.join(group)}"
@@ -345,11 +436,12 @@ def build(
             raise OrderTypeError(
                 f"{m.title} works {', '.join(m.orderTypes)} orders, not {spec.title}"
             )
-        for field, allowed in m.conditions:
-            value = built.get(field, ORDER_DEFAULTS[field])
-            if value not in allowed:
+        for condition in m.conditions:
+            value = built.get(condition.field, ORDER_DEFAULTS[condition.field])
+            if value not in condition.allowed:
                 raise OrderTypeError(
-                    f"{m.title} needs {field} in {allowed!r}, not {value!r}"
+                    f"{m.title} needs {condition.field} in {condition.allowed!r}, "
+                    f"not {value!r}"
                 )
         built |= m.orderFields
     return built

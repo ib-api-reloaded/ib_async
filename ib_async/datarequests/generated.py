@@ -76,7 +76,7 @@ class DurationUnit(StrEnum):
     YEARS = "Y"
 
 
-#: The whatToShow of reqHistoricalData and reqHeadTimeStamp. SCHEDULE is for reqHistoricalSchedule; AGGTRADES is for crypto; the ``YIELD_*`` values are for bonds.
+#: The whatToShow of reqHistoricalData and reqHeadTimeStamp. AGGTRADES is for crypto; the ``YIELD_*`` values are for bonds. SCHEDULE, answered with a schedule rather than bars, is reqHistoricalSchedule's.
 HistoricalData = Literal[
     "TRADES",
     "MIDPOINT",
@@ -92,7 +92,6 @@ HistoricalData = Literal[
     "YIELD_ASK",
     "YIELD_BID_ASK",
     "YIELD_LAST",
-    "SCHEDULE",
     "AGGTRADES",
     WhatToShow.TRADES,
     WhatToShow.MIDPOINT,
@@ -108,7 +107,6 @@ HistoricalData = Literal[
     WhatToShow.YIELD_ASK,
     WhatToShow.YIELD_BID_ASK,
     WhatToShow.YIELD_LAST,
-    WhatToShow.SCHEDULE,
     WhatToShow.AGGTRADES,
 ]
 

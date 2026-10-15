@@ -20,12 +20,12 @@ from ib_async.datarequests import (
     WhatToShow,
     checkDuration,
 )
-from ib_async.datarequests.catalog import FAMILIES, PARAMETERS
+from ib_async.datarequests.catalog import FAMILIES, PARAMETERS, WHAT_TO_SHOW, Parameter
 
 
 def test_each_family_has_unique_names_and_values() -> None:
     for family in FAMILIES:
-        names = [name for name, _ in family.members]
+        names = [member.name for member in family.members]
         assert len(set(names)) == len(names), family.name
         assert len(set(family.values)) == len(family.values), family.name
 
@@ -53,13 +53,16 @@ def test_a_parameter_type_accepts_its_strings_and_its_enum_members() -> None:
 
 
 def test_every_value_is_both_a_string_and_a_member() -> None:
-    for alias, enum in (
-        (HistoricalData, WhatToShow),
-        (BarSizeSetting, BarSize),
+    for alias, enum, left in (
+        (HistoricalData, WhatToShow, {WhatToShow.SCHEDULE}),
+        (BarSizeSetting, BarSize, set()),
     ):
         args = get_args(alias)
         for member in enum:
-            assert member in args and member.value in args
+            if member in left:
+                assert member not in args and member.value not in args
+            else:
+                assert member in args and member.value in args
 
 
 def test_an_enum_member_is_its_value_on_the_wire() -> None:
@@ -105,3 +108,26 @@ def test_requests_refuse_a_bad_duration_before_sending() -> None:
     with pytest.raises(ValueError, match="durationStr"):
         asyncio.run(ib.reqHistoricalScheduleAsync(contract, "2 weeks"))
     assert len(ib.wrapper.requests) == 0
+
+
+def test_historical_data_refuses_schedule() -> None:
+    """A schedule is reqHistoricalSchedule's, not bars; nothing is sent."""
+    ib = ibi.IB()
+    contract = ibi.Stock("AAPL", "SMART", "USD")
+    with pytest.raises(ValueError, match="use reqHistoricalSchedule"):
+        asyncio.run(
+            ib.reqHistoricalDataAsync(
+                contract,
+                "",
+                "2 D",
+                "1 hour",
+                "SCHEDULE",
+                True,  # type: ignore[arg-type]
+            )
+        )
+    assert len(ib.wrapper.requests) == 0
+
+
+def test_a_parameter_takes_only_its_familys_values() -> None:
+    with pytest.raises(ValueError, match="not in WhatToShow"):
+        Parameter(name="X", doc="X", family=WHAT_TO_SHOW, values=("TRADES", "NOPE"))

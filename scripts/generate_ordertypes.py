@@ -229,7 +229,9 @@ def ComboRouting(
 
 
 def module() -> str:
-    names = sorted([*(s.className for s in (*CATALOG, *ALGOS)), "ComboRouting"])
+    names = sorted(
+        [*(s.className for s in CATALOG), *(a.className for a in ALGOS), "ComboRouting"]
+    )
     header = (
         '''"""The order type and algo constructors, generated from ``catalog.py``
 by ``scripts/generate_ordertypes.py``. Do not edit: change the catalog and
@@ -435,8 +437,8 @@ def algoDocs() -> list[str]:
                 ]
             lines.append("")
         facts = [f"Works: {', '.join(spec.orderTypes)} orders"]
-        for field, allowed in spec.conditions:
-            facts.append(f"Needs {condition(field, allowed)}")
+        for fieldIn in spec.conditions:
+            facts.append(f"Needs {condition(fieldIn.field, fieldIn.allowed)}")
         if spec.products:
             facts.append(f"Products: {', '.join(spec.products)}")
         facts.append(f"Stability: {spec.stability}")

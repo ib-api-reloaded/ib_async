@@ -219,11 +219,8 @@ class Order:
 
     def __repr__(self):
         attrs = dataclassDisplayFields(self)
-        if self.__class__ is not Order:
-            attrs.pop("orderType", None)
-
         if not self.softDollarTier:
-            attrs.pop("softDollarTier")
+            attrs.pop("softDollarTier", None)
 
         clsName = self.__class__.__qualname__
         return f"{clsName}({dataclassDisplayPairs(attrs)})"
@@ -631,6 +628,11 @@ _install_commission_alias(OrderStateNumeric)
 @dataclass
 class OrderComboLeg:
     price: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        # As for Order's Decimal fields: floats and strings coerce, and a
+        # value that is not a finite number is unset.
+        self.price = _toDecimal(self.price)
 
 
 # Trade is deliberately not @dataclass(slots=True). __post_init__ assigns

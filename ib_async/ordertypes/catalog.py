@@ -18,6 +18,8 @@ import dataclasses
 from ..order import COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID
 from .spec import (
     AlgoSpec,
+    FieldIn,
+    FieldValue,
     Kind,
     OptionSpec,
     OrderTypeSpec,
@@ -28,6 +30,13 @@ from .spec import (
 STABLE, VENUE, ADVANCED = Stability.STABLE, Stability.VENUE, Stability.ADVANCED
 
 LMT_PRICE = Param("lmtPrice", "lmtPrice", "The limit price.")
+OPTIONAL_LMT_PRICE = dataclasses.replace(LMT_PRICE, required=False)
+LMT_PRICE_OFFSET = Param(
+    "lmtPriceOffset",
+    "lmtPriceOffset",
+    "The limit price's distance from the stop price.",
+    required=False,
+)
 STOP_PRICE = Param("stopPrice", "auxPrice", "The price that triggers the order.")
 TOUCH_PRICE = Param(
     "touchPrice", "auxPrice", "The price that, once touched, triggers the order."
@@ -48,7 +57,7 @@ TRAILING_PERCENT = Param(
     "How far the stop trails, in percent.",
     required=False,
 )
-TRAILING = ("trailingAmount", "trailingPercent")
+TRAILING = (TRAILING_AMOUNT.name, TRAILING_PERCENT.name)
 TRAIL_STOP_PRICE = Param(
     "trailStopPrice", "trailStopPrice", "The trailing stop price.", required=False
 )
@@ -156,7 +165,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="MarketOnOpenOrder",
         title="Market on Open",
         orderType="MKT",
-        defining=(("tif", "OPG"),),
+        defining=(FieldValue("tif", "OPG"),),
         summary="A market order executed at the opening price.",
         usage="A market order with time in force OPG.",
         stability=STABLE,
@@ -168,7 +177,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="LimitOnOpenOrder",
         title="Limit on Open",
         orderType="LMT",
-        defining=(("tif", "OPG"),),
+        defining=(FieldValue("tif", "OPG"),),
         summary="A limit order executed at the open if the opening price is "
         "at or better than the limit.",
         usage="A limit order with time in force OPG.",
@@ -181,7 +190,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="AtAuctionOrder",
         title="At Auction",
         orderType="MTL",
-        defining=(("tif", "AUC"),),
+        defining=(FieldValue("tif", "AUC"),),
         summary="Entered in the pre-market auction to execute at the "
         "calculated opening price; if not filled on the open, it is "
         "resubmitted as a limit order at that price or the best bid or ask "
@@ -237,18 +246,13 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         usage="Give trailingAmount or trailingPercent, and lmtPrice or lmtPriceOffset.",
         stability=STABLE,
         params=(
-            Param(
-                "lmtPriceOffset",
-                "lmtPriceOffset",
-                "The limit price's distance from the stop price.",
-                required=False,
-            ),
-            Param("lmtPrice", "lmtPrice", "The limit price.", required=False),
+            LMT_PRICE_OFFSET,
+            OPTIONAL_LMT_PRICE,
             TRAILING_AMOUNT,
             TRAILING_PERCENT,
             TRAIL_STOP_PRICE,
         ),
-        exactlyOne=(TRAILING, ("lmtPriceOffset", "lmtPrice")),
+        exactlyOne=(TRAILING, (LMT_PRICE_OFFSET.name, OPTIONAL_LMT_PRICE.name)),
         products=("BOND", "CFD", "CASH", "FUT", "FOP", "OPT", "STK", "WAR"),
         example='"SELL", 100, lmtPriceOffset=0.10, trailingAmount=1.00',
     ),
@@ -413,7 +417,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="SweepToFillOrder",
         title="Sweep to Fill",
         orderType="LMT",
-        defining=(("sweepToFill", True),),
+        defining=(FieldValue("sweepToFill", True),),
         summary="A limit order that takes the best price and, at once, the "
         "next best prices, for speed of execution over price.",
         usage="SMART-routed only.",
@@ -427,7 +431,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="BlockOrder",
         title="Block",
         orderType="LMT",
-        defining=(("blockOrder", True),),
+        defining=(FieldValue("blockOrder", True),),
         summary="A limit order for 50 or more option contracts, executed as a "
         "block on ISE.",
         stability=VENUE,
@@ -506,7 +510,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="PegBestOrder",
         title="Pegged to Best (IBKR ATS)",
         orderType="PEG BEST",
-        defining=(("notHeld", True),),
+        defining=(FieldValue("notHeld", True),),
         summary="Pegged to the best price on IBKR's ATS.",
         stability=VENUE,
         params=(
@@ -528,8 +532,10 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         title="Pegged to Best up to Midpoint (IBKR ATS)",
         orderType="PEG BEST",
         defining=(
-            ("notHeld", True),
-            ("competeAgainstBestOffset", COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID),
+            FieldValue("notHeld", True),
+            FieldValue(
+                "competeAgainstBestOffset", COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID
+            ),
         ),
         summary="Pegged to the best price on IBKR's ATS, competing up to the "
         "midpoint, offset by midOffsetAtWhole or midOffsetAtHalf depending on "
@@ -550,7 +556,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="IbkrAtsLimitOrder",
         title="Limit (IBKR ATS)",
         orderType="LMT",
-        defining=(("notHeld", True),),
+        defining=(FieldValue("notHeld", True),),
         summary="A not-held limit order on IBKR's ATS.",
         usage="For non-marketable US stock orders; route the contract to IBKRATS.",
         stability=VENUE,
@@ -563,7 +569,7 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         className="PegMidOrder",
         title="Pegged to Midpoint (IBKR ATS)",
         orderType="PEG MID",
-        defining=(("notHeld", True),),
+        defining=(FieldValue("notHeld", True),),
         summary="Pegged to the midpoint on IBKR's own venue, offset by "
         "midOffsetAtWhole or midOffsetAtHalf depending on the spread.",
         usage="Route stocks to IBKRATS and options to IBUSOPT. Live trading "
@@ -774,7 +780,7 @@ ALGOS: tuple[AlgoSpec, ...] = (
                 allowed=("Urgent", "Normal", "Patient"),
             ),
         ),
-        conditions=(("tif", ("", "DAY")), ("outsideRth", (False,))),
+        conditions=(FieldIn("tif", ("", "DAY")), FieldIn("outsideRth", (False,))),
         example='priority="Urgent"',
     ),
     AlgoSpec(
@@ -804,7 +810,7 @@ ALGOS: tuple[AlgoSpec, ...] = (
             END,
             PAST_END,
         ),
-        conditions=(("tif", ("", "DAY")),),
+        conditions=(FieldIn("tif", ("", "DAY")),),
         example="displaySize=100",
     ),
     AlgoSpec(

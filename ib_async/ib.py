@@ -43,6 +43,7 @@ from ib_async.datarequests import (
     HistoricalData,
     HistoricalTicksData,
     RealTimeBarsData,
+    WhatToShow,
     checkDuration,
 )
 from ib_async.objects import (
@@ -2921,6 +2922,11 @@ class IB:
     ) -> BarDataList:
         """Async sibling of :meth:`reqHistoricalData`."""
         checkDuration(durationStr)
+        if whatToShow == WhatToShow.SCHEDULE:
+            raise ValueError(
+                "whatToShow SCHEDULE is answered with a schedule, not bars: "
+                "use reqHistoricalSchedule"
+            )
         chartOptions = _tagValueList(chartOptions)
         bars = BarDataList()
         bars.contract = contract
@@ -2997,7 +3003,7 @@ class IB:
             end,
             duration,
             barSizeSetting,
-            "SCHEDULE",
+            WhatToShow.SCHEDULE,
             useRTH,
             formatDate,
             False,

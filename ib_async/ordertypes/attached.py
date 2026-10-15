@@ -13,7 +13,7 @@ from typing import Any
 
 from ..order import Order
 from .generated import MarketOrder
-from .spec import Adjustment, OrderTypeError
+from .spec import Adjustment, FieldValue, OrderTypeError
 
 __all__ = ["AdjustToStop", "AdjustToStopLimit", "AdjustToTrail", "FxHedgeOrder"]
 
@@ -21,10 +21,26 @@ __all__ = ["AdjustToStop", "AdjustToStopLimit", "AdjustToTrail", "FxHedgeOrder"]
 TRAIL_BY_AMOUNT = 0
 TRAIL_BY_PERCENT = 100
 
+Price = Decimal | float | str
 
-def AdjustToStop(
-    triggerPrice: Decimal | float | str, stopPrice: Decimal | float | str
+
+def _adjustment(
+    title: str,
+    adjustedOrderType: str,
+    prices: dict[str, Price | None],
+    *fields: FieldValue,
 ) -> Adjustment:
+    """An adjustment to ``adjustedOrderType``: ``prices`` (by parameter name,
+    in the order of the Order fields they set) must all be given."""
+    missing = [name for name, price in prices.items() if price is None]
+    if missing:
+        raise OrderTypeError(f"{title} needs {', '.join(missing)}")
+    return Adjustment(
+        title, (FieldValue("adjustedOrderType", adjustedOrderType), *fields)
+    )
+
+
+def AdjustToStop(triggerPrice: Price, stopPrice: Price) -> Adjustment:
     """Once the price penetrates ``triggerPrice``, become a stop at
     ``stopPrice`` (to move a stop to break-even, say).
 
@@ -33,20 +49,17 @@ def AdjustToStop(
         StopOrder("SELL", 100, 45.00, parentId=parent.orderId,
                   adjust=AdjustToStop(triggerPrice=55.00, stopPrice=50.00))
     """
-    return Adjustment(
+    return _adjustment(
         "Adjust to stop",
-        (
-            ("adjustedOrderType", "STP"),
-            ("triggerPrice", triggerPrice),
-            ("adjustedStopPrice", stopPrice),
-        ),
+        "STP",
+        {"triggerPrice": triggerPrice, "stopPrice": stopPrice},
+        FieldValue("triggerPrice", triggerPrice),
+        FieldValue("adjustedStopPrice", stopPrice),
     )
 
 
 def AdjustToStopLimit(
-    triggerPrice: Decimal | float | str,
-    stopPrice: Decimal | float | str,
-    limitPrice: Decimal | float | str,
+    triggerPrice: Price, stopPrice: Price, limitPrice: Price
 ) -> Adjustment:
     """Once the price penetrates ``triggerPrice``, become a stop limit at
     ``stopPrice`` with limit price ``limitPrice``.
@@ -56,23 +69,26 @@ def AdjustToStopLimit(
         StopOrder("SELL", 100, 45.00, parentId=parent.orderId,
                   adjust=AdjustToStopLimit(55.00, 50.00, 49.50))
     """
-    return Adjustment(
+    return _adjustment(
         "Adjust to stop limit",
-        (
-            ("adjustedOrderType", "STP LMT"),
-            ("triggerPrice", triggerPrice),
-            ("adjustedStopPrice", stopPrice),
-            ("adjustedStopLimitPrice", limitPrice),
-        ),
+        "STP LMT",
+        {
+            "triggerPrice": triggerPrice,
+            "stopPrice": stopPrice,
+            "limitPrice": limitPrice,
+        },
+        FieldValue("triggerPrice", triggerPrice),
+        FieldValue("adjustedStopPrice", stopPrice),
+        FieldValue("adjustedStopLimitPrice", limitPrice),
     )
 
 
 def AdjustToTrail(
-    triggerPrice: Decimal | float | str,
-    stopPrice: Decimal | float | str,
+    triggerPrice: Price,
+    stopPrice: Price,
     *,
-    trailingAmount: Decimal | float | str | None = None,
-    trailingPercent: Decimal | float | str | None = None,
+    trailingAmount: Price | None = None,
+    trailingPercent: Price | None = None,
 ) -> Adjustment:
     """Once the price penetrates ``triggerPrice``, become a trailing stop
     with stop price ``stopPrice``, trailing by exactly one of
@@ -88,19 +104,23 @@ def AdjustToTrail(
             "AdjustToTrail needs exactly one of trailingAmount, trailingPercent"
         )
     byAmount = trailingAmount is not None
-    return Adjustment(
+    return _adjustment(
         "Adjust to trailing stop",
-        (
-            ("adjustedOrderType", "TRAIL"),
-            ("triggerPrice", triggerPrice),
-            ("adjustedStopPrice", stopPrice),
-            ("adjustedTrailingAmount", trailingAmount if byAmount else trailingPercent),
-            (
-                "adjustableTrailingUnit",
-                TRAIL_BY_AMOUNT if byAmount else TRAIL_BY_PERCENT,
-            ),
+        "TRAIL",
+        {"triggerPrice": triggerPrice, "stopPrice": stopPrice},
+        FieldValue("triggerPrice", triggerPrice),
+        FieldValue("adjustedStopPrice", stopPrice),
+        FieldValue(
+            "adjustedTrailingAmount", trailingAmount if byAmount else trailingPercent
+        ),
+        FieldValue(
+            "adjustableTrailingUnit", TRAIL_BY_AMOUNT if byAmount else TRAIL_BY_PERCENT
         ),
     )
+
+
+# The fields an FX hedge sets itself.
+_FX_HEDGE_FIELDS = frozenset({"parentId", "hedgeType"})
 
 
 def FxHedgeOrder(parent: Order, action: str, **kwargs: Any) -> Order:
@@ -119,4 +139,7 @@ def FxHedgeOrder(parent: Order, action: str, **kwargs: Any) -> Order:
     """
     if not parent.orderId:
         raise OrderTypeError("FxHedgeOrder needs the parent's orderId set")
+    clash = sorted(_FX_HEDGE_FIELDS & set(kwargs))
+    if clash:
+        raise OrderTypeError(f"FxHedgeOrder sets {', '.join(clash)} itself")
     return MarketOrder(action, 0, parentId=parent.orderId, hedgeType="F", **kwargs)

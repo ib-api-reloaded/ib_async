@@ -10,6 +10,7 @@ the change.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 from typing import Any
 
@@ -56,7 +57,10 @@ def modifiedOrder(
         ib.placeOrder(trade.contract, modifiedOrder(trade.order, lmtPrice=50.10))
     """
     updated = dataclasses.replace(
-        order, **{"orderType": baseOrderType(order), **changes}
+        # A deep copy: the live order's lists (algoParams, conditions, ...)
+        # must not change with the copy's.
+        copy.deepcopy(order),
+        **{"orderType": baseOrderType(order), **changes},
     )
     if "VOL" not in updated.orderType:
         updated.volatility = None

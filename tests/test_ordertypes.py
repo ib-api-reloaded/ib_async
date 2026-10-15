@@ -27,6 +27,17 @@ from ib_async.ordertypes import (
     checkOrder,
     specOf,
 )
+from ib_async.ordertypes.spec import (
+    ORDER_DEFAULTS,
+    Adjustment,
+    AlgoSpec,
+    FieldIn,
+    FieldValue,
+    Kind,
+    OrderTypeSpec,
+    Param,
+    Stability,
+)
 
 SPECS = list(CATALOG)
 
@@ -41,7 +52,7 @@ def test_example_builds_the_order_type(spec):
     order = example(spec)
     assert type(order) is Order
     assert order.orderType == spec.orderType
-    for field, value in spec.defining:
+    for field, value in spec.definingFields.items():
         assert getattr(order, field) == value
     for param in spec.params:
         if param.required:
@@ -561,13 +572,13 @@ def test_the_catalog_refers_only_to_what_exists():
     assert len(names) == len(set(names)), "a constructor name is used twice"
     for spec in CATALOG:
         assert spec.orderType in codes, spec.className
-        assert {f for f, _ in spec.defining} <= set(fields), spec.className
+        assert {d.field for d in spec.defining} <= set(fields), spec.className
         optional = {p.name for p in spec.params if not p.required}
         for group in spec.exactlyOne:
             assert set(group) <= optional, spec.className
     for algo in ordertypes.ALGOS:
         assert set(algo.orderTypes) <= set(codes), algo.className
-        assert {f for f, _ in algo.conditions} <= set(fields), algo.className
+        assert {c.field for c in algo.conditions} <= set(fields), algo.className
         assert all(p.field == "algoParams" for p in algo.params), algo.className
     assert set(ordertypes.spec.ADJUSTABLE) <= set(codes)
     assert set(ordertypes.SERVER_FILLED) <= set(fields)
@@ -604,3 +615,110 @@ def test_check_order_knows_the_midprice_spelling_contract_details_use():
         contract=Stock("SPY", "SMART", "USD"), orderTypes="LMT,MIDPX"
     )
     assert checkOrder(stock, ib_async.MidpriceOrder("BUY", 1, 500)) == []
+
+
+def test_leg_prices_are_finite_decimals_one_per_leg():
+    order = ib_async.ComboLegPricesOrder("BUY", 1, [2.5, "1.2", Decimal(3)])
+    assert [leg.price for leg in order.orderComboLegs] == [
+        Decimal("2.5"),
+        Decimal("1.2"),
+        Decimal(3),
+    ]
+    with pytest.raises(OrderTypeError, match="one price per leg"):
+        ib_async.ComboLegPricesOrder("BUY", 1, "2.5")
+    with pytest.raises(OrderTypeError, match=r"legPrices\[1\] is not a price"):
+        ib_async.ComboLegPricesOrder("BUY", 1, [2.5, None])
+    with pytest.raises(OrderTypeError, match=r"legPrices\[0\] is not a price"):
+        ib_async.ComboLegPricesOrder("BUY", 1, [math.nan])
+
+
+def test_a_float_tag_value_is_a_finite_number():
+    param = Param("x", "algoParams", "A float.", tag="x", kind=Kind.FLOAT)
+    assert param.encode(1.5) == "1.5"
+    for value in (math.nan, math.inf, Decimal("Infinity")):
+        with pytest.raises(OrderTypeError, match="finite"):
+            param.encode(value)
+
+
+def test_a_field_at_its_unset_default_is_not_given():
+    tif = Param("tif", "tif", "The time in force.")
+    assert not tif.given(None)
+    assert not tif.given("")
+    assert tif.given("DAY")
+    # 0 is a price where the field's unset value is None
+    assert Param("lmtPrice", "lmtPrice", "A price.").given(0)
+
+
+def test_a_modifier_cannot_set_the_order_types_own_fields():
+    stomp = Adjustment("Stomp", (FieldValue("auxPrice", Decimal(1)),))
+    with pytest.raises(OrderTypeError, match="Stomp sets auxPrice, which StopOrder"):
+        ib_async.StopOrder("SELL", 100, 45, adjust=stomp)
+
+
+def test_adjustments_need_their_prices():
+    with pytest.raises(OrderTypeError, match="needs triggerPrice"):
+        ordertypes.AdjustToStop(None, 50)  # type: ignore[arg-type]
+    with pytest.raises(OrderTypeError, match="needs limitPrice"):
+        ordertypes.AdjustToStopLimit(55, 50, None)  # type: ignore[arg-type]
+
+
+def test_an_fx_hedge_sets_its_parent_and_hedge_type_itself():
+    parent = LimitOrder("BUY", 100, 50.00, orderId=7, transmit=False)
+    hedge = ordertypes.FxHedgeOrder(parent, "BUY")
+    assert (hedge.parentId, hedge.hedgeType) == (7, "F")
+    with pytest.raises(OrderTypeError, match="sets hedgeType itself"):
+        ordertypes.FxHedgeOrder(parent, "BUY", hedgeType="D")
+
+
+def test_check_order_checks_a_type_missing_a_required_value():
+    # No priceCap: not quite a MidpriceOrder, still a midprice order.
+    order = Order(orderType="MIDPRICE", action="BUY", totalQuantity=Decimal(1))
+    assert specOf(order) is None
+    problems = checkOrder(Future("ES", exchange="CME"), order)
+    assert any("documented for STK" in p for p in problems), problems
+
+
+def test_a_catalog_mistake_fails_when_it_is_defined():
+    with pytest.raises(ValueError, match="no field nope"):
+        OrderTypeSpec(
+            "X", "X", "X", "X", Stability.STABLE, defining=(FieldValue("nope", 1),)
+        )
+    with pytest.raises(ValueError, match="not all optional"):
+        OrderTypeSpec(
+            "X",
+            "X",
+            "X",
+            "X",
+            Stability.STABLE,
+            params=(Param("lmtPrice", "lmtPrice", "A price."),),
+            exactlyOne=(("lmtPrice",),),
+        )
+    with pytest.raises(ValueError, match="no field nope"):
+        AlgoSpec(
+            "X",
+            "X",
+            "X",
+            "X",
+            Stability.STABLE,
+            ("LMT",),
+            conditions=(FieldIn("nope", ()),),
+        )
+
+
+def test_order_defaults_are_read_only():
+    with pytest.raises(TypeError):
+        ORDER_DEFAULTS["lmtPrice"] = 1  # type: ignore[index]
+
+
+def test_modified_order_shares_no_lists_with_the_live_order():
+    live = readBack(orderType="LMT", algoParams=[TagValue("a", "1")])
+    order = ordertypes.modifiedOrder(live)
+    order.algoParams.append(TagValue("b", "2"))
+    assert live.algoParams == [TagValue("a", "1")]
+
+
+def test_a_subclass_of_order_shows_its_order_type():
+    class Mine(Order):
+        pass
+
+    assert "orderType='LMT'" in repr(Mine(orderType="LMT"))

@@ -25,17 +25,15 @@ MODULE = generating.ROOT / "ib_async" / "datarequests" / "generated.py"
 
 
 def enumSource(family: Family) -> str:
-    members = "".join(f"    {name} = {value!r}\n" for name, value in family.members)
+    members = "".join(f"    {m.name} = {m.value!r}\n" for m in family.members)
     return f'\n\nclass {family.name}(StrEnum):\n    """{family.doc}"""\n\n{members}'
 
 
 def aliasSource(parameter: Parameter) -> str:
     """The parameter's values as strings, its other spellings, then the
     same values as enum members."""
-    names = {value: name for name, value in parameter.family.members}
-    unknown = [v for v in parameter.values if v not in names]
-    if unknown:
-        raise SystemExit(f"{parameter.name}: not in {parameter.family.name}: {unknown}")
+    # Parameter checks its values are its family's when it is defined.
+    names = {m.value: m.name for m in parameter.family.members}
     strings = [repr(v) for v in (*parameter.values, *parameter.spellings)]
     members = [f"{parameter.family.name}.{names[v]}" for v in parameter.values]
     return (

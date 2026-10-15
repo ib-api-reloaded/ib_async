@@ -57,13 +57,11 @@ if TYPE_CHECKING:
 def specOf(order: Order) -> OrderTypeSpec | None:
     """The catalog's order type for ``order``: the most specific one whose
     code, defining fields and required parameters match; None for an order
-    type outside the catalog."""
+    type outside the catalog, or one without a required parameter set."""
     matches = [
         spec
-        for spec in CATALOG
-        if spec.orderType == baseOrderType(order)
-        and all(getattr(order, f) == v for f, v in spec.defining)
-        and all(
+        for spec in _sameKind(order)
+        if all(
             isSet(p.field, getattr(order, p.field)) for p in spec.params if p.required
         )
     ]
@@ -73,6 +71,17 @@ def specOf(order: Order) -> OrderTypeSpec | None:
         matches,
         key=lambda s: (len(s.defining), sum(p.required for p in s.params)),
     )
+
+
+def _sameKind(order: Order) -> list[OrderTypeSpec]:
+    """The order types whose code and defining fields ``order`` has,
+    whatever its parameters."""
+    return [
+        spec
+        for spec in CATALOG
+        if spec.orderType == baseOrderType(order)
+        and all(getattr(order, d.field) == d.value for d in spec.defining)
+    ]
 
 
 def algoOf(order: Order) -> AlgoSpec | None:
@@ -124,7 +133,11 @@ def _documented(contract: Contract, order: Order) -> list[str]:
         problems.append(
             f"{algo.title} is documented for {', '.join(algo.products)}, not {product}"
         )
-    spec = specOf(order)
+    # An order missing a parameter its type requires is still checked as
+    # the least specific type of its code (TWS will say what is missing).
+    spec = specOf(order) or min(
+        _sameKind(order), key=lambda s: len(s.defining), default=None
+    )
     if spec is None:
         return problems
     if spec.products and product and product not in spec.products:
