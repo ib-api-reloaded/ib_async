@@ -183,6 +183,11 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``PnLSingle``. ``None`` is the unset sentinel —
   ``Decimal('NaN')`` is never used (it is silently truthy in Python
   and corrupted downstream comparisons).
+* **``RealTimeBar`` is frozen, and its ``open_`` is ``open``**, as on
+  ``BarData``: the bars of ``reqRealTimeBars`` and of the bar operators
+  cannot be changed once handed out, and code reading or assigning
+  ``bar.open_`` needs ``bar.open`` (assigning needs
+  ``dataclasses.replace``).
 * **``commission`` → ``commissionAndFees``** on ``CommissionReport``
   and ``OrderState``. Legacy ``commission`` attribute and
   constructor keyword keep working with ``DeprecationWarning`` until
