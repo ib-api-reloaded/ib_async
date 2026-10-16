@@ -14,6 +14,7 @@ and send-side parity fixes.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import math
 import struct
 from collections import OrderedDict
@@ -36,7 +37,7 @@ from ib_async.objects import (
     AccountValue,
     OptionComputation,
 )
-from ib_async.order import Order, OrderState, _toDecimal
+from ib_async.order import Order, OrderState, OrderStateNumeric, _toDecimal
 from ib_async.wrapper import _MAX_PENDING_COMMISSION_REPORTS
 
 # ---------------------------------------------------------------------------
@@ -1126,28 +1127,30 @@ def test_commission_report_legacy_write_emits_deprecation_warning():
     assert report.commissionAndFees == Decimal("2.50")
 
 
-def test_commission_report_legacy_construction_emits_deprecation_warning():
-    """``CommissionReport(commission=...)`` keyword arg keeps working
-    for v2.x callers but emits ``DeprecationWarning`` and aliases to
-    ``commissionAndFees``.
-    """
-    with pytest.warns(DeprecationWarning, match="commissionAndFees"):
-        report = ibi.CommissionReport(execId="x", commission=Decimal("3.75"))
-    assert report.commissionAndFees == Decimal("3.75")
-    assert report.execId == "x"
+@pytest.mark.parametrize("cls", [ibi.CommissionReport, OrderState])
+def test_commission_is_no_constructor_keyword(cls):
+    """The constructor takes ``commissionAndFees`` alone: ``commission``
+    is not a field, so ``fields()`` and ``dataclasses.replace`` never see
+    it (or its warning)."""
+    with pytest.raises(TypeError, match="commission"):
+        cls(commission=Decimal("3.75"))
+    assert "commission" not in {f.name for f in dataclasses.fields(cls)}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        changed = dataclasses.replace(cls(), commissionAndFees=Decimal(1))
+        OrderState(commissionAndFees=Decimal(2)).numeric()
+    assert changed.commissionAndFees == Decimal(1)
 
 
-def test_order_state_commission_alias_round_trips():
-    """``OrderState`` has the same deprecation alias; verify
-    construction, read, and write all flow through to ``commissionAndFees``.
-    """
-
-    with pytest.warns(DeprecationWarning):
-        state = OrderState(commission=Decimal("5.00"))
-    assert state.commissionAndFees == Decimal("5.00")
-    with pytest.warns(DeprecationWarning):
+@pytest.mark.parametrize("cls", [OrderState, OrderStateNumeric])
+def test_order_state_commission_alias_round_trips(cls):
+    """``OrderState`` (and its numeric helper type) has the same
+    deprecation alias, naming its own class; read and write flow through
+    to ``commissionAndFees``."""
+    state = cls(commissionAndFees=Decimal("5.00"))
+    with pytest.warns(DeprecationWarning, match=f"^{cls.__name__}.commission"):
         assert state.commission == Decimal("5.00")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(DeprecationWarning, match=f"^{cls.__name__}.commission"):
         state.commission = Decimal("6.00")
     assert state.commissionAndFees == Decimal("6.00")
 

@@ -11,7 +11,7 @@ from typing import ClassVar, NamedTuple
 from eventkit import Event
 
 from .contract import Contract, TagValue
-from .objects import Fill, SoftDollarTier, TradeLogEntry, _install_commission_alias
+from .objects import Fill, SoftDollarTier, TradeLogEntry, _CommissionAlias
 from .util import (
     UNSET_DOUBLE,
     dataclassDisplayFields,
@@ -489,8 +489,8 @@ class OrderState:
     # Monetary fields are ``Decimal | None`` end-to-end so user code
     # treats unset as falsy without the ``Decimal('NaN')`` truthy trap.
     # ``commissionAndFees`` is the IBKR-aligned canonical name in v3.0+;
-    # ``commission`` continues to work via the deprecation alias installed
-    # below (removal target: v4.0).
+    # ``commission`` (below the fields) is its deprecated v2.x name, until
+    # v4.0.
     commissionAndFees: Decimal | None = None
     minCommission: Decimal | None = None
     maxCommission: Decimal | None = None
@@ -508,6 +508,8 @@ class OrderState:
     # 0 / "" for every answered preview and every live order state.
     whatIfErrorCode: int = 0
     whatIfErrorString: str = ""
+
+    commission = _CommissionAlias()
 
     @property
     def whatIfRefused(self) -> bool:
@@ -614,15 +616,6 @@ class OrderStateNumeric(OrderState):
     commissionAndFees: float | None = None  # type: ignore[assignment]
     minCommission: float | None = None  # type: ignore[assignment]
     maxCommission: float | None = None  # type: ignore[assignment]
-
-
-# Install legacy ``commission`` deprecation alias on both ``OrderState``
-# and ``OrderStateNumeric``. v2.x callers that read or set
-# ``state.commission`` continue to work but emit ``DeprecationWarning``;
-# the alias is slated for removal in v4.0. The same helper is applied to
-# ``CommissionReport`` in ``objects.py``.
-_install_commission_alias(OrderState)
-_install_commission_alias(OrderStateNumeric)
 
 
 @dataclass

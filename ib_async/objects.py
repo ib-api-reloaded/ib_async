@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import functools
 import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
 from decimal import Decimal
-from typing import Any
+from typing import Any, overload
 
 from eventkit import Event
 
@@ -98,67 +97,60 @@ class Execution:
     __str__ = dataclassRepr
 
 
+class _CommissionAlias:
+    """``commission``, the v2.x name of ``commissionAndFees``: reading or
+    setting it warns (``DeprecationWarning``) and reads or sets
+    ``commissionAndFees``. Declared in a class body, unannotated, so it is
+    not a dataclass field: the constructor and ``dataclasses.replace`` take
+    ``commissionAndFees`` alone. Removal target: v4.0."""
+
+    @overload
+    def __get__(self, obj: None, objtype: type | None = None) -> _CommissionAlias: ...
+
+    @overload
+    def __get__(self, obj: Any, objtype: type | None = None) -> Decimal | None: ...
+
+    def __get__(
+        self, obj: Any, objtype: type | None = None
+    ) -> _CommissionAlias | Decimal | None:
+        if obj is None:
+            return self
+        self._warn(obj)
+        return obj.commissionAndFees
+
+    def __set__(self, obj: Any, value: Decimal | None) -> None:
+        self._warn(obj)
+        obj.commissionAndFees = value
+
+    @staticmethod
+    def _warn(obj: object) -> None:
+        warnings.warn(
+            f"{type(obj).__name__}.commission is deprecated; use "
+            "commissionAndFees instead. It will be removed in v4.0.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+
 @dataclass
 class CommissionReport:
     execId: str = ""
     # IBKR renamed ``commission`` → ``commissionAndFees``
     # to match the wire field name (the combined number IBKR returns
     # includes exchange + regulatory fees in addition to the broker commission).
-    # ``commissionAndFees`` is the canonical name in v3.0+. The legacy
-    # ``commission`` attribute and constructor kwarg remain available via the
-    # deprecation alias installed below; both emit ``DeprecationWarning`` and
-    # are slated for removal in v4.0.
+    # ``commissionAndFees`` is the canonical name in v3.0+; ``commission``
+    # (below the fields) is its deprecated v2.x name, until v4.0.
     commissionAndFees: Decimal | None = None
     currency: str = ""
     realizedPNL: Decimal | None = None
     yield_: Decimal | None = None
     yieldRedemptionDate: int = 0
 
+    commission = _CommissionAlias()
+
     # Same display policy as ``Execution`` above.
     __repr__ = dataclassRepr
     __str__ = dataclassRepr
-
-
-# ``commission`` deprecation alias — installed at module load so users
-# upgrading from v2.x continue to see ``report.commission`` work (with a
-# warning) and ``CommissionReport(commission=...)`` continue to accept the
-# old keyword (with a warning). Removal target: v4.0.
-def _install_commission_alias(cls: type, *, legacy_attr: str = "commission") -> None:
-    canonical = "commissionAndFees"
-    deprecation_message = (
-        f"{cls.__name__}.{legacy_attr} is deprecated; use {canonical} instead. "
-        f"It will be removed in v4.0."
-    )
-
-    def _legacy_get(self):  # type: ignore[no-untyped-def]
-        warnings.warn(deprecation_message, DeprecationWarning, stacklevel=2)
-        return getattr(self, canonical)
-
-    def _legacy_set(self, value):  # type: ignore[no-untyped-def]
-        warnings.warn(deprecation_message, DeprecationWarning, stacklevel=2)
-        setattr(self, canonical, value)
-
-    setattr(cls, legacy_attr, property(_legacy_get, _legacy_set))
-
-    orig_init = cls.__init__  # type: ignore[misc]
-
-    @functools.wraps(orig_init)
-    def _patched_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        legacy_value = kwargs.pop(legacy_attr, None)
-        if legacy_value is not None:
-            warnings.warn(
-                f"{cls.__name__}({legacy_attr}=...) is deprecated; "
-                f"use {canonical}= instead. It will be removed in v4.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            kwargs.setdefault(canonical, legacy_value)
-        orig_init(self, *args, **kwargs)
-
-    cls.__init__ = _patched_init  # type: ignore[method-assign,misc]
-
-
-_install_commission_alias(CommissionReport)
 
 
 @dataclass

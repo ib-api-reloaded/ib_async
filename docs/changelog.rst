@@ -16,8 +16,9 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 
 * Financial numeric fields are now ``Decimal | None`` (was ``float``).
 * ``commission`` is now ``commissionAndFees`` on ``CommissionReport``
-  and ``OrderState``. The legacy name keeps working with a
-  ``DeprecationWarning`` until v4.0.
+  and ``OrderState``. The legacy attribute keeps working with a
+  ``DeprecationWarning`` until v4.0 (the constructors take only
+  ``commissionAndFees=``).
 * ``HistogramData.count`` is renamed to ``HistogramData.size`` and
   retyped to ``Decimal | None``.
 * ``PnLSingle.position`` is now ``Decimal | None`` (was ``int``).
@@ -198,9 +199,9 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``bar.open_`` needs ``bar.open`` (assigning needs
   ``dataclasses.replace``).
 * **``commission`` → ``commissionAndFees``** on ``CommissionReport``
-  and ``OrderState``. Legacy ``commission`` attribute and
-  constructor keyword keep working with ``DeprecationWarning`` until
-  v4.0.
+  and ``OrderState``. The legacy ``commission`` attribute keeps
+  working with ``DeprecationWarning`` until v4.0; the constructors take
+  ``commissionAndFees=`` only.
 * **``HistogramData.count: int`` → ``HistogramData.size: Decimal | None``**
   — the field was the wrong name and the wrong type. ``count`` was
   always a Decimal-encoded quantity on the wire; the legacy name
