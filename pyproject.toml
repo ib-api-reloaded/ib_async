@@ -45,6 +45,7 @@ test = [
     # polars has no PyPy wheels; the DataFrame tests skip there.
     "polars>=2.0.0,<3.0.0; implementation_name != 'pypy'",
     "hypothesis>=6.100,<7",
+    "pytest-xdist>=3.5,<4",
 ]
 dev = [
     "mypy>=1.11.0",

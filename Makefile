@@ -46,11 +46,11 @@ help:
 	@echo "  publish  - release, upload to PyPI, tag, verify the published release"
 	@echo "  publish-test - the same against TestPyPI"
 	@echo "  test     - run the owned test suite"
-	@echo "  test-report - the suite once, each failure reported whole, and any hang"
+	@echo "  test-report - run the suite once; print each failure in full and any hang"
 	@echo "                (PYTEST_ARGS=\"tests/test_x.py -k y\" to select)"
-	@echo "  test-deep   - test-report with the property tests at SCALE times their"
-	@echo "                examples (default 20): the simulated-TWS and registry state"
-	@echo "                machines and the value properties, before a release"
+	@echo "  test-deep   - test-report on all cores, with property tests running SCALE"
+	@echo "                times as many examples (default 20); covers the simulated-TWS"
+	@echo "                and registry state machines and the value properties"
 	@echo "  test-matrix - run the suite on each configured Python version, each in its"
 	@echo "                own .venvs/py<version> environment and time-boxed; logs in"
 	@echo "                .venvs/logs/ (PYTHONS=\"3.13 3.15\" for a subset)"
@@ -133,17 +133,19 @@ lint: ruff typecheck
 test:
 	uv run --no-dev --group test $(UV_RUN_ARGS) $(PYTEST)
 
-# The tests once, reported from pytest's own results: each failure whole,
-# the slowest phases, and the test a hang stopped in; logs in
-# .venvs/logs/test/. PYTEST_ARGS selects, e.g. PYTEST_ARGS="tests/test_x.py -k y".
+# Run the tests once and report from pytest's results: each failure in full,
+# the slowest phases, and the test where a hang stopped. Logs go to
+# .venvs/logs/test/. PYTEST_ARGS selects tests, e.g. PYTEST_ARGS="tests/test_x.py -k y".
 test-report:
 	$(RELEASEKIT) test -- $(PYTEST_ARGS)
 
-# The property tests (tests/_property.py) run SCALE times their examples:
-# every interleaving the state machines can reach in a few minutes.
+# Run the property tests (tests/_property.py) with SCALE times as many
+# examples, on all cores (pytest-xdist), to explore far more state-machine
+# interleavings in a few minutes. The default run stays serial so output is
+# in order and a hang shows which test it was in.
 SCALE ?= 20
 test-deep:
-	IB_ASYNC_PROPERTY_SCALE=$(SCALE) $(RELEASEKIT) test -- $(PYTEST_ARGS)
+	IB_ASYNC_PROPERTY_SCALE=$(SCALE) $(RELEASEKIT) test -- -n auto $(PYTEST_ARGS)
 
 test-matrix:
 	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v))
