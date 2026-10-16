@@ -40,6 +40,7 @@ REQUESTS: dict[str, bool] = {
     "reqExecutions": True,
     "reqHeadTimeStamp": True,
     "reqHistoricalData": True,
+    "reqHistoricalTicks": True,
     "reqPositionsMulti": True,
     "reqPositions": False,
     "reqOpenOrders": False,
@@ -62,6 +63,7 @@ REQUESTS: dict[str, bool] = {
 CANCELS: dict[str, str] = {
     "cancelHeadTimeStamp": "reqHeadTimeStamp",
     "cancelHistoricalData": "reqHistoricalData",
+    "cancelHistoricalTicks": "reqHistoricalTicks",
     "cancelPositionsMulti": "reqPositionsMulti",
     "cancelContractData": "reqContractDetails",
     "cancelPositions": "reqPositions",
@@ -276,6 +278,10 @@ class SimulatedTws:
             for i in range(rows):
                 w.accountSummary(reqId, "DU1", f"Tag{i}", str(i), "USD")
             w.accountSummaryEnd(reqId)
+        elif ask.kind == "reqHistoricalTicks":
+            assert reqId is not None
+            ticks = [ibi.HistoricalTick(EXECUTED, 1.0, 1.0) for _ in range(rows)]
+            w.historicalTicks(reqId, ticks, True)
         else:
             raise ValueError(f"the simulated server has no answer for {ask.kind}")
         ask.answered = True
@@ -471,6 +477,35 @@ class SimulatedTws:
         """Reject the order with error ``code``."""
         placed.ended = "rejected"
         self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
+        self.run()
+
+    # -- server side: historical data ----------------------------------------
+
+    def barUpdate(self, ask: Ask, bar: ibi.BarData) -> None:
+        """Send a bar update for a keepUpToDate subscription."""
+        assert ask.kind == "reqHistoricalData" and ask.reqId is not None
+        self.wrapper.historicalDataUpdate(ask.reqId, bar)
+
+    def historicalTicks(self, ask: Ask, ticks: list, done: bool) -> None:
+        """Send one chunk of historical ticks. The class of the first tick
+        selects the wrapper callback. ``done`` marks the last chunk."""
+        assert ask.kind == "reqHistoricalTicks" and ask.reqId is not None
+        w = self.wrapper
+        if ticks and isinstance(ticks[0], ibi.HistoricalTickLast):
+            w.historicalTicksLast(ask.reqId, ticks, done)
+        elif ticks and isinstance(ticks[0], ibi.HistoricalTickBidAsk):
+            w.historicalTicksBidAsk(ask.reqId, ticks, done)
+        else:
+            w.historicalTicks(ask.reqId, ticks, done)
+        if done:
+            ask.answered = True
+        self.run()
+
+    def headTimestamp(self, ask: Ask, text: str) -> None:
+        """Answer a head timestamp request with ``text`` as TWS sends it."""
+        assert ask.kind == "reqHeadTimeStamp" and ask.reqId is not None
+        self.wrapper.headTimestamp(ask.reqId, text)
+        ask.answered = True
         self.run()
 
     # -- server side: accounts and positions -------------------------------
