@@ -10,8 +10,7 @@ The send-side ``create*Proto`` helpers always read from the source
 domain object and write to the target proto — never read the
 freshly-empty target, whose every field is unset, nor assign a field to
 itself: either silently drops the field (``clientId`` from every
-outbound order, say). ``test_orders_proto_round_trips_clientId``
-exercises that path.
+outbound order, say).
 """
 
 from __future__ import annotations
