@@ -15,6 +15,24 @@ from ib_async import util
 from ib_async.contract import Contract, Forex
 from ib_async.ib import IB
 
+# Each IBC option's command-line switch, (on Unix, on Windows): one ending
+# in "=" or ":" takes the value; "" is none (twsVersion goes first, bare).
+_SWITCHES: dict[str, tuple[str, str]] = {
+    "twsVersion": ("", ""),
+    "gateway": ("--gateway", "/Gateway"),
+    "tradingMode": ("--mode=", "/Mode:"),
+    "twsPath": ("--tws-path=", "/TwsPath:"),
+    "twsSettingsPath": ("--tws-settings-path=", ""),
+    "ibcPath": ("--ibc-path=", "/IbcPath:"),
+    "ibcIni": ("--ibc-ini=", "/Config:"),
+    "javaPath": ("--java-path=", "/JavaPath:"),
+    "userid": ("--user=", "/User:"),
+    "password": ("--pw=", "/PW:"),
+    "fixuserid": ("--fix-user=", "/FIXUser:"),
+    "fixpassword": ("--fix-pw=", "/FIXPW:"),
+    "on2fatimeout": ("--on2fatimeout=", "/On2FATimeout:"),
+}
+
 
 @dataclass
 class IBC:
@@ -111,6 +129,8 @@ class IBC:
         self._proc = None
         self._monitor = None
         self._logger = logging.getLogger("ib_async.IBC")
+        self._warned: set[str] = set()
+        self._warnUnswitched()
 
     def __enter__(self):
         self.start()
@@ -131,31 +151,16 @@ class IBC:
         if self._proc:
             return
         self._logger.info("Starting")
+        self._warnUnswitched()  # an option set since the IBC was made
         self._proc = await asyncio.create_subprocess_exec(
             *self._command(), stdout=asyncio.subprocess.PIPE
         )
         self._monitor = asyncio.ensure_future(self.monitorAsync())
 
     def _command(self) -> list[str]:
-        """The IBC start command for this configuration."""
-        # map from field names to cmd arguments; key=(UnixArg, WindowsArg)
-        args = {
-            "twsVersion": ("", ""),
-            "gateway": ("--gateway", "/Gateway"),
-            "tradingMode": ("--mode=", "/Mode:"),
-            "twsPath": ("--tws-path=", "/TwsPath:"),
-            "twsSettingsPath": ("--tws-settings-path=", ""),
-            "ibcPath": ("--ibc-path=", "/IbcPath:"),
-            "ibcIni": ("--ibc-ini=", "/Config:"),
-            "javaPath": ("--java-path=", "/JavaPath:"),
-            "userid": ("--user=", "/User:"),
-            "password": ("--pw=", "/PW:"),
-            "fixuserid": ("--fix-user=", "/FIXUser:"),
-            "fixpassword": ("--fix-pw=", "/FIXPW:"),
-            "on2fatimeout": ("--on2fatimeout=", "/On2FATimeout:"),
-        }
-
-        # create shell command
+        """The IBC start command for this configuration; an option IBC has
+        no switch for on this platform is left out (``_warnUnswitched``
+        warns of it)."""
         cmd = [
             (
                 f"{self.ibcPath}\\scripts\\StartIBC.bat"
@@ -164,15 +169,26 @@ class IBC:
             )
         ]
         for k, v in util.dataclassAsDict(self).items():
-            arg = args[k][self._isWindows]
+            arg = _SWITCHES[k][self._isWindows]
             if v:
                 if arg.endswith(("=", ":")):
                     cmd.append(f"{arg}{v}")
                 elif arg:
                     cmd.append(arg)
-                else:
+                elif k == "twsVersion":
                     cmd.append(str(v))
         return cmd
+
+    def _warnUnswitched(self) -> None:
+        """Warn of each option set that IBC has no switch for on this
+        platform, once: when the IBC is made and before each start (a
+        Watchdog's every restart), only of one not warned of yet."""
+        platform = "Windows" if self._isWindows else sys.platform
+        for k, v in util.dataclassAsDict(self).items():
+            unswitched = v and k != "twsVersion" and not _SWITCHES[k][self._isWindows]
+            if unswitched and k not in self._warned:
+                self._warned.add(k)
+                self._logger.warning("IBC takes no %s on %s; left out", k, platform)
 
     async def terminateAsync(self):
         if not self._proc:
