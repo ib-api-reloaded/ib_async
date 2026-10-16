@@ -581,18 +581,15 @@ class SubscriptionRegistry:
             negated for a CONTFUT, which is not the front future it shares
             its conId with (as :meth:`Contract.__eq__` says, and as the
             Ticker pool keys it), so the two never share a subscription.
-          * Bags/spreads → ``hash(contract)``, the conId-independent
-            synthetic comboLeg hash from :meth:`Contract.__hash__`, whatever its
-            conId: a bag often has ``conId == 0``, and IBKR gives many different
-            spreads the same combo conId. Under the raw-conId scheme a bag
-            could never be indexed — and therefore never deduped on
-            re-subscribe, nor *cancelled by contract*
-            (``IB.cancelMktData(bag)`` silently returned False and leaked
-            the live combo stream). Its synthetic hash gives every distinct
-            spread its own entry. (Like the per-contract Ticker pool, which
-            is also keyed by ``hash(contract)``, this carries the same
-            vanishingly small chance of colliding with a qualified
-            contract's ``conId``.)
+          * Bags/spreads → ``hash(contract)``, the synthetic comboLeg hash
+            from :meth:`Contract.__hash__`, whatever their conId: a bag's
+            conId is often 0, and IBKR gives many different spreads one
+            combo conId, so only the legs tell spreads apart. Each distinct
+            spread gets its own entry, deduped on re-subscribe and
+            cancellable by contract. (Like the per-contract Ticker pool,
+            also keyed by ``hash(contract)``, this carries a vanishingly
+            small chance of colliding with a qualified contract's
+            ``conId``.)
           * Genuinely-unqualified contracts (``conId == 0`` and not a
             ``BAG``) → ``None``: they have no stable identity, so multiple
             unrelated callers must NOT collapse into a single ``(0, kind)``
