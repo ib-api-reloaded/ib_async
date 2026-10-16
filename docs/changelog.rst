@@ -190,12 +190,14 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 * **No more methods patched onto classes at import.** Importing
   ib_async added ``dict()``, ``tuple()``, ``update()`` and
   ``nonDefaults()`` to every ib_async dataclass. They are gone: use
-  ``util.dataclassAsDict(obj)``, ``util.dataclassAsTuple(obj)``,
-  ``util.dataclassNonDefaults(obj)`` and
-  ``dataclasses.replace(obj, **changes)`` (``update()`` already failed on
-  the slotted classes, which have no ``__dict__``). ``util.dataclassUpdate``,
-  which changed an object in place through its ``__dict__``, is gone too:
-  ``dataclasses.replace`` makes the changed copy.
+  ``util.dataclassAsDict(obj)``, ``util.dataclassAsTuple(obj)`` and
+  ``util.dataclassNonDefaults(obj)``. ``update()`` and
+  ``util.dataclassUpdate``, which changed an object in place through its
+  ``__dict__`` (and failed on the slotted classes, which have none), are
+  gone too: set the attributes (``contract.exchange = "SMART"``), which
+  changes the object in place as they did. ``dataclasses.replace`` makes
+  a copy instead, and raises on the ``Contract`` subclasses; migration
+  guide section 6e has each replacement.
 * **``RealTimeBar`` is frozen, and its ``open_`` is ``open``**, as on
   ``BarData``: the bars of ``reqRealTimeBars`` and of the bar operators
   cannot be changed once handed out, and code reading or assigning
