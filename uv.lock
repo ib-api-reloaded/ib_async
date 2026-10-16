@@ -850,6 +850,8 @@ dev = [
     { name = "hypothesis", version = "6.155.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'" },
     { name = "hypothesis", version = "6.170.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'" },
     { name = "mypy" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and implementation_name != 'pypy'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' and implementation_name != 'pypy'" },
     { name = "polars", marker = "implementation_name != 'pypy'" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -877,6 +879,8 @@ protos = [
 test = [
     { name = "hypothesis", version = "6.155.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'" },
     { name = "hypothesis", version = "6.170.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and implementation_name != 'pypy'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' and implementation_name != 'pypy'" },
     { name = "polars", marker = "implementation_name != 'pypy'" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -899,6 +903,7 @@ dev = [
     { name = "hypothesis", marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'", specifier = ">=6.100,<7" },
     { name = "hypothesis", marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'", specifier = "==6.155.7" },
     { name = "mypy", specifier = ">=1.11.0" },
+    { name = "numpy", marker = "implementation_name != 'pypy'", specifier = ">=2.0,<3.0" },
     { name = "polars", marker = "implementation_name != 'pypy'", specifier = ">=2.0.0,<3.0.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
@@ -923,6 +928,7 @@ protos = [{ name = "grpcio-tools", specifier = ">=1.60.0" }]
 test = [
     { name = "hypothesis", marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'", specifier = ">=6.100,<7" },
     { name = "hypothesis", marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'", specifier = "==6.155.7" },
+    { name = "numpy", marker = "implementation_name != 'pypy'", specifier = ">=2.0,<3.0" },
     { name = "polars", marker = "implementation_name != 'pypy'", specifier = ">=2.0.0,<3.0.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
