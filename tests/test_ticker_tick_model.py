@@ -38,6 +38,7 @@ from ib_async.wrapper import (
     SIZE_TICK_MAP,
     STRING_TICK_MAP,
     TIMESTAMP_TICK_MAP,
+    Wrapper,
 )
 from tests._property import machine
 from tests._sim import SimulatedTws
@@ -69,29 +70,64 @@ MODELLED_FIELDS = sorted(
 )
 
 
-def snapshot(ticker: Ticker) -> dict:
+# A value of one of the modelled Ticker fields.
+TickerValue = (
+    float
+    | str
+    | datetime
+    | HaltedStatus
+    | ibi.Dividends
+    | ibi.OptionComputation
+    | ibi.EfpData
+    | None
+)
+TickerModel = dict[str, TickerValue]
+
+
+def snapshot(ticker: Ticker) -> TickerModel:
     return {name: getattr(ticker, name) for name in MODELLED_FIELDS}
 
 
-def hasBidAsk(m: dict) -> bool:
+def num(m: TickerModel, name: str) -> float | None:
+    """Return the numeric field ``name`` of the model."""
+    value = m[name]
+    assert value is None or isinstance(value, float | int)
+    return value
+
+
+def hasBidAsk(m: TickerModel) -> bool:
+    bid, bidSize, ask, askSize = (
+        num(m, n) for n in ("bid", "bidSize", "ask", "askSize")
+    )
     return bool(
-        m["bid"] is not None
-        and m["bid"] != -1
-        and m["bidSize"]
-        and m["bidSize"] > 0
-        and m["ask"] is not None
-        and m["ask"] != -1
-        and m["askSize"]
-        and m["askSize"] > 0
+        bid is not None
+        and bid != -1
+        and bidSize
+        and bidSize > 0
+        and ask is not None
+        and ask != -1
+        and askSize
+        and askSize > 0
     )
 
 
-def marketPrice(m: dict) -> float | None:
+def midpoint(m: TickerModel) -> float | None:
+    if not hasBidAsk(m):
+        return None
+    bid, ask = num(m, "bid"), num(m, "ask")
+    assert bid is not None and ask is not None
+    return (bid + ask) * 0.5
+
+
+def marketPrice(m: TickerModel) -> float | None:
+    last = num(m, "last")
     if hasBidAsk(m):
-        if m["last"] is not None and m["bid"] <= m["last"] <= m["ask"]:
-            return m["last"]
-        return (m["bid"] + m["ask"]) * 0.5
-    return m["last"]
+        bid, ask = num(m, "bid"), num(m, "ask")
+        assert bid is not None and ask is not None
+        if last is not None and bid <= last <= ask:
+            return last
+        return (bid + ask) * 0.5
+    return last
 
 
 class TickProcessing(RuleBasedStateMachine):
@@ -108,7 +144,8 @@ class TickProcessing(RuleBasedStateMachine):
         self.cancelledBefore = snapshot(self.cancelled)
 
         self.model = snapshot(self.ticker)
-        self.ticks: list[tuple[int, object, object]] = []  # ticks in this packet
+        # The ticks of the current packet, as (tickType, price or value, size).
+        self.ticks: list[tuple[int, float | HaltedStatus | None, float]] = []
         self.touched = False  # True once a tick updates the live ticker
         self.updates = 0
         self.pending: list[set[Ticker]] = []
@@ -117,16 +154,13 @@ class TickProcessing(RuleBasedStateMachine):
         self.tws.wrapper.tcpDataArrived()
 
     @property
-    def wrapper(self):
+    def wrapper(self) -> Wrapper:
         return self.tws.wrapper
 
     def _onUpdate(self, ticker: Ticker) -> None:
         self.updates += 1
 
-    def _set(self, name: str, value: object) -> None:
-        self.model[name] = value
-
-    def _tick(self, tickType: int, price: object, size: object) -> None:
+    def _tick(self, tickType: int, price: float | None, size: float) -> None:
         if price or size:
             self.ticks.append((tickType, price, size))
 
@@ -148,7 +182,8 @@ class TickProcessing(RuleBasedStateMachine):
             m["prev" + side.capitalize() + "Size"] = m[side + "Size"]
             m[side], m[side + "Size"] = price, size
         elif tickType in LAST:
-            if price == -1 and size == 0 and m["close"] is not None and m["close"] > 0:
+            close = num(m, "close")
+            if price == -1 and size == 0 and close is not None and close > 0:
                 price, size = EMPTY_PRICE, EMPTY_SIZE
             m["prevLast"], m["prevLastSize"] = m["last"], m["lastSize"]
             m["last"], m["lastSize"] = price, size
@@ -164,7 +199,7 @@ class TickProcessing(RuleBasedStateMachine):
     def size_tick(self, tickType: int, size: float) -> None:
         self.wrapper.tickSize(self.reqId, tickType, size)
         m = self.model
-        price: object = EMPTY_PRICE
+        price: float | None = EMPTY_PRICE
         if tickType in BID_SIZE or tickType in ASK_SIZE:
             side = "bid" if tickType in BID_SIZE else "ask"
             if size == m[side + "Size"]:
@@ -173,10 +208,10 @@ class TickProcessing(RuleBasedStateMachine):
             if size == 0:
                 m[side], m[side + "Size"] = EMPTY_PRICE, EMPTY_SIZE
             else:
-                price = m[side]
+                price = num(m, side)
                 m[side + "Size"] = size
         elif tickType in LAST_SIZE:
-            price = m["last"]
+            price = num(m, "last")
             if price is None:
                 return  # a size without a last price is dropped
             if size != m["lastSize"]:
@@ -285,7 +320,7 @@ class TickProcessing(RuleBasedStateMachine):
     )
     def generic_tick(self, tickType: int, value: float) -> None:
         self.wrapper.tickGeneric(self.reqId, tickType, value)
-        shown: object = value
+        shown: float | HaltedStatus = value
         if tickType not in _GENERIC_TICK_NO_CLAMP:
             shown = value if value > 0 else EMPTY_SIZE
         if (
@@ -376,7 +411,7 @@ class TickProcessing(RuleBasedStateMachine):
     def derived_values_match_quote(self) -> None:
         t, m = self.ticker, self.model
         assert t.hasBidAsk() == hasBidAsk(m)
-        assert t.midpoint() == ((m["bid"] + m["ask"]) * 0.5 if hasBidAsk(m) else None)
+        assert t.midpoint() == midpoint(m)
         assert t.marketPrice() == marketPrice(m)
 
     @invariant()

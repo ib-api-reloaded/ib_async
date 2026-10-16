@@ -21,6 +21,7 @@ the app terminated.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock
 
@@ -56,10 +57,10 @@ class ControlledSleep:
     Each call waits on its own future.
     """
 
-    pending: list[tuple[float, asyncio.Future]] = field(default_factory=list)
+    pending: list[tuple[float, asyncio.Future[None]]] = field(default_factory=list)
 
     async def __call__(self, delay: float) -> None:
-        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         self.pending.append((delay, future))
         try:
             await future
@@ -79,8 +80,8 @@ class Counts:
     def __init__(self, watchdog: Watchdog) -> None:
         self.started = self.stopped = self.soft = self.hard = 0
 
-        def bump(name: str):
-            def on(*_: object) -> None:
+        def bump(name: str) -> Callable[[Watchdog], None]:
+            def on(_: Watchdog) -> None:
                 setattr(self, name, getattr(self, name) + 1)
 
             return on
@@ -114,7 +115,7 @@ class WatchdogSimulation(RuleBasedStateMachine):
         )
         self.counts = Counts(self.watchdog)
         self.refuseConnections = False
-        self.runner: asyncio.Task | None = None
+        self.runner: asyncio.Task[None] | None = None
         # "idle", "starting", "connected", "retry" or "stopped"
         self.phase = "idle"
         self.expectedStarted = self.expectedStopped = 0
@@ -122,7 +123,7 @@ class WatchdogSimulation(RuleBasedStateMachine):
 
     # -- the fake connection -------------------------------------------
 
-    def _connect(self, *args: object, **kwargs: object) -> None:
+    def _connect(self, *args: str | float | bool, **kwargs: str | float | bool) -> None:
         if self.refuseConnections:
             raise ConnectionRefusedError("refused")
         self.tws.client.isReady.return_value = True

@@ -25,13 +25,20 @@ from tests._property import examples
 NEW_FRAMING = 226  # server version with 4-byte msgId framing
 OLD_FRAMING = 150  # NUL-separated text framing
 
+# A frame to send. It is ("binary", msgId, fields) or
+# ("proto", msgId, payload).
+Frame = tuple[str, int, list[str]] | tuple[str, int, bytes]
+# A message as the decoder receives it. It is ("binary", fields) or
+# ("proto", msgId, payload).
+Decoded = tuple[str, list[str]] | tuple[str, int, bytes]
+
 
 @dataclass
 class RecordingDecoder:
     """Replaces the Decoder and records the frames the client passes to it."""
 
     serverVersion: int = 0
-    frames: list[tuple] = field(default_factory=list)
+    frames: list[Decoded] = field(default_factory=list)
 
     def interpret(self, fields: list[str]) -> None:
         self.frames.append(("binary", list(fields)))
@@ -52,23 +59,22 @@ protoFrame = st.tuples(st.integers(1, 120), st.binary(max_size=24)).map(
 )
 
 
-def encode(frame: tuple, version: int) -> bytes:
+def encode(frame: Frame, version: int) -> bytes:
     """Return the bytes a server at ``version`` sends for ``frame``."""
-    kind, msgId, rest = frame
+    _, msgId, rest = frame
     # Every text field ends in a NUL, so a body with no fields is empty.
-    if version >= 201:
-        if kind == "proto":
-            body = struct.pack(">I", PROTOBUF_MSG_ID + msgId) + rest
-        else:
-            body = struct.pack(">I", msgId) + "".join(f + "\0" for f in rest).encode()
+    if isinstance(rest, bytes):
+        body = struct.pack(">I", PROTOBUF_MSG_ID + msgId) + rest
+    elif version >= 201:
+        body = struct.pack(">I", msgId) + "".join(f + "\0" for f in rest).encode()
     else:
         body = "".join(f + "\0" for f in [str(msgId), *rest]).encode()
     return struct.pack(">I", len(body)) + body
 
 
-def expected(frame: tuple) -> tuple:
-    kind, msgId, rest = frame
-    if kind == "proto":
+def expected(frame: Frame) -> Decoded:
+    _, msgId, rest = frame
+    if isinstance(rest, bytes):
         return ("proto", msgId, rest)
     return ("binary", [str(msgId), *rest])
 
@@ -95,7 +101,9 @@ def chunks(data: bytes, cuts: list[int]) -> list[bytes]:
     cuts=st.lists(st.integers(0, 10**6), max_size=12),
 )
 @examples()
-def test_new_framing_is_independent_of_chunking(frames, cuts):
+def test_new_framing_is_independent_of_chunking(
+    frames: list[Frame], cuts: list[int]
+) -> None:
     c, decoder = client(NEW_FRAMING)
     data = b"".join(encode(f, NEW_FRAMING) for f in frames)
     for chunk in chunks(data, cuts):
@@ -111,7 +119,9 @@ def test_new_framing_is_independent_of_chunking(frames, cuts):
     cuts=st.lists(st.integers(0, 10**6), max_size=12),
 )
 @examples()
-def test_old_framing_is_independent_of_chunking(frames, cuts):
+def test_old_framing_is_independent_of_chunking(
+    frames: list[Frame], cuts: list[int]
+) -> None:
     c, decoder = client(OLD_FRAMING)
     data = b"".join(encode(f, OLD_FRAMING) for f in frames)
     for chunk in chunks(data, cuts):
@@ -123,7 +133,7 @@ def test_old_framing_is_independent_of_chunking(frames, cuts):
 
 @given(frames=st.lists(st.one_of(binaryFrame, protoFrame), min_size=1, max_size=4))
 @examples()
-def test_partial_frame_is_kept_until_complete(frames):
+def test_partial_frame_is_kept_until_complete(frames: list[Frame]) -> None:
     """The client keeps the bytes of an incomplete frame and does not decode
     it until the rest arrives."""
     c, decoder = client(NEW_FRAMING)

@@ -24,7 +24,9 @@ NOT_ON_THE_WIRE = {
 }
 
 
-def orderField(name: str, kind: type) -> st.SearchStrategy:
+def orderField(
+    name: str, kind: type
+) -> st.SearchStrategy[Decimal | float | int | bool | str]:
     if kind is Decimal:
         return quantities if "Quantity" in name or name == "cashQty" else prices
     if kind is float:

@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -26,7 +26,7 @@ from hypothesis import strategies as st
 import ib_async as ibi
 from ib_async.util import getLoop
 from tests._property import examples
-from tests._sim import CONTRACT, SimulatedTws
+from tests._sim import CONTRACT, Ask, SimulatedTws
 
 START = 1_700_000_000
 MINUTE = 60
@@ -49,13 +49,23 @@ def when(epoch: int) -> datetime:
     return datetime.fromtimestamp(epoch, UTC)
 
 
-def row(b: ibi.BarData) -> tuple:
+BarRow = tuple[
+    datetime | date,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+]
+
+
+def row(b: ibi.BarData) -> BarRow:
     return (b.date, b.open, b.high, b.low, b.close, b.volume)
 
 
 # The bars the simulated server answers with: open 1, high 2, low 1,
 # close 2, volume 10, one minute apart from START.
-def initialRow(i: int) -> tuple:
+def initialRow(i: int) -> BarRow:
     return (
         when(START + MINUTE * i),
         Decimal(1),
@@ -73,7 +83,9 @@ def initialRow(i: int) -> tuple:
     ),
 )
 @examples()
-def test_keep_up_to_date_bars_match_model(initial, updates):
+def test_keep_up_to_date_bars_match_model(
+    initial: int, updates: list[tuple[str, Decimal]]
+) -> None:
     tws = SimulatedTws(getLoop())
     task = tws.start(
         tws.ib.reqHistoricalDataAsync(
@@ -115,23 +127,44 @@ def test_keep_up_to_date_bars_match_model(initial, updates):
     assert events == expected
 
 
-TICK_KINDS = {
-    "TRADES": lambda t: ibi.HistoricalTickLast(
-        when(t), ibi.TickAttribLast(), 1.0, 1.0, "", ""
-    ),
-    "BID_ASK": lambda t: ibi.HistoricalTickBidAsk(
-        when(t), ibi.TickAttribBidAsk(), 1.0, 2.0, 1.0, 1.0
-    ),
-    "MIDPOINT": lambda t: ibi.HistoricalTick(when(t), 1.5, 0.0),
-}
+HistoricalTicks = (
+    list[ibi.HistoricalTick]
+    | list[ibi.HistoricalTickBidAsk]
+    | list[ibi.HistoricalTickLast]
+)
+
+
+def sendTicks(
+    tws: SimulatedTws, ask: Ask, kind: str, times: list[int], done: bool
+) -> HistoricalTicks:
+    """Send one chunk of ticks of ``kind`` at ``times`` and return them."""
+    if kind == "TRADES":
+        trades = [
+            ibi.HistoricalTickLast(when(t), ibi.TickAttribLast(), 1.0, 1.0, "", "")
+            for t in times
+        ]
+        tws.historicalTicksLast(ask, trades, done)
+        return trades
+    if kind == "BID_ASK":
+        quotes = [
+            ibi.HistoricalTickBidAsk(
+                when(t), ibi.TickAttribBidAsk(), 1.0, 2.0, 1.0, 1.0
+            )
+            for t in times
+        ]
+        tws.historicalTicksBidAsk(ask, quotes, done)
+        return quotes
+    midpoints = [ibi.HistoricalTick(when(t), 1.5, 0.0) for t in times]
+    tws.historicalTicks(ask, midpoints, done)
+    return midpoints
 
 
 @given(
-    kind=st.sampled_from(sorted(TICK_KINDS)),
+    kind=st.sampled_from(["TRADES", "BID_ASK", "MIDPOINT"]),
     chunks=st.lists(st.integers(0, 4), min_size=1, max_size=4),
 )
 @examples()
-def test_historical_ticks_arrive_in_chunks(kind, chunks):
+def test_historical_ticks_arrive_in_chunks(kind: str, chunks: list[int]) -> None:
     tws = SimulatedTws(getLoop())
     task = tws.start(
         tws.ib.reqHistoricalTicksAsync(
@@ -140,15 +173,13 @@ def test_historical_ticks_arrive_in_chunks(kind, chunks):
     )
     ask = tws.asks[-1]
     assert ask.kind == "reqHistoricalTicks"
+    sent: list[ibi.HistoricalTick | ibi.HistoricalTickBidAsk | ibi.HistoricalTickLast]
     sent = []
     t = START
     for i, size in enumerate(chunks):
-        ticks = []
-        for _ in range(size):
-            ticks.append(TICK_KINDS[kind](t))
-            t += 1
-        sent.extend(ticks)
-        tws.historicalTicks(ask, ticks, done=i == len(chunks) - 1)
+        times = list(range(t, t + size))
+        t += size
+        sent.extend(sendTicks(tws, ask, kind, times, done=i == len(chunks) - 1))
         assert task.done() == (i == len(chunks) - 1)
     assert task.result() == sent
 
@@ -176,7 +207,7 @@ HEAD_TIMES = {
 
 
 @pytest.mark.parametrize("text", sorted(HEAD_TIMES))
-def test_head_timestamp_parses_each_time_format(text):
+def test_head_timestamp_parses_each_time_format(text: str) -> None:
     tws = SimulatedTws(getLoop())
     task = tws.start(tws.ib.reqHeadTimeStampAsync(CONTRACT, "TRADES", True, 1))
     tws.headTimestamp(tws.asks[-1], text)
@@ -185,7 +216,7 @@ def test_head_timestamp_parses_each_time_format(text):
 
 
 @pytest.mark.parametrize("text", ["", "-9223372036854775808", "no data"])
-def test_unreadable_head_timestamp_fails_the_request(text):
+def test_unreadable_head_timestamp_fails_the_request(text: str) -> None:
     tws = SimulatedTws(getLoop())
     task = tws.start(tws.ib.reqHeadTimeStampAsync(CONTRACT, "TRADES", True, 1))
     tws.headTimestamp(tws.asks[-1], text)

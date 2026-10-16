@@ -12,8 +12,10 @@ request that the caller believes was refused.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from datetime import datetime
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -23,7 +25,47 @@ from tests._property import examples
 from tests._session import Session, ready
 from tests._strategies import orders, userContracts
 
-Request = Callable[[ibi.IB, ibi.Contract, Order], object]
+# The types an awaitable request resolves to.
+Answer = (
+    ibi.BarDataList
+    | datetime
+    | list[ibi.HistogramData]
+    | list[ibi.HistoricalTick]
+    | list[ibi.ContractDetails]
+    | list[ibi.Contract | list[ibi.Contract | None] | None]
+    | ibi.OptionComputation
+    | ibi.HistoricalSchedule
+    | ibi.OrderState
+    | list[ibi.ContractDescription]
+    | list[ibi.DepthMktDataDescription]
+    | str
+    | int
+    | list[ibi.Position]
+    | list[ibi.Fill]
+    | list[ibi.Trade]
+    | list[ibi.PriceIncrement]
+    | list[ibi.OptionChain]
+    | list[ibi.NewsProvider]
+    | ibi.NewsArticle
+    | list[ibi.HistoricalNews]
+    | list[ibi.SoftDollarTier]
+    | list[ibi.FamilyCode]
+    | None
+)
+# The types a request method returns when called. It returns a live
+# object, a flag, or an awaitable for the answer.
+Started = (
+    ibi.Ticker
+    | ibi.Trade
+    | ibi.RealTimeBarList
+    | ibi.ScanDataList
+    | ibi.PnL
+    | ibi.PnLSingle
+    | bool
+    | None
+    | Awaitable[Answer]
+)
+Request = Callable[[ibi.IB, ibi.Contract, Order], Started]
 
 REQUESTS: dict[str, Request] = {
     "reqMktData": lambda ib, c, o: ib.reqMktData(c),
@@ -43,33 +85,191 @@ REQUESTS: dict[str, Request] = {
     "calculateImpliedVolatility": lambda ib, c, o: ib.calculateImpliedVolatilityAsync(
         c, 1.0, 100.0
     ),
+    "calculateOptionPrice": lambda ib, c, o: ib.calculateOptionPriceAsync(
+        c, 0.2, 100.0
+    ),
+    "reqHistoricalSchedule": lambda ib, c, o: ib.reqHistoricalScheduleAsync(c, 5),
     "placeOrder": lambda ib, c, o: ib.placeOrder(c, o),
     "whatIfOrder": lambda ib, c, o: ib.whatIfOrderAsync(c, o),
 }
 
-REFUSALS = (ValueError, TypeError)
+# Requests that take no contract or order. Each sends exactly one frame.
+SCAN = ibi.ScannerSubscription(
+    instrument="STK", locationCode="STK.US", scanCode="TOP_PERC_GAIN"
+)
+FIXED_REQUESTS: dict[str, Callable[[ibi.IB], Started]] = {
+    "reqMatchingSymbols": lambda ib: ib.reqMatchingSymbolsAsync("AAPL"),
+    "reqSmartComponents": lambda ib: ib.reqSmartComponentsAsync("a6"),
+    "reqMktDepthExchanges": lambda ib: ib.reqMktDepthExchangesAsync(),
+    "reqScannerSubscription": lambda ib: ib.reqScannerSubscription(SCAN),
+    "reqScannerParameters": lambda ib: ib.reqScannerParametersAsync(),
+    "reqPnL": lambda ib: ib.reqPnL("DU1"),
+    "reqPnLSingle": lambda ib: ib.reqPnLSingle("DU1", "", 10),
+    "reqPositions": lambda ib: ib.reqPositionsAsync(),
+    "reqPositionsMulti": lambda ib: ib.reqPositionsMultiAsync("DU1", "M1"),
+    "reqAccountUpdates": lambda ib: ib.reqAccountUpdatesAsync("DU1"),
+    "reqAccountUpdatesMulti": lambda ib: ib.reqAccountUpdatesMultiAsync("DU1", "M1"),
+    "reqAccountSummary": lambda ib: ib.reqAccountSummaryAsync(),
+    "reqExecutions": lambda ib: ib.reqExecutionsAsync(),
+    "reqExecutionsFiltered": lambda ib: ib.reqExecutionsAsync(
+        ibi.ExecutionFilter(acctCode="DU1", symbol="AAPL", secType="STK")
+    ),
+    "reqOpenOrders": lambda ib: ib.reqOpenOrdersAsync(),
+    "reqAllOpenOrders": lambda ib: ib.reqAllOpenOrdersAsync(),
+    "reqCompletedOrders": lambda ib: ib.reqCompletedOrdersAsync(True),
+    "reqAutoOpenOrders": lambda ib: ib.reqAutoOpenOrders(True),
+    "reqGlobalCancel": lambda ib: ib.reqGlobalCancel(),
+    "reqCurrentTime": lambda ib: ib.reqCurrentTimeAsync(),
+    "reqCurrentTimeInMillis": lambda ib: ib.reqCurrentTimeInMillisAsync(),
+    "reqMarketDataType": lambda ib: ib.reqMarketDataType(3),
+    "reqMarketRule": lambda ib: ib.reqMarketRuleAsync(26),
+    "reqSecDefOptParams": lambda ib: ib.reqSecDefOptParamsAsync(
+        "AAPL", "", "STK", 265598
+    ),
+    "reqNewsProviders": lambda ib: ib.reqNewsProvidersAsync(),
+    "reqNewsArticle": lambda ib: ib.reqNewsArticleAsync("BRFG", "BRFG$1"),
+    "reqHistoricalNews": lambda ib: ib.reqHistoricalNewsAsync(
+        265598, "BRFG", "", "", 10
+    ),
+    "reqNewsBulletins": lambda ib: ib.reqNewsBulletins(True),
+    "reqUserInfo": lambda ib: ib.reqUserInfoAsync(),
+    "reqWshMetaData": lambda ib: ib.reqWshMetaData(),
+    "reqWshEventData": lambda ib: ib.reqWshEventData(ibi.WshEventData(conId=265598)),
+    "reqSoftDollarTiers": lambda ib: ib.reqSoftDollarTiersAsync(),
+    "reqFamilyCodes": lambda ib: ib.reqFamilyCodesAsync(),
+    "requestFA": lambda ib: ib.requestFA(1),
+    "reqConfig": lambda ib: ib.reqConfigAsync(),
+}
+
+# Requests followed by their cancels. Each function makes the request and
+# counts the frames sent so far. It then sends the cancel and returns the
+# count.
+STOCK = ibi.Stock("AAPL", "SMART", "USD", conId=265598)
+
+
+def framesSent(session: Session) -> int:
+    session.run()
+    return len(session.conn.sent)
+
+
+def cancelMktData(s: Session) -> int:
+    s.ib.reqMktData(STOCK)
+    before = framesSent(s)
+    s.ib.cancelMktData(STOCK)
+    return before
+
+
+def cancelMktDepth(s: Session) -> int:
+    s.ib.reqMktDepth(STOCK)
+    before = framesSent(s)
+    s.ib.cancelMktDepth(STOCK)
+    return before
+
+
+def cancelTickByTickData(s: Session) -> int:
+    s.ib.reqTickByTickData(STOCK, "Last")
+    before = framesSent(s)
+    s.ib.cancelTickByTickData(STOCK, "Last")
+    return before
+
+
+def cancelRealTimeBars(s: Session) -> int:
+    bars = s.ib.reqRealTimeBars(STOCK, 5, "TRADES", True)
+    before = framesSent(s)
+    s.ib.cancelRealTimeBars(bars)
+    return before
+
+
+def cancelPnL(s: Session) -> int:
+    s.ib.reqPnL("DU1")
+    before = framesSent(s)
+    s.ib.cancelPnL("DU1")
+    return before
+
+
+def cancelPnLSingle(s: Session) -> int:
+    s.ib.reqPnLSingle("DU1", "", 10)
+    before = framesSent(s)
+    s.ib.cancelPnLSingle("DU1", "", 10)
+    return before
+
+
+def cancelScannerSubscription(s: Session) -> int:
+    scan = s.ib.reqScannerSubscription(SCAN)
+    before = framesSent(s)
+    s.ib.cancelScannerSubscription(scan)
+    return before
+
+
+def cancelNewsBulletins(s: Session) -> int:
+    s.ib.reqNewsBulletins(True)
+    before = framesSent(s)
+    s.ib.cancelNewsBulletins()
+    return before
+
+
+def cancelWshMetaData(s: Session) -> int:
+    s.ib.reqWshMetaData()
+    before = framesSent(s)
+    s.ib.cancelWshMetaData()
+    return before
+
+
+def cancelWshEventData(s: Session) -> int:
+    s.ib.reqWshEventData(ibi.WshEventData(conId=265598))
+    before = framesSent(s)
+    s.ib.cancelWshEventData()
+    return before
+
+
+def cancelOrder(s: Session) -> int:
+    trade = s.ib.placeOrder(STOCK, ibi.MarketOrder("BUY", 1))
+    before = framesSent(s)
+    s.ib.cancelOrder(trade.order)
+    return before
+
+
+CANCELS: dict[str, Callable[[Session], int]] = {
+    f.__name__: f
+    for f in (
+        cancelMktData,
+        cancelMktDepth,
+        cancelTickByTickData,
+        cancelRealTimeBars,
+        cancelPnL,
+        cancelPnLSingle,
+        cancelScannerSubscription,
+        cancelNewsBulletins,
+        cancelWshMetaData,
+        cancelWshEventData,
+        cancelOrder,
+    )
+}
+
+Refusal = ValueError | TypeError
 
 
 def attempt(
-    session: Session, request: Request, contract, order
-) -> tuple[BaseException | None, int]:
-    """Make the request and return the refusal and the number of frames
-    sent. The refusal is the exception the request raised, or None if the
-    request was sent. An awaitable result is started as a task. Its frames
-    are counted and then the task is cancelled. The cancel may send its own
-    frame, which is not counted."""
+    session: Session, start: Callable[[], Started]
+) -> tuple[Refusal | None, int]:
+    """Make the request. Return the refusal and the number of frames sent.
+    The refusal is the exception the request raised, or None if the
+    request was sent. An awaitable result is started as a task. The test
+    counts its frames and then cancels the task. The cancel may send its
+    own frame, which is not counted."""
     before = len(session.conn.sent)
     try:
-        result = request(session.ib, contract, order)
-    except REFUSALS as exc:
+        result = start()
+    except (ValueError, TypeError) as exc:
         return exc, len(session.conn.sent) - before
-    refusal = None
+    refusal: Refusal | None = None
     if asyncio.iscoroutine(result) or asyncio.isfuture(result):
         task = asyncio.ensure_future(result, loop=session.loop)
         session.run()
         if task.done() and not task.cancelled() and task.exception() is not None:
-            refusal = task.exception()
-            assert isinstance(refusal, REFUSALS), refusal
+            raised = task.exception()
+            assert isinstance(raised, ValueError | TypeError), raised
+            refusal = raised
         sent = len(session.conn.sent) - before
         task.cancel()
         session.run()
@@ -83,11 +283,32 @@ def attempt(
     order=st.one_of(orders(), st.builds(ibi.MarketOrder, st.just("BUY"), st.just(100))),
 )
 @examples()
-def test_request_sends_one_frame_or_refuses_before_sending(name, contract, order):
+def test_request_sends_one_frame_or_refuses_before_sending(
+    name: str, contract: ibi.Contract, order: Order
+) -> None:
     session = Session()
     ready(session)
-    refusal, sent = attempt(session, REQUESTS[name], contract, order)
+    refusal, sent = attempt(
+        session, lambda: REQUESTS[name](session.ib, contract, order)
+    )
     if refusal is None:
         assert sent == 1, (name, sent)
     else:
         assert sent == 0, (name, refusal)
+
+
+@pytest.mark.parametrize("name", sorted(FIXED_REQUESTS))
+def test_fixed_request_sends_one_frame(name: str) -> None:
+    session = Session()
+    ready(session)
+    refusal, sent = attempt(session, lambda: FIXED_REQUESTS[name](session.ib))
+    assert refusal is None and sent == 1, (name, refusal, sent)
+
+
+@pytest.mark.parametrize("name", sorted(CANCELS))
+def test_cancel_sends_one_frame(name: str) -> None:
+    session = Session()
+    ready(session)
+    before = CANCELS[name](session)
+    session.run()
+    assert len(session.conn.sent) - before == 1, name

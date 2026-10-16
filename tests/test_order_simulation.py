@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Protocol
 
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 import ib_async as ibi
-from ib_async import OrderStatus, Trade
+from ib_async import CommissionReport, Fill, OrderStatus, Trade
 from ib_async.util import getLoop
 from tests._property import machine
 from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
@@ -70,11 +71,17 @@ class Tracked:
         return OrderStatus.PendingSubmit
 
 
+class Counter(Protocol):
+    """A handler for any of a trade's events."""
+
+    def __call__(self, *_: Trade | Fill | CommissionReport) -> None: ...
+
+
 def track(trade: Trade) -> Counts:
     counts = Counts()
 
-    def bump(name: str):
-        def on(*_: object) -> None:
+    def bump(name: str) -> Counter:
+        def on(*_: Trade | Fill | CommissionReport) -> None:
             setattr(counts, name, getattr(counts, name) + 1)
 
         return on

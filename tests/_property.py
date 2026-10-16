@@ -26,7 +26,7 @@ MACHINE_STEPS = 40
 PHASES = (Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink)
 
 
-def examples(count: int = PROPERTY_EXAMPLES, **kwargs: object) -> settings:
+def examples(count: int = PROPERTY_EXAMPLES, **kwargs: int) -> settings:
     """Return settings for a property test.
 
     The test runs ``count`` examples at scale 1 and has no deadline.
@@ -34,7 +34,7 @@ def examples(count: int = PROPERTY_EXAMPLES, **kwargs: object) -> settings:
     return settings(max_examples=count * SCALE, deadline=None, phases=PHASES, **kwargs)
 
 
-def machine(**kwargs: object) -> settings:
+def machine(**kwargs: int) -> settings:
     """Return settings for a state machine.
 
     At scale 1 the machine does MACHINE_EXAMPLES runs of MACHINE_STEPS

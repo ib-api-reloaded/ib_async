@@ -14,6 +14,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from google.protobuf.descriptor import FieldDescriptor as FD
+from google.protobuf.message import Message
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -90,7 +91,7 @@ def isTimeField(field: FD) -> bool:
     return field.type == FD.TYPE_STRING and ("time" in name or "date" in name)
 
 
-def scalar(field: FD) -> st.SearchStrategy:
+def scalar(field: FD) -> st.SearchStrategy[int | float | bool | str | bytes]:
     if field.type == FD.TYPE_ENUM:
         return st.sampled_from([v.number for v in field.enum_type.values])
     if isTimeField(field):
@@ -98,7 +99,7 @@ def scalar(field: FD) -> st.SearchStrategy:
     return SCALARS[field.type]
 
 
-def fill(draw: st.DrawFn, message, depth: int) -> None:
+def fill(draw: st.DrawFn, message: Message, depth: int) -> None:
     """Set a random subset of ``message``'s fields to random typed values.
     Time and date strings are always set, in one of IBKR's formats."""
     for field in message.DESCRIPTOR.fields:
@@ -138,8 +139,8 @@ def fill(draw: st.DrawFn, message, depth: int) -> None:
 
 
 @st.composite
-def messageFor(draw: st.DrawFn, msgId: int):
-    message = _PROTO_MSG_CLASSES[msgId]()
+def messageFor(draw: st.DrawFn, msgId: int) -> Message:
+    message: Message = _PROTO_MSG_CLASSES[msgId]()
     fill(draw, message, 0)
     return message
 
@@ -159,7 +160,9 @@ def assert_valid_frame_decodes(ib: ibi.IB, dec: Decoder) -> None:
 
 @given(msgId=st.sampled_from(MSG_IDS), data=st.data())
 @examples()
-def test_well_formed_message_converts_without_an_exception(msgId, data):
+def test_well_formed_message_converts_without_an_exception(
+    msgId: int, data: st.DataObject
+) -> None:
     message = data.draw(messageFor(msgId))
     ib, dec = decoder()
     dec.processProtoBuf(msgId, message.SerializeToString())

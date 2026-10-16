@@ -21,9 +21,10 @@ import asyncio
 import dataclasses
 import datetime as dt
 import functools
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import TypeVar
 from unittest.mock import MagicMock
 
 import ib_async as ibi
@@ -32,6 +33,25 @@ from ib_async.wrapper import Wrapper
 EXECUTED = dt.datetime(2026, 10, 14, 15, 30, tzinfo=dt.UTC)
 CONTRACT = ibi.Stock("SIM", "SMART", "USD", conId=1)
 CLIENT_ID = 7
+
+T = TypeVar("T")
+
+# The argument types the client's request methods receive.
+ClientArg = (
+    int
+    | str
+    | bool
+    | float
+    | Decimal
+    | ibi.Contract
+    | ibi.Order
+    | ibi.ExecutionFilter
+    | ibi.ScannerSubscription
+    | ibi.WshEventData
+    | ibi.OrderCancel
+    | Sequence[ibi.TagValue]
+    | None
+)
 
 # Client methods that send a request, mapped to whether their first
 # argument is the reqId. Singleton requests have no reqId.
@@ -108,7 +128,7 @@ class Ask:
 
     kind: str  # name of the client method that sent it
     reqId: int | None  # None for a singleton request
-    args: tuple
+    args: tuple[ClientArg, ...]
     answered: bool = False  # the server answered or refused it
     cancelled: bool = False  # the client cancelled it, or the socket dropped
 
@@ -147,7 +167,9 @@ class SimulatedTws:
         self.orders: dict[int, PlacedOrder] = {}
         self._execIds = iter(range(1, 10**6))
         # Executions sent, keyed by execId, with the order and commission report.
-        self.executions: dict[str, tuple[PlacedOrder, ibi.Execution, Any]] = {}
+        self.executions: dict[
+            str, tuple[PlacedOrder, ibi.Execution, ibi.CommissionReport]
+        ] = {}
         self.connected = True
 
     @property
@@ -162,13 +184,15 @@ class SimulatedTws:
             raise ConnectionError("Not connected")  # same as Client.getReqId
         return next(self._reqIds)
 
-    def _asked(self, name: str, hasReqId: bool, *args: Any) -> None:
+    def _asked(self, name: str, hasReqId: bool, *args: ClientArg) -> None:
         if not self.connected:
             raise ConnectionError("Not connected")  # same as Client.send
-        self.asks.append(Ask(name, args[0] if hasReqId else None, args))
+        reqId = args[0] if hasReqId else None
+        assert reqId is None or isinstance(reqId, int)
+        self.asks.append(Ask(name, reqId, args))
 
     def _cancelled(
-        self, name: str, kind: str, reqId: int | None = None, *_: Any
+        self, name: str, kind: str, reqId: int | None = None, *_: ClientArg
     ) -> None:
         self.cancels.append((name, reqId))
         for ask in self.asks:
@@ -189,16 +213,18 @@ class SimulatedTws:
         else:
             placed.order = copy  # a modification
 
-    def _orderCancelled(self, orderId: int, orderCancel: Any = None) -> None:
+    def _orderCancelled(
+        self, orderId: int, orderCancel: ibi.OrderCancel | None = None
+    ) -> None:
         if not self.connected:
             raise ConnectionError("Not connected")
         placed = self.orders.get(orderId)
         if placed is not None:
             placed.cancelRequested = True
 
-    def start(self, coro: Any) -> asyncio.Task:
-        """Start a request coroutine and run the loop until it has sent."""
-        task = asyncio.ensure_future(coro, loop=self.loop)
+    def start(self, request: Awaitable[T]) -> asyncio.Future[T]:
+        """Start a request and run the loop until the request is sent."""
+        task = asyncio.ensure_future(request, loop=self.loop)
         self.run()
         return task
 
@@ -512,17 +538,32 @@ class SimulatedTws:
         assert ask.kind == "reqHistoricalData" and ask.reqId is not None
         self.wrapper.historicalDataUpdate(ask.reqId, bar)
 
-    def historicalTicks(self, ask: Ask, ticks: list, done: bool) -> None:
-        """Send one chunk of historical ticks. The class of the first tick
-        selects the wrapper callback. ``done`` marks the last chunk."""
+    def historicalTicks(
+        self, ask: Ask, ticks: list[ibi.HistoricalTick], done: bool
+    ) -> None:
+        """Send one chunk of midpoint historical ticks. ``done`` marks the
+        last chunk."""
         assert ask.kind == "reqHistoricalTicks" and ask.reqId is not None
-        w = self.wrapper
-        if ticks and isinstance(ticks[0], ibi.HistoricalTickLast):
-            w.historicalTicksLast(ask.reqId, ticks, done)
-        elif ticks and isinstance(ticks[0], ibi.HistoricalTickBidAsk):
-            w.historicalTicksBidAsk(ask.reqId, ticks, done)
-        else:
-            w.historicalTicks(ask.reqId, ticks, done)
+        self.wrapper.historicalTicks(ask.reqId, ticks, done)
+        self._chunkSent(ask, done)
+
+    def historicalTicksBidAsk(
+        self, ask: Ask, ticks: list[ibi.HistoricalTickBidAsk], done: bool
+    ) -> None:
+        """Send one chunk of bid/ask historical ticks."""
+        assert ask.kind == "reqHistoricalTicks" and ask.reqId is not None
+        self.wrapper.historicalTicksBidAsk(ask.reqId, ticks, done)
+        self._chunkSent(ask, done)
+
+    def historicalTicksLast(
+        self, ask: Ask, ticks: list[ibi.HistoricalTickLast], done: bool
+    ) -> None:
+        """Send one chunk of last-trade historical ticks."""
+        assert ask.kind == "reqHistoricalTicks" and ask.reqId is not None
+        self.wrapper.historicalTicksLast(ask.reqId, ticks, done)
+        self._chunkSent(ask, done)
+
+    def _chunkSent(self, ask: Ask, done: bool) -> None:
         if done:
             ask.answered = True
         self.run()

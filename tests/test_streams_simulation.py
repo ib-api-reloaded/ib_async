@@ -33,6 +33,10 @@ from ib_async.util import getLoop
 from tests._property import machine
 from tests._sim import Ask, SimulatedTws
 
+# The types of object a stream subscription returns. The client keeps the
+# object updated.
+StreamObject = ibi.RealTimeBarList | ibi.PnL | ibi.PnLSingle | ibi.ScanDataList
+
 STOCK_A = ibi.Stock("A", "SMART", "USD", conId=10)
 STOCK_B = ibi.Stock("B", "SMART", "USD", conId=11)
 CONTRACTS = [STOCK_A, STOCK_B]
@@ -49,8 +53,10 @@ class Stream:
     """A subscription the test made, with its expected state."""
 
     kind: str  # "bars", "pnl", "pnlSingle" or "scan"
-    key: tuple  # key IB uses to reuse a live subscription; empty if none
-    obj: object  # the RealTimeBarList, PnL, PnLSingle or ScanDataList
+    key: tuple[
+        str | int, ...
+    ]  # key IB uses to reuse a live subscription; empty if none
+    obj: StreamObject
     ask: Ask
     epoch: int
     live: bool = True
@@ -75,15 +81,18 @@ class StreamSimulation(RuleBasedStateMachine):
     def pick(self, data: st.DataObject, candidates: list[Stream]) -> Stream:
         return candidates[data.draw(st.integers(0, len(candidates) - 1))]
 
-    def _track(self, kind: str, key: tuple, obj: object, ask: Ask) -> Stream:
+    def _track(
+        self, kind: str, key: tuple[str | int, ...], obj: StreamObject, ask: Ask
+    ) -> Stream:
         stream = Stream(kind, key, obj, ask, self.epoch)
-        event = getattr(obj, "updateEvent", None)
-        if event is not None:
+        # Bars and scans have an update event. PnL objects have none. They
+        # are updated in place.
+        if isinstance(obj, ibi.RealTimeBarList | ibi.ScanDataList):
 
-            def count(*_: object) -> None:
+            def count(*_: ibi.RealTimeBarList | ibi.ScanDataList | bool) -> None:
                 stream.updates += 1
 
-            event += count
+            obj.updateEvent += count
         self.streams.append(stream)
         return stream
 

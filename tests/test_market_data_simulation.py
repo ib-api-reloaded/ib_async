@@ -120,7 +120,7 @@ class MarketDataSimulation(RuleBasedStateMachine):
                 return s
         return None
 
-    def pick(self, data: st.DataObject, candidates: list) -> object:
+    def pick(self, data: st.DataObject, candidates: list[Stream]) -> Stream:
         return candidates[data.draw(st.integers(0, len(candidates) - 1))]
 
     # -- client operations -----------------------------------------------

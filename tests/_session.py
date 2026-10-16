@@ -28,7 +28,7 @@ class RecordingConnection:
         self.sent: list[bytes] = []
         self.closed = 0
 
-    async def connectAsync(self, host, port) -> None:
+    async def connectAsync(self, host: str, port: int) -> None:
         return None
 
     def sendMsg(self, msg: bytes) -> None:
@@ -54,7 +54,7 @@ class Session:
         self.client.apiError += self.errors.append
         self.loop = getLoop()
 
-    def connect(self, clientId: int = 1) -> asyncio.Task:
+    def connect(self, clientId: int = 1) -> asyncio.Task[None]:
         task = self.loop.create_task(
             self.client.connectAsync("127.0.0.1", 7497, clientId, timeout=0)
         )
@@ -106,7 +106,7 @@ def managedAccountsFrame(accounts: list[str], proto: bool) -> bytes:
 
 def ready(
     session: Session, version: int = MAX_CLIENT_VER, orderId: int = 100
-) -> asyncio.Task:
+) -> asyncio.Task[None]:
     """Connect and complete the handshake with binary frames."""
     task = session.connect()
     session.receive(

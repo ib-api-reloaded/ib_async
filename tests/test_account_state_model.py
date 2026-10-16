@@ -34,6 +34,15 @@ from ib_async.util import getLoop
 from tests._property import machine
 from tests._sim import Ask, SimulatedTws
 
+# A position row as (account, conId, position, average cost).
+PositionRow = tuple[str, int, Decimal | None, Decimal | None]
+# The future of a started account request.
+AccountFuture = (
+    asyncio.Future[None]
+    | asyncio.Future[list[ibi.Position]]
+    | asyncio.Future[list[AccountValue]]
+)
+
 ACCOUNTS = ["DU1", "DU2"]
 MODELS = ["", "M1"]
 TAGS = ["NetLiquidation", "BuyingPower", "CashBalance"]
@@ -62,13 +71,13 @@ sizes = st.one_of(
 class Pending:
     """A request the test started and the server has not finished."""
 
-    task: asyncio.Task
+    task: AccountFuture
     ask: Ask
     account: str = ""
-    rows: list[tuple] = field(default_factory=list)  # positions sent while open
+    rows: list[PositionRow] = field(default_factory=list)  # positions sent while open
 
 
-def positionRows(positions: list[ibi.Position]) -> list[tuple]:
+def positionRows(positions: list[ibi.Position]) -> list[PositionRow]:
     return [(p.account, p.contract.conId, p.position, p.avgCost) for p in positions]
 
 
@@ -76,16 +85,24 @@ class AccountState(RuleBasedStateMachine):
     def __init__(self) -> None:
         super().__init__()
         self.tws = SimulatedTws(getLoop())
-        self.values: dict[tuple, str] = {}
-        self.summary: dict[tuple, str] = {}
-        self.positions: dict[tuple, tuple] = {}  # (account, conId) -> (size, cost)
-        self.portfolio: dict[tuple, tuple] = {}  # (account, conId) -> (size, px, cost)
+        # (account, tag, currency, modelCode) -> value
+        self.values: dict[tuple[str, str, str, str], str] = {}
+        # (account, tag, currency) -> value
+        self.summary: dict[tuple[str, str, str], str] = {}
+        # (account, conId) -> (size, cost)
+        self.positions: dict[
+            tuple[str, int], tuple[Decimal | None, Decimal | None]
+        ] = {}
+        # (account, conId) -> (size, price, cost)
+        self.portfolio: dict[
+            tuple[str, int], tuple[Decimal | None, Decimal | None, Decimal | None]
+        ] = {}
         self.accountUpdates: Pending | None = None
         self.positionsRequest: Pending | None = None
         self.summaryRequest: Pending | None = None
         self.multiAsks: list[Ask] = []  # finished model-level subscriptions
         self.summaryAsks: list[Ask] = []  # finished summary requests
-        self.failed: list[asyncio.Task] = []  # requests open at a disconnect
+        self.failed: list[AccountFuture] = []  # requests open at a disconnect
         self.events = dict.fromkeys(("value", "summary", "position", "portfolio"), 0)
         self.expected = dict(self.events)
         ib = self.tws.ib
@@ -326,7 +343,9 @@ class AccountState(RuleBasedStateMachine):
 
     @invariant()
     def portfolio_matches_model(self) -> None:
-        def rows(items: list[ibi.PortfolioItem]) -> set[tuple]:
+        def rows(
+            items: list[ibi.PortfolioItem],
+        ) -> set[tuple[str, int, Decimal | None, Decimal | None, Decimal | None]]:
             return {
                 (i.account, i.contract.conId, i.position, i.marketPrice, i.averageCost)
                 for i in items

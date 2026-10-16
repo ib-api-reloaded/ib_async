@@ -326,7 +326,7 @@ class Watchdog:
     # Coroutine function used to wait for appStartupTime and retryDelay.
     # Defaults to asyncio.sleep. Tests replace it so they do not wait on a
     # real clock.
-    sleep: Callable[[float], Awaitable[object]] = asyncio.sleep
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
 
     def __post_init__(self):
         self.startingEvent = Event("startingEvent")
@@ -413,7 +413,7 @@ class Watchdog:
                 self.ib.disconnectedEvent += onDisconnected
 
                 while self._runner:
-                    waiter: asyncio.Future = asyncio.Future()
+                    waiter: asyncio.Future[None] = asyncio.Future()
                     await waiter
                     # soft timeout, probe the app with a historical request
                     self._logger.debug("Soft timeout")
