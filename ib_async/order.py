@@ -574,7 +574,12 @@ class OrderState:
                 # initial conversion failed so just return None in its place
                 return None
 
-        return self.transform(lambda x: floatOrNone(x, digits))
+        # an OrderStateNumeric, as annotated: transform keeps the class it is
+        # given, and replace() on self would keep OrderState
+        numeric = OrderStateNumeric(
+            **{f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
+        )
+        return numeric.transform(lambda x: floatOrNone(x, digits))
 
     def formatted(self, digits: int = 2):
         """Return a new OrderState with the current values as formatted strings."""

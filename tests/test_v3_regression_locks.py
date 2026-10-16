@@ -313,6 +313,15 @@ def test_order_state_numeric_converts_outsidertch_margins():
     assert numeric.maintMarginAfterOutsideRTH == 300.75
 
 
+def test_order_state_numeric_is_an_order_state_numeric():
+    """As annotated, so its repr and the commission alias's warning name
+    it, and isinstance tells it from the string-valued state."""
+    numeric = OrderState(initMarginBefore="1.5", status="Submitted").numeric()
+    assert type(numeric) is OrderStateNumeric
+    assert (numeric.initMarginBefore, numeric.status) == (1.5, "Submitted")
+    assert repr(numeric).startswith("OrderStateNumeric(")
+
+
 # ---------------------------------------------------------------------------
 # tickOptionComputation vega/theta sentinel maps to None
 # ---------------------------------------------------------------------------
