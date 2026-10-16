@@ -184,6 +184,9 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``PnLSingle``. ``None`` is the unset sentinel —
   ``Decimal('NaN')`` is never used (it is silently truthy in Python
   and corrupted downstream comparisons).
+* **``IBC`` needs ``twsVersion``**: it has no default, so ``IBC()``
+  raises ``TypeError``; pass it first, ``IBC(1019)`` or ``IBC("10.19")``
+  (see Fixed). IBC's start script could not run without it.
 * **No more methods patched onto classes at import.** Importing
   ib_async added ``dict()``, ``tuple()``, ``update()`` and
   ``nonDefaults()`` to every ib_async dataclass. They are gone: use
@@ -338,9 +341,9 @@ are fixed in v3.0:
   the deprecated ``exec_()``. (:issue:`134`, thanks to @Flippo24)
 * **``IBC(twsVersion=...)`` takes a string**, as macOS needs: ``"10.19"``,
   with the period, as in the macOS install folder (1019 on Windows and
-  Linux). It was typed and documented as an integer. An ``IBC`` without
-  it now raises ``ValueError`` when made, where IBC's start script failed
-  on it, saying so only in its output. (:issue:`57`)
+  Linux). It was typed and documented as an integer. An empty or zero
+  one raises ``ValueError`` when the ``IBC`` is made, where IBC's start
+  script failed on it, saying so only in its output. (:issue:`57`)
 * **``TickerUpdateEvent.trades()`` left out RT Trade Volume** (tick 77)
   while it passed RT Volume (tick 48), so tick, volume and time bars built
   on it missed those trades. (:issue:`45`)
