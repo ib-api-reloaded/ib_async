@@ -305,9 +305,9 @@ def test_decimal_values_print_plain_everything_else_through_repr() -> None:
 
 
 def test_non_defaults_policy_is_untouched_for_its_own_callers() -> None:
-    """``dataclassNonDefaults`` feeds ``tree`` / the public ``nonDefaults``
-    accessor and keeps its own, looser semantics: it does not drop empty
-    strings, zeros or IBKR's string boilerplate."""
+    """``dataclassNonDefaults`` feeds ``tree`` and is public in ``util``,
+    and keeps its own, looser semantics: it does not drop empty strings,
+    zeros or IBKR's string boilerplate."""
 
     order = Order(orderId=1, orderRef="None", lmtPrice=Decimal(0))
     softDollarTier = order.softDollarTier
