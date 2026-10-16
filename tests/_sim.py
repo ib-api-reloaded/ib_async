@@ -95,6 +95,7 @@ class PlacedOrder:
     # or "disconnected". Empty while the order is working.
     ended: str = ""
     cancelRequested: bool = False
+    lastStatus: str = ""  # last status sent for this order
 
     @property
     def working(self) -> bool:
@@ -145,6 +146,8 @@ class SimulatedTws:
         # Every order placed, by orderId. A modification replaces the copy.
         self.orders: dict[int, PlacedOrder] = {}
         self._execIds = iter(range(1, 10**6))
+        # Executions sent, keyed by execId, with the order and commission report.
+        self.executions: dict[str, tuple[PlacedOrder, ibi.Execution, Any]] = {}
         self.connected = True
 
     @property
@@ -405,6 +408,7 @@ class SimulatedTws:
 
     def _orderStatus(self, placed: PlacedOrder, status: str) -> None:
         total = placed.order.totalQuantity or Decimal(0)
+        placed.lastStatus = status
         self.wrapper.orderStatus(
             placed.orderId,
             status,
@@ -452,6 +456,7 @@ class SimulatedTws:
             orderId=placed.orderId,
         )
         report = ibi.CommissionReport(execId=execId, commissionAndFees=Decimal(1))
+        self.executions[execId] = (placed, execution, report)
         if reportFirst:
             self.wrapper.commissionReport(report)
         self.wrapper.execDetails(-1, placed.contract, execution)
@@ -478,6 +483,27 @@ class SimulatedTws:
         placed.ended = "rejected"
         self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
         self.run()
+
+    def repeatFill(self, execId: str) -> None:
+        """Send an execution and its commission report again."""
+        placed, execution, report = self.executions[execId]
+        self.wrapper.execDetails(-1, placed.contract, execution)
+        self.wrapper.commissionReport(report)
+        self.run()
+
+    def repeatStatus(self, placed: PlacedOrder) -> None:
+        """Send the last status of the order again."""
+        assert placed.lastStatus
+        self._orderStatus(placed, placed.lastStatus)
+        self.run()
+
+    def globalCancel(self) -> list[PlacedOrder]:
+        """Cancel every working order, as TWS does after reqGlobalCancel.
+        Return the cancelled orders."""
+        cancelled = [p for p in self.orders.values() if p.working]
+        for placed in cancelled:
+            self.cancelOrder(placed)
+        return cancelled
 
     # -- server side: historical data ----------------------------------------
 

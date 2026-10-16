@@ -1135,6 +1135,8 @@ class Wrapper:
             # the fill's own report, completed in place (the fill is
             # frozen, and already handed out)
             report = fill.commissionReport
+            if report == commissionReport:
+                return  # repeated report, already applied
             for f in dataclasses.fields(commissionReport):
                 setattr(report, f.name, getattr(commissionReport, f.name))
             self._logger.info("commissionReport: %s", report)

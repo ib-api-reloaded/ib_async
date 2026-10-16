@@ -1,13 +1,15 @@
 """Stateful test of order handling against a simulated TWS.
 
-Hypothesis places, modifies and cancels orders. In any order, the
-simulated TWS acknowledges, fills, cancels and rejects them, and the
-socket drops and reconnects. Fills can be partial or full, and the
-commission report can arrive before or after the execution.
+Hypothesis places single orders and bracket orders, modifies and cancels
+them, and cancels all orders at once. The simulated TWS acknowledges,
+fills, cancels and rejects orders, and repeats executions and statuses it
+has already sent. The socket drops and reconnects. These steps run in any
+order. Fills are partial or full. The commission report arrives before or
+after the execution.
 
-After each step, every trade's status, fills, log and events must match
-what happened to it. At the end the server fills every working order, and
-no trade may be left open.
+After each step the test checks that every trade's status, fills, log and
+events match the messages sent for it. At the end the server fills every
+working order, and the test checks that no trade is still open.
 """
 
 from __future__ import annotations
@@ -122,6 +124,32 @@ class OrderSimulation(RuleBasedStateMachine):
             Tracked(trade, placed, Decimal(quantity), track(trade), self.epoch)
         )
 
+    @rule(quantity=st.integers(1, 6))
+    def place_bracket(self, quantity: int) -> None:
+        """Place a bracket order. It has a limit entry, a take-profit limit
+        and a stop-loss. The take-profit and stop-loss have the entry as
+        parent. Only the stop-loss has transmit set, and placing it sends
+        the whole bracket."""
+        if not self.tws.connected:
+            return
+        parent, takeProfit, stopLoss = self.ib.bracketOrder(
+            "BUY", quantity, 50.00, 55.00, 45.00
+        )
+        assert takeProfit.parentId == stopLoss.parentId == parent.orderId
+        assert (parent.transmit, takeProfit.transmit, stopLoss.transmit) == (
+            False,
+            False,
+            True,
+        )
+        for order in (parent, takeProfit, stopLoss):
+            trade = self.ib.placeOrder(CONTRACT, order)
+            self.tws.run()
+            placed = self.tws.orders[trade.order.orderId]
+            assert placed.order.parentId == order.parentId
+            self.tracked.append(
+                Tracked(trade, placed, Decimal(quantity), track(trade), self.epoch)
+            )
+
     @rule(data=st.data(), price=st.integers(40, 60))
     def modify(self, data: st.DataObject, price: int) -> None:
         candidates = [t for t in self.live() if t.trade.order.orderType == "LMT"]
@@ -138,8 +166,20 @@ class OrderSimulation(RuleBasedStateMachine):
         if not candidates or not self.tws.connected:
             return
         tracked = self.pick(data, candidates)
+        untransmitted = (
+            tracked.serverStatus is None
+            and not tracked.ended
+            and not tracked.trade.order.transmit
+        )
         self.ib.cancelOrder(tracked.trade.order)
         self.tws.run()
+        if untransmitted:
+            # The client cancels an untransmitted order immediately if TWS
+            # has not acknowledged it yet. TWS then confirms the cancel.
+            assert tracked.trade.orderStatus.status == OrderStatus.Cancelled
+            self.tws.cancelOrder(tracked.placed)
+            tracked.ended = "cancelled"
+            return
         tracked.clientCancelled = True
         tracked.serverStatus = None  # the cancel is now the latest change
 
@@ -182,12 +222,56 @@ class OrderSimulation(RuleBasedStateMachine):
 
     @rule(data=st.data())
     def tws_rejects(self, data: st.DataObject) -> None:
-        candidates = [t for t in self.live() if not t.placed.acknowledged]
+        # TWS rejects an order before it reports any status for it.
+        candidates = [t for t in self.live() if not t.placed.lastStatus]
         if not candidates:
             return
         tracked = self.pick(data, candidates)
         self.tws.rejectOrder(tracked.placed)
         tracked.ended = "rejected"
+
+    @rule(data=st.data())
+    def tws_repeats_fill(self, data: st.DataObject) -> None:
+        """TWS sends an execution and its commission report again. The
+        trade gets no new fill and fires no events."""
+        candidates = [
+            t for t in self.tracked if t.trade.fills and t.epoch == self.epoch
+        ]
+        if not candidates:
+            return
+        tracked = self.pick(data, candidates)
+        fill = tracked.trade.fills[
+            data.draw(st.integers(0, len(tracked.trade.fills) - 1))
+        ]
+        self.tws.repeatFill(fill.execution.execId)
+
+    @rule(data=st.data())
+    def tws_repeats_status(self, data: st.DataObject) -> None:
+        """TWS sends the last order status again. A repeated Submitted after
+        a client cancel is the latest word from TWS, as an acknowledgement
+        is. Otherwise the trade does not change."""
+        candidates = [
+            t for t in self.tracked if t.placed.lastStatus and t.epoch == self.epoch
+        ]
+        if not candidates:
+            return
+        tracked = self.pick(data, candidates)
+        self.tws.repeatStatus(tracked.placed)
+        if not tracked.ended and tracked.placed.lastStatus == OrderStatus.Submitted:
+            tracked.serverStatus = OrderStatus.Submitted
+
+    @rule()
+    def global_cancel(self) -> None:
+        """The client calls reqGlobalCancel, and TWS cancels every working
+        order."""
+        if not self.tws.connected:
+            return
+        self.ib.reqGlobalCancel()
+        self.tws.run()
+        cancelled = self.tws.globalCancel()
+        for tracked in self.live():
+            assert tracked.placed in cancelled
+            tracked.ended = "cancelled"
 
     @rule()
     def disconnect(self) -> None:
