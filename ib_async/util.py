@@ -229,7 +229,10 @@ def _series(pl: Any, name: str, values: list[Any]) -> Any:
             return pl.Series(name, values, strict=kind != _NUMBER)
         except (pl.exceptions.PolarsError, TypeError, ValueError, OverflowError):
             pass
-    return pl.Series(name, values, dtype=pl.Object)
+    # polars converts an enum member it meets first to its value even in an
+    # object column; a plain object ahead of the values, dropped after,
+    # keeps every value as it is.
+    return pl.Series(name, [object(), *values], dtype=pl.Object).slice(1)
 
 
 def dataclassAsDict(obj) -> dict:

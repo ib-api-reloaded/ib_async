@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import enum
 from decimal import Decimal
 from typing import NamedTuple
 from zoneinfo import ZoneInfo
@@ -221,3 +222,12 @@ def test_enum_members_and_aware_times_are_kept_as_they_are():
     assert util.df([(h,) for h in halted])["column_0"].to_list() == halted
     aware = dt.time(9, 30, tzinfo=dt.UTC)
     assert util.df([(aware,)])["column_0"].to_list() == [aware]
+
+
+class _Plain(enum.Enum):
+    A = 1
+
+
+def test_plain_enum_members_are_kept_in_any_order():
+    for values in ([_Plain.A, None], [None, _Plain.A], [_Plain.A, "s"], [_Plain.A]):
+        assert util.df([(v,) for v in values])["column_0"].to_list() == values
