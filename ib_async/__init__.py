@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
-import sys
-
 from eventkit import Event
 
 from . import datarequests, ordertypes, util
@@ -233,15 +230,3 @@ __all__ = [
     "StartupFetchALL",
     "StartupFetchNONE",
 ]
-
-
-# compatibility with old Object
-for obj in locals().copy().values():
-    if dataclasses.is_dataclass(obj):
-        obj.dict = util.dataclassAsDict  # type: ignore[union-attr]
-        obj.tuple = util.dataclassAsTuple  # type: ignore[union-attr]
-        obj.update = util.dataclassUpdate  # type: ignore[union-attr]
-        obj.nonDefaults = util.dataclassNonDefaults  # type: ignore[union-attr]
-
-del sys
-del dataclasses

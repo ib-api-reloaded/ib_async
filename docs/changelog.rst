@@ -183,6 +183,13 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``PnLSingle``. ``None`` is the unset sentinel —
   ``Decimal('NaN')`` is never used (it is silently truthy in Python
   and corrupted downstream comparisons).
+* **No more methods patched onto classes at import.** Importing
+  ib_async added ``dict()``, ``tuple()``, ``update()`` and
+  ``nonDefaults()`` to every ib_async dataclass. They are gone: use
+  ``util.dataclassAsDict(obj)``, ``util.dataclassAsTuple(obj)``,
+  ``util.dataclassNonDefaults(obj)`` and
+  ``dataclasses.replace(obj, **changes)`` (``update()`` already failed on
+  the slotted classes, which have no ``__dict__``).
 * **``RealTimeBar`` is frozen, and its ``open_`` is ``open``**, as on
   ``BarData``: the bars of ``reqRealTimeBars`` and of the bar operators
   cannot be changed once handed out, and code reading or assigning
