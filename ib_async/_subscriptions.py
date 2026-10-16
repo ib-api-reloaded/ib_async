@@ -131,9 +131,11 @@ class Subscription:
 class MktDataSub(Subscription):
     """``IB.reqMktData`` — streaming top-of-book + generic ticks.
 
-    The :class:`Ticker` is pooled per-contract across mktData /
-    tickByTick / mktDepth and is therefore *not* set-done on close;
-    other subscriptions on the same contract may still be active.
+    A streaming subscription's :class:`Ticker` is shared per contract by
+    mktData, tickByTick and mktDepth, so it is *not* set done on close:
+    other subscriptions on the same contract may still be active. A
+    snapshot has its own Ticker, which is set done when the snapshot ends
+    because nothing will update it again.
     """
 
     KIND: ClassVar[str | None] = "mktData"
@@ -147,6 +149,10 @@ class MktDataSub(Subscription):
         # protocol error.
         if not self.snapshot:
             client.cancelMktData(self.reqId)
+
+    def _set_done(self) -> None:
+        if self.snapshot and self.ticker is not None:
+            self.ticker.updateEvent.set_done()
 
 
 @dataclass

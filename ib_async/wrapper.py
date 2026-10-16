@@ -503,22 +503,12 @@ class Wrapper:
 
         error = ConnectionError("Socket disconnect")
 
-        # Snapshot Tickers are private (not in the pool), so gather them
-        # from their still-live subscriptions before close_all drops the
-        # reqId index — otherwise an awaiter on a snapshot Ticker's
-        # ``updateEvent`` would never wake after a mid-snapshot disconnect.
-        snapshot_tickers = [
-            sub.ticker
-            for sub in self.subscriptions
-            if isinstance(sub, MktDataSub) and sub.snapshot and sub.ticker is not None
-        ]
-
         self.requests.fail_all(error)
+        # Closing a snapshot's subscription sets its private Ticker done;
+        # the pooled Tickers, shared by streams, are set done below.
         self.subscriptions.close_all(send_cancel=False)
 
         for ticker in self.subscriptions.pooled_tickers():
-            ticker.updateEvent.set_done()
-        for ticker in snapshot_tickers:
             ticker.updateEvent.set_done()
 
         now = datetime.now(self.defaultTimezone)

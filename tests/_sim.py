@@ -38,6 +38,10 @@ REQUESTS: dict[str, bool] = {
     "reqHistoricalData": True,
     "reqPositionsMulti": True,
     "reqPositions": False,
+    # Streams: open while they stream; a snapshot ends with tickSnapshotEnd.
+    "reqMktData": True,
+    "reqTickByTickData": True,
+    "reqMktDepth": True,
 }
 # Each cancel the client may send, and the request it cancels.
 CANCELS: dict[str, str] = {
@@ -46,6 +50,9 @@ CANCELS: dict[str, str] = {
     "cancelPositionsMulti": "reqPositionsMulti",
     "cancelContractData": "reqContractDetails",
     "cancelPositions": "reqPositions",
+    "cancelMktData": "reqMktData",
+    "cancelTickByTickData": "reqTickByTickData",
+    "cancelMktDepth": "reqMktDepth",
 }
 
 
@@ -131,7 +138,9 @@ class SimulatedTws:
             raise ConnectionError("Not connected")  # as Client.send
         self.asks.append(Ask(name, args[0] if hasReqId else None, args))
 
-    def _cancelled(self, name: str, kind: str, reqId: int | None = None) -> None:
+    def _cancelled(
+        self, name: str, kind: str, reqId: int | None = None, *_: Any
+    ) -> None:
         self.cancels.append((name, reqId))
         for ask in self.asks:
             if ask.kind == kind and ask.reqId == reqId and ask.open:
@@ -240,6 +249,59 @@ class SimulatedTws:
         self.wrapper.error(ask.reqId, 10225, "Bust event occurred", "")
         ask.answered = True
         self.run()
+
+    # -- the server's side: streams ----------------------------------------
+
+    def lastTick(self, ask: Ask, price: float, size: float = 1.0) -> None:
+        """A last price tick on a market data stream (or a stray one for a
+        cancelled reqId, which the wrapper drops)."""
+        assert ask.reqId is not None
+        self.wrapper.priceSizeTick(ask.reqId, 4, price, size, ibi.TickAttrib())
+
+    def quote(self, ask: Ask, bid: float, offer: float) -> None:
+        assert ask.reqId is not None
+        self.wrapper.priceSizeTick(ask.reqId, 1, bid, 1.0, ibi.TickAttrib())
+        self.wrapper.priceSizeTick(ask.reqId, 2, offer, 1.0, ibi.TickAttrib())
+
+    def snapshotEnd(self, ask: Ask) -> None:
+        """A snapshot's last message; its subscription ends."""
+        assert ask.reqId is not None
+        self.wrapper.tickSnapshotEnd(ask.reqId)
+        ask.answered = True
+
+    def tickByTick(self, ask: Ask, tickType: str, price: float) -> None:
+        assert ask.reqId is not None
+        w, reqId = self.wrapper, ask.reqId
+        if tickType in ("Last", "AllLast"):
+            w.tickByTickAllLast(
+                reqId, 1, 1700000000, price, 1.0, ibi.TickAttribLast(), "", ""
+            )
+        elif tickType == "BidAsk":
+            w.tickByTickBidAsk(
+                reqId, 1700000000, price, price + 1, 1.0, 1.0, ibi.TickAttribBidAsk()
+            )
+        else:
+            w.tickByTickMidPoint(reqId, 1700000000, price)
+
+    def depth(
+        self, ask: Ask, position: int, operation: int, side: int, price: float
+    ) -> None:
+        assert ask.reqId is not None
+        self.wrapper.updateMktDepthL2(
+            ask.reqId, position, "SIM", operation, side, price, 1.0
+        )
+
+    def depthReset(self, ask: Ask) -> None:
+        """Error 317: the depth book is reset."""
+        assert ask.reqId is not None
+        self.wrapper.error(ask.reqId, 317, "Market depth data has been RESET", "")
+
+    def refuseStream(self, ask: Ask, code: int = 354) -> None:
+        """An error on a stream (354: not subscribed to the data)."""
+        assert ask.reqId is not None
+        self.wrapper.error(
+            ask.reqId, code, "Requested market data is not subscribed", ""
+        )
 
     # -- the server's side: orders -----------------------------------------
 
