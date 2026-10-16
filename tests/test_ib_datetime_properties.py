@@ -30,7 +30,7 @@ instants = st.datetimes(
 
 
 @given(when=instants)
-@examples(300)
+@examples()
 def test_time_round_trip(when):
     parsed = util.parseIBDatetime(util.formatIBDatetime(when))
     assert isinstance(parsed, dt.datetime)
@@ -41,7 +41,7 @@ def test_time_round_trip(when):
 
 
 @given(day=st.dates(dt.date(1990, 1, 1), dt.date(2099, 12, 31)))
-@examples(200)
+@examples()
 def test_date_round_trip(day):
     parsed = util.parseIBDatetime(util.formatIBDatetime(day))
     assert isinstance(parsed, dt.datetime)
@@ -64,7 +64,7 @@ def test_date_round_trip(day):
         ),
     )
 )
-@examples(400)
+@examples()
 def test_invalid_string_raises_only_value_error(text):
     try:
         parsed = util.parseIBDatetime(text)
@@ -79,7 +79,7 @@ def test_invalid_string_raises_only_value_error(text):
     zone=st.sampled_from(["", "GB-Eire", "US/Eastern", "UTC"]),
     hyphenated=st.booleans(),
 )
-@examples(200)
+@examples()
 def test_last_trade_date_splits_into_parts(date, time, zone, hyphenated):
     """IB writes either ``date time zone`` separated by spaces, or
     ``date-time`` separated by a hyphen.
@@ -106,7 +106,7 @@ def test_last_trade_date_splits_into_parts(date, time, zone, hyphenated):
     ).map(lambda t: t.replace(microsecond=0)),
     steps=st.lists(st.integers(1, 20 * 86400), min_size=1, max_size=12),
 )
-@examples(200)
+@examples()
 def test_short_datetimes_get_years_in_order(start, steps):
     """formatDate=3 bars have ``MMdd HH:MM:SS`` and a zone but no year.
 

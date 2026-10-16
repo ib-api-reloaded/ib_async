@@ -28,7 +28,7 @@ import ib_async as ibi
 from ib_async.depth import DepthOperation
 from ib_async.ticker import Ticker
 from ib_async.util import getLoop
-from tests._property import examples
+from tests._property import machine
 from tests._sim import Ask, SimulatedTws
 
 STOCK_A = ibi.Stock("A", "SMART", "USD", conId=10)
@@ -351,4 +351,4 @@ class MarketDataSimulation(RuleBasedStateMachine):
 
 
 TestMarketDataSimulation = MarketDataSimulation.TestCase
-TestMarketDataSimulation.settings = examples(100, stateful_step_count=40)
+TestMarketDataSimulation.settings = machine()

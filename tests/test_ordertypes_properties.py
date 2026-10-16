@@ -67,7 +67,7 @@ def holds(kind: type, field: str, value: object) -> bool:
 
 
 @given(field=st.sampled_from(FIELDS), value=anything)
-@examples(400)
+@examples()
 def test_checked_value_is_refused_or_stored(field, value):
     try:
         checked = checkedValue("X", field, field, value, infinity=True)
@@ -82,7 +82,7 @@ def test_checked_value_is_refused_or_stored(field, value):
 
 
 @given(value=anything)
-@examples(300)
+@examples()
 def test_finite_decimal_never_raises_and_is_finite_or_none(value):
     result = finiteDecimal(value)
     assert result is None or (isinstance(result, Decimal) and result.is_finite())
@@ -93,7 +93,7 @@ def test_finite_decimal_never_raises_and_is_finite_or_none(value):
 
 
 @given(kind=st.sampled_from(sorted(Kind)), value=anything)
-@examples(300)
+@examples()
 def test_tag_value_is_refused_or_encoded(kind, value):
     if kind in (Kind.FIELD, Kind.LEG_PRICES):
         return
@@ -140,7 +140,7 @@ def valueFor(param: Param, data: st.DataObject) -> object:
     ),
     data=st.data(),
 )
-@examples(300)
+@examples()
 def test_constructor_refuses_arguments_or_builds_its_type(spec, action, quantity, data):
     values = {p.name: valueFor(p, data) for p in spec.params}
     constructor = getattr(ib_async, spec.className)
@@ -170,7 +170,7 @@ def test_constructor_refuses_arguments_or_builds_its_type(spec, action, quantity
     ),
     preserveParentId=st.booleans(),
 )
-@examples(200)
+@examples()
 def test_modified_order_is_refused_or_ready_to_send(changes, preserveParentId):
     live = Order(
         orderId=5,

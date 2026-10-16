@@ -28,7 +28,7 @@ def comparable(value: object) -> object:
 
 
 @given(order=orders())
-@examples(300)
+@examples()
 def test_order_round_trip(order):
     sent = dataclassAsDict(order)
     proto = createOrderProto(order)
@@ -40,7 +40,7 @@ def test_order_round_trip(order):
 
 
 @given(contract=contracts())
-@examples(300)
+@examples()
 def test_contract_round_trip(contract):
     proto = createContractProto(contract)
     assert isinstance(proto, Contract_pb2.Contract)

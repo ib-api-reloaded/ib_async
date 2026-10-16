@@ -31,7 +31,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 from ib_async._requests import ReqIdKey, RequestKey, SingletonKey
 from ib_async._subscriptions import HistoricalBarsSub
 from ib_async.util import getLoop
-from tests._property import examples
+from tests._property import machine
 from tests._sim import CONTRACT, Ask, SimulatedTws
 
 PENDING, RESULT, CANCELLED, DISCONNECTED = "pending", "result", "cancelled", "gone"
@@ -336,4 +336,4 @@ class RequestSimulation(RuleBasedStateMachine):
 
 
 TestRequestSimulation = RequestSimulation.TestCase
-TestRequestSimulation.settings = examples(100, stateful_step_count=40)
+TestRequestSimulation.settings = machine()

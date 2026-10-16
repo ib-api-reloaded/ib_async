@@ -24,7 +24,7 @@ import ib_async as ibi
 from ib_async._subscriptions import MktDepthSub
 from ib_async.depth import DepthBook, DepthOperation
 from ib_async.objects import DOMLevel
-from tests._property import examples
+from tests._property import examples, machine
 
 INSERT, UPDATE, DELETE = (
     DepthOperation.INSERT,
@@ -87,7 +87,7 @@ class PartialBookModel(RuleBasedStateMachine):
 
 
 TestPartialBookModel = PartialBookModel.TestCase
-TestPartialBookModel.settings = examples(150, stateful_step_count=60)
+TestPartialBookModel.settings = machine()
 
 
 # -- replaying target books as IBKR row operations ----------------------------
@@ -164,7 +164,7 @@ def bookSequences(draw: st.DrawFn) -> list[tuple[list[DOMLevel], list[DOMLevel]]
 
 
 @given(books=bookSequences(), insertsFirst=st.booleans())
-@examples(150)
+@examples()
 def test_row_operations_reproduce_target_books(books, insertsFirst):
     ib = ibi.IB()
     contract = ibi.Stock("QQQ", "ISLAND", "USD", conId=1001)

@@ -43,7 +43,7 @@ accountLists = st.lists(st.sampled_from(["DU1", "DU2", "DU3"]), min_size=1, uniq
     secondOrderId=st.integers(1, 10**6),
     secondAccounts=accountLists,
 )
-@examples(100)
+@examples()
 def test_api_starts_after_next_valid_id_and_managed_accounts(
     version,
     idFirst,

@@ -72,7 +72,7 @@ def initialRow(i: int) -> tuple:
         st.tuples(st.sampled_from(["same", "later", "earlier"]), prices), max_size=12
     ),
 )
-@examples(150)
+@examples()
 def test_keep_up_to_date_bars_match_model(initial, updates):
     tws = SimulatedTws(getLoop())
     task = tws.start(
@@ -130,7 +130,7 @@ TICK_KINDS = {
     kind=st.sampled_from(sorted(TICK_KINDS)),
     chunks=st.lists(st.integers(0, 4), min_size=1, max_size=4),
 )
-@examples(100)
+@examples()
 def test_historical_ticks_arrive_in_chunks(kind, chunks):
     tws = SimulatedTws(getLoop())
     task = tws.start(

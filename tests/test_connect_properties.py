@@ -57,7 +57,7 @@ def counts(asks: list[Ask]) -> dict[str, int]:
     accounts=st.lists(st.sampled_from(["DU1", "DU2", "DU3"]), min_size=1, unique=True),
     chooseAccount=st.booleans(),
 )
-@examples(60)
+@examples()
 def test_connect_sends_startup_requests_for_settings(
     flags, readonly, accounts, chooseAccount
 ):

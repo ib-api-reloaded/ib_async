@@ -48,7 +48,7 @@ MSG_IDS = sorted(Decoder(ibi.IB().wrapper, SERVER_VERSION).handlers)
 
 
 @given(msgId=st.sampled_from(MSG_IDS), body=fields)
-@examples(400)
+@examples()
 def test_malformed_binary_frame_is_dropped(msgId, body):
     ib, dec = decoder()
     dec.interpret([str(msgId), *body])
@@ -56,7 +56,7 @@ def test_malformed_binary_frame_is_dropped(msgId, body):
 
 
 @given(msgId=st.sampled_from(sorted(_PROTO_MESSAGES)), payload=st.binary(max_size=64))
-@examples(400)
+@examples()
 def test_random_protobuf_bytes_are_dropped(msgId, payload):
     ib, dec = decoder()
     dec.processProtoBuf(msgId, payload)

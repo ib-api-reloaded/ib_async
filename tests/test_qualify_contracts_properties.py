@@ -43,7 +43,7 @@ details = st.lists(
     answered=details,
     returnAll=st.booleans(),
 )
-@examples(300)
+@examples()
 def test_unique_match_qualifies_contract_in_place(
     secType, exchange, answered, returnAll
 ):

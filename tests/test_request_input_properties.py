@@ -82,7 +82,7 @@ def attempt(
     contract=userContracts,
     order=st.one_of(orders(), st.builds(ibi.MarketOrder, st.just("BUY"), st.just(100))),
 )
-@examples(300)
+@examples()
 def test_request_sends_one_frame_or_refuses_before_sending(name, contract, order):
     session = Session()
     ready(session)

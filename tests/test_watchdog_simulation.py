@@ -30,7 +30,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 import ib_async as ibi
 from ib_async.ibcontroller import Watchdog
 from ib_async.util import getLoop
-from tests._property import examples
+from tests._property import machine
 from tests._sim import SimulatedTws
 
 STARTUP, RETRY = 30.0, 2.0
@@ -277,4 +277,4 @@ class WatchdogSimulation(RuleBasedStateMachine):
 
 
 TestWatchdogSimulation = WatchdogSimulation.TestCase
-TestWatchdogSimulation.settings = examples(100, stateful_step_count=40)
+TestWatchdogSimulation.settings = machine()

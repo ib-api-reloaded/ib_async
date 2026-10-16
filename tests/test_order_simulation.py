@@ -23,7 +23,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 import ib_async as ibi
 from ib_async import OrderStatus, Trade
 from ib_async.util import getLoop
-from tests._property import examples
+from tests._property import machine
 from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
 
 
@@ -354,7 +354,7 @@ class OrderSimulation(RuleBasedStateMachine):
 
 
 TestOrderSimulation = OrderSimulation.TestCase
-TestOrderSimulation.settings = examples(100, stateful_step_count=40)
+TestOrderSimulation.settings = machine()
 
 
 def test_fill_before_open_order_gets_commission_event():

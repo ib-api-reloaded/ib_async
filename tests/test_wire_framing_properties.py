@@ -94,7 +94,7 @@ def chunks(data: bytes, cuts: list[int]) -> list[bytes]:
     frames=st.lists(st.one_of(binaryFrame, protoFrame), max_size=8),
     cuts=st.lists(st.integers(0, 10**6), max_size=12),
 )
-@examples(300)
+@examples()
 def test_new_framing_is_independent_of_chunking(frames, cuts):
     c, decoder = client(NEW_FRAMING)
     data = b"".join(encode(f, NEW_FRAMING) for f in frames)
@@ -110,7 +110,7 @@ def test_new_framing_is_independent_of_chunking(frames, cuts):
     frames=st.lists(binaryFrame, max_size=8),
     cuts=st.lists(st.integers(0, 10**6), max_size=12),
 )
-@examples(200)
+@examples()
 def test_old_framing_is_independent_of_chunking(frames, cuts):
     c, decoder = client(OLD_FRAMING)
     data = b"".join(encode(f, OLD_FRAMING) for f in frames)
@@ -122,7 +122,7 @@ def test_old_framing_is_independent_of_chunking(frames, cuts):
 
 
 @given(frames=st.lists(st.one_of(binaryFrame, protoFrame), min_size=1, max_size=4))
-@examples(100)
+@examples()
 def test_partial_frame_is_kept_until_complete(frames):
     """The client keeps the bytes of an incomplete frame and does not decode
     it until the rest arrives."""

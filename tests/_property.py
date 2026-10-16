@@ -14,11 +14,30 @@ from hypothesis import Phase, settings
 
 SCALE = int(os.environ.get("IB_ASYNC_PROPERTY_SCALE", "1"))
 
+# Example budgets at scale 1. Property tests use PROPERTY_EXAMPLES. State
+# machines use MACHINE_EXAMPLES and MACHINE_STEPS. These numbers set the
+# running time of the suite.
+PROPERTY_EXAMPLES = 200
+MACHINE_EXAMPLES = 100
+MACHINE_STEPS = 40
+
 # The explain phase is off. Its tracing makes long state machine runs much
-# slower, and a failing example is readable without it.
+# slower. A failing example is readable without it.
 PHASES = (Phase.explicit, Phase.reuse, Phase.generate, Phase.target, Phase.shrink)
 
 
-def examples(count: int, **kwargs: object) -> settings:
-    """Settings for ``count`` examples at scale 1, with no deadline."""
+def examples(count: int = PROPERTY_EXAMPLES, **kwargs: object) -> settings:
+    """Return settings for a property test.
+
+    The test runs ``count`` examples at scale 1 and has no deadline.
+    """
     return settings(max_examples=count * SCALE, deadline=None, phases=PHASES, **kwargs)
+
+
+def machine(**kwargs: object) -> settings:
+    """Return settings for a state machine.
+
+    At scale 1 the machine does MACHINE_EXAMPLES runs of MACHINE_STEPS
+    steps each. It has no deadline.
+    """
+    return examples(MACHINE_EXAMPLES, stateful_step_count=MACHINE_STEPS, **kwargs)

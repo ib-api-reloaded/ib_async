@@ -31,7 +31,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 import ib_async as ibi
 from ib_async.objects import AccountValue
 from ib_async.util import getLoop
-from tests._property import examples
+from tests._property import machine
 from tests._sim import Ask, SimulatedTws
 
 ACCOUNTS = ["DU1", "DU2"]
@@ -360,4 +360,4 @@ class AccountState(RuleBasedStateMachine):
 
 
 TestAccountState = AccountState.TestCase
-TestAccountState.settings = examples(100, stateful_step_count=40)
+TestAccountState.settings = machine()

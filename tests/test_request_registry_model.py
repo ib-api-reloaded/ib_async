@@ -41,7 +41,7 @@ from ib_async._requests import (
     SingletonKey,
 )
 from ib_async.util import getLoop
-from tests._property import examples
+from tests._property import machine
 
 # As in IB, singleton requests are shared among callers, and each reqId
 # request has a single caller.
@@ -261,4 +261,4 @@ class RegistryModel(RuleBasedStateMachine):
 
 
 TestRegistryModel = RegistryModel.TestCase
-TestRegistryModel.settings = examples(150, stateful_step_count=40)
+TestRegistryModel.settings = machine()

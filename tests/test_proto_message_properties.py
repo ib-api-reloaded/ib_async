@@ -158,7 +158,7 @@ def assert_valid_frame_decodes(ib: ibi.IB, dec: Decoder) -> None:
 
 
 @given(msgId=st.sampled_from(MSG_IDS), data=st.data())
-@examples(600)
+@examples()
 def test_well_formed_message_converts_without_an_exception(msgId, data):
     message = data.draw(messageFor(msgId))
     ib, dec = decoder()

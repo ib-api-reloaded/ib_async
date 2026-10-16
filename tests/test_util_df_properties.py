@@ -46,7 +46,7 @@ rows = st.lists(
 
 
 @given(rows=rows)
-@examples(200)
+@examples()
 def test_all_rows_and_values_kept(rows):
     frame = util.df(rows)
     assert frame.height == len(rows)
@@ -60,7 +60,7 @@ def test_all_rows_and_values_kept(rows):
 
 
 @given(rows=rows, labels=st.permutations(["ratio", "name", "count"]))
-@examples(50)
+@examples()
 def test_labels_select_columns_in_order(rows, labels):
     frame = util.df(rows, labels)
     assert frame.columns == labels

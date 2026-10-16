@@ -83,7 +83,7 @@ def same(bar: RealTimeBar, expected: RealTimeBar) -> None:
     count=st.integers(1, 7),
     maxBars=st.one_of(st.none(), st.integers(1, 5)),
 )
-@examples(200)
+@examples()
 def test_tick_bars_group_by_count(stream, count, maxBars):
     ticker = Ticker()
     tickBars = ticker.updateEvent.trades().tickbars(count, maxBars)
@@ -105,7 +105,7 @@ def test_tick_bars_group_by_count(stream, count, maxBars):
 
 
 @given(stream=ticks, volume=st.decimals(Decimal("0.5"), 600, places=1))
-@examples(200)
+@examples()
 def test_volume_bar_completes_at_volume(stream, volume):
     ticker = Ticker()
     volumeBars = ticker.updateEvent.trades().volumebars(volume)
@@ -129,7 +129,7 @@ def test_volume_bar_completes_at_volume(stream, volume):
     stream=ticks,
     timerAt=st.lists(st.integers(0, 45), unique=True, max_size=8).map(sorted),
 )
-@examples(200)
+@examples()
 def test_time_bars_group_by_timer(stream, timerAt):
     """A bar starts at each timer event and holds the ticks until the next.
 
@@ -175,7 +175,7 @@ def test_time_bars_group_by_timer(stream, timerAt):
 
 
 @given(stream=ticks, count=st.integers(1, 4))
-@examples(100)
+@examples()
 def test_completed_bar_is_unchanged_and_operator_ends_with_source(stream, count):
     ticker = Ticker()
     tickBars = ticker.updateEvent.trades().tickbars(count)

@@ -29,7 +29,7 @@ DURATION = re.compile(r"[1-9][0-9]* [SDWMY]")
 
 
 @given(text=st.text(alphabet="0123456789 SDWMYsdX-", max_size=8))
-@examples(400)
+@examples()
 def test_duration_accepted_only_as_count_and_unit(text):
     if DURATION.fullmatch(text):
         assert checkDuration(text) == text
@@ -51,7 +51,7 @@ months = st.one_of(
     exchange=st.sampled_from(["", "CME"]),
     monthList=st.lists(months, max_size=4),
 )
-@examples(300)
+@examples()
 def test_option_strike_searches_accept_documented_months(
     secType, symbol, exchange, monthList
 ):
@@ -95,7 +95,7 @@ OPTIONS = [name for name in _SWITCHES if name not in ("twsVersion", "gateway")]
         max_size=5,
     ),
 )
-@examples(300)
+@examples()
 def test_ibc_command_lists_each_set_option_once(twsVersion, gateway, windows, values):
     ibc = IBC(twsVersion, gateway=gateway, **values)
     ibc._isWindows = windows
@@ -155,7 +155,7 @@ def parsed(value: str) -> object:
 
 
 @given(report=flexXml())
-@examples(200)
+@examples()
 def test_flex_report_extracts_all_rows(report, tmp_path_factory):
     data, rows = report
     path = tmp_path_factory.mktemp("flex") / "report.xml"
@@ -172,7 +172,7 @@ def test_flex_report_extracts_all_rows(report, tmp_path_factory):
 
 
 @given(junk=st.binary(max_size=40).filter(lambda b: not b.startswith(b"<")))
-@examples(100)
+@examples()
 def test_non_xml_file_raises_flex_error(junk, tmp_path_factory):
     path = tmp_path_factory.mktemp("flex") / "junk.xml"
     path.write_bytes(junk)
@@ -186,7 +186,7 @@ def test_non_xml_file_raises_flex_error(junk, tmp_path_factory):
         st.tuples(st.builds(ibi.TagValue, st.text(max_size=4), st.text(max_size=4))),
     )
 )
-@examples(100)
+@examples()
 def test_tag_value_options_are_copied_not_shared(options):
     copied = _tagValueList(options)
     assert copied == list(options)

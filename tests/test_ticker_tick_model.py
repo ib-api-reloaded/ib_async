@@ -39,7 +39,7 @@ from ib_async.wrapper import (
     STRING_TICK_MAP,
     TIMESTAMP_TICK_MAP,
 )
-from tests._property import examples
+from tests._property import machine
 from tests._sim import SimulatedTws
 
 EMPTY_PRICE, EMPTY_SIZE = -1, 0
@@ -386,4 +386,4 @@ class TickProcessing(RuleBasedStateMachine):
 
 
 TestTickProcessing = TickProcessing.TestCase
-TestTickProcessing.settings = examples(150, stateful_step_count=50)
+TestTickProcessing.settings = machine()

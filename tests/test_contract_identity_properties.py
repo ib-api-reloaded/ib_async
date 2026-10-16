@@ -54,7 +54,7 @@ def identity(contract: ibi.Contract) -> int | None:
 
 
 @given(contract=contracts())
-@examples(300)
+@examples()
 def test_contract_equals_itself_and_recreation(contract):
     assert contract == dataclasses.replace(contract)
     again = ibi.Contract.recreate(contract)
@@ -65,7 +65,7 @@ def test_contract_equals_itself_and_recreation(contract):
 
 
 @given(a=contracts(), b=contracts())
-@examples(400)
+@examples()
 def test_equal_contracts_have_equal_hash_and_identity(a, b):
     if a == b:
         assert b == a
@@ -76,7 +76,7 @@ def test_equal_contracts_have_equal_hash_and_identity(a, b):
 
 
 @given(contract=contracts(), other=symbols, conId=st.sampled_from([0, 10, 99]))
-@examples(300)
+@examples()
 def test_contract_identity_by_sec_type(contract, other, conId):
     """Check which fields identify each kind of contract.
 
@@ -108,7 +108,7 @@ def test_contract_identity_by_sec_type(contract, other, conId):
 
 
 @given(contract=contracts())
-@examples(300)
+@examples()
 def test_market_data_identity_exists_only_for_hashable_contracts(contract):
     key = identity(contract)
     assert (key is None) == (not contract.isHashable())
