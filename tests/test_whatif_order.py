@@ -123,3 +123,22 @@ def test_whatIf_refusal_answers_a_refused_OrderState():
 
 def test_answered_whatIf_is_not_refused():
     assert not OrderState(initMarginChange="1234.5").whatIfRefused
+
+
+@pytest.mark.parametrize("margin", ["", "1.7976931348623157E308"])
+def test_whatIf_reply_without_margins_does_not_settle_request(margin):
+    """TWS sends a first what-if reply without margins and a second reply
+    with them. In the first reply the margin is an empty field on the
+    protobuf path or the unset double on the binary path. Only the reply
+    with margins settles the request."""
+    ib = _wired_ib()
+    contract = ibi.Stock("ABC", "SMART", "USD", conId=1)
+    future = ib.whatIfOrderAsync(contract, ibi.MarketOrder("BUY", 100))
+    twsOrder = Order(orderId=555, clientId=0, whatIf=True)
+
+    ib.wrapper.openOrder(555, contract, twsOrder, OrderState(initMarginChange=margin))
+    assert not future.done()
+
+    state = OrderState(initMarginChange="1234.5")
+    ib.wrapper.openOrder(555, contract, twsOrder, state)
+    assert future.done() and future.result() is state

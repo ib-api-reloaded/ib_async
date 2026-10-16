@@ -11,7 +11,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Final, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Final, TypeAlias
 from zoneinfo import ZoneInfo
 
 from ib_async._requests import (
@@ -851,8 +851,11 @@ class Wrapper:
         * handle openOrders and allOpenOrders responses.
         """
         if order.whatIf:
-            # response to whatIfOrder
-            if float(orderState.initMarginChange) != UNSET_DOUBLE:
+            # Response to whatIfOrder. TWS sends a first reply without
+            # margins, where the margin is empty or the unset double. A
+            # second reply carries the margins.
+            margin = orderState.initMarginChange
+            if margin and float(margin) != UNSET_DOUBLE:
                 self.requests.set_result(WhatIfKey(order.orderId), orderState)
         else:
             key = self.orderKey(order.clientId, order.orderId, order.permId)
@@ -1952,8 +1955,17 @@ class Wrapper:
     def historicalNews(
         self, reqId: int, time: str, providerCode: str, articleId: str, headline: str
     ):
-        dt = parseIBDatetime(time)
-        dt = cast(datetime, dt)
+        try:
+            dt = parseIBDatetime(time)
+        except ValueError:
+            dt = None
+        if not isinstance(dt, datetime):
+            # Drop a row whose time cannot be parsed. The request still
+            # completes with the other rows.
+            self._logger.error(
+                "historicalNews: unreadable time %r for article %s", time, articleId
+            )
+            return
         article = HistoricalNews(dt, providerCode, articleId, headline)
         self.requests.append(ReqIdKey(reqId), article)
 
