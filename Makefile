@@ -9,7 +9,7 @@
 # bindings bundled into the package without needing ``protoc`` or
 # ``grpcio-tools``.
 
-.PHONY: help sync protos ordertypes datarequests audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-matrix test-repeat examples-check format clean
+.PHONY: help sync protos ordertypes datarequests audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-report test-matrix test-repeat examples-check format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -46,6 +46,8 @@ help:
 	@echo "  publish  - release, upload to PyPI, tag, verify the published release"
 	@echo "  publish-test - the same against TestPyPI"
 	@echo "  test     - run the owned test suite"
+	@echo "  test-report - the suite once, each failure reported whole, and any hang"
+	@echo "                (PYTEST_ARGS=\"tests/test_x.py -k y\" to select)"
 	@echo "  test-matrix - run the suite on each configured Python version, each in its"
 	@echo "                own .venvs/py<version> environment and time-boxed; logs in"
 	@echo "                .venvs/logs/ (PYTHONS=\"3.13 3.15\" for a subset)"
@@ -127,6 +129,12 @@ lint: ruff typecheck
 
 test:
 	uv run --no-dev --group test $(UV_RUN_ARGS) $(PYTEST)
+
+# The tests once, reported from pytest's own results: each failure whole,
+# the slowest phases, and the test a hang stopped in; logs in
+# .venvs/logs/test/. PYTEST_ARGS selects, e.g. PYTEST_ARGS="tests/test_x.py -k y".
+test-report:
+	$(RELEASEKIT) test -- $(PYTEST_ARGS)
 
 test-matrix:
 	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v))
