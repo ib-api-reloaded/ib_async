@@ -152,9 +152,13 @@ class FlexReport:
         _logger.info("Statement retrieved.")
 
     def load(self, path):
-        """Load report from XML file."""
+        """Load report from XML file. Raises FlexError if the file is not
+        valid XML."""
         self.data = Path(path).read_bytes()
-        self.root = et.fromstring(self.data)
+        try:
+            self.root = et.fromstring(self.data)
+        except et.ParseError as e:
+            raise FlexError(f"{path} is not a Flex report: {e}") from e
 
     def save(self, path):
         """Save report to XML file."""
