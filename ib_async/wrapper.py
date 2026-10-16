@@ -84,7 +84,6 @@ from ib_async.util import (
     UNSET_DOUBLE,
     UNSET_INTEGER,
     dataclassAsDict,
-    dataclassUpdate,
     getLoop,
     globalErrorEvent,
     isIBShortDatetime,
@@ -1016,7 +1015,9 @@ class Wrapper:
             isChanged = curr != {**curr, **new}
 
             if isChanged:
-                dataclassUpdate(trade.orderStatus, **new)
+                # the trade's live status, changed in place
+                for name, value in new.items():
+                    setattr(trade.orderStatus, name, value)
                 msg = ""
             elif (
                 status == "Submitted"
@@ -1124,7 +1125,11 @@ class Wrapper:
         # passed through as decoded rather than substituted.
         fill = self.fills.get(commissionReport.execId)
         if fill:
-            report = dataclassUpdate(fill.commissionReport, commissionReport)
+            # the fill's own report, completed in place (the fill is
+            # frozen, and already handed out)
+            report = fill.commissionReport
+            for f in dataclasses.fields(commissionReport):
+                setattr(report, f.name, getattr(commissionReport, f.name))
             self._logger.info("commissionReport: %s", report)
             trade = self.permId2Trade.get(fill.execution.permId)
             if trade and commissionReport.execId in self._liveExecIds:

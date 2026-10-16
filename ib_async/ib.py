@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import copy
+import dataclasses
 import datetime
 import logging
 import time
@@ -130,6 +131,14 @@ class _OptionListing:
     tradingClass: str
     multiplier: Decimal | None
     underlyingConId: int
+
+
+def _qualifyInPlace(contract: Contract, qualified: Contract) -> None:
+    """Fill in the caller's ``contract`` with every field of ``qualified``,
+    as IBKR's details give it: qualifyContracts qualifies the contracts it
+    is given, in place."""
+    for f in dataclasses.fields(qualified):
+        setattr(contract, f.name, getattr(qualified, f.name))
 
 
 def _optionSearches(underlying: Contract, months: Sequence[str]) -> list[Contract]:
@@ -2680,24 +2689,27 @@ class IB:
                 #  - IBKR is returning EC _and_ FOP contracts for only FOP requests,
                 #    which is clearly incorrect, so now if an input request has `secType`
                 #    defined, we only return matching `secType` contracts.
+                possibles: list[Contract | None]
                 if contract.secType:
-                    possibles = [
-                        details.contract
+                    matching = [
+                        c
                         for details in detailsList
-                        if contract.secType == details.contract.secType  # type: ignore[union-attr]
+                        if (c := details.contract) is not None
+                        and c.secType == contract.secType
                     ]
 
                     # if our match instrument type filter resolved to only _one_ matching
                     # contract, then we found a single usable result to add.
-                    if len(possibles) == 1:
-                        c = possibles[0]
+                    if len(matching) == 1:
+                        c = matching[0]
                         if contract.exchange == "SMART":
                             # Allow contracts to become more generic if SMART requested as input
-                            c.exchange = contract.exchange  # type: ignore[union-attr]
+                            c.exchange = contract.exchange
 
-                        util.dataclassUpdate(contract, c)
+                        _qualifyInPlace(contract, c)
                         result.append(contract)
                         continue
+                    possibles = list(matching)
                 else:
                     # else, return all matches if no specific secType requested
                     possibles = [details.contract for details in detailsList]
@@ -2717,7 +2729,7 @@ class IB:
                     # overwriting 'SMART' exchange can create invalid contract
                     c.exchange = contract.exchange
 
-                util.dataclassUpdate(contract, c)
+                _qualifyInPlace(contract, c)
                 result.append(contract)
 
         return result

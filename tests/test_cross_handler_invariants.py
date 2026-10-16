@@ -425,7 +425,7 @@ def test_openOrder_then_orderStatus_arrives_consistent_state():
 
 def test_execDetails_then_commissionReport_pairs_on_fill():
     """Normal arrival order (exec, then commission). Commission lands
-    on the existing fill via ``dataclassUpdate`` and the paired event
+    on the existing fill, in place, and the paired event
     fires.
     """
     ib = ibi.IB()

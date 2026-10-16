@@ -189,7 +189,9 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``util.dataclassAsDict(obj)``, ``util.dataclassAsTuple(obj)``,
   ``util.dataclassNonDefaults(obj)`` and
   ``dataclasses.replace(obj, **changes)`` (``update()`` already failed on
-  the slotted classes, which have no ``__dict__``).
+  the slotted classes, which have no ``__dict__``). ``util.dataclassUpdate``,
+  which changed an object in place through its ``__dict__``, is gone too:
+  ``dataclasses.replace`` makes the changed copy.
 * **``RealTimeBar`` is frozen, and its ``open_`` is ``open``**, as on
   ``BarData``: the bars of ``reqRealTimeBars`` and of the bar operators
   cannot be changed once handed out, and code reading or assigning

@@ -289,8 +289,8 @@ def dataclassNonDefaults(obj) -> dict[str, Any]:
 # ``dataclassDisplayPairs``, consumed by ``dataclassRepr`` and by the
 # hand-written ``__repr__`` of ``Order`` / ``Contract`` / ``Forex``. It is
 # a DISPLAY policy only: ``dataclassAsDict`` / ``dataclassAsTuple`` /
-# ``dataclassUpdate`` / ``dataclassNonDefaults`` keep their own semantics
-# for the callers that round-trip data rather than show it.
+# ``dataclassNonDefaults`` keep their own semantics for the callers that
+# round-trip data rather than show it.
 
 # Fields where a ZERO value is information, not absence, so display keeps
 # it. Two families:
@@ -421,21 +421,6 @@ def dataclassDisplayPairs(attrs: dict[str, Any]) -> str:
     """Render display fields as the ``name=value, name=value`` repr body."""
 
     return ", ".join(f"{k}={dataclassDisplayValue(v)}" for k, v in attrs.items())
-
-
-def dataclassUpdate(obj, *srcObjs, **kwargs) -> object:
-    """
-    Update fields of the given ``dataclass`` object from zero or more
-    ``dataclass`` source objects and/or from keyword arguments.
-    """
-    if not is_dataclass(obj):
-        raise TypeError(f"Object {obj} is not a dataclass")
-
-    for srcObj in srcObjs:
-        obj.__dict__.update(dataclassAsDict(srcObj))  # type: ignore[union-attr]
-
-    obj.__dict__.update(**kwargs)  # type: ignore[union-attr]
-    return obj
 
 
 def dataclassRepr(obj) -> str:
