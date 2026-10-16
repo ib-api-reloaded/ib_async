@@ -636,23 +636,24 @@ class Wrapper:
         """
         priceStr, sizeStr, rtTime, volume, vwap, _ = value.split(";")
 
-        if volume:
-            # Set volume field based on tick type
-            volumeField = RT_VOLUME_TICK_MAP[tickType]
-            setattr(ticker, volumeField, float(volume))
+        # Parse all fields before assigning any of them to the ticker.
+        # A malformed string then leaves the ticker unchanged.
+        totalVolume = float(volume) if volume else None
+        vwapValue = float(vwap) if vwap else None
+        tradeTime = (
+            datetime.fromtimestamp(int(rtTime) / 1000, self.defaultTimezone)
+            if rtTime
+            else None
+        )
+        trade = None if priceStr == "" else (float(priceStr), float(sizeStr))
 
-        if vwap:
-            ticker.vwap = float(vwap)
-
-        if rtTime:
-            ticker.rtTime = datetime.fromtimestamp(
-                int(rtTime) / 1000, self.defaultTimezone
-            )
-
-        if priceStr == "":
-            return None
-
-        return (float(priceStr), float(sizeStr))
+        if totalVolume is not None:
+            setattr(ticker, RT_VOLUME_TICK_MAP[tickType], totalVolume)
+        if vwapValue is not None:
+            ticker.vwap = vwapValue
+        if tradeTime is not None:
+            ticker.rtTime = tradeTime
+        return trade
 
     # wrapper methods
 
