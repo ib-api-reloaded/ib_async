@@ -308,11 +308,13 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     if order.scaleTable:
         proto.scaleTable = order.scaleTable
 
-    # Hedge
+    # Hedge: hedgeParam is only meaningful with a hedgeType. Send it only
+    # when hedgeType is set, as the binary path does; decoding reads it
+    # back only in that case too.
     if order.hedgeType:
         proto.hedgeType = order.hedgeType
-    if order.hedgeParam:
-        proto.hedgeParam = order.hedgeParam
+        if order.hedgeParam:
+            proto.hedgeParam = order.hedgeParam
 
     # Algo
     if order.algoStrategy:
