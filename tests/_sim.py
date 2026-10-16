@@ -47,6 +47,7 @@ REQUESTS: dict[str, bool] = {
     "reqCompletedOrders": False,
     "reqAccountUpdates": False,
     "reqAccountUpdatesMulti": True,
+    "reqAccountSummary": True,
     # Streaming requests stay open until cancelled. A market data snapshot
     # ends with tickSnapshotEnd.
     "reqMktData": True,
@@ -65,6 +66,7 @@ CANCELS: dict[str, str] = {
     "cancelContractData": "reqContractDetails",
     "cancelPositions": "reqPositions",
     "cancelAccountUpdatesMulti": "reqAccountUpdatesMulti",
+    "cancelAccountSummary": "reqAccountSummary",
     "cancelMktData": "reqMktData",
     "cancelTickByTickData": "reqTickByTickData",
     "cancelMktDepth": "reqMktDepth",
@@ -269,6 +271,11 @@ class SimulatedTws:
                     reqId, account, modelCode, f"Tag{i}", str(i), "USD"
                 )
             w.accountUpdateMultiEnd(reqId)
+        elif ask.kind == "reqAccountSummary":
+            assert reqId is not None
+            for i in range(rows):
+                w.accountSummary(reqId, "DU1", f"Tag{i}", str(i), "USD")
+            w.accountSummaryEnd(reqId)
         else:
             raise ValueError(f"the simulated server has no answer for {ask.kind}")
         ask.answered = True
@@ -464,6 +471,69 @@ class SimulatedTws:
         """Reject the order with error ``code``."""
         placed.ended = "rejected"
         self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
+        self.run()
+
+    # -- server side: accounts and positions -------------------------------
+
+    def accountValue(self, account: str, tag: str, value: str, currency: str) -> None:
+        """Send an account value. Values keep arriving while an account
+        updates subscription is open."""
+        self.wrapper.updateAccountValue(tag, value, currency, account)
+
+    def accountUpdatesEnd(self, ask: Ask) -> None:
+        """End the first download of an account updates subscription."""
+        assert ask.kind == "reqAccountUpdates"
+        self.wrapper.accountDownloadEnd(ask.args[1])
+        ask.answered = True
+        self.run()
+
+    def accountValueMulti(self, ask: Ask, tag: str, value: str, currency: str) -> None:
+        """Send an account value for a model-level subscription."""
+        assert ask.kind == "reqAccountUpdatesMulti" and ask.reqId is not None
+        account, modelCode = ask.args[1], ask.args[2]
+        self.wrapper.accountUpdateMulti(
+            ask.reqId, account, modelCode, tag, value, currency
+        )
+
+    def summaryValue(
+        self, ask: Ask, account: str, tag: str, value: str, currency: str
+    ) -> None:
+        assert ask.kind == "reqAccountSummary" and ask.reqId is not None
+        self.wrapper.accountSummary(ask.reqId, account, tag, value, currency)
+
+    def summaryEnd(self, ask: Ask) -> None:
+        assert ask.kind == "reqAccountSummary" and ask.reqId is not None
+        self.wrapper.accountSummaryEnd(ask.reqId)
+        ask.answered = True
+        self.run()
+
+    def portfolioUpdate(
+        self,
+        account: str,
+        contract: ibi.Contract,
+        position: Decimal | None,
+        marketPrice: Decimal | None,
+        averageCost: Decimal | None,
+    ) -> None:
+        """Send a portfolio row. A zero or empty position closes it."""
+        self.wrapper.updatePortfolio(
+            contract, position, marketPrice, None, averageCost, None, None, account
+        )
+
+    def positionUpdate(
+        self,
+        account: str,
+        contract: ibi.Contract,
+        position: Decimal | None,
+        avgCost: Decimal | None,
+    ) -> None:
+        """Send a position row. A zero or empty position closes it."""
+        self.wrapper.position(account, contract, position, avgCost)
+
+    def positionsEnd(self, ask: Ask) -> None:
+        assert ask.kind == "reqPositions"
+        self.wrapper.positionEnd()
+        ask.answered = True
         self.run()
 
     # -- connection ------------------------------------------------------
