@@ -29,7 +29,7 @@ from typing import (
     Final,
     TypeAlias,
 )
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import nest_asyncio
 from eventkit import Event
@@ -967,11 +967,22 @@ def isIBShortDatetime(s: str) -> bool:
     )
 
 
+def _ibZone(name: str, s: str) -> ZoneInfo:
+    """Return the time zone named in an IB datetime.
+
+    Raises ValueError if this host does not know the zone, as for any
+    other unparseable part of the string."""
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as e:
+        raise ValueError(f"unknown time zone {name!r} in IB datetime {s!r}") from e
+
+
 def _splitIBShortDatetime(s: str) -> tuple[dt.datetime, ZoneInfo]:
     """Split ``MMdd HH:MM:SS <tz>`` into a year-less stamp and its zone."""
     s0, s1, s2 = s.split(" ", 2)
     naive = dt.datetime.strptime(f"{_SHORT_DATETIME_YEAR}{s0}{s1}", "%Y%m%d%H:%M:%S")
-    return naive, ZoneInfo(s2)
+    return naive, _ibZone(s2, s)
 
 
 def _stampIBYear(naive: dt.datetime, tz: ZoneInfo, year: int) -> dt.datetime | None:
@@ -1091,7 +1102,10 @@ def parseIBDatetime(s: str, *, year: int | None = None) -> dt.date | dt.datetime
         d = int(s[6:8])
         t = dt.date(y, m, d)
     elif s.isdigit():
-        t = dt.datetime.fromtimestamp(int(s), dt.UTC)
+        try:
+            t = dt.datetime.fromtimestamp(int(s), dt.UTC)
+        except (OverflowError, OSError) as e:  # outside datetime's range
+            raise ValueError(f"IB timestamp {s!r} is out of range") from e
     elif len(s) == 17 and s[8] == "-":
         # 20260824-20:00:12: IBKR's zone-less form is UTC.
         t = dt.datetime.strptime(s, "%Y%m%d-%H:%M:%S").replace(tzinfo=dt.UTC)
@@ -1113,7 +1127,7 @@ def parseIBDatetime(s: str, *, year: int | None = None) -> dt.date | dt.datetime
             t = stamped
         else:
             t = dt.datetime.strptime(s0 + s1, "%Y%m%d%H:%M:%S")
-            t = t.replace(tzinfo=ZoneInfo(s2))
+            t = t.replace(tzinfo=_ibZone(s2, s))
     else:
         # YYYYmmdd  HH:MM:SS
         # or

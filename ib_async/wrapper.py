@@ -504,8 +504,8 @@ class Wrapper:
         error = ConnectionError("Socket disconnect")
 
         self.requests.fail_all(error)
-        # Closing a snapshot's subscription sets its private Ticker done;
-        # the pooled Tickers, shared by streams, are set done below.
+        # Closing a snapshot subscription sets its own Ticker done. Pooled
+        # Tickers, which streams share, are set done below.
         self.subscriptions.close_all(send_cancel=False)
 
         for ticker in self.subscriptions.pooled_tickers():
@@ -1111,9 +1111,11 @@ class Wrapper:
         self.requests.set_result(ReqIdKey(reqId))
 
     def _tradeForExecution(self, execution: Execution) -> Trade | None:
-        """The trade ``execution`` fills: by its permId once an openOrder
-        has reported one, else by the client and order ids it was placed
-        with (a fill can arrive before any openOrder for the order)."""
+        """Find the trade that ``execution`` fills.
+
+        Looks it up by permId once an openOrder has reported one, otherwise
+        by client and order id, because a fill can arrive before any
+        openOrder for the order."""
         trade = self.permId2Trade.get(execution.permId)
         if not trade:
             key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
@@ -1342,12 +1344,10 @@ class Wrapper:
         bars.updateEvent.emit(bars, hasNewBar)
 
     def headTimestamp(self, reqId: int, headTimestamp: str):
-        # ``parseIBDatetime`` raises ``ValueError`` for malformed wire strings
-        # and ``ZoneInfoNotFoundError`` (a subclass of ``KeyError``) for
-        # unrecognised timezone names. Catching only ``ValueError`` left an
-        # awaiter hanging when IBKR shipped a timezone the host doesn't know;
-        # we widen to ``Exception`` so any parse failure surfaces as the
-        # request error instead of silently dropping the frame.
+        # ``parseIBDatetime`` raises ``ValueError`` for any input it cannot
+        # parse, including an unknown timezone name. Any failure is reported
+        # as the request's error, so the frame is not silently dropped and
+        # the awaiter does not hang.
         try:
             dt = self._normalizeDatetime(parseIBDatetime(headTimestamp))
             self.requests.set_result(ReqIdKey(reqId), dt)

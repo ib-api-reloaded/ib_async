@@ -1,8 +1,7 @@
 """Regression locks for v3.0 IBKR-parity fixes.
 
 Each test pins one specific behaviour that the v3.0 wire-protocol and
-Decimal-coercion sweep caught and fixed against the IBKR reference
-client. The tests are intentionally small, standalone, and worded so a
+Decimal-coercion sweep caught and fixed. The tests are intentionally small, standalone, and worded so a
 future refactor that unfixes the issue surfaces a clearly-named failure
 rather than a silent regression cascade.
 
@@ -19,7 +18,6 @@ import math
 import struct
 from collections import OrderedDict
 from decimal import Decimal
-from zoneinfo import ZoneInfoNotFoundError
 
 import pytest
 
@@ -448,28 +446,26 @@ def test_watchdog_probe_contract_defaults_to_eurusd_forex():
 
 
 # ---------------------------------------------------------------------------
-# Wrapper.headTimestamp catches ZoneInfoNotFoundError
+# Wrapper.headTimestamp surfaces an unknown time zone as the request error
 # ---------------------------------------------------------------------------
 
 
 def test_head_timestamp_zone_info_not_found_surfaces_as_request_error():
-    """``parseIBDatetime`` raises ``ZoneInfoNotFoundError`` (a subclass
-    of ``KeyError``, NOT of ``ValueError``) when IBKR ships a timezone
-    the host doesn't know. Catching only ``ValueError`` would leave
-    the awaiter on ``reqHeadTimeStampAsync`` hanging forever instead
-    of seeing the error.
+    """A timezone the host doesn't know makes ``parseIBDatetime`` raise a
+    ``ValueError`` naming it, like any other unreadable part of an IB
+    datetime, and the awaiter on ``reqHeadTimeStampAsync`` sees that error
+    instead of hanging forever.
     """
     ib = ibi.IB()
     reqId = 77
     request = ib.wrapper.requests.open(ReqIdKey(reqId))
 
     # An unknown-timezone wire string — IBKR's ``YYYYmmdd HH:MM:SS Tz``
-    # shape with a TZ name not in the host's tzdata. ``ZoneInfo`` raises
-    # ``ZoneInfoNotFoundError``.
+    # shape with a TZ name not in the host's tzdata.
     ib.wrapper.headTimestamp(reqId, "20221125 10:00:00 Mars/Olympus")
 
     assert request.future.done()
-    with pytest.raises(ZoneInfoNotFoundError):
+    with pytest.raises(ValueError, match="unknown time zone 'Mars/Olympus'"):
         request.future.result()
 
 
