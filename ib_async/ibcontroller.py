@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import ClassVar
@@ -322,6 +323,10 @@ class Watchdog:
     raiseSyncErrors: bool = False
     probeContract: Contract = field(default_factory=lambda: Forex("EURUSD"))
     probeTimeout: float = 4
+    # Coroutine function used to wait for appStartupTime and retryDelay.
+    # Defaults to asyncio.sleep. Tests replace it so they do not wait on a
+    # real clock.
+    sleep: Callable[[float], Awaitable[object]] = asyncio.sleep
 
     def __post_init__(self):
         self.startingEvent = Event("startingEvent")
@@ -337,19 +342,41 @@ class Watchdog:
         if self.ib.isConnected():
             raise ValueError("IB instance must not be connected")
         self._runner = None
+        self._stopping = asyncio.Event()
         self._logger = logging.getLogger("ib_async.Watchdog")
 
     def start(self):
         self._logger.info("Starting")
         self.startingEvent.emit(self)
+        self._stopping = asyncio.Event()
         self._runner = util.getLoop().create_task(self.runAsync())
         return self._runner
 
     def stop(self):
+        """Stop the Watchdog loop.
+
+        If a startup or retry wait is in progress, it ends immediately and
+        no further connection attempt is made.
+        """
         self._logger.info("Stopping")
         self.stoppingEvent.emit(self)
         self.ib.disconnect()
         self._runner = None
+        self._stopping.set()
+
+    async def _wait(self, delay: float) -> None:
+        """Wait ``delay`` seconds using ``self.sleep``.
+
+        Returns early if :meth:`stop` is called.
+        """
+        waiting = asyncio.ensure_future(self.sleep(delay))
+        stopped = asyncio.ensure_future(self._stopping.wait())
+        try:
+            await asyncio.wait({waiting, stopped}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for pending in (waiting, stopped):
+                if not pending.done():
+                    pending.cancel()
 
     async def runAsync(self):
         def onTimeout(idlePeriod):
@@ -367,7 +394,9 @@ class Watchdog:
         while self._runner:
             try:
                 await self.controller.startAsync()
-                await asyncio.sleep(self.appStartupTime)
+                await self._wait(self.appStartupTime)
+                if not self._runner:
+                    break  # stop() was called during the startup wait
                 await self.ib.connectAsync(
                     self.host,
                     self.port,
@@ -413,7 +442,7 @@ class Watchdog:
                 await self.controller.terminateAsync()
                 self.stoppedEvent.emit(self)
                 if self._runner:
-                    await asyncio.sleep(self.retryDelay)
+                    await self._wait(self.retryDelay)
 
 
 if __name__ == "__main__":
