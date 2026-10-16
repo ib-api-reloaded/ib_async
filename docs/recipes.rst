@@ -250,12 +250,12 @@ the data that has not been sent yet.
     ib.disconnect()
 
 
-Integration with PyQt5 or PySide2
+Integration with PyQt5 or PySide6
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. image:: images/qt-tickertable.png
 
-`This example <https://github.com/ib-api-reloaded/ib_async/blob/master/examples/qt_ticker_table.py>`_
+`This example <https://github.com/ib-api-reloaded/ib_async/blob/master/examples/gui/qt_ticker_table.py>`_
 of a ticker table shows how to integrate both
 realtime streaming and synchronous API requests in a single-threaded
 Qt application.
@@ -270,7 +270,7 @@ This example depends on PyQt5:
 
 ``pip3 install -U PyQt5``.
 
-It's also possible to use PySide2 instead; To do so uncomment the PySide2
+It's also possible to use PySide6 instead; To do so uncomment the PySide6
 import and ``util.useQt`` lines in the example and comment out their PyQt5
 counterparts.
 
@@ -278,7 +278,7 @@ Integration with Tkinter
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 To integrate with the Tkinter event loop, take a look at
-`this example app <https://github.com/ib-api-reloaded/ib_async/blob/master/examples/tk.py>`_.
+`this example app <https://github.com/ib-api-reloaded/ib_async/blob/master/examples/gui/tk.py>`_.
 
 Integration with PyGame
 ^^^^^^^^^^^^^^^^^^^^^^^
