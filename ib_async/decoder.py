@@ -142,114 +142,132 @@ def _noopHandler(fields: list[str]) -> None:
     unconditionally."""
 
 
-# Per-canonical-msgId protobuf dispatch table for ``Decoder.processProtoBuf``.
-# Each entry is ``(ProtoClass, decoder_handler_method_name)`` for the
-# message families covered in the orders / contracts phase. Other phases
-# extend this dict in place as they land. Build is deferred to the first
-# instantiation so the heavy ``_pb`` imports don't fire at decoder-module
-# import time.
-_PROTO_MSG_HANDLERS: dict[int, tuple[type, str]] = {}
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ProtoMessage:
+    """A protobuf message the decoder reads: its message class's name
+    (the class lives in the generated module ``ib_async._pb.<name>_pb2``)
+    and the Decoder method that handles it."""
+
+    name: str
+    handler: str
 
 
-# Canonical IBKR ``IN`` msgId -> (protobuf message name, decoder handler
-# method name). The message class ``Name`` lives in the generated module
-# ``ib_async._pb.Name_pb2``.
-_PROTO_MSG_HANDLER_NAMES: Final[dict[int, tuple[str, str]]] = {
-    3: ("OrderStatus", "_protoOrderStatus"),
-    4: ("ErrorMessage", "_protoError"),
-    5: ("OpenOrder", "_protoOpenOrder"),
-    6: ("AccountValue", "_protoUpdateAccountValue"),
-    7: ("PortfolioValue", "_protoUpdatePortfolio"),
-    8: ("AccountUpdateTime", "_protoUpdateAccountTime"),
-    10: ("ContractData", "_protoContractData"),
-    11: ("ExecutionDetails", "_protoExecutionDetails"),
-    15: ("ManagedAccounts", "_protoManagedAccounts"),
-    18: ("ContractData", "_protoBondContractData"),
-    52: ("ContractDataEnd", "_protoContractDataEnd"),
-    53: ("OpenOrdersEnd", "_protoOpenOrderEnd"),
-    54: ("AccountDataEnd", "_protoAccountDownloadEnd"),
-    55: ("ExecutionDetailsEnd", "_protoExecutionDetailsEnd"),
-    59: ("CommissionAndFeesReport", "_protoCommissionReport"),
-    61: ("Position", "_protoPosition"),
-    62: ("PositionEnd", "_protoPositionEnd"),
-    63: ("AccountSummary", "_protoAccountSummary"),
-    64: ("AccountSummaryEnd", "_protoAccountSummaryEnd"),
-    65: ("VerifyMessageApi", "_protoVerifyMessageAPI"),
-    66: ("VerifyCompleted", "_protoVerifyCompleted"),
-    67: ("DisplayGroupList", "_protoDisplayGroupList"),
-    68: ("DisplayGroupUpdated", "_protoDisplayGroupUpdated"),
-    71: ("PositionMulti", "_protoPositionMulti"),
-    72: ("PositionMultiEnd", "_protoPositionMultiEnd"),
-    73: ("AccountUpdateMulti", "_protoAccountUpdateMulti"),
-    74: ("AccountUpdateMultiEnd", "_protoAccountUpdateMultiEnd"),
-    100: ("OrderBound", "_protoOrderBound"),
-    101: ("CompletedOrder", "_protoCompletedOrder"),
-    102: ("CompletedOrdersEnd", "_protoCompletedOrdersEnd"),
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ProtoHandler:
+    """How a Decoder reads one protobuf message: its class, and the bound
+    method that handles a parsed one."""
+
+    protoClass: type
+    handle: Callable[[Any], None]
+
+
+# Per-canonical-msgId protobuf message classes, for every message in
+# ``_PROTO_MESSAGES``. Resolved on the first instantiation so the
+# heavy ``_pb`` imports don't fire at decoder-module import time.
+_PROTO_MSG_CLASSES: dict[int, type] = {}
+
+
+# Canonical IBKR ``IN`` msgId -> the protobuf message it carries.
+_PROTO_MESSAGES: Final[dict[int, _ProtoMessage]] = {
+    3: _ProtoMessage("OrderStatus", "_protoOrderStatus"),
+    4: _ProtoMessage("ErrorMessage", "_protoError"),
+    5: _ProtoMessage("OpenOrder", "_protoOpenOrder"),
+    6: _ProtoMessage("AccountValue", "_protoUpdateAccountValue"),
+    7: _ProtoMessage("PortfolioValue", "_protoUpdatePortfolio"),
+    8: _ProtoMessage("AccountUpdateTime", "_protoUpdateAccountTime"),
+    10: _ProtoMessage("ContractData", "_protoContractData"),
+    11: _ProtoMessage("ExecutionDetails", "_protoExecutionDetails"),
+    15: _ProtoMessage("ManagedAccounts", "_protoManagedAccounts"),
+    18: _ProtoMessage("ContractData", "_protoBondContractData"),
+    52: _ProtoMessage("ContractDataEnd", "_protoContractDataEnd"),
+    53: _ProtoMessage("OpenOrdersEnd", "_protoOpenOrderEnd"),
+    54: _ProtoMessage("AccountDataEnd", "_protoAccountDownloadEnd"),
+    55: _ProtoMessage("ExecutionDetailsEnd", "_protoExecutionDetailsEnd"),
+    59: _ProtoMessage("CommissionAndFeesReport", "_protoCommissionReport"),
+    61: _ProtoMessage("Position", "_protoPosition"),
+    62: _ProtoMessage("PositionEnd", "_protoPositionEnd"),
+    63: _ProtoMessage("AccountSummary", "_protoAccountSummary"),
+    64: _ProtoMessage("AccountSummaryEnd", "_protoAccountSummaryEnd"),
+    65: _ProtoMessage("VerifyMessageApi", "_protoVerifyMessageAPI"),
+    66: _ProtoMessage("VerifyCompleted", "_protoVerifyCompleted"),
+    67: _ProtoMessage("DisplayGroupList", "_protoDisplayGroupList"),
+    68: _ProtoMessage("DisplayGroupUpdated", "_protoDisplayGroupUpdated"),
+    71: _ProtoMessage("PositionMulti", "_protoPositionMulti"),
+    72: _ProtoMessage("PositionMultiEnd", "_protoPositionMultiEnd"),
+    73: _ProtoMessage("AccountUpdateMulti", "_protoAccountUpdateMulti"),
+    74: _ProtoMessage("AccountUpdateMultiEnd", "_protoAccountUpdateMultiEnd"),
+    100: _ProtoMessage("OrderBound", "_protoOrderBound"),
+    101: _ProtoMessage("CompletedOrder", "_protoCompletedOrder"),
+    102: _ProtoMessage("CompletedOrdersEnd", "_protoCompletedOrdersEnd"),
     # --- market data + historical (gates 206 / 208) ---
-    1: ("TickPrice", "_protoPriceSizeTick"),
-    2: ("TickSize", "_protoTickSize"),
-    12: ("MarketDepth", "_protoUpdateMktDepth"),
-    13: ("MarketDepthL2", "_protoUpdateMktDepthL2"),
-    17: ("HistoricalData", "_protoHistoricalData"),
-    21: ("TickOptionComputation", "_protoTickOptionComputation"),
-    45: ("TickGeneric", "_protoTickGeneric"),
-    46: ("TickString", "_protoTickString"),
-    50: ("RealTimeBarTick", "_protoRealtimeBar"),
-    57: ("TickSnapshotEnd", "_protoTickSnapshotEnd"),
-    58: ("MarketDataType", "_protoMarketDataType"),
-    80: ("MarketDepthExchanges", "_protoMktDepthExchanges"),
-    81: ("TickReqParams", "_protoTickReqParams"),
-    88: ("HeadTimestamp", "_protoHeadTimestamp"),
-    89: ("HistogramData", "_protoHistogramData"),
-    90: ("HistoricalDataUpdate", "_protoHistoricalDataUpdate"),
-    91: ("RerouteMarketDataRequest", "_protoRerouteMktDataReq"),
-    92: ("RerouteMarketDepthRequest", "_protoRerouteMktDepthReq"),
-    96: ("HistoricalTicks", "_protoHistoricalTicks"),
-    97: ("HistoricalTicksBidAsk", "_protoHistoricalTicksBidAsk"),
-    98: ("HistoricalTicksLast", "_protoHistoricalTicksLast"),
-    99: ("TickByTickData", "_protoTickByTick"),
-    106: ("HistoricalSchedule", "_protoHistoricalSchedule"),
-    108: ("HistoricalDataEnd", "_protoHistoricalDataEnd"),
+    1: _ProtoMessage("TickPrice", "_protoPriceSizeTick"),
+    2: _ProtoMessage("TickSize", "_protoTickSize"),
+    12: _ProtoMessage("MarketDepth", "_protoUpdateMktDepth"),
+    13: _ProtoMessage("MarketDepthL2", "_protoUpdateMktDepthL2"),
+    17: _ProtoMessage("HistoricalData", "_protoHistoricalData"),
+    21: _ProtoMessage("TickOptionComputation", "_protoTickOptionComputation"),
+    45: _ProtoMessage("TickGeneric", "_protoTickGeneric"),
+    46: _ProtoMessage("TickString", "_protoTickString"),
+    50: _ProtoMessage("RealTimeBarTick", "_protoRealtimeBar"),
+    57: _ProtoMessage("TickSnapshotEnd", "_protoTickSnapshotEnd"),
+    58: _ProtoMessage("MarketDataType", "_protoMarketDataType"),
+    80: _ProtoMessage("MarketDepthExchanges", "_protoMktDepthExchanges"),
+    81: _ProtoMessage("TickReqParams", "_protoTickReqParams"),
+    88: _ProtoMessage("HeadTimestamp", "_protoHeadTimestamp"),
+    89: _ProtoMessage("HistogramData", "_protoHistogramData"),
+    90: _ProtoMessage("HistoricalDataUpdate", "_protoHistoricalDataUpdate"),
+    91: _ProtoMessage("RerouteMarketDataRequest", "_protoRerouteMktDataReq"),
+    92: _ProtoMessage("RerouteMarketDepthRequest", "_protoRerouteMktDepthReq"),
+    96: _ProtoMessage("HistoricalTicks", "_protoHistoricalTicks"),
+    97: _ProtoMessage("HistoricalTicksBidAsk", "_protoHistoricalTicksBidAsk"),
+    98: _ProtoMessage("HistoricalTicksLast", "_protoHistoricalTicksLast"),
+    99: _ProtoMessage("TickByTickData", "_protoTickByTick"),
+    106: _ProtoMessage("HistoricalSchedule", "_protoHistoricalSchedule"),
+    108: _ProtoMessage("HistoricalDataEnd", "_protoHistoricalDataEnd"),
     # --- news + scanner / PnL (gates 209 / 210) ---
-    14: ("NewsBulletin", "_protoUpdateNewsBulletin"),
-    19: ("ScannerParameters", "_protoScannerParameters"),
-    20: ("ScannerData", "_protoScannerData"),
-    83: ("NewsArticle", "_protoNewsArticle"),
-    84: ("TickNews", "_protoTickNews"),
-    85: ("NewsProviders", "_protoNewsProviders"),
-    86: ("HistoricalNews", "_protoHistoricalNews"),
-    87: ("HistoricalNewsEnd", "_protoHistoricalNewsEnd"),
-    94: ("PnL", "_protoPnL"),
-    95: ("PnLSingle", "_protoPnLSingle"),
-    104: ("WshMetaData", "_protoWshMetaData"),
-    105: ("WshEventData", "_protoWshEventData"),
+    14: _ProtoMessage("NewsBulletin", "_protoUpdateNewsBulletin"),
+    19: _ProtoMessage("ScannerParameters", "_protoScannerParameters"),
+    20: _ProtoMessage("ScannerData", "_protoScannerData"),
+    83: _ProtoMessage("NewsArticle", "_protoNewsArticle"),
+    84: _ProtoMessage("TickNews", "_protoTickNews"),
+    85: _ProtoMessage("NewsProviders", "_protoNewsProviders"),
+    86: _ProtoMessage("HistoricalNews", "_protoHistoricalNews"),
+    87: _ProtoMessage("HistoricalNewsEnd", "_protoHistoricalNewsEnd"),
+    94: _ProtoMessage("PnL", "_protoPnL"),
+    95: _ProtoMessage("PnLSingle", "_protoPnLSingle"),
+    104: _ProtoMessage("WshMetaData", "_protoWshMetaData"),
+    105: _ProtoMessage("WshEventData", "_protoWshEventData"),
     # --- REST messages (gates 211 / 212 / 213) ---
-    9: ("NextValidId", "_protoNextValidId"),
-    16: ("ReceiveFA", "_protoReceiveFA"),
-    49: ("CurrentTime", "_protoCurrentTime"),
-    75: ("SecDefOptParameter", "_protoSecDefOptParameter"),
-    76: ("SecDefOptParameterEnd", "_protoSecDefOptParameterEnd"),
-    77: ("SoftDollarTiers", "_protoSoftDollarTiers"),
-    78: ("FamilyCodes", "_protoFamilyCodes"),
-    79: ("SymbolSamples", "_protoSymbolSamples"),
-    82: ("SmartComponents", "_protoSmartComponents"),
-    93: ("MarketRule", "_protoMarketRule"),
-    103: ("ReplaceFAEnd", "_protoReplaceFAEnd"),
-    107: ("UserInfo", "_protoUserInfo"),
-    109: ("CurrentTimeInMillis", "_protoCurrentTimeInMillis"),
-    110: ("ConfigResponse", "_protoConfigResponse"),
-    111: ("UpdateConfigResponse", "_protoUpdateConfigResponse"),
+    9: _ProtoMessage("NextValidId", "_protoNextValidId"),
+    16: _ProtoMessage("ReceiveFA", "_protoReceiveFA"),
+    49: _ProtoMessage("CurrentTime", "_protoCurrentTime"),
+    75: _ProtoMessage("SecDefOptParameter", "_protoSecDefOptParameter"),
+    76: _ProtoMessage("SecDefOptParameterEnd", "_protoSecDefOptParameterEnd"),
+    77: _ProtoMessage("SoftDollarTiers", "_protoSoftDollarTiers"),
+    78: _ProtoMessage("FamilyCodes", "_protoFamilyCodes"),
+    79: _ProtoMessage("SymbolSamples", "_protoSymbolSamples"),
+    82: _ProtoMessage("SmartComponents", "_protoSmartComponents"),
+    93: _ProtoMessage("MarketRule", "_protoMarketRule"),
+    103: _ProtoMessage("ReplaceFAEnd", "_protoReplaceFAEnd"),
+    107: _ProtoMessage("UserInfo", "_protoUserInfo"),
+    109: _ProtoMessage("CurrentTimeInMillis", "_protoCurrentTimeInMillis"),
+    110: _ProtoMessage("ConfigResponse", "_protoConfigResponse"),
+    111: _ProtoMessage("UpdateConfigResponse", "_protoUpdateConfigResponse"),
 }
 
 
-def _initProtoMsgHandlers() -> None:
+def _initProtoMsgClasses() -> None:
     """Resolve the protobuf message classes on first use, so the generated
-    bindings are not imported with this module."""
-    if _PROTO_MSG_HANDLERS:
+    bindings are not imported with this module. All of them or none: an
+    import that fails leaves the table empty, to fail again next time,
+    rather than partly filled."""
+    if _PROTO_MSG_CLASSES:
         return
-    for msgId, (name, handler) in _PROTO_MSG_HANDLER_NAMES.items():
-        module = importlib.import_module(f"{__package__}._pb.{name}_pb2")
-        _PROTO_MSG_HANDLERS[msgId] = (getattr(module, name), handler)
+    classes = {}
+    for msgId, message in _PROTO_MESSAGES.items():
+        module = importlib.import_module(f"{__package__}._pb.{message.name}_pb2")
+        classes[msgId] = getattr(module, message.name)
+    _PROTO_MSG_CLASSES.update(classes)
 
 
 def _resolveCoerceType(annotation: Any) -> type | None:
@@ -280,19 +298,21 @@ class Decoder:
         self.wrapper = wrapper
         self.serverVersion = serverVersion
         self.logger = logging.getLogger("ib_async.Decoder")
-        # Populate the protobuf dispatch table on first construction
+        # Resolve the protobuf message classes on first construction
         # so the heavy ``_pb`` imports don't fire at module-load time
         # for callers that only use the binary path.
-        _initProtoMsgHandlers()
+        _initProtoMsgClasses()
         # Pre-resolve the bound handler method for every protobuf
         # canonical msgId. ``processProtoBuf`` is on the receive
         # hot path (every wire frame post-201 server) so eliminating
-        # the per-call ``getattr(self, handlerName)`` is worth the
+        # the per-call ``getattr`` of the handler is worth the
         # one-time cost at construction. The cache also lets us skip
         # the second dict lookup on every dispatch.
-        self._protoDispatch: dict[int, tuple[type, Any]] = {
-            msgId: (protoCls, getattr(self, handlerName))
-            for msgId, (protoCls, handlerName) in _PROTO_MSG_HANDLERS.items()
+        self._protoDispatch: dict[int, _ProtoHandler] = {
+            msgId: _ProtoHandler(
+                protoClass, getattr(self, _PROTO_MESSAGES[msgId].handler)
+            )
+            for msgId, protoClass in _PROTO_MSG_CLASSES.items()
         }
         self.handlers = {
             1: self.priceSizeTick,
@@ -430,8 +450,9 @@ class Decoder:
         """Decode a protobuf-framed wire message and dispatch to the
         matching wrapper method.
 
-        Per-msgId table maps canonical IBKR ``IN`` ids to ``(ProtoClass,
-        handler_method_name)``. The handler parses the proto, calls the
+        A per-msgId table maps canonical IBKR ``IN`` ids to how to read
+        each (a ``_ProtoHandler``: its message class and the handler). The
+        handler gets the parsed proto, calls the
         relevant ``_proto`` converter to produce domain dataclasses,
         and forwards to the same ``Wrapper`` method the binary path
         uses — so user-visible behaviour is identical regardless of
@@ -448,7 +469,7 @@ class Decoder:
         so we have no way to look up the awaiting future and surface
         an error there. The malformed frame is logged and dropped; the
         awaiter eventually clears via the connection-loss path
-        (``Wrapper.disconnected`` drains every pending awaiter) or its
+        (``Wrapper.connectionClosed`` fails every pending awaiter) or its
         own ``asyncio.wait_for`` timeout if the user wrapped it. A
         live connection with a single malformed frame in the middle
         survives, but the matching request never receives a result.
@@ -461,12 +482,11 @@ class Decoder:
                 len(payload),
             )
             return
-        protoCls, handler = entry
         proto: Any = None
         try:
-            proto = protoCls()
+            proto = entry.protoClass()
             proto.ParseFromString(payload)
-            handler(proto)
+            entry.handle(proto)
         except Exception as exc:
             # ``ParseFromString`` failures leave reqId inaccessible because
             # the bytes never landed in a typed field, so the awaiter only

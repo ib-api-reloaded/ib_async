@@ -119,7 +119,7 @@ from ib_async._subscriptions import MktDataSub, MktDepthSub, PnLSingleSub, TickB
 from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
 from ib_async.client import Client as _Client
 from ib_async.contract import ComboLeg, Contract, TagValue
-from ib_async.decoder import _CONV, _PROTO_MSG_HANDLERS, Decoder, _initProtoMsgHandlers
+from ib_async.decoder import _CONV, _PROTO_MSG_CLASSES, Decoder, _initProtoMsgClasses
 from ib_async.objects import (
     MONETARY_ACCOUNT_VALUE_TAGS,
     BarData,
@@ -4646,7 +4646,7 @@ def test_disconnect_during_callback_reentry_does_not_raise():
 
 
 def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
-    """``_PROTO_MSG_HANDLERS`` must mirror every msgId in IBKR's
+    """``_PROTO_MSG_CLASSES`` must mirror every msgId in IBKR's
     reference ``Decoder.msgId2handleInfoProtoBuf`` map.
 
     IBKR's set of canonical proto-encoded message ids is fixed by the
@@ -4656,8 +4656,8 @@ def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
     debug-dropping the new wire frame.
     """
 
-    _initProtoMsgHandlers()
-    ours = set(_PROTO_MSG_HANDLERS.keys())
+    _initProtoMsgClasses()
+    ours = set(_PROTO_MSG_CLASSES.keys())
 
     # Canonical ``IN`` ids the server sends as protobuf
     # (server-protocol contract).
