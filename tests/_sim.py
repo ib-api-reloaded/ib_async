@@ -14,6 +14,7 @@ the awaiters see.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import datetime as dt
 import functools
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from ib_async.wrapper import Wrapper
 
 EXECUTED = dt.datetime(2026, 10, 14, 15, 30, tzinfo=dt.UTC)
 CONTRACT = ibi.Stock("SIM", "SMART", "USD", conId=1)
+CLIENT_ID = 7
 
 # The client methods that send a request the server answers, and whether
 # their first argument is the reqId (a singleton request has none).
@@ -45,6 +47,25 @@ CANCELS: dict[str, str] = {
     "cancelContractData": "reqContractDetails",
     "cancelPositions": "reqPositions",
 }
+
+
+@dataclass(eq=False)
+class PlacedOrder:
+    """One order the client placed (or modified: a second placeOrder on the
+    same orderId), as the server sees it."""
+
+    orderId: int
+    contract: ibi.Contract
+    order: ibi.Order  # a copy, as sent
+    acknowledged: bool = False
+    filled: Decimal = Decimal(0)
+    # Over at the server: "filled", "cancelled" or "rejected"; "" while working.
+    ended: str = ""
+    cancelRequested: bool = False
+
+    @property
+    def working(self) -> bool:
+        return not self.ended
 
 
 @dataclass(eq=False)
@@ -81,10 +102,16 @@ class SimulatedTws:
             getattr(self.client, name).side_effect = functools.partial(
                 self._cancelled, name, kind
             )
+        self.client.placeOrder.side_effect = self._placed
+        self.client.cancelOrder.side_effect = self._orderCancelled
         self.ib.client = self.client
+        self.ib.wrapper.clientId = CLIENT_ID
         self.asks: list[Ask] = []
         # Every cancel the client sent: (the cancel method, the reqId).
         self.cancels: list[tuple[str, int | None]] = []
+        # Every order placed, by orderId; a modification replaces the copy.
+        self.orders: dict[int, PlacedOrder] = {}
+        self._execIds = iter(range(1, 10**6))
         self.connected = True
 
     @property
@@ -109,6 +136,27 @@ class SimulatedTws:
         for ask in self.asks:
             if ask.kind == kind and ask.reqId == reqId and ask.open:
                 ask.cancelled = True
+
+    def _placed(self, orderId: int, contract: ibi.Contract, order: ibi.Order) -> None:
+        if not self.connected:
+            raise ConnectionError("Not connected")
+        placed = self.orders.get(orderId)
+        # As TWS holds it: under the orderId it was sent with, the client
+        # it came from, and the permId TWS assigns it.
+        copy = dataclasses.replace(
+            order, orderId=orderId, clientId=CLIENT_ID, permId=1_000_000 + orderId
+        )
+        if placed is None:
+            self.orders[orderId] = PlacedOrder(orderId, contract, copy)
+        else:
+            placed.order = copy  # a modification
+
+    def _orderCancelled(self, orderId: int, orderCancel: Any = None) -> None:
+        if not self.connected:
+            raise ConnectionError("Not connected")
+        placed = self.orders.get(orderId)
+        if placed is not None:
+            placed.cancelRequested = True
 
     def start(self, coro: Any) -> asyncio.Task:
         """Start a request method and run the loop until it has sent."""
@@ -193,17 +241,98 @@ class SimulatedTws:
         ask.answered = True
         self.run()
 
+    # -- the server's side: orders -----------------------------------------
+
+    def _orderStatus(self, placed: PlacedOrder, status: str) -> None:
+        total = placed.order.totalQuantity or Decimal(0)
+        self.wrapper.orderStatus(
+            placed.orderId,
+            status,
+            placed.filled,
+            total - placed.filled,
+            Decimal(50) if placed.filled else None,
+            placed.order.permId,
+            0,
+            Decimal(50) if placed.filled else None,
+            CLIENT_ID,
+            "",
+        )
+
+    def acknowledge(self, placed: PlacedOrder) -> None:
+        """TWS accepts the order (or a modification of it): an openOrder
+        with the order as it holds it, then a Submitted status."""
+        self.wrapper.openOrder(
+            placed.orderId,
+            placed.contract,
+            dataclasses.replace(placed.order),
+            ibi.OrderState(status="Submitted"),
+        )
+        self._orderStatus(placed, "Submitted")
+        placed.acknowledged = True
+        self.run()
+
+    def fill(
+        self, placed: PlacedOrder, shares: Decimal, *, reportFirst: bool = False
+    ) -> str:
+        """A fill of ``shares``: the execution, the status it leaves the
+        order in, and its commission report, which may arrive first (as
+        it does in a replay race). Returns the execId."""
+        execId = f"{placed.orderId}.{next(self._execIds)}"
+        execution = ibi.Execution(
+            execId=execId,
+            time=EXECUTED,
+            shares=shares,
+            price=Decimal(50),
+            permId=placed.order.permId,
+            clientId=CLIENT_ID,
+            orderId=placed.orderId,
+        )
+        report = ibi.CommissionReport(execId=execId, commissionAndFees=Decimal(1))
+        if reportFirst:
+            self.wrapper.commissionReport(report)
+        self.wrapper.execDetails(-1, placed.contract, execution)
+        placed.filled += shares
+        total = placed.order.totalQuantity or Decimal(0)
+        if placed.filled >= total:
+            placed.ended = "filled"
+            self._orderStatus(placed, "Filled")
+        else:
+            self._orderStatus(placed, "Submitted")
+        if not reportFirst:
+            self.wrapper.commissionReport(report)
+        self.run()
+        return execId
+
+    def cancelOrder(self, placed: PlacedOrder) -> None:
+        """TWS cancels the order (on the client's request, or on its own)."""
+        placed.ended = "cancelled"
+        self._orderStatus(placed, "Cancelled")
+        self.run()
+
+    def rejectOrder(self, placed: PlacedOrder, code: int = 201) -> None:
+        """TWS rejects the order with error ``code``."""
+        placed.ended = "rejected"
+        self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
+        self.run()
+
+    # -- the connection --------------------------------------------------
+
     def disconnect(self) -> None:
         """The socket drops: every awaiter is failed, every subscription
-        closed, and the server forgets every open ask."""
+        closed, every live trade Disconnected, and the server forgets every
+        open ask and working order."""
         self.client.isConnected.return_value = False
         self.connected = False
         self.wrapper.connectionClosed()
         for ask in self.asks:
             if ask.open:
                 ask.cancelled = True
+        for placed in self.orders.values():
+            if placed.working:
+                placed.ended = "disconnected"
         self.run()
 
     def reconnect(self) -> None:
         self.client.isConnected.return_value = True
         self.connected = True
+        self.wrapper.clientId = CLIENT_ID  # as connect sets it

@@ -1059,10 +1059,7 @@ class Wrapper:
             # bug in TWS: executions of manual orders have unset value
             execution.orderId = 0
 
-        trade = self.permId2Trade.get(execution.permId)
-        if not trade:
-            key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
-            trade = self.trades.get(key)
+        trade = self._tradeForExecution(execution)
 
         # A combo's execution contract has no legs (its order's has, and
         # a bag the user built has conId 0): the trade, found by its
@@ -1123,6 +1120,16 @@ class Wrapper:
     def execDetailsEnd(self, reqId: int):
         self.requests.set_result(ReqIdKey(reqId))
 
+    def _tradeForExecution(self, execution: Execution) -> Trade | None:
+        """The trade ``execution`` fills: by its permId once an openOrder
+        has reported one, else by the client and order ids it was placed
+        with (a fill can arrive before any openOrder for the order)."""
+        trade = self.permId2Trade.get(execution.permId)
+        if not trade:
+            key = self.orderKey(execution.clientId, execution.orderId, execution.permId)
+            trade = self.trades.get(key)
+        return trade
+
     def commissionReport(self, commissionReport: CommissionReport):
         # ``commissionReport.yield_`` and ``realizedPNL`` are
         # ``Decimal | None``; ``None`` is the unset value, so they are
@@ -1135,7 +1142,7 @@ class Wrapper:
             for f in dataclasses.fields(commissionReport):
                 setattr(report, f.name, getattr(commissionReport, f.name))
             self._logger.info("commissionReport: %s", report)
-            trade = self.permId2Trade.get(fill.execution.permId)
+            trade = self._tradeForExecution(fill.execution)
             if trade and commissionReport.execId in self._liveExecIds:
                 self.ib.commissionReportEvent.emit(trade, fill, report)
                 trade.commissionReportEvent.emit(trade, fill, report)
