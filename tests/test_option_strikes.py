@@ -140,7 +140,7 @@ def test_each_month_is_searched_once() -> None:
     [
         (ibi.Index("SPX", "CBOE"), ("202612",), "stock or future"),
         (Future("ES"), ("202612",), "the future's exchange"),
-        (Future("ES", exchange="CME"), (), "a list of months"),
+        (Future("ES", exchange="CME"), (), "at least one month, YYYYMM or YYYYMMDD"),
         (Future("ES", exchange="CME"), ("2026-12",), "YYYYMM"),
         (Future("ES", exchange="CME"), (202612,), "strings"),
         (Contract(secType="STK", conId=265598), ("202612",), "qualify it first"),

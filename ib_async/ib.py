@@ -158,8 +158,10 @@ def _optionSearches(underlying: Contract, months: Sequence[str]) -> list[Contrac
         raise ValueError(
             "reqOptionStrikes searches by the underlying's symbol: qualify it first"
         )
-    if isinstance(months, str) or not months:
-        raise ValueError(f"reqOptionStrikes needs a list of months, not {months!r}")
+    if not months:
+        raise ValueError(
+            "reqOptionStrikes needs at least one month, YYYYMM or YYYYMMDD"
+        )
     if not all(isinstance(m, str) and m.isdigit() and len(m) in (6, 8) for m in months):
         raise ValueError(f"months are YYYYMM or YYYYMMDD strings, not {months!r}")
     if secType == "FOP" and not underlying.exchange:
