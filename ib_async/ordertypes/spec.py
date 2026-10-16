@@ -1,20 +1,23 @@
-"""What an order type is, as data.
+"""Order type definitions as data.
 
-An :class:`OrderTypeSpec` describes one IBKR order type: its ``orderType``
-code, the constructor parameters and the :class:`~ib_async.order.Order`
-field each one sets, the fields that define the type besides the code, the
-products and exchanges IBKR documents it for, and how stable it is. The
-catalog of specs is the single source of truth: the order type
-constructors and their documentation are generated from it, and
-:func:`build` enforces it when an order is constructed. Each spec checks
-the names it refers to when it is defined, so a mistake in the catalog
-fails on import, not on first use.
+An :class:`OrderTypeSpec` describes one IBKR order type:
 
-Values are checked as an order's values (:func:`checkedValue`): a price
-or quantity is a finite number, a count a whole number, a flag a bool, a
-code a string. What the Order would otherwise silently unset or misread
-is refused with an :class:`OrderTypeError` naming the constructor and the
-parameter.
+* its ``orderType`` code;
+* the constructor parameters and the :class:`~ib_async.order.Order` field
+  each one sets;
+* any other fields that define the type;
+* the products and exchanges IBKR documents it for;
+* its stability.
+
+The order type constructors and their documentation are generated from
+this catalog, and :func:`build` enforces it when an order is constructed.
+Each spec validates the field names it uses when it is defined, so a
+catalog mistake fails at import time.
+
+Parameter values are validated by :func:`checkedValue`. Prices and
+quantities must be finite numbers, counts whole numbers, flags bools and
+codes strings. A value that the Order would silently unset or misread
+raises :class:`OrderTypeError` naming the constructor and the parameter.
 """
 
 from __future__ import annotations
@@ -52,16 +55,19 @@ ORDER_DEFAULTS: Mapping[str, Any] = MappingProxyType(
 
 
 def isSet(field: str, value: Any) -> bool:
-    """Whether ``value`` of Order ``field`` is set: anything but None and
-    the field's default. A price of 0 is set where the field's default is
-    None; where the default is 0 (a field 0 means "none" for), 0 is
-    unset."""
+    """Return True if ``value`` for Order ``field`` is neither None nor
+    the field's default.
+
+    A price of 0 counts as set when the field defaults to None. When the
+    field defaults to 0 (0 means "none" for that field), 0 is unset."""
     return value is not None and value != ORDER_DEFAULTS[field]
 
 
 def unset(field: str) -> Any:
-    """Order ``field``'s default, its unset value (made fresh where Order
-    makes it fresh: a list, a SoftDollarTier)."""
+    """Return the default (unset) value of Order ``field``.
+
+    Factory defaults such as a list or a SoftDollarTier are created fresh,
+    as Order does."""
     factory = _DEFAULT_FACTORIES.get(field)
     return factory() if factory is not None else ORDER_DEFAULTS[field]
 
@@ -143,21 +149,23 @@ _TAG_KINDS = frozenset({Kind.BOOL, Kind.INT, Kind.FLOAT, Kind.STR})
 
 
 def _realNumber(value: Any) -> float | None:
-    """``value`` as a float when it is a finite real number (an int, a
-    float, a Decimal, numpy's numbers; a bool is not); else None."""
+    """Return ``value`` as a float if it is a finite real number, else None.
+
+    Accepts int, float, Decimal and numpy numbers, but not bool."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real | Decimal):
         return None
     try:
         real = float(value)
-    except OverflowError:
+    except (OverflowError, ValueError):  # too large for a float, or signaling NaN
         return None
     return real if math.isfinite(real) else None
 
 
 def _wholeNumber(value: Any) -> int | None:
-    """``value`` as an int when it is a whole number (an int, numpy's, or
-    a real number of whole value such as 100.0 or Decimal(100); a bool is
-    not); else None."""
+    """Return ``value`` as an int if it is a whole number, else None.
+
+    Accepts int, numpy integers, and real numbers with a whole value such
+    as 100.0 or Decimal(100), but not bool."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real | Decimal):
         return None
     if isinstance(value, numbers.Integral):
@@ -194,8 +202,10 @@ class Param:
         _checkFields(self.name, (self.field,))
 
     def encode(self, owner: str, value: Any) -> str:
-        """``value`` as the tag value IBKR expects, checked against the
-        parameter's kind and allowed values (refusals name ``owner``)."""
+        """Encode ``value`` as an IBKR tag value string.
+
+        Validates it against the parameter's kind and allowed values;
+        errors name ``owner``."""
         if self.kind is Kind.BOOL and isinstance(value, bool):
             encoded = "1" if value else "0"
         elif self.kind is Kind.INT and (whole := _wholeNumber(value)) is not None:
@@ -218,12 +228,14 @@ class Param:
         return encoded
 
     def coerce(self, owner: str, value: Any) -> Any:
-        """``value`` as this parameter puts it into the Order: a tag
-        value's TagValue, leg prices' OrderComboLegs, a field's value as
-        the field holds it (see :func:`checkedValue`); None for None.
+        """Convert ``value`` to the form this parameter stores in the Order.
 
-        Refuses what the Order would otherwise silently unset or misread:
-        NaN, infinity, a value that is not a number."""
+        Returns a TagValue for a tag parameter, a list of OrderComboLegs
+        for leg prices, or the field value as checked by
+        :func:`checkedValue`. None stays None.
+
+        Raises :class:`OrderTypeError` for values the Order would silently
+        unset or misread: NaN, infinity, or a non-number."""
         if value is None:
             return None
         if self.tag:
@@ -233,18 +245,20 @@ class Param:
         return checkedValue(owner, self.name, self.field, value)
 
     def given(self, value: Any) -> bool:
-        """Whether the coerced ``value`` gives this parameter: not None,
-        and for a plain field not the field's unset default either, as
-        :func:`isSet` judges an order's fields."""
+        """Return True if the coerced ``value`` counts as given.
+
+        It must not be None. For a plain field it must also not be the
+        field's default, as checked by :func:`isSet`."""
         return value is not None and (
             self.kind is not Kind.FIELD or isSet(self.field, value)
         )
 
 
 def checkedDecimal(owner: str, name: str, value: Any) -> Decimal:
-    """``value`` of ``name`` as the finite Decimal an Order holds (a number,
-    or a string of one); refused when it is not (NaN, infinity, a string
-    that does not parse), which the Order would silently unset."""
+    """Convert ``value`` (a number or numeric string) to a finite Decimal.
+
+    Raises :class:`OrderTypeError` for NaN, infinity or an unparseable
+    string, which the Order would otherwise silently unset."""
     number = finiteDecimal(value)
     if number is None:
         raise OrderTypeError(f"{owner}: {name} must be a finite number, not {value!r}")
@@ -254,16 +268,24 @@ def checkedDecimal(owner: str, name: str, value: Any) -> Decimal:
 def checkedValue(
     owner: str, name: str, field: str, value: Any, *, infinity: bool = False
 ) -> Any:
-    """``value``, given as ``name``, as Order ``field`` holds it: a Decimal
-    field a finite number (a string of one too), and +Infinity where IBKR
-    gives it a meaning when ``infinity`` allows it; a float field a finite
-    real number (as a float); an int field a whole number (as an int); a
-    bool field True or False; a str field a string; any other field (a
-    list, a record) the value as given, as is None.
+    """Validate ``value`` (passed as ``name``) for Order ``field``.
 
-    Refuses what the Order would silently unset (NaN, infinity, a string
-    that is not a number) or misread (a float field's string, an int
-    field's fraction, a bool field's "false")."""
+    By field type:
+
+    * Decimal: a finite number or numeric string. +Infinity is also
+      accepted if ``infinity`` is True and IBKR gives it a meaning for
+      the field.
+    * float: a finite real number, returned as a float.
+    * int: a whole number, returned as an int.
+    * bool: True or False.
+    * str: a string.
+    * anything else (a list, a record): returned unchanged. None is also
+      returned unchanged.
+
+    Raises :class:`OrderTypeError` for values the Order would silently
+    unset (NaN, infinity, a non-numeric string) or misread (a string for
+    a float field, a fraction for an int field, "false" for a bool
+    field)."""
     if value is None:
         return None
     kind = ORDER_FIELD_TYPES.get(field)
@@ -298,9 +320,10 @@ def checkedValue(
 
 
 def checkedFields(owner: str, fields: Mapping[str, Any]) -> dict[str, Any]:
-    """Order ``fields`` (by field name), each checked as
-    :func:`checkedValue` says, +Infinity allowed where IBKR gives it a
-    meaning; None is the field's unset value (its default)."""
+    """Validate Order ``fields`` by field name with :func:`checkedValue`.
+
+    +Infinity is allowed where IBKR gives it a meaning. None becomes the
+    field's default."""
     return {
         name: unset(name)
         if value is None and name in ORDER_DEFAULTS
@@ -325,8 +348,9 @@ def required(owner: str, params: tuple[Param, ...], values: Mapping[str, Any]) -
 
 
 def _legs(owner: str, param: Param, prices: Any) -> list[OrderComboLeg]:
-    """One OrderComboLeg per price of the list ``prices``, each a finite
-    number, in the legs' order; at least one."""
+    """Build one OrderComboLeg per price in ``prices``, in leg order.
+
+    Each price must be a finite number, and there must be at least one."""
     if isinstance(prices, str) or not isinstance(prices, Sequence):
         raise OrderTypeError(
             f"{owner}: {param.name} is a list of prices, one per leg, in the "
@@ -577,17 +601,23 @@ def build(
     routing: Routing | None = None,
     adjust: Adjustment | None = None,
 ) -> dict[str, Any]:
-    """The Order fields for ``spec``, from its parameter ``values`` (by
-    parameter name) and any other Order fields in ``extra``, modified by an
-    ``algo``, combo ``routing`` and an ``adjust``-ment.
+    """Build the Order fields for ``spec``.
 
-    Refuses an action IBKR does not take, a quantity or a price that is
-    not a finite number, a missing required parameter, a broken
-    exactly-one group, ``extra`` fields the order type or a modifier sets
-    itself (its code, its defining fields, its parameters' fields), a
-    modifier that sets one of the order type's own fields, and a modifier
-    that does not apply to the order type or whose conditions the order
-    breaks."""
+    Uses the parameter ``values`` (by parameter name) and other Order
+    fields in ``extra``, then applies the optional ``algo``, combo
+    ``routing`` and ``adjust`` modifiers.
+
+    Raises :class:`OrderTypeError` for:
+
+    * an action IBKR does not accept;
+    * a quantity or price that is not a finite number;
+    * a missing required parameter;
+    * an exactly-one group with zero or several values given;
+    * ``extra`` fields that the order type or a modifier sets itself (the
+      code, the defining fields, the parameters' fields);
+    * a modifier that sets one of the order type's own fields;
+    * a modifier that does not apply to the order type, or whose
+      conditions the order does not meet."""
     owner = spec.className
     if action not in ACTIONS:
         raise OrderTypeError(
@@ -596,8 +626,8 @@ def build(
     quantity = checkedDecimal(owner, "totalQuantity", totalQuantity)
     extra = checkedFields(owner, extra)
     modifiers: list[Modifier] = [m for m in (algo, routing, adjust) if m is not None]
-    # Who sets each field the order type or a modifier sets, to say why an
-    # extra field cannot also be given.
+    # Maps each field set by the order type or a modifier to who sets it,
+    # for the error message when ``extra`` also sets it.
     setBy = dict.fromkeys(_CORE | set(spec.definingFields), f"{spec.title} sets it")
     setBy |= {p.field: f"its parameter {p.name} sets it" for p in spec.params}
     for m in modifiers:
