@@ -42,10 +42,20 @@ REQUESTS: dict[str, bool] = {
     "reqHistoricalData": True,
     "reqPositionsMulti": True,
     "reqPositions": False,
-    # Streams stay open while they stream. A snapshot ends with tickSnapshotEnd.
+    "reqOpenOrders": False,
+    "reqAllOpenOrders": False,
+    "reqCompletedOrders": False,
+    "reqAccountUpdates": False,
+    "reqAccountUpdatesMulti": True,
+    # Streaming requests stay open until cancelled. A market data snapshot
+    # ends with tickSnapshotEnd.
     "reqMktData": True,
     "reqTickByTickData": True,
     "reqMktDepth": True,
+    "reqRealTimeBars": True,
+    "reqScannerSubscription": True,
+    "reqPnL": True,
+    "reqPnLSingle": True,
 }
 # Client cancel methods, mapped to the request each one cancels.
 CANCELS: dict[str, str] = {
@@ -54,9 +64,14 @@ CANCELS: dict[str, str] = {
     "cancelPositionsMulti": "reqPositionsMulti",
     "cancelContractData": "reqContractDetails",
     "cancelPositions": "reqPositions",
+    "cancelAccountUpdatesMulti": "reqAccountUpdatesMulti",
     "cancelMktData": "reqMktData",
     "cancelTickByTickData": "reqTickByTickData",
     "cancelMktDepth": "reqMktDepth",
+    "cancelRealTimeBars": "reqRealTimeBars",
+    "cancelScannerSubscription": "reqScannerSubscription",
+    "cancelPnL": "reqPnL",
+    "cancelPnLSingle": "reqPnLSingle",
 }
 
 
@@ -237,6 +252,23 @@ class SimulatedTws:
             for _ in range(rows):
                 w.position("DU1", CONTRACT, Decimal(1), Decimal(10))
             w.positionEnd()
+        elif ask.kind in ("reqOpenOrders", "reqAllOpenOrders"):
+            w.openOrderEnd()
+        elif ask.kind == "reqCompletedOrders":
+            w.completedOrdersEnd()
+        elif ask.kind == "reqAccountUpdates":
+            account = ask.args[1]
+            for i in range(rows):
+                w.updateAccountValue(f"Tag{i}", str(i), "USD", account)
+            w.accountDownloadEnd(account)
+        elif ask.kind == "reqAccountUpdatesMulti":
+            assert reqId is not None
+            account, modelCode = ask.args[1], ask.args[2]
+            for i in range(rows):
+                w.accountUpdateMulti(
+                    reqId, account, modelCode, f"Tag{i}", str(i), "USD"
+                )
+            w.accountUpdateMultiEnd(reqId)
         else:
             raise ValueError(f"the simulated server has no answer for {ask.kind}")
         ask.answered = True
@@ -323,6 +355,38 @@ class SimulatedTws:
         self.wrapper.error(
             ask.reqId, code, "Requested market data is not subscribed", ""
         )
+
+    def realTimeBar(self, ask: Ask, close: float) -> None:
+        """Send one real-time bar closing at ``close``."""
+        assert ask.reqId is not None
+        price = Decimal(str(close))
+        self.wrapper.realtimeBar(
+            ask.reqId, 1700000000, price, price, price, price, Decimal(1), price, 1
+        )
+
+    def scanRows(self, ask: Ask, rows: int) -> None:
+        """Send ``rows`` scanner rows with ranks from 0, then the end message."""
+        assert ask.reqId is not None
+        for rank in range(rows):
+            self.wrapper.scannerData(
+                ask.reqId, rank, ibi.ContractDetails(contract=CONTRACT), "", "", "", ""
+            )
+        self.wrapper.scannerDataEnd(ask.reqId)
+
+    def scanHasNoResults(self, ask: Ask) -> None:
+        """Send error 165, which means the scan no longer matches anything."""
+        assert ask.reqId is not None
+        self.wrapper.error(ask.reqId, 165, "Historical Market Data Service query", "")
+
+    def pnlUpdate(self, ask: Ask, daily: float) -> None:
+        """Send a PnL update with daily PnL ``daily``."""
+        assert ask.reqId is not None
+        self.wrapper.pnl(ask.reqId, daily, 0.0, 0.0)
+
+    def pnlSingleUpdate(self, ask: Ask, position: int, daily: float) -> None:
+        """Send a single-position PnL update with ``position`` and ``daily``."""
+        assert ask.reqId is not None
+        self.wrapper.pnlSingle(ask.reqId, Decimal(position), daily, 0.0, 0.0, 0.0)
 
     # -- server side: orders ---------------------------------------------
 
