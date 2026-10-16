@@ -136,8 +136,8 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     proto version. Compliance / origination fields
     (``customerAccount``, ``professionalCustomer``,
     ``bondAccruedInterest``, ``includeOvernight``, ``submitter``) are
-    written on send so a user's re-place of a fetched order preserves
-    the originating session, as regulation requires. Specialized
+    written on send, so an order fetched and placed again keeps them.
+    Specialized
     order-behavior flags (``allowPreOpen``,
     ``deactivate``, ``postOnly``, ``ignoreOpenAuction``,
     ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``) are
