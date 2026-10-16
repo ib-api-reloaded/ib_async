@@ -1,14 +1,18 @@
 """A simulated TWS for driving :class:`ib_async.IB` without a server.
 
-:class:`SimulatedTws` wraps an IB whose client records every request and
-cancel it is given instead of sending them, and plays IBKR on the other
-side: :meth:`SimulatedTws.answer` delivers a request's rows and end
-through the wrapper callbacks the decoder would call, :meth:`refuse` an
-error for it, :meth:`bust` a bust event (10225), :meth:`disconnect` a
-dropped socket. Each request the client sends is an :class:`Ask`, open
-until the server answers it or the client cancels it, so a test can drive
-any interleaving of asks, answers, cancels and disconnects and check what
-the awaiters see.
+:class:`SimulatedTws` holds an IB whose client records requests and
+cancels instead of sending them. It also acts as the server: it calls the
+same wrapper callbacks the decoder would call.
+
+- :meth:`SimulatedTws.answer` sends a request's rows and its end message.
+- :meth:`SimulatedTws.refuse` sends an error for a request.
+- :meth:`SimulatedTws.bust` sends a bust event (10225).
+- :meth:`SimulatedTws.disconnect` simulates a dropped socket.
+
+Each request the client sends is recorded as an :class:`Ask`. An ask is
+open until the server answers it or the client cancels it. Tests use this
+to run any order of requests, answers, cancels and disconnects and check
+what the awaiting callers receive.
 """
 
 from __future__ import annotations
@@ -29,8 +33,8 @@ EXECUTED = dt.datetime(2026, 10, 14, 15, 30, tzinfo=dt.UTC)
 CONTRACT = ibi.Stock("SIM", "SMART", "USD", conId=1)
 CLIENT_ID = 7
 
-# The client methods that send a request the server answers, and whether
-# their first argument is the reqId (a singleton request has none).
+# Client methods that send a request, mapped to whether their first
+# argument is the reqId. Singleton requests have no reqId.
 REQUESTS: dict[str, bool] = {
     "reqContractDetails": True,
     "reqExecutions": True,
@@ -38,12 +42,12 @@ REQUESTS: dict[str, bool] = {
     "reqHistoricalData": True,
     "reqPositionsMulti": True,
     "reqPositions": False,
-    # Streams: open while they stream; a snapshot ends with tickSnapshotEnd.
+    # Streams stay open while they stream. A snapshot ends with tickSnapshotEnd.
     "reqMktData": True,
     "reqTickByTickData": True,
     "reqMktDepth": True,
 }
-# Each cancel the client may send, and the request it cancels.
+# Client cancel methods, mapped to the request each one cancels.
 CANCELS: dict[str, str] = {
     "cancelHeadTimeStamp": "reqHeadTimeStamp",
     "cancelHistoricalData": "reqHistoricalData",
@@ -58,15 +62,18 @@ CANCELS: dict[str, str] = {
 
 @dataclass(eq=False)
 class PlacedOrder:
-    """One order the client placed (or modified: a second placeOrder on the
-    same orderId), as the server sees it."""
+    """An order the client placed, as the server sees it.
+
+    A second placeOrder with the same orderId is a modification and updates
+    this record."""
 
     orderId: int
     contract: ibi.Contract
     order: ibi.Order  # a copy, as sent
     acknowledged: bool = False
     filled: Decimal = Decimal(0)
-    # Over at the server: "filled", "cancelled" or "rejected"; "" while working.
+    # How the order ended at the server: "filled", "cancelled", "rejected"
+    # or "disconnected". Empty while the order is working.
     ended: str = ""
     cancelRequested: bool = False
 
@@ -77,22 +84,22 @@ class PlacedOrder:
 
 @dataclass(eq=False)
 class Ask:
-    """One request the client sent, as the server sees it."""
+    """A request the client sent, as the server sees it."""
 
-    kind: str  # the client method that sent it
+    kind: str  # name of the client method that sent it
     reqId: int | None  # None for a singleton request
     args: tuple
-    answered: bool = False  # the server answered (or refused) it
+    answered: bool = False  # the server answered or refused it
     cancelled: bool = False  # the client cancelled it, or the socket dropped
 
     @property
     def open(self) -> bool:
-        """Still awaiting the server's answer."""
+        """True if the request is not yet answered or cancelled."""
         return not (self.answered or self.cancelled)
 
 
 class SimulatedTws:
-    """An IB and the server it talks to, both in this process."""
+    """An IB instance and a simulated server, both in this process."""
 
     def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
         self.loop = loop
@@ -114,28 +121,28 @@ class SimulatedTws:
         self.ib.client = self.client
         self.ib.wrapper.clientId = CLIENT_ID
         self.asks: list[Ask] = []
-        # Every cancel the client sent: (the cancel method, the reqId).
+        # Every cancel the client sent, as (cancel method, reqId).
         self.cancels: list[tuple[str, int | None]] = []
-        # Every order placed, by orderId; a modification replaces the copy.
+        # Every order placed, by orderId. A modification replaces the copy.
         self.orders: dict[int, PlacedOrder] = {}
         self._execIds = iter(range(1, 10**6))
         self.connected = True
 
     @property
     def wrapper(self) -> Wrapper:
-        """The wrapper now (a disconnect resets its registries)."""
+        """The current wrapper. A disconnect resets its registries."""
         return self.ib.wrapper
 
-    # -- the client's side -----------------------------------------------
+    # -- client side -----------------------------------------------------
 
     def _reqId(self) -> int:
         if not self.connected:
-            raise ConnectionError("Not connected")  # as Client.getReqId
+            raise ConnectionError("Not connected")  # same as Client.getReqId
         return next(self._reqIds)
 
     def _asked(self, name: str, hasReqId: bool, *args: Any) -> None:
         if not self.connected:
-            raise ConnectionError("Not connected")  # as Client.send
+            raise ConnectionError("Not connected")  # same as Client.send
         self.asks.append(Ask(name, args[0] if hasReqId else None, args))
 
     def _cancelled(
@@ -150,8 +157,8 @@ class SimulatedTws:
         if not self.connected:
             raise ConnectionError("Not connected")
         placed = self.orders.get(orderId)
-        # As TWS holds it: under the orderId it was sent with, the client
-        # it came from, and the permId TWS assigns it.
+        # Store the order as TWS does: with the orderId it was sent with,
+        # the sending clientId, and a permId assigned by TWS.
         copy = dataclasses.replace(
             order, orderId=orderId, clientId=CLIENT_ID, permId=1_000_000 + orderId
         )
@@ -168,24 +175,24 @@ class SimulatedTws:
             placed.cancelRequested = True
 
     def start(self, coro: Any) -> asyncio.Task:
-        """Start a request method and run the loop until it has sent."""
+        """Start a request coroutine and run the loop until it has sent."""
         task = asyncio.ensure_future(coro, loop=self.loop)
         self.run()
         return task
 
     def run(self) -> None:
-        """Run the event loop long enough for callbacks and awaits to settle."""
+        """Run the event loop until pending callbacks and awaits finish."""
         for _ in range(4):
             self.loop.run_until_complete(asyncio.sleep(0))
 
     def openAsks(self, kind: str | None = None) -> list[Ask]:
-        """The asks still awaiting an answer, oldest first."""
+        """Open asks, oldest first."""
         return [a for a in self.asks if a.open and (kind is None or a.kind == kind)]
 
-    # -- the server's side -----------------------------------------------
+    # -- server side -----------------------------------------------------
 
     def answer(self, ask: Ask, rows: int = 1) -> None:
-        """Answer ``ask`` with ``rows`` rows and its end, as IBKR would."""
+        """Answer ``ask`` with ``rows`` rows and the end message."""
         w = self.wrapper
         reqId = ask.reqId
         if ask.kind == "reqContractDetails":
@@ -235,26 +242,40 @@ class SimulatedTws:
         ask.answered = True
         self.run()
 
+    def answerContractDetails(
+        self, ask: Ask, details: list[ibi.ContractDetails]
+    ) -> None:
+        """Answer a contract details request with exactly ``details``."""
+        assert ask.kind == "reqContractDetails" and ask.reqId is not None
+        for item in details:
+            self.wrapper.contractDetails(ask.reqId, item)
+        self.wrapper.contractDetailsEnd(ask.reqId)
+        ask.answered = True
+        self.run()
+
     def refuse(self, ask: Ask, code: int = 162) -> None:
-        """Refuse ``ask`` with error ``code``, as IBKR refuses a request."""
+        """Refuse ``ask`` with error ``code``."""
         assert ask.reqId is not None, "a singleton request is not refused by reqId"
         self.wrapper.error(ask.reqId, code, "refused by the simulated server", "")
         ask.answered = True
         self.run()
 
     def bust(self, ask: Ask) -> None:
-        """A bust event (10225) on ``ask``: IBKR deactivates the request's
-        subscription; the client is expected to send it again."""
+        """Send a bust event (10225) for ``ask``.
+
+        IBKR deactivates the request's subscription, and the client is
+        expected to send the request again."""
         assert ask.reqId is not None
         self.wrapper.error(ask.reqId, 10225, "Bust event occurred", "")
         ask.answered = True
         self.run()
 
-    # -- the server's side: streams ----------------------------------------
+    # -- server side: streams --------------------------------------------
 
     def lastTick(self, ask: Ask, price: float, size: float = 1.0) -> None:
-        """A last price tick on a market data stream (or a stray one for a
-        cancelled reqId, which the wrapper drops)."""
+        """Send a last price tick for a market data stream.
+
+        For a cancelled reqId this is a stray tick, which the wrapper drops."""
         assert ask.reqId is not None
         self.wrapper.priceSizeTick(ask.reqId, 4, price, size, ibi.TickAttrib())
 
@@ -264,7 +285,7 @@ class SimulatedTws:
         self.wrapper.priceSizeTick(ask.reqId, 2, offer, 1.0, ibi.TickAttrib())
 
     def snapshotEnd(self, ask: Ask) -> None:
-        """A snapshot's last message; its subscription ends."""
+        """Send the snapshot end message, which ends the subscription."""
         assert ask.reqId is not None
         self.wrapper.tickSnapshotEnd(ask.reqId)
         ask.answered = True
@@ -292,18 +313,18 @@ class SimulatedTws:
         )
 
     def depthReset(self, ask: Ask) -> None:
-        """Error 317: the depth book is reset."""
+        """Send error 317, which resets the depth book."""
         assert ask.reqId is not None
         self.wrapper.error(ask.reqId, 317, "Market depth data has been RESET", "")
 
     def refuseStream(self, ask: Ask, code: int = 354) -> None:
-        """An error on a stream (354: not subscribed to the data)."""
+        """Send an error for a stream. Code 354 means not subscribed."""
         assert ask.reqId is not None
         self.wrapper.error(
             ask.reqId, code, "Requested market data is not subscribed", ""
         )
 
-    # -- the server's side: orders -----------------------------------------
+    # -- server side: orders ---------------------------------------------
 
     def _orderStatus(self, placed: PlacedOrder, status: str) -> None:
         total = placed.order.totalQuantity or Decimal(0)
@@ -321,8 +342,10 @@ class SimulatedTws:
         )
 
     def acknowledge(self, placed: PlacedOrder) -> None:
-        """TWS accepts the order (or a modification of it): an openOrder
-        with the order as it holds it, then a Submitted status."""
+        """Accept the order or its modification.
+
+        Sends openOrder with the order as TWS stores it, then a Submitted
+        status."""
         self.wrapper.openOrder(
             placed.orderId,
             placed.contract,
@@ -336,9 +359,11 @@ class SimulatedTws:
     def fill(
         self, placed: PlacedOrder, shares: Decimal, *, reportFirst: bool = False
     ) -> str:
-        """A fill of ``shares``: the execution, the status it leaves the
-        order in, and its commission report, which may arrive first (as
-        it does in a replay race). Returns the execId."""
+        """Fill ``shares`` of the order and return the execId.
+
+        Sends the execution, the new order status, and the commission
+        report. With ``reportFirst`` the commission report is sent before
+        the execution, as happens in a replay race."""
         execId = f"{placed.orderId}.{next(self._execIds)}"
         execution = ibi.Execution(
             execId=execId,
@@ -366,22 +391,24 @@ class SimulatedTws:
         return execId
 
     def cancelOrder(self, placed: PlacedOrder) -> None:
-        """TWS cancels the order (on the client's request, or on its own)."""
+        """Cancel the order, either on the client's request or unprompted."""
         placed.ended = "cancelled"
         self._orderStatus(placed, "Cancelled")
         self.run()
 
     def rejectOrder(self, placed: PlacedOrder, code: int = 201) -> None:
-        """TWS rejects the order with error ``code``."""
+        """Reject the order with error ``code``."""
         placed.ended = "rejected"
         self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
         self.run()
 
-    # -- the connection --------------------------------------------------
+    # -- connection ------------------------------------------------------
 
     def disconnect(self) -> None:
-        """The socket drops: every awaiter is failed, every subscription
-        closed, every live trade Disconnected, and the server forgets every
+        """Drop the socket.
+
+        The wrapper fails every awaiting caller, closes every subscription
+        and marks every live trade Disconnected. The server drops every
         open ask and working order."""
         self.client.isConnected.return_value = False
         self.connected = False
@@ -397,4 +424,4 @@ class SimulatedTws:
     def reconnect(self) -> None:
         self.client.isConnected.return_value = True
         self.connected = True
-        self.wrapper.clientId = CLIENT_ID  # as connect sets it
+        self.wrapper.clientId = CLIENT_ID  # connect sets this
