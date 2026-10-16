@@ -102,23 +102,24 @@ class _CommissionAlias:
     setting it warns (``DeprecationWarning``) and reads or sets
     ``commissionAndFees``. Declared in a class body, unannotated, so it is
     not a dataclass field: the constructor and ``dataclasses.replace`` take
-    ``commissionAndFees`` alone. Removal target: v4.0."""
+    ``commissionAndFees`` alone. Typed ``Any``, as ``commissionAndFees``'s
+    type is its class's: a Decimal on CommissionReport and OrderState, a
+    float on OrderStateNumeric, a string once ``formatted()``. Removal
+    target: v4.0."""
 
     @overload
     def __get__(self, obj: None, objtype: type | None = None) -> _CommissionAlias: ...
 
     @overload
-    def __get__(self, obj: Any, objtype: type | None = None) -> Decimal | None: ...
+    def __get__(self, obj: Any, objtype: type | None = None) -> Any: ...
 
-    def __get__(
-        self, obj: Any, objtype: type | None = None
-    ) -> _CommissionAlias | Decimal | None:
+    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         if obj is None:
             return self
         self._warn(obj)
         return obj.commissionAndFees
 
-    def __set__(self, obj: Any, value: Decimal | None) -> None:
+    def __set__(self, obj: Any, value: Any) -> None:
         self._warn(obj)
         obj.commissionAndFees = value
 
