@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import numbers
 from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -30,6 +31,7 @@ from ib_async.objects import (
     TickByTickMidPoint,
     TickData,
 )
+from ib_async.order import finiteDecimal
 from ib_async.util import dataclassDisplayFields, dataclassDisplayPairs
 
 # Bounded ring of most-recent per-contract news ticks. NewsTick already
@@ -536,6 +538,26 @@ class BarList(list[RealTimeBar]):
         return id(self)
 
 
+def _wholeCount(value: object) -> int | None:
+    """``value`` as an int when it is a whole number (an int, numpy's; a
+    bool is not), at least 1; else None."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Integral):
+        return None
+    count = int(value)
+    return count if count >= 1 else None
+
+
+def _positiveVolume(value: object) -> Decimal | None:
+    """``value`` as a Decimal when it is a finite real number (a Decimal,
+    an int, a float, a fraction, numpy's; a bool is not) above 0, read as
+    an Order's numbers are (:func:`~ib_async.order.finiteDecimal`): an int
+    of any size exactly, a float as it prints; else None."""
+    if not isinstance(value, Decimal | numbers.Real):
+        return None
+    volume = finiteDecimal(value)
+    return volume if volume is not None and volume > 0 else None
+
+
 def _decimal(value: Decimal | float) -> Decimal:
     """A float (a tick's price or size) as the Decimal it reads as."""
     return Decimal(str(value))
@@ -633,9 +655,12 @@ class _Bars(Op):
 
     @maxBars.setter
     def maxBars(self, maxBars: int | None) -> None:
-        if maxBars is not None and maxBars < 1:
-            raise ValueError(f"maxBars keeps at least 1 bar, not {maxBars}")
-        self._maxBars = maxBars
+        count = None if maxBars is None else _wholeCount(maxBars)
+        if maxBars is not None and count is None:
+            raise ValueError(
+                f"maxBars keeps a whole number of bars, at least 1, not {maxBars!r}"
+            )
+        self._maxBars = count
 
     def on_source(self, time: datetime, price: float | None, size: float | None):
         # A tick without a finite price (a midpoint without a bid and ask)
@@ -763,9 +788,12 @@ class TickBars(_Bars):
     _count: int
 
     def __init__(self, count: int, source=None, maxBars: int | None = None):
-        if count < 1:
-            raise ValueError(f"a tick bar has at least 1 tick, not {count}")
-        self._count = count
+        ticks = _wholeCount(count)
+        if ticks is None:
+            raise ValueError(
+                f"a tick bar has a whole number of ticks, at least 1, not {count!r}"
+            )
+        self._count = ticks
         _Bars.__init__(self, source, maxBars)
 
     def _isComplete(self, builder: _BarBuilder) -> bool:
@@ -781,9 +809,10 @@ class VolumeBars(_Bars):
     def __init__(
         self, volume: Decimal | float, source=None, maxBars: int | None = None
     ):
-        if not (math.isfinite(volume) and volume > 0):
-            raise ValueError(f"a volume bar has a positive volume, not {volume}")
-        self._volume = _decimal(volume)
+        positive = _positiveVolume(volume)
+        if positive is None:
+            raise ValueError(f"a volume bar has a positive volume, not {volume!r}")
+        self._volume = positive
         _Bars.__init__(self, source, maxBars)
 
     def _isComplete(self, builder: _BarBuilder) -> bool:

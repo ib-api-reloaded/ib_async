@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
+import numbers
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
-from typing import ClassVar, NamedTuple
+from types import MappingProxyType
+from typing import Any, ClassVar, NamedTuple, get_args, get_type_hints
 
 from eventkit import Event
 
@@ -233,65 +236,70 @@ class Order:
     def __hash__(self):
         return id(self)
 
-    # The fields annotated ``Decimal | None`` (set below the class, from
-    # its fields). ``__post_init__`` coerces user-supplied ``float`` /
-    # ``int`` / ``str`` values for these to ``Decimal`` via ``str()`` so
-    # ``Order(lmtPrice=50.5)`` lands the right type without forcing every
-    # caller to write ``Decimal('50.5')``.
-    _DECIMAL_FIELDS: ClassVar[tuple[str, ...]] = ()
     # The Decimal fields where IBKR gives +Infinity a meaning, kept instead
     # of unset: COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID.
     _INFINITE_FIELDS: ClassVar[frozenset[str]] = frozenset({"competeAgainstBestOffset"})
 
     def __post_init__(self) -> None:
-        for name in self._DECIMAL_FIELDS:
+        # Coerce user-supplied ``float`` / ``int`` / ``str`` values of the
+        # Decimal fields to ``Decimal`` via ``str()``, so
+        # ``Order(lmtPrice=50.5)`` lands the right type without every caller
+        # writing ``Decimal('50.5')``.
+        # Always coerce, even pre-coerced ``Decimal`` inputs, so a stray
+        # ``Decimal('NaN')`` from user code lands as ``None`` instead of
+        # as a silently-truthy ``Decimal('NaN')`` that breaks every
+        # downstream ``if order.lmtPrice:`` guard and puts "NaN" on the
+        # wire.
+        for name in _DECIMAL_FIELDS:
             v = getattr(self, name)
-            if v is None:
-                continue
-            if name in self._INFINITE_FIELDS:
-                setattr(self, name, decimalOrInfinity(v))
-                continue
-            # Always route through ``_toDecimal`` — even pre-coerced
-            # ``Decimal`` inputs — so a stray ``Decimal('NaN')`` /
-            # ``Decimal('Infinity')`` from user code lands as ``None``
-            # instead of as a silently-truthy ``Decimal('NaN')`` that
-            # breaks every downstream ``if order.lmtPrice:`` guard and
-            # corrupts ``_decimalToWireString`` to emit ``"NaN"`` on
-            # the wire.
-            setattr(self, name, _toDecimal(v))
+            if v is not None:
+                setattr(self, name, orderDecimal(name, v))
 
 
-Order._DECIMAL_FIELDS = tuple(
-    f.name for f in dataclasses.fields(Order) if f.type == "Decimal | None"
-)
+def takesInfinity(field: str) -> bool:
+    """Whether IBKR gives +Infinity a meaning in Order's Decimal
+    ``field``, which then holds it rather than unset."""
+    return field in Order._INFINITE_FIELDS
 
 
-def _toDecimal(value: Decimal | float | str | None) -> Decimal | None:
+def orderDecimal(field: str, value: Decimal | float | str | None) -> Decimal | None:
+    """``value`` as Order's Decimal ``field`` holds it: a finite Decimal
+    (:func:`finiteDecimal`), or +Infinity too where IBKR gives it a
+    meaning (:func:`takesInfinity`); None for anything else."""
+    if takesInfinity(field):
+        return decimalOrInfinity(value)
+    return finiteDecimal(value)
+
+
+def finiteDecimal(
+    value: Decimal | float | numbers.Real | str | None,
+) -> Decimal | None:
     """Coerce a user-supplied numeric to ``Decimal | None``.
 
-    Goes through ``str()`` for floats so binary-float imprecision (e.g.
-    ``Decimal(0.1) → Decimal('0.1000000000000000055...')``) doesn't
-    contaminate user-provided fractional-share quantities or option
-    prices. ``None`` / ``""`` / ``float('nan')`` / ``float('inf')`` /
-    ``Decimal('NaN')`` / ``Decimal('Infinity')`` all round-trip to
-    ``None`` so the ``Decimal | None`` field semantics hold: ``None``
-    is the unset sentinel and ``if order.lmtPrice:`` checks stay
-    correct, instead of a silently-truthy ``Decimal('NaN')`` slipping
-    past the guard and corrupting downstream wire writes.
+    Floats are converted through ``str()`` so binary-float error (e.g.
+    ``Decimal(0.1) → Decimal('0.1000000000000000055...')``) does not leak
+    into fractional-share quantities or option prices. numpy numbers also
+    convert through their printed value.
+
+    ``None``, ``""``, ``float('nan')``, ``float('inf')``, ``Decimal('NaN')``,
+    ``Decimal('Infinity')``, a bool, and a non-numeric string all return
+    ``None``. ``None`` means unset, so ``if order.lmtPrice:`` checks stay
+    correct. A ``Decimal('NaN')`` would be truthy, pass that check, and
+    corrupt the wire message.
     """
     if value is None or value == "":
         return None
     if isinstance(value, Decimal):
-        if value.is_nan() or value.is_infinite():
-            return None
-        return value
+        return value if value.is_finite() else None
+    if isinstance(value, bool):
+        return None  # True is no price
+    if isinstance(value, numbers.Integral):
+        return Decimal(int(value))  # exactly, numpy's ints too
     try:
         result = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return None
-    if result.is_nan() or result.is_infinite():
-        return None
-    return result
+    return result if result.is_finite() else None
 
 
 # competeAgainstBestOffset for a Pegged to Best order that competes up to the
@@ -300,15 +308,22 @@ COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID = Decimal("Infinity")
 
 
 def decimalOrInfinity(value: Decimal | float | str | None) -> Decimal | None:
-    """``_toDecimal``, except that +Infinity (as IBKR sends and reads it, in
-    any spelling) stays Decimal("Infinity"), for the fields where it means
-    something."""
+    """Like ``finiteDecimal``, but keep +Infinity as Decimal("Infinity").
+
+    Used for fields where IBKR gives +Infinity a meaning; any spelling of
+    it IBKR sends or reads is accepted. IBKR's unset double becomes None,
+    as for any other field."""
     try:
-        if Decimal(str(value)) == COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID:
-            return COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID
+        number = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
-        pass
-    return _toDecimal(value)
+        return None
+    if number.is_nan():
+        return None
+    if number == COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID:
+        return COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID
+    if float(number) == UNSET_DOUBLE:
+        return None
+    return finiteDecimal(value)
 
 
 # TWS API 10.51 reports a completed order's outcome as descriptive text
@@ -630,7 +645,7 @@ class OrderComboLeg:
     def __post_init__(self) -> None:
         # As for Order's Decimal fields: floats and strings coerce, and a
         # value that is not a finite number is unset.
-        self.price = _toDecimal(self.price)
+        self.price = finiteDecimal(self.price)
 
 
 # Trade is deliberately not @dataclass(slots=True). __post_init__ assigns
@@ -834,3 +849,26 @@ class PercentChangeCondition(OrderCondition):
     changePercent: float = 0.0
     conId: int = 0
     exch: str = ""
+
+
+def _scalar(hint: Any) -> type | None:
+    """The scalar type an Order field annotated ``hint`` holds (Decimal,
+    float, int, bool or str), if any."""
+    kinds = get_args(hint) or (hint,)
+    return next((t for t in (Decimal, float, int, bool, str) if t in kinds), None)
+
+
+# The scalar type each scalar Order field holds, by field; resolved here,
+# at the end of the module, once every type the annotations name is
+# defined.
+ORDER_FIELD_TYPES: Mapping[str, type] = MappingProxyType(
+    {
+        name: scalar
+        for name, hint in get_type_hints(Order).items()
+        if name in Order.__dataclass_fields__ and (scalar := _scalar(hint)) is not None
+    }
+)
+# The Decimal fields, which Order.__post_init__ coerces.
+_DECIMAL_FIELDS: tuple[str, ...] = tuple(
+    name for name, scalar in ORDER_FIELD_TYPES.items() if scalar is Decimal
+)

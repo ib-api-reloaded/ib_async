@@ -6,9 +6,9 @@
 Order types
 ===========
 
-Each order type is a function that returns an ``Order`` with the fields IBKR expects for it. Its parameters are the values that order type needs; any other ``Order`` field (``tif``, ``outsideRth``, ``account``, ``cashQty``, ``includeOvernight``, ...) is a keyword argument. A missing required value, two of a pair where one is needed, or overriding a field the type sets itself raises ``OrderTypeError``.
+Each order type is a function that returns an ``Order`` with the fields IBKR expects for it. Its parameters are the values that order type needs; any other ``Order`` field (``tif``, ``outsideRth``, ``account``, ``cashQty``, ``includeOvernight``, ...) is a keyword argument. An action IBKR does not take, a value that is not one its field holds (a price or quantity that is not a finite number, say), a missing required value, not exactly one of a pair where one is needed, a field the type or a modifier (``algo=``, ``routing=``, ``adjust=``) sets itself, or a modifier that does not apply raises ``OrderTypeError``.
 
-``ib_async.ordertypes.specOf(order)`` names the order type of any ``Order``; ``ib_async.ordertypes.checkOrder(contract, order)`` lists what IBKR says against an order for a contract, such as a product it is not listed for; given the contract's ``ContractDetails`` instead, also an order type its ``orderTypes`` does not list.
+``ib_async.ordertypes.specOf(order)`` names the order type of any ``Order``, and ``specsOf(order)`` every type of an order combining types (such as an IBKR ATS limit order on the open); ``ib_async.ordertypes.checkOrder(contract, order)`` lists what IBKR says against an order for a contract, such as a product it is not listed for; given the contract's ``ContractDetails`` instead, also an order type its ``orderTypes`` does not list.
 
 For an order type not listed here, set the fields on ``Order`` directly: ``Order(orderType=..., action=..., totalQuantity=...)``.
 
@@ -1222,7 +1222,7 @@ Day orders only. Live trading found it refused outside regular trading hours, an
      - ``adaptivePriority`` (str)
      - Urgent fills fastest, Patient seeks the best price. One of: Urgent, Normal, Patient.
 
-- Works: LMT, MKT orders
+- Works LMT, MKT orders
 - Needs ``tif`` one of ``''``, ``'DAY'``
 - Needs ``outsideRth=False``
 - Stability: stable
@@ -1261,7 +1261,7 @@ Aims for the bid/ask midpoint at the time the order is submitted, trading off ma
      - ``allowPastEndTime`` (bool)
      - Keep working after endTime if not done.
 
-- Works: LMT orders
+- Works LMT orders
 - Stability: advanced
 
 Dark Ice (``DarkIce``)
@@ -1294,7 +1294,7 @@ Day orders only.
      - ``allowPastEndTime`` (bool)
      - Keep working after endTime if not done.
 
-- Works: LMT orders
+- Works LMT orders
 - Needs ``tif`` one of ``''``, ``'DAY'``
 - Stability: advanced
 
@@ -1326,7 +1326,7 @@ Trades a fixed share of the market's volume.
      - ``noTakeLiq`` (bool)
      - Attempt never to take liquidity.
 
-- Works: LMT orders
+- Works LMT orders
 - Stability: advanced
 
 Price Variant Percentage of Volume (``PctVolPx``)
@@ -1366,7 +1366,7 @@ Trades a share of volume that changes with the price: by deltaPctVol per move, b
      - ``noTakeLiq`` (bool)
      - Attempt never to take liquidity.
 
-- Works: LMT orders
+- Works LMT orders
 - Stability: advanced
 
 Size Variant Percentage of Volume (``PctVolSz``)
@@ -1400,7 +1400,7 @@ Trades a share of volume that moves from startPctVol to endPctVol as the order f
      - ``noTakeLiq`` (bool)
      - Attempt never to take liquidity.
 
-- Works: LMT orders
+- Works LMT orders
 - Stability: advanced
 
 Time Variant Percentage of Volume (``PctVolTm``)
@@ -1434,7 +1434,7 @@ Trades a share of volume that moves from startPctVol to endPctVol between startT
      - ``noTakeLiq`` (bool)
      - Attempt never to take liquidity.
 
-- Works: LMT orders
+- Works LMT orders
 - Stability: advanced
 
 TWAP (``Twap``)
@@ -1468,7 +1468,7 @@ Aims for the time-weighted average price from when the order is submitted to whe
      - ``catchUp`` (bool)
      - Catch up in time.
 
-- Works: LMT orders
+- Works LMT orders
 - Products: STK
 - Stability: advanced
 
@@ -1506,7 +1506,7 @@ Aims for the volume-weighted average price, on a best-efforts basis.
      - ``speedUp`` (bool)
      - Compensate for the lower fill rate a limit price causes.
 
-- Works: LMT orders
+- Works LMT orders
 - Products: STK
 - Stability: advanced
 
@@ -1535,7 +1535,7 @@ For options: balances the market impact of trading against the risk of the price
      - ``forceCompletion`` (bool)
      - Attempt completion by the end of the day.
 
-- Works: LMT orders
+- Works LMT orders
 - Products: OPT
 - Stability: advanced
 
@@ -1558,7 +1558,7 @@ For options: minimizes market impact.
      - ``maxPctVol`` (float)
      - The largest share of the market's volume, 0.1 (10%) to 0.5 (50%).
 
-- Works: LMT orders
+- Works LMT orders
 - Products: OPT
 - Stability: advanced
 
@@ -1590,7 +1590,7 @@ Aims for the closing price: breaks a large order down and times its entry.
      - ``forceCompletion`` (bool)
      - Attempt completion by the end of the day.
 
-- Works: LMT orders
+- Works LMT orders
 - Stability: advanced
 
 Accumulate/Distribute (``AD``)
@@ -1636,7 +1636,7 @@ Splits a large order into componentSize pieces sent timeBetweenOrders seconds ap
      - ``activeTimeEnd`` (str)
      - When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
 
-- Works: LMT, MKT, REL orders
+- Works LMT, MKT, REL orders
 - Stability: advanced
 
 IBKR order type codes

@@ -3,13 +3,15 @@
 Each order type here returns an :class:`~ib_async.order.Order` built from
 one entry of the catalog (``catalog.py``), which records the order type's
 IBKR code, the fields it sets, and the products IBKR documents it for; the
-catalog also describes IB algos, combo routing and the order options. ``attached.py`` builds adjustable stops and
-FX hedges. ``docs/ordertypes.rst`` describes them all.
+catalog also describes IB algos, combo routing and the order options.
+``attached.py`` builds adjustable stops and FX hedges.
+``docs/ordertypes.rst`` describes them all.
 
 Beyond constructing orders:
 
 - :func:`specOf` tells what order type an ``Order`` is, whichever way it
-  was made (useful for logs, and for orders read back from TWS);
+  was made (useful for logs, and for orders read back from TWS), and
+  :func:`specsOf` every type an order combining types is;
 - :func:`checkOrder` lists what IBKR says against sending an order for a
   contract (a product or exchange it is not offered for, or, from the
   contract's details, an order type they do not list);
@@ -36,9 +38,13 @@ from .generated import *  # noqa: F403  (the order types and algos)
 from .generated import __all__ as _classes
 from .modify import SERVER_FILLED, modifiedOrder
 from .spec import (
+    ACTIONS,
     Adjustment,
     Algo,
     AlgoSpec,
+    FieldIn,
+    FieldValue,
+    Kind,
     OptionSpec,
     OrderTypeError,
     OrderTypeSpec,
@@ -54,23 +60,47 @@ if TYPE_CHECKING:
     from ..order import Order
 
 
-def specOf(order: Order) -> OrderTypeSpec | None:
-    """The catalog's order type for ``order``: the most specific one whose
-    code, defining fields and required parameters match; None for an order
-    type outside the catalog, or one without a required parameter set."""
-    matches = [
-        spec
-        for spec in _sameKind(order)
-        if all(
-            isSet(p.field, getattr(order, p.field)) for p in spec.params if p.required
-        )
-    ]
-    if not matches:
-        return None
-    return max(
-        matches,
-        key=lambda s: (len(s.defining), sum(p.required for p in s.params)),
+def specsOf(order: Order) -> list[OrderTypeSpec]:
+    """The catalog's order types ``order`` is: those whose code, defining
+    fields and required parameters it has, each parameter a value the
+    type's constructor takes, the most specific only (a type whose defining
+    fields and required parameters another one has too is left out).
+    Several for an order combining types, such as an IBKR ATS limit order
+    on the open; none for an order type outside the catalog, or one without
+    a required parameter set."""
+    return _mostSpecific(
+        [
+            spec
+            for spec in _sameKind(order)
+            if all(isSet(f, getattr(order, f)) for f in spec.requiredFields)
+            and all(
+                _takes(p, getattr(order, p.field)) for p in spec.params if p.required
+            )
+        ]
     )
+
+
+def _takes(param: Param, value: object) -> bool:
+    """Whether ``param``'s constructor argument may be ``value``, as an
+    order holds it (an up-to-mid order's infinite competeAgainstBestOffset
+    is no Pegged to Best order's); a tag value or leg prices, held as a
+    list, is judged by its being set."""
+    if param.tag or param.kind is Kind.LEG_PRICES:
+        return True
+    try:
+        param.coerce(param.name, value)
+    except OrderTypeError:
+        return False
+    return True
+
+
+def specOf(order: Order) -> OrderTypeSpec | None:
+    """The catalog's order type for ``order``, when it is one (see
+    :func:`specsOf`); None for an order type outside the catalog, one
+    without a required parameter set or with one its constructor would
+    refuse, or an order combining types."""
+    specs = specsOf(order)
+    return specs[0] if len(specs) == 1 else None
 
 
 def _sameKind(order: Order) -> list[OrderTypeSpec]:
@@ -81,6 +111,29 @@ def _sameKind(order: Order) -> list[OrderTypeSpec]:
         for spec in CATALOG
         if spec.orderType == baseOrderType(order)
         and all(getattr(order, d.field) == d.value for d in spec.defining)
+    ]
+
+
+def _covers(a: OrderTypeSpec, b: OrderTypeSpec) -> bool:
+    """Whether ``a`` is at least as specific as ``b``: it has ``b``'s
+    defining values, and pins every field ``b`` pins (by a defining value
+    or a required parameter)."""
+    return set(b.defining) <= set(a.defining) and _pinned(b) <= _pinned(a)
+
+
+def _pinned(spec: OrderTypeSpec) -> frozenset[str]:
+    return spec.requiredFields | set(spec.definingFields)
+
+
+def _mostSpecific(specs: list[OrderTypeSpec]) -> list[OrderTypeSpec]:
+    return [
+        s for s in specs if not any(_covers(o, s) and not _covers(s, o) for o in specs)
+    ]
+
+
+def _leastSpecific(specs: list[OrderTypeSpec]) -> list[OrderTypeSpec]:
+    return [
+        s for s in specs if not any(_covers(s, o) and not _covers(o, s) for o in specs)
     ]
 
 
@@ -133,21 +186,34 @@ def _documented(contract: Contract, order: Order) -> list[str]:
         problems.append(
             f"{algo.title} is documented for {', '.join(algo.products)}, not {product}"
         )
-    # An order missing a parameter its type requires is still checked as
-    # the least specific type of its code (TWS will say what is missing).
-    spec = specOf(order) or min(
-        _sameKind(order), key=lambda s: len(s.defining), default=None
-    )
-    if spec is None:
+    specs = specsOf(order)
+    if specs:
+        # The order is each of these types: each one's limits apply.
+        for spec in specs:
+            problems += _offered(spec, product, contract.exchange)
         return problems
+    # An order missing a parameter its type requires (TWS will say what):
+    # what every least specific type of its code says against it.
+    complaints = [
+        _offered(spec, product, contract.exchange)
+        for spec in _leastSpecific(_sameKind(order))
+    ]
+    if complaints and all(complaints):
+        problems += complaints[0]
+    return problems
+
+
+def _offered(spec: OrderTypeSpec, product: str, exchange: str) -> list[str]:
+    """What ``spec``'s documented products and exchanges say against
+    ``product`` and ``exchange`` (either empty when not known)."""
+    problems = []
     if spec.products and product and product not in spec.products:
         problems.append(
             f"{spec.title} is documented for {', '.join(spec.products)}, not {product}"
         )
-    if spec.exchanges and contract.exchange and contract.exchange not in spec.exchanges:
+    if spec.exchanges and exchange and exchange not in spec.exchanges:
         problems.append(
-            f"{spec.title} is offered on {', '.join(spec.exchanges)}, "
-            f"not {contract.exchange}"
+            f"{spec.title} is offered on {', '.join(spec.exchanges)}, not {exchange}"
         )
     return problems
 
@@ -161,6 +227,7 @@ def _listed(listed: set[str], order: Order) -> list[str]:
 
 __all__ = [
     *_classes,
+    "ACTIONS",
     "ALGOS",
     "AdjustToStop",
     "AdjustToStopLimit",
@@ -169,20 +236,24 @@ __all__ = [
     "Algo",
     "AlgoSpec",
     "CATALOG",
+    "FieldIn",
+    "FieldValue",
     "FxHedgeOrder",
     "IBKR_ORDER_TYPES",
+    "Kind",
     "NOT_BUILT",
     "OPTIONS",
     "OptionSpec",
-    "SERVER_FILLED",
-    "SPECS",
     "OrderTypeError",
     "OrderTypeSpec",
     "Param",
     "Routing",
+    "SERVER_FILLED",
+    "SPECS",
     "Stability",
     "algoOf",
     "checkOrder",
     "modifiedOrder",
     "specOf",
+    "specsOf",
 ]

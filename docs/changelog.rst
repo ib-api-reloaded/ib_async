@@ -64,8 +64,10 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 * **39 order types** in ``ib_async.ordertypes``, one constructor each, from
   Market on Close, Limit on Open and Trailing Stop to Midprice, the Snap
   types, the IBKR ATS pegs and the combo types, generated with their
-  documentation from one catalog. Each validates its required values;
-  ``specOf(order)`` names the type of any ``Order``, and
+  documentation from one catalog. Each validates its values (an action
+  IBKR takes, required values given, prices and quantities finite
+  numbers); ``specOf(order)`` names the type of any ``Order`` (and
+  ``specsOf`` every type of one combining types), and
   ``checkOrder(contract, order)`` lists what IBKR documents against an
   order for a contract. IB algos work the order types they apply to:
   ``LimitOrder("BUY", 100, 50.00, algo=Adaptive(priority="Urgent"))``, typed

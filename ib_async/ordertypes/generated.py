@@ -511,7 +511,8 @@ def TrailingStopOrder(
 
     Give trailingAmount or trailingPercent.
 
-    Products: CFD, CASH, FOP, FUT, OPT, STK, WAR. Stability: stable.
+    Exactly one of trailingAmount, trailingPercent. Products: CFD, CASH, FOP,
+    FUT, OPT, STK, WAR. Stability: stable.
 
     Args:
         trailingAmount: How far the stop trails, in price. Optional.
@@ -561,10 +562,12 @@ def TrailingStopLimitOrder(
 
     Give trailingAmount or trailingPercent, and lmtPrice or lmtPriceOffset.
 
+    Exactly one of trailingAmount, trailingPercent; lmtPriceOffset, lmtPrice.
     Products: BOND, CFD, CASH, FUT, FOP, OPT, STK, WAR. Stability: stable.
 
     Args:
-        lmtPriceOffset: The limit price's distance from the stop price. Optional.
+        lmtPriceOffset: The limit price's distance from the stop price.
+            Optional.
         lmtPrice: The limit price. Optional.
         trailingAmount: How far the stop trails, in price. Optional.
         trailingPercent: How far the stop trails, in percent. Optional.
@@ -1239,7 +1242,8 @@ def PeggedToStockOrder(
     Args:
         delta: The option's price change per underlying move.
         startingPrice: The option price to start from.
-        stockRefPrice: The underlying price the change is measured from. Optional.
+        stockRefPrice: The underlying price the change is measured from.
+            Optional.
         stockRangeLower: Cancel below this underlying price. Optional.
         stockRangeUpper: Cancel above this underlying price. Optional.
 
@@ -1341,8 +1345,10 @@ def PegBestUpToMidOrder(
         lmtPrice: The limit price.
         minTradeQty: The smallest fill accepted.
         minCompeteSize: The minimum size to compete.
-        midOffsetAtWhole: The offset when the spread is an even number of cents wide.
-        midOffsetAtHalf: The offset when the spread is an odd number of cents wide.
+        midOffsetAtWhole: The offset when the spread is an even number of cents
+            wide.
+        midOffsetAtHalf: The offset when the spread is an odd number of cents
+            wide.
 
     Example::
 
@@ -1433,8 +1439,10 @@ def PegMidOrder(
     Args:
         lmtPrice: The limit price.
         minTradeQty: The smallest fill accepted. Optional.
-        midOffsetAtWhole: The offset when the spread is an even number of cents wide. Optional.
-        midOffsetAtHalf: The offset when the spread is an odd number of cents wide. Optional.
+        midOffsetAtWhole: The offset when the spread is an even number of cents
+            wide. Optional.
+        midOffsetAtHalf: The offset when the spread is an odd number of cents
+            wide. Optional.
 
     Example::
 
@@ -1646,8 +1654,10 @@ def PeggedToBenchmarkOrder(
         referenceExchangeId: The reference contract's exchange.
         peggedChangeAmount: How much the order price changes per step.
         referenceChangeAmount: How much the reference contract moves per step.
-        isPeggedChangeAmountDecrease: Whether the pegged price decreases rather than increases. Optional.
-        stockRefPrice: The reference price the change is measured from. Optional.
+        isPeggedChangeAmountDecrease: Whether the pegged price decreases rather
+            than increases. Optional.
+        stockRefPrice: The reference price the change is measured from.
+            Optional.
         stockRangeLower: Cancel below this reference price. Optional.
         stockRangeUpper: Cancel above this reference price. Optional.
 
@@ -1690,7 +1700,8 @@ def Adaptive(
     Day orders only. Live trading found it refused outside regular trading
     hours, and for CME futures options and SPXW index options.
 
-    Works LMT, MKT orders. Stability: stable.
+    Works LMT, MKT orders. Needs tif one of '', 'DAY'. Needs outsideRth=False.
+    Stability: stable.
 
     Args:
         priority: Urgent fills fastest, Patient seeks the best price. Optional.
@@ -1719,10 +1730,13 @@ def ArrivalPrice(
     Works LMT orders. Stability: advanced.
 
     Args:
-        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5 (50%). Optional.
+        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5
+            (50%). Optional.
         riskAversion: How urgently to complete. Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         forceCompletion: Attempt completion by the end of the day. Optional.
         allowPastEndTime: Keep working after endTime if not done. Optional.
 
@@ -1756,12 +1770,14 @@ def DarkIce(
 
     Day orders only.
 
-    Works LMT orders. Stability: advanced.
+    Works LMT orders. Needs tif one of '', 'DAY'. Stability: advanced.
 
     Args:
         displaySize: The size to show. Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         allowPastEndTime: Keep working after endTime if not done. Optional.
 
     Example::
@@ -1793,9 +1809,12 @@ def PercentOfVolume(
     Works LMT orders. Stability: advanced.
 
     Args:
-        pctVol: The share of the market's volume, 0.1 (10%) to 0.5 (50%). Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        pctVol: The share of the market's volume, 0.1 (10%) to 0.5 (50%).
+            Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         noTakeLiq: Attempt never to take liquidity. Optional.
 
     Example::
@@ -1831,12 +1850,16 @@ def PriceVariantPercentOfVolume(
     Works LMT orders. Stability: advanced.
 
     Args:
-        pctVol: The share of the market's volume, 0.1 (10%) to 0.5 (50%). Optional.
-        deltaPctVol: The change in share per price move, 0.1 (10%) to 0.5 (50%). Optional.
+        pctVol: The share of the market's volume, 0.1 (10%) to 0.5 (50%).
+            Optional.
+        deltaPctVol: The change in share per price move, 0.1 (10%) to 0.5 (50%).
+            Optional.
         minPctVol4Px: The lowest share, 0.1 (10%) to 0.5 (50%). Optional.
         maxPctVol4Px: The highest share, 0.1 (10%) to 0.5 (50%). Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         noTakeLiq: Attempt never to take liquidity. Optional.
 
     Example::
@@ -1872,10 +1895,14 @@ def SizeVariantPercentOfVolume(
     Works LMT orders. Stability: advanced.
 
     Args:
-        startPctVol: The share of volume at the start, 0.1 (10%) to 0.5 (50%). Optional.
-        endPctVol: The share of volume at the end, 0.1 (10%) to 0.5 (50%). Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startPctVol: The share of volume at the start, 0.1 (10%) to 0.5 (50%).
+            Optional.
+        endPctVol: The share of volume at the end, 0.1 (10%) to 0.5 (50%).
+            Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         noTakeLiq: Attempt never to take liquidity. Optional.
 
     Example::
@@ -1909,10 +1936,14 @@ def TimeVariantPercentOfVolume(
     Works LMT orders. Stability: advanced.
 
     Args:
-        startPctVol: The share of volume at the start, 0.1 (10%) to 0.5 (50%). Optional.
-        endPctVol: The share of volume at the end, 0.1 (10%) to 0.5 (50%). Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startPctVol: The share of volume at the start, 0.1 (10%) to 0.5 (50%).
+            Optional.
+        endPctVol: The share of volume at the end, 0.1 (10%) to 0.5 (50%).
+            Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         noTakeLiq: Attempt never to take liquidity. Optional.
 
     Example::
@@ -1950,8 +1981,10 @@ def Twap(
 
     Args:
         strategyType: Which trades count toward the price. Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         allowPastEndTime: Keep working after endTime if not done. Optional.
         catchUp: Catch up in time. Optional.
 
@@ -1987,12 +2020,16 @@ def Vwap(
     Works LMT orders. Products: STK. Stability: advanced.
 
     Args:
-        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5 (50%). Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5
+            (50%). Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         allowPastEndTime: Keep working after endTime if not done. Optional.
         noTakeLiq: Attempt never to take liquidity. Optional.
-        speedUp: Compensate for the lower fill rate a limit price causes. Optional.
+        speedUp: Compensate for the lower fill rate a limit price causes.
+            Optional.
 
     Example::
 
@@ -2024,7 +2061,8 @@ def BalanceImpactRisk(
     Works LMT orders. Products: OPT. Stability: advanced.
 
     Args:
-        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5 (50%). Optional.
+        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5
+            (50%). Optional.
         riskAversion: How urgently to complete. Optional.
         forceCompletion: Attempt completion by the end of the day. Optional.
 
@@ -2052,7 +2090,8 @@ def MinimiseImpact(
     Works LMT orders. Products: OPT. Stability: advanced.
 
     Args:
-        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5 (50%). Optional.
+        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5
+            (50%). Optional.
 
     Example::
 
@@ -2075,9 +2114,11 @@ def ClosePrice(
     Works LMT orders. Stability: advanced.
 
     Args:
-        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5 (50%). Optional.
+        maxPctVol: The largest share of the market's volume, 0.1 (10%) to 0.5
+            (50%). Optional.
         riskAversion: How urgently to complete. Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
         forceCompletion: Attempt completion by the end of the day. Optional.
 
     Example::
@@ -2114,15 +2155,18 @@ def AccumulateDistribute(
     Works LMT, MKT, REL orders. Stability: advanced.
 
     Args:
-        componentSize: The size of each piece; at most the order's size. Optional.
+        componentSize: The size of each piece; at most the order's size.
+            Optional.
         timeBetweenOrders: Seconds between pieces. Optional.
         randomizeTime20: Vary the time between pieces by +/- 20%. Optional.
         randomizeSize55: Vary the piece size by +/- 55%. Optional.
         giveUp: A number associated with the clearing. Optional.
         catchUp: Catch up in time. Optional.
         waitForFill: Wait for each piece to fill before the next. Optional.
-        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
-        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'. Optional.
+        startTime: When to start, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
+        endTime: When to finish, as 'hh:mm:ss TMZ' or 'YYYYMMDD-hh:mm:ss TMZ'.
+            Optional.
 
     Example::
 
@@ -2151,13 +2195,16 @@ def ComboRouting(
     dontLegInNext: bool | None = None,
 ) -> Routing:
     """
-    How SMART routes a combo (BAG) order: ``routing=`` of any order type
-    placed for a combo contract. Each tag left as None is not sent.
+    How SMART routes a combo (BAG) order: ``routing=`` of any order type placed
+    for a combo contract. Each optional tag left as None is not sent.
 
     Args:
-        nonGuaranteed: Let SMART execute each leg separately for the best execution; the combo is then not guaranteed to fill in proportion.
-        legInPriority: IBKR's LeginPrio tag (live trading sends 0).
+        nonGuaranteed: Let SMART execute each leg separately for the best
+            execution; the combo is then not guaranteed to fill in proportion.
+            Optional.
+        legInPriority: IBKR's LeginPrio tag (live trading sends 0). Optional.
         dontLegInNext: IBKR's DontLeginNext tag (live trading sends 1).
+            Optional.
 
     Example::
 

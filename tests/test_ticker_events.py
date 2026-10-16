@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+import numbers
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -325,7 +326,7 @@ def test_ticks_without_a_price_are_skipped():
 @pytest.mark.parametrize(
     ("make", "message"),
     [
-        (lambda: TickBars(0), "at least 1 tick"),
+        (lambda: TickBars(0), "at least 1, not 0"),
         (lambda: VolumeBars(0), "positive volume"),
     ],
 )
@@ -389,7 +390,7 @@ def test_max_bars_does_not_count_the_bar_in_progress():
 
 
 def test_max_bars_keeps_at_least_one_bar():
-    with pytest.raises(ValueError, match="at least 1 bar"):
+    with pytest.raises(ValueError, match="at least 1, not 0"):
         TickBars(1, maxBars=0)
 
 
@@ -483,16 +484,58 @@ def test_ticks_without_a_finite_price_or_size():
     ]
 
 
-@pytest.mark.parametrize("volume", [float("nan"), float("inf"), 0, -1])
+@pytest.mark.parametrize(
+    "volume",
+    [float("nan"), float("inf"), 0, -1, True, "5", Decimal(-1)],
+)
 def test_a_volume_bar_needs_a_finite_positive_volume(volume):
     with pytest.raises(ValueError, match="positive volume"):
         VolumeBars(volume)
 
 
+class _Whole:
+    """An integer type that is not int, as numpy's are."""
+
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __int__(self) -> int:
+        return self.value
+
+
+class _Single:
+    """A real number type that is not float, as numpy's float32 is: it
+    prints as 0.1, while its double is 0.10000000149011612."""
+
+    def __float__(self) -> float:
+        return 0.10000000149011612
+
+    def __str__(self) -> str:
+        return "0.1"
+
+
+# The ABCs' own way to admit a type, as numpy admits its numbers; it adds
+# these two test types and changes no existing class.
+numbers.Integral.register(_Whole)
+numbers.Real.register(_Single)
+
+
+def test_bar_sizes_take_any_real_number_type_exactly():
+    """A size computed with numpy (a median volume as an int64) is a
+    size; a whole number or a Decimal is taken exactly, and any other
+    number as it prints, as an Order's numbers are."""
+    assert VolumeBars(_Whole(10_000))._volume == Decimal(10_000)
+    assert VolumeBars(Decimal("2500.5"))._volume == Decimal("2500.5")
+    assert VolumeBars(_Single())._volume == Decimal("0.1")
+    tickBars = TickBars(_Whole(3), maxBars=_Whole(2))
+    assert (tickBars._count, tickBars.maxBars) == (3, 2)
+    assert type(tickBars._count) is int and type(tickBars.maxBars) is int
+
+
 def test_max_bars_is_checked_when_changed():
     tickBars = TickBars(1, maxBars=2)
     tickBars.maxBars = None
-    with pytest.raises(ValueError, match="at least 1 bar"):
+    with pytest.raises(ValueError, match="at least 1, not 0"):
         tickBars.maxBars = 0
 
 
@@ -521,3 +564,13 @@ def test_time_bars_on_an_ended_timer_end_at_once():
     assert timeBars.done()
     _feed(ticker, TICKS)
     assert list(timeBars.bars) == []
+
+
+@pytest.mark.parametrize("count", [1.5, 2.5, True])
+def test_bar_counts_are_whole_numbers(count):
+    """A fractional maxBars would fail every trim after the first; a
+    fractional tick count would round up silently."""
+    with pytest.raises(ValueError, match="whole number"):
+        TickBars(count)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="whole number"):
+        TickBars(1, maxBars=count)  # type: ignore[arg-type]

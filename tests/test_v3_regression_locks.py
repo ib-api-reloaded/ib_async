@@ -37,7 +37,7 @@ from ib_async.objects import (
     AccountValue,
     OptionComputation,
 )
-from ib_async.order import Order, OrderState, OrderStateNumeric, _toDecimal
+from ib_async.order import Order, OrderState, OrderStateNumeric, finiteDecimal
 from ib_async.wrapper import _MAX_PENDING_COMMISSION_REPORTS
 
 # ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ def test_account_value_decimal_value_none_for_non_monetary_tag():
 
 
 # ---------------------------------------------------------------------------
-# Order._toDecimal filters NaN / Infinity from float and Decimal inputs
+# Order.finiteDecimal filters NaN / Infinity from float and Decimal inputs
 # ---------------------------------------------------------------------------
 
 
@@ -124,26 +124,26 @@ def test_account_value_decimal_value_none_for_non_monetary_tag():
     ],
 )
 def test_to_decimal_filters_nan_and_infinity(bad):
-    """``_toDecimal`` must coerce NaN / Infinity to None on both the
+    """``finiteDecimal`` must coerce NaN / Infinity to None on both the
     float and Decimal input branches. The trap is ``Decimal('NaN')``
     being silently truthy — ``if order.lmtPrice:`` returns True on NaN
     but False on None.
     """
-    assert _toDecimal(bad) is None
+    assert finiteDecimal(bad) is None
 
 
 def test_to_decimal_real_float_still_passes_via_str():
     """The companion positive path — a real float still goes through
     ``str()`` so binary-float imprecision is bounded.
     """
-    assert _toDecimal(0.1) == Decimal("0.1")
-    assert _toDecimal(50.5) == Decimal("50.5")
+    assert finiteDecimal(0.1) == Decimal("0.1")
+    assert finiteDecimal(50.5) == Decimal("50.5")
 
 
 def test_order_post_init_filters_decimal_nan_input():
     """An ``Order`` constructed with ``Decimal('NaN')`` on a Decimal
     field must NOT keep the NaN — ``__post_init__`` re-runs
-    ``_toDecimal`` even on pre-coerced Decimal inputs so a stray NaN
+    ``finiteDecimal`` even on pre-coerced Decimal inputs so a stray NaN
     from user code lands as ``None``.
     """
     order = Order(orderType="LMT", lmtPrice=Decimal("NaN"))
@@ -162,6 +162,15 @@ def test_order_post_init_filters_float_infinity_input():
     """``float('inf')`` is the third trap variant; same expected outcome."""
     order = Order(orderType="LMT", trailingPercent=float("inf"))
     assert order.trailingPercent is None
+
+
+@pytest.mark.parametrize(
+    "nan", [Decimal("sNaN"), Decimal("-sNaN"), "sNaN", Decimal("NaN"), "nan"]
+)
+def test_a_nan_is_unset_where_infinity_is_kept(nan):
+    """competeAgainstBestOffset keeps +Infinity, but a NaN, signaling ones
+    included (which raise when compared), is unset there as anywhere."""
+    assert Order(competeAgainstBestOffset=nan).competeAgainstBestOffset is None
 
 
 # ---------------------------------------------------------------------------
@@ -499,19 +508,19 @@ def test_head_timestamp_success_path_resolves_with_datetime():
 
 
 # ---------------------------------------------------------------------------
-# Cross-check — math.nan handling on _toDecimal vs Decimal('NaN')
+# Cross-check — math.nan handling on finiteDecimal vs Decimal('NaN')
 # ---------------------------------------------------------------------------
 
 
 def test_to_decimal_math_nan_vs_decimal_nan_equivalent():
     """Both ``math.nan`` and ``Decimal('NaN')`` are NaN-shaped; both
     must coerce to None. Locks the symmetry between the two input
-    branches of ``_toDecimal``.
+    branches of ``finiteDecimal``.
     """
-    assert _toDecimal(math.nan) is None
-    assert _toDecimal(Decimal("NaN")) is None
+    assert finiteDecimal(math.nan) is None
+    assert finiteDecimal(Decimal("NaN")) is None
     # They are NOT equal — Decimal('NaN') != float('nan') in Python —
-    # but ``_toDecimal``'s contract is the same: both unset.
+    # but ``finiteDecimal``'s contract is the same: both unset.
 
 
 # ---------------------------------------------------------------------------

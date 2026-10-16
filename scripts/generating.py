@@ -20,13 +20,15 @@ ROOT = Path(__file__).resolve().parent.parent
 def formatted(source: str, path: Path) -> str:
     """``source`` as ``ruff format`` writes it for ``path``, so a
     generated module is exactly what the project's formatter keeps."""
-    return subprocess.run(
+    result = subprocess.run(
         ["ruff", "format", "--stdin-filename", str(path), "-"],
         input=source,
-        check=True,
         capture_output=True,
         text=True,
-    ).stdout
+    )
+    if result.returncode:
+        raise SystemExit(f"ruff cannot format the generated {path}:\n{result.stderr}")
+    return result.stdout
 
 
 def main(

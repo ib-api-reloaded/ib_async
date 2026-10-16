@@ -1,15 +1,17 @@
-"""Generate the order type classes and their documentation from the catalog.
+"""Generate the order type constructors and their documentation from the
+catalog.
 
 ``ib_async/ordertypes/catalog.py`` is the single source of truth for the
 order types ib_async builds. This writes, from it:
 
-- ``ib_async/ordertypes/generated.py``: one typed class per order type,
-  whose constructor takes the order type's parameters (types taken from the
-  Order fields they set) and validates them through ``spec.build``;
+- ``ib_async/ordertypes/generated.py``: one typed function per order
+  type, returning an ``Order``, that takes the order type's parameters
+  (types taken from the Order fields they set) and validates them through
+  ``spec.build``;
 - ``docs/ordertypes.rst``: the documentation of every order type.
 
-``--check`` writes nothing and exits 1 if either file is out of date (the
-tests run it).
+``--check`` writes nothing and exits 1 if either file is out of date
+(``make ruff`` runs it).
 
 Usage::
 
@@ -21,6 +23,7 @@ from __future__ import annotations
 import dataclasses
 import sys
 import textwrap
+from collections.abc import Callable
 
 import generating
 
@@ -100,36 +103,93 @@ def signature(spec: OrderTypeSpec) -> str:
     return "\n".join(lines)
 
 
-def docstring(spec: OrderTypeSpec) -> str:
-    parts = [f"{spec.title} (``{spec.orderType}``): {spec.summary}"]
-    if spec.usage:
-        parts.append(spec.usage)
+# How a fact marks source text: as is in a docstring, as a literal on the
+# docs page.
+Mark = Callable[[str], str]
+
+
+def plain(text: str) -> str:
+    return text
+
+
+def literal(text: str) -> str:
+    return f"``{text}``"
+
+
+def typeFacts(spec: OrderTypeSpec, mark: Mark) -> list[str]:
+    """What an order type sets and needs, and where IBKR offers it."""
     facts = []
     if spec.definingFields:
         facts.append(
             "Sets "
-            + ", ".join(f"{k}={v!r}" for k, v in spec.definingFields.items())
-            + "."
+            + ", ".join(mark(f"{k}={v!r}") for k, v in spec.definingFields.items())
+        )
+    if spec.exactlyOne:
+        facts.append(
+            "Exactly one of "
+            + "; ".join(", ".join(mark(n) for n in g) for g in spec.exactlyOne)
         )
     if spec.products:
-        facts.append(f"Products: {', '.join(spec.products)}.")
+        facts.append(f"Products: {', '.join(spec.products)}")
     if spec.exchanges:
-        facts.append(f"Exchanges: {', '.join(spec.exchanges)}.")
+        facts.append(f"Exchanges: {', '.join(spec.exchanges)}")
     if spec.requires:
-        facts.append(f"Requires {spec.requires}.")
-    facts.append(f"Stability: {spec.stability}.")
-    parts.append(" ".join(facts))
-    if spec.params:
-        args = ["Args:"] + [
-            f"    {p.name}: {p.doc}" + ("" if p.required else " Optional.")
-            for p in spec.params
+        facts.append(f"Requires {spec.requires}")
+    return facts
+
+
+def algoFacts(spec: AlgoSpec, mark: Mark) -> list[str]:
+    """The order types an algo works, what it needs, and where."""
+    facts = [f"Works {', '.join(spec.orderTypes)} orders"]
+    facts += [f"Needs {condition(c.field, c.allowed, mark)}" for c in spec.conditions]
+    if spec.products:
+        facts.append(f"Products: {', '.join(spec.products)}")
+    facts.append(f"Stability: {spec.stability}")
+    return facts
+
+
+def argsBlock(params: tuple[Param, ...]) -> str:
+    """A docstring's Args section for ``params``."""
+    return "\n".join(
+        ["Args:"]
+        + [
+            textwrap.fill(
+                f"{p.name}: {p.doc}" + ("" if p.required else " Optional."),
+                width=76,
+                initial_indent="    ",
+                subsequent_indent="        ",
+            )
+            for p in params
         ]
-        parts.append("\n".join(args))
-    parts.append(f"Example::\n\n    {spec.className}({spec.example})")
+    )
+
+
+def algoExample(spec: AlgoSpec) -> str:
+    """A limit order the algo works, as source text."""
+    if "LMT" not in spec.orderTypes:
+        raise SystemExit(f"{spec.className}: the example needs an algo working LMT")
+    return f'LimitOrder("BUY", 100, 50.00, algo={spec.className}({spec.example}))'
+
+
+def docstringOf(parts: list[str]) -> str:
+    """The docstring of ``parts`` (paragraphs; one with a line break is
+    kept as is), indented for a function body."""
     body = "\n\n".join(
         "\n".join(textwrap.wrap(p, 76)) if "\n" not in p else p for p in parts
     )
     return textwrap.indent(f'"""\n{body}\n"""', "    ").lstrip()
+
+
+def docstring(spec: OrderTypeSpec) -> str:
+    parts = [f"{spec.title} (``{spec.orderType}``): {spec.summary}"]
+    if spec.usage:
+        parts.append(spec.usage)
+    facts = [*typeFacts(spec, plain), f"Stability: {spec.stability}"]
+    parts.append(" ".join(f"{fact}." for fact in facts))
+    if spec.params:
+        parts.append(argsBlock(spec.params))
+    parts.append(f"Example::\n\n    {spec.className}({spec.example})")
+    return docstringOf(parts)
 
 
 def functionSource(spec: OrderTypeSpec) -> str:
@@ -155,40 +215,21 @@ def algoName(spec: AlgoSpec) -> str:
     return f"{spec.title} (``{spec.strategy}``)"
 
 
-def condition(field: str, allowed: tuple[object, ...]) -> str:
+def condition(field: str, allowed: tuple[object, ...], mark: Mark) -> str:
     if len(allowed) == 1:
-        return f"``{field}={allowed[0]!r}``"
-    return f"``{field}`` one of " + ", ".join(f"``{v!r}``" for v in allowed)
+        return mark(f"{field}={allowed[0]!r}")
+    return f"{mark(field)} one of " + ", ".join(mark(repr(v)) for v in allowed)
 
 
 def algoDocstring(spec: AlgoSpec) -> str:
     parts = [f"{algoName(spec)}: {spec.summary}"]
     if spec.usage:
         parts.append(spec.usage)
-    facts = [f"Works {', '.join(spec.orderTypes)} orders."]
-    if spec.products:
-        facts.append(f"Products: {', '.join(spec.products)}.")
-    facts.append(f"Stability: {spec.stability}.")
-    parts.append(" ".join(facts))
+    parts.append(" ".join(f"{fact}." for fact in algoFacts(spec, plain)))
     if spec.params:
-        parts.append(
-            "\n".join(
-                ["Args:"]
-                + [
-                    f"    {p.name}: {p.doc}" + ("" if p.required else " Optional.")
-                    for p in spec.params
-                ]
-            )
-        )
-    parts.append(
-        f'Example::\n\n    LimitOrder("BUY", 100, 50.00, algo={spec.className}({spec.example}))'
-        if "LMT" in spec.orderTypes
-        else f"Example::\n\n    {spec.className}({spec.example})"
-    )
-    body = "\n\n".join(
-        "\n".join(textwrap.wrap(p, 76)) if "\n" not in p else p for p in parts
-    )
-    return textwrap.indent(f'"""\n{body}\n"""', "    ").lstrip()
+        parts.append(argsBlock(spec.params))
+    parts.append(f"Example::\n\n    {algoExample(spec)}")
+    return docstringOf(parts)
 
 
 def algoSource(spec: AlgoSpec) -> str:
@@ -207,25 +248,24 @@ def {spec.className}(
 def routingSource() -> str:
     values = ", ".join(f'"{p.name}": {p.name}' for p in COMBO_ROUTING)
     params = "\n".join(parameters(COMBO_ROUTING))
-    args = "\n".join(f"        {p.name}: {p.doc}" for p in COMBO_ROUTING)
-    return f'''
+    doc = docstringOf(
+        [
+            "How SMART routes a combo (BAG) order: ``routing=`` of any order "
+            "type placed for a combo contract. Each optional tag left as None "
+            "is not sent.",
+            argsBlock(COMBO_ROUTING),
+            "Example::\n\n"
+            '    LimitOrder("BUY", 1, 2.50, routing=ComboRouting(nonGuaranteed=True))',
+        ]
+    )
+    return f"""
 
 def ComboRouting(
 {params}
 ) -> Routing:
-    """
-    How SMART routes a combo (BAG) order: ``routing=`` of any order type
-    placed for a combo contract. Each tag left as None is not sent.
-
-    Args:
-{args}
-
-    Example::
-
-        LimitOrder("BUY", 1, 2.50, routing=ComboRouting(nonGuaranteed=True))
-    """
+    {doc}
     return buildRouting(COMBO_ROUTING, {{{values}}})
-'''
+"""
 
 
 def module() -> str:
@@ -288,12 +328,17 @@ def docs() -> str:
         "IBKR expects for it. Its "
         "parameters are the values that order type needs; any other ``Order`` "
         "field (``tif``, ``outsideRth``, ``account``, ``cashQty``, "
-        "``includeOvernight``, ...) is a keyword argument. A missing required "
-        "value, two of a pair where one is needed, or overriding a field the "
-        "type sets itself raises ``OrderTypeError``.",
+        "``includeOvernight``, ...) is a keyword argument. An action IBKR "
+        "does not take, a value that is not one its field holds (a price or "
+        "quantity that is not a finite number, say), a missing required "
+        "value, not exactly one of a pair where one is needed, a field the "
+        "type or a modifier (``algo=``, ``routing=``, ``adjust=``) sets "
+        "itself, or a modifier that does not apply raises ``OrderTypeError``.",
         "",
         "``ib_async.ordertypes.specOf(order)`` names the order type of any "
-        "``Order``; ``ib_async.ordertypes.checkOrder(contract, order)`` lists "
+        "``Order``, and ``specsOf(order)`` every type of an order combining "
+        "types (such as an IBKR ATS limit order on the open); "
+        "``ib_async.ordertypes.checkOrder(contract, order)`` lists "
         "what IBKR says against an order for a contract, such as a product "
         "it is not listed for; given the contract's ``ContractDetails`` "
         "instead, also an order type its ``orderTypes`` does not "
@@ -334,27 +379,7 @@ def docs() -> str:
                         f"     - {p.doc}{note}",
                     ]
                 lines.append("")
-            facts = []
-            if spec.definingFields:
-                facts.append(
-                    "Sets "
-                    + ", ".join(
-                        f"``{k}={v!r}``" for k, v in spec.definingFields.items()
-                    )
-                )
-            if spec.exactlyOne:
-                facts.append(
-                    "Exactly one of "
-                    + "; ".join(
-                        ", ".join(f"``{n}``" for n in g) for g in spec.exactlyOne
-                    )
-                )
-            if spec.products:
-                facts.append(f"Products: {', '.join(spec.products)}")
-            if spec.exchanges:
-                facts.append(f"Exchanges: {', '.join(spec.exchanges)}")
-            if spec.requires:
-                facts.append(f"Requires {spec.requires}")
+            facts = typeFacts(spec, literal)
             lines += [*(f"- {fact}" for fact in facts), ""] if facts else []
     lines += comboDocs()
     lines += optionsDocs()
@@ -379,6 +404,15 @@ def comboDocs() -> list[str]:
         "",
         '    LimitOrder("BUY", 1, 2.50, routing=ComboRouting(nonGuaranteed=True))',
         "",
+    ]
+    return lines + tagTable(COMBO_ROUTING)
+
+
+def tagTable(params: tuple[Param, ...]) -> list[str]:
+    """The docs page's table of tag parameters (an algo's, combo
+    routing's): each one's name, IBKR tag and kind, meaning, the values it
+    takes when IBKR names them, and whether it is required."""
+    lines = [
         ".. list-table::",
         "   :header-rows: 1",
         "",
@@ -386,11 +420,13 @@ def comboDocs() -> list[str]:
         "     - IBKR tag",
         "     - Meaning",
     ]
-    for p in COMBO_ROUTING:
+    for p in params:
+        values = f" One of: {', '.join(p.allowed)}." if p.allowed else ""
+        note = " Required." if p.required else ""
         lines += [
             f"   * - ``{p.name}``",
             f"     - ``{p.tag}`` ({p.kind})",
-            f"     - {p.doc}",
+            f"     - {p.doc}{values}{note}",
         ]
     return [*lines, ""]
 
@@ -412,37 +448,10 @@ def algoDocs() -> list[str]:
         lines += [heading, "^" * len(heading), "", spec.summary, ""]
         if spec.usage:
             lines += [spec.usage, ""]
-        example = (
-            f'LimitOrder("BUY", 100, 50.00, algo={spec.className}({spec.example}))'
-            if "LMT" in spec.orderTypes
-            else f"{spec.className}({spec.example})"
-        )
-        lines += [".. code-block:: python", "", f"    {example}", ""]
+        lines += [".. code-block:: python", "", f"    {algoExample(spec)}", ""]
         if spec.params:
-            lines += [
-                ".. list-table::",
-                "   :header-rows: 1",
-                "",
-                "   * - Parameter",
-                "     - IBKR tag",
-                "     - Meaning",
-            ]
-            for p in spec.params:
-                values = f" One of: {', '.join(p.allowed)}." if p.allowed else ""
-                note = " Required." if p.required else ""
-                lines += [
-                    f"   * - ``{p.name}``",
-                    f"     - ``{p.tag}`` ({p.kind})",
-                    f"     - {p.doc}{values}{note}",
-                ]
-            lines.append("")
-        facts = [f"Works: {', '.join(spec.orderTypes)} orders"]
-        for fieldIn in spec.conditions:
-            facts.append(f"Needs {condition(fieldIn.field, fieldIn.allowed)}")
-        if spec.products:
-            facts.append(f"Products: {', '.join(spec.products)}")
-        facts.append(f"Stability: {spec.stability}")
-        lines += [f"- {fact}" for fact in facts] + [""]
+            lines += tagTable(spec.params)
+        lines += [f"- {fact}" for fact in algoFacts(spec, literal)] + [""]
     return lines
 
 
@@ -504,6 +513,8 @@ def coverageDocs() -> list[str]:
     built: dict[str, list[str]] = {}
     for spec in CATALOG:
         built.setdefault(spec.orderType, []).append(spec.className)
+    # (The catalog checks on import that every code is in IBKR's table,
+    # and either built or said why not.)
 
     def codeCell(code: str) -> str:
         """The code, with its other spellings when it has any."""

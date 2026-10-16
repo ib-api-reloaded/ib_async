@@ -8,12 +8,13 @@ another type, when the price penetrates its trigger price: pass it as
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
 from ..order import Order
 from .generated import MarketOrder
-from .spec import Adjustment, FieldValue, OrderTypeError
+from .spec import Adjustment, FieldValue, OrderTypeError, checkedDecimal
 
 __all__ = ["AdjustToStop", "AdjustToStopLimit", "AdjustToTrail", "FxHedgeOrder"]
 
@@ -24,20 +25,32 @@ TRAIL_BY_PERCENT = 100
 Price = Decimal | float | str
 
 
+@dataclass(frozen=True, slots=True)
+class _Price:
+    """A price an adjustment takes: its parameter, the Order field it
+    sets, and the value given."""
+
+    name: str
+    field: str
+    value: Price | None
+
+
 def _adjustment(
-    title: str,
-    adjustedOrderType: str,
-    prices: dict[str, Price | None],
-    *fields: FieldValue,
+    title: str, adjustedOrderType: str, *prices: _Price, unit: int | None = None
 ) -> Adjustment:
-    """An adjustment to ``adjustedOrderType``: ``prices`` (by parameter name,
-    in the order of the Order fields they set) must all be given."""
-    missing = [name for name, price in prices.items() if price is None]
+    """An adjustment to ``adjustedOrderType`` setting ``prices``, every one
+    of which must be given as a finite number, and the trailing ``unit``
+    when it has one."""
+    missing = [p.name for p in prices if p.value is None]
     if missing:
         raise OrderTypeError(f"{title} needs {', '.join(missing)}")
-    return Adjustment(
-        title, (FieldValue("adjustedOrderType", adjustedOrderType), *fields)
-    )
+    fields = [FieldValue("adjustedOrderType", adjustedOrderType)]
+    fields += [
+        FieldValue(p.field, checkedDecimal(title, p.name, p.value)) for p in prices
+    ]
+    if unit is not None:
+        fields.append(FieldValue("adjustableTrailingUnit", unit))
+    return Adjustment(title, tuple(fields))
 
 
 def AdjustToStop(triggerPrice: Price, stopPrice: Price) -> Adjustment:
@@ -52,9 +65,8 @@ def AdjustToStop(triggerPrice: Price, stopPrice: Price) -> Adjustment:
     return _adjustment(
         "Adjust to stop",
         "STP",
-        {"triggerPrice": triggerPrice, "stopPrice": stopPrice},
-        FieldValue("triggerPrice", triggerPrice),
-        FieldValue("adjustedStopPrice", stopPrice),
+        _Price("triggerPrice", "triggerPrice", triggerPrice),
+        _Price("stopPrice", "adjustedStopPrice", stopPrice),
     )
 
 
@@ -72,14 +84,9 @@ def AdjustToStopLimit(
     return _adjustment(
         "Adjust to stop limit",
         "STP LMT",
-        {
-            "triggerPrice": triggerPrice,
-            "stopPrice": stopPrice,
-            "limitPrice": limitPrice,
-        },
-        FieldValue("triggerPrice", triggerPrice),
-        FieldValue("adjustedStopPrice", stopPrice),
-        FieldValue("adjustedStopLimitPrice", limitPrice),
+        _Price("triggerPrice", "triggerPrice", triggerPrice),
+        _Price("stopPrice", "adjustedStopPrice", stopPrice),
+        _Price("limitPrice", "adjustedStopLimitPrice", limitPrice),
     )
 
 
@@ -103,19 +110,18 @@ def AdjustToTrail(
         raise OrderTypeError(
             "AdjustToTrail needs exactly one of trailingAmount, trailingPercent"
         )
-    byAmount = trailingAmount is not None
+    trailing = (
+        _Price("trailingAmount", "adjustedTrailingAmount", trailingAmount)
+        if trailingAmount is not None
+        else _Price("trailingPercent", "adjustedTrailingAmount", trailingPercent)
+    )
     return _adjustment(
         "Adjust to trailing stop",
         "TRAIL",
-        {"triggerPrice": triggerPrice, "stopPrice": stopPrice},
-        FieldValue("triggerPrice", triggerPrice),
-        FieldValue("adjustedStopPrice", stopPrice),
-        FieldValue(
-            "adjustedTrailingAmount", trailingAmount if byAmount else trailingPercent
-        ),
-        FieldValue(
-            "adjustableTrailingUnit", TRAIL_BY_AMOUNT if byAmount else TRAIL_BY_PERCENT
-        ),
+        _Price("triggerPrice", "triggerPrice", triggerPrice),
+        _Price("stopPrice", "adjustedStopPrice", stopPrice),
+        trailing,
+        unit=TRAIL_BY_AMOUNT if trailingAmount is not None else TRAIL_BY_PERCENT,
     )
 
 

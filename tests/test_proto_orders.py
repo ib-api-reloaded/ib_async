@@ -20,6 +20,7 @@ Additional negative coverage:
 from __future__ import annotations
 
 import math
+import sys
 from decimal import Decimal
 
 import pytest
@@ -235,7 +236,7 @@ def test_create_order_proto_conditions_include_overnight_is_truthy_gated():
 
 def test_limit_order_constructor_coerces_user_floats_to_decimal():
     # User-friendly ``LimitOrder("BUY", 100, 50.5)`` round-trips through
-    # ``_toDecimal`` so the wire-side gets a clean Decimal even though
+    # ``finiteDecimal`` so the wire-side gets a clean Decimal even though
     # the user passed floats.
     order = LimitOrder("BUY", 100, 50.5)
     assert isinstance(order.totalQuantity, Decimal)
@@ -1284,3 +1285,12 @@ def test_compete_up_to_mid_round_trips_through_proto():
     proto = createOrderProto(order)
     assert proto.competeAgainstBestOffset == math.inf
     assert createOrder(proto).competeAgainstBestOffset == Decimal("Infinity")
+
+
+def test_the_unset_double_decodes_as_unset_for_compete_against_best_offset():
+    """As on the binary path and for the mid offsets beside it."""
+    proto = Order_pb2.Order(
+        competeAgainstBestOffset=sys.float_info.max, midOffsetAtWhole=sys.float_info.max
+    )
+    order = createOrder(proto)
+    assert (order.competeAgainstBestOffset, order.midOffsetAtWhole) == (None, None)

@@ -24,6 +24,7 @@ from ib_async.ordertypes import (
     PegMidOrder,
     SnapToMidpointOrder,
     TrailingStopOrder,
+    catalog,
     checkOrder,
     specOf,
 )
@@ -122,12 +123,19 @@ def test_exactly_one_of_a_pair():
 
 
 def test_fields_the_type_sets_cannot_be_overridden():
-    with pytest.raises(OrderTypeError, match="sets tif itself"):
+    with pytest.raises(
+        OrderTypeError, match=r"cannot also take tif \(Limit on Open sets it\)"
+    ):
         LimitOnOpenOrder("BUY", 100, 50, tif="DAY")
-    with pytest.raises(OrderTypeError, match="sets orderType itself"):
+    with pytest.raises(
+        OrderTypeError, match=r"cannot also take orderType \(Market on Close sets it\)"
+    ):
         MarketOnCloseOrder("BUY", 100, orderType="MKT")
     # stopPrice is the auxPrice field: setting both would be ambiguous
-    with pytest.raises(OrderTypeError, match="sets auxPrice itself"):
+    with pytest.raises(
+        OrderTypeError,
+        match=r"cannot also take auxPrice \(its parameter stopPrice sets it\)",
+    ):
         ib_async.StopOrder("SELL", 100, 45, auxPrice=44)
 
 
@@ -226,7 +234,7 @@ def test_algo_values_are_checked_and_encoded():
 
 
 def test_an_algo_and_algo_fields_together_are_refused():
-    with pytest.raises(OrderTypeError, match="sets algoStrategy itself"):
+    with pytest.raises(OrderTypeError, match=r"algoStrategy \(Adaptive sets it\)"):
         LimitOrder("BUY", 100, 50, algo=Adaptive(), algoStrategy="Vwap")
 
 
@@ -259,7 +267,9 @@ def test_combo_routing_as_an_application_sends_it():
 
 
 def test_combo_routing_and_its_field_together_are_refused():
-    with pytest.raises(OrderTypeError, match="sets smartComboRoutingParams itself"):
+    with pytest.raises(
+        OrderTypeError, match=r"smartComboRoutingParams \(Combo routing sets it\)"
+    ):
         LimitOrder(
             "BUY",
             1,
@@ -341,7 +351,9 @@ def test_adjustable_stops():
         ordertypes.AdjustToTrail(55, 50)
     with pytest.raises(OrderTypeError, match="works STP, STP LMT, TRAIL"):
         LimitOrder("SELL", 100, 55, adjust=ordertypes.AdjustToStop(55, 50))
-    with pytest.raises(OrderTypeError, match="sets triggerPrice itself"):
+    with pytest.raises(
+        OrderTypeError, match=r"triggerPrice \(Adjust to stop sets it\)"
+    ):
         ib_async.StopOrder(
             "SELL", 100, 45, triggerPrice=1, adjust=ordertypes.AdjustToStop(55, 50)
         )
@@ -370,6 +382,17 @@ def test_ibkr_ats_variants_are_told_apart():
         "IbkrAtsLimitOrder"
     )
     assert specOf(LimitOrder("BUY", 100, 50)).className == "LimitOrder"
+
+
+def test_an_order_is_no_type_whose_constructor_refuses_its_values():
+    """An up-to-mid order without its midpoint offsets is not a Pegged to
+    Best order, whose competeAgainstBestOffset is finite: it is no type."""
+    upToMid = ib_async.PegBestUpToMidOrder("BUY", 100, 50, 100, 100, 0.01, 0.005)
+    incomplete = dataclasses.replace(
+        upToMid, midOffsetAtWhole=None, midOffsetAtHalf=None
+    )
+    assert ordertypes.specsOf(incomplete) == []
+    assert specOf(incomplete) is None
 
 
 # --- modification and contract details --------------------------------------
@@ -531,11 +554,18 @@ def test_an_algo_order_read_back_is_its_base_type():
 
 
 def test_tag_values_are_checked_against_their_kind():
-    with pytest.raises(OrderTypeError, match="maxPctVol must be float, not 'lots'"):
+    with pytest.raises(
+        OrderTypeError, match="maxPctVol must be a finite number, not 'lots'"
+    ):
         ib_async.Vwap(maxPctVol="lots")
-    with pytest.raises(OrderTypeError, match="legInPriority must be int, not True"):
+    with pytest.raises(
+        OrderTypeError, match="legInPriority must be a whole number, not True"
+    ):
         ib_async.ComboRouting(legInPriority=True)
-    with pytest.raises(OrderTypeError, match="noTakeLiq must be bool, not 1"):
+    with pytest.raises(OrderTypeError, match="displaySize must be a whole number"):
+        ib_async.DarkIce(displaySize=10.5)
+    assert ib_async.DarkIce(displaySize=100.0).params[0].value == "100"
+    with pytest.raises(OrderTypeError, match="noTakeLiq must be a bool, not 1"):
         ib_async.Vwap(noTakeLiq=1)
     assert ib_async.Vwap(maxPctVol=Decimal("0.2")).params == (
         TagValue("maxPctVol", "0.2"),
@@ -624,20 +654,27 @@ def test_leg_prices_are_finite_decimals_one_per_leg():
         Decimal("1.2"),
         Decimal(3),
     ]
-    with pytest.raises(OrderTypeError, match="one price per leg"):
-        ib_async.ComboLegPricesOrder("BUY", 1, "2.5")
-    with pytest.raises(OrderTypeError, match=r"legPrices\[1\] is not a price"):
+    # a single price, or a string of one, is not a list of them
+    for given in (2.5, "2.5"):
+        with pytest.raises(OrderTypeError, match="a list of prices, one per leg"):
+            ib_async.ComboLegPricesOrder("BUY", 1, given)
+    legs = ib_async.ComboLegPricesOrder("BUY", 1, (2.5, 1.2))
+    assert [leg.price for leg in legs.orderComboLegs] == [
+        Decimal("2.5"),
+        Decimal("1.2"),
+    ]
+    with pytest.raises(OrderTypeError, match=r"legPrices\[1\] must be a finite number"):
         ib_async.ComboLegPricesOrder("BUY", 1, [2.5, None])
-    with pytest.raises(OrderTypeError, match=r"legPrices\[0\] is not a price"):
+    with pytest.raises(OrderTypeError, match=r"legPrices\[0\] must be a finite number"):
         ib_async.ComboLegPricesOrder("BUY", 1, [math.nan])
 
 
 def test_a_float_tag_value_is_a_finite_number():
     param = Param("x", "algoParams", "A float.", tag="x", kind=Kind.FLOAT)
-    assert param.encode(1.5) == "1.5"
+    assert param.encode("X", 1.5) == "1.5"
     for value in (math.nan, math.inf, Decimal("Infinity")):
         with pytest.raises(OrderTypeError, match="finite"):
-            param.encode(value)
+            param.encode("X", value)
 
 
 def test_a_field_at_its_unset_default_is_not_given():
@@ -651,7 +688,10 @@ def test_a_field_at_its_unset_default_is_not_given():
 
 def test_a_modifier_cannot_set_the_order_types_own_fields():
     stomp = Adjustment("Stomp", (FieldValue("auxPrice", Decimal(1)),))
-    with pytest.raises(OrderTypeError, match="Stomp sets auxPrice, which StopOrder"):
+    with pytest.raises(
+        OrderTypeError,
+        match=r"Stomp cannot also set auxPrice \(its parameter stopPrice sets it\)",
+    ):
         ib_async.StopOrder("SELL", 100, 45, adjust=stomp)
 
 
@@ -722,3 +762,246 @@ def test_a_subclass_of_order_shows_its_order_type():
         pass
 
     assert "orderType='LMT'" in repr(Mine(orderType="LMT"))
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: LimitOrder("BUY", 100, math.nan),
+        lambda: LimitOrder("BUY", 100, math.inf),
+        lambda: LimitOrder("BUY", 100, ""),
+        lambda: LimitOrder("BUY", 100, "abc"),
+        lambda: ib_async.StopOrder("SELL", 100, Decimal("NaN")),
+        lambda: TrailingStopOrder("SELL", 100, trailingPercent=math.nan),
+        lambda: ib_async.MarketOrder("BUY", math.nan),
+        lambda: ib_async.MarketOrder("BUY", None),
+        # infinity is Pegged to Best up to Midpoint's own value, not a price
+        lambda: ib_async.PegBestOrder("BUY", 100, 50, 100, 100, math.inf),
+        lambda: LimitOrder("BUY", 100, 50, trailStopPrice=math.nan),
+        lambda: ordertypes.AdjustToStop(math.nan, 50),
+    ],
+)
+def test_a_value_the_order_would_silently_unset_is_refused(make):
+    with pytest.raises(OrderTypeError, match="must be a"):
+        make()
+
+
+def test_an_adjustment_holds_decimals():
+    adjust = ordertypes.AdjustToStopLimit(55, "50", 49.5)
+    assert adjust.orderFields == {
+        "adjustedOrderType": "STP LMT",
+        "triggerPrice": Decimal(55),
+        "adjustedStopPrice": Decimal(50),
+        "adjustedStopLimitPrice": Decimal("49.5"),
+    }
+
+
+def test_leg_prices_need_a_price_per_leg():
+    with pytest.raises(OrderTypeError, match="needs a price per leg"):
+        ib_async.ComboLegPricesOrder("BUY", 1, [])
+
+
+def test_an_action_ibkr_does_not_take_is_refused():
+    with pytest.raises(OrderTypeError, match="action is one of"):
+        LimitOrder("BYU", 1, 50)
+    assert LimitOrder("SSHORT", 1, 50).action == "SSHORT"
+
+
+def test_an_order_combining_types_is_each_of_them():
+    order = ib_async.IbkrAtsLimitOrder("BUY", 1, 50, tif="OPG")
+    names = {spec.className for spec in ordertypes.specsOf(order)}
+    assert names == {"IbkrAtsLimitOrder", "LimitOnOpenOrder"}
+    assert specOf(order) is None
+    problems = checkOrder(Stock("X", "SMART", "USD"), order)
+    assert any("offered on IBKRATS, not SMART" in p for p in problems), problems
+
+
+def test_modified_order_refuses_changes_its_rules_override():
+    live = readBack(orderType="LMT")
+    for changes in ({"parentId": 7}, {"transmit": False}):
+        with pytest.raises(OrderTypeError, match="sets .* itself"):
+            ordertypes.modifiedOrder(live, **changes)
+    with pytest.raises(OrderTypeError, match="takes no volatility"):
+        ordertypes.modifiedOrder(live, volatility=30)
+    vol = ordertypes.modifiedOrder(readBack(orderType="VOL"), volatility=30)
+    assert vol.volatility == Decimal(30)
+
+
+def test_catalog_entries_check_their_parameters():
+    price = Param("lmtPrice", "lmtPrice", "A price.")
+    with pytest.raises(ValueError, match="fields given twice: lmtPrice"):
+        OrderTypeSpec(
+            "X",
+            "X",
+            "X",
+            "X",
+            Stability.STABLE,
+            params=(price, dataclasses.replace(price, name="other")),
+        )
+    with pytest.raises(ValueError, match="not tag values of algoParams"):
+        AlgoSpec("X", "X", "X", "X", Stability.STABLE, ("LMT",), params=(price,))
+
+
+@pytest.mark.parametrize(
+    ("make", "message"),
+    [
+        (lambda: ib_async.DiscretionaryOrder("BUY", 100, 50, math.nan), "finite"),
+        (lambda: ib_async.DiscretionaryOrder("BUY", 100, 50, "0.05"), "finite number"),
+        (lambda: ib_async.PegBestOrder("BUY", 100, 50, 100.5, 100, 0.01), "whole"),
+        (lambda: LimitOrder("BUY", 100, 50, minQty=math.nan), "whole"),
+        (lambda: LimitOrder("BUY", 100, 50, displaySize="x"), "whole"),
+    ],
+)
+def test_every_numeric_field_takes_only_its_kind_of_number(make, message):
+    with pytest.raises(OrderTypeError, match=message):
+        make()
+
+
+def test_a_float_field_holds_a_float():
+    order = ib_async.DiscretionaryOrder("BUY", 100, 50, Decimal("0.05"))
+    assert order.discretionaryAmt == 0.05
+
+
+def test_modified_order_refuses_a_change_its_field_cannot_hold():
+    live = readBack(orderType="LMT")
+    for changes in (
+        {"lmtPrice": math.nan},
+        {"lmtPrice": "50.1O"},
+        {"totalQuantity": "abc"},
+    ):
+        with pytest.raises(OrderTypeError, match="must be a finite number"):
+            ordertypes.modifiedOrder(live, **changes)
+
+
+def test_a_field_set_by_a_modifier_names_the_modifier():
+    with pytest.raises(OrderTypeError, match=r"algoParams \(Adaptive sets it\)"):
+        LimitOrder("BUY", 1, 50, algo=Adaptive(), algoParams=[])
+
+
+def test_an_order_type_cannot_redefine_what_build_sets():
+    with pytest.raises(ValueError, match="build sets orderType"):
+        OrderTypeSpec(
+            "X",
+            "X",
+            "LMT",
+            "X",
+            Stability.STABLE,
+            defining=(FieldValue("orderType", "MKT"),),
+        )
+    with pytest.raises(ValueError, match="build sets totalQuantity"):
+        OrderTypeSpec(
+            "X",
+            "X",
+            "LMT",
+            "X",
+            Stability.STABLE,
+            params=(Param("q", "totalQuantity", "Q."),),
+        )
+
+
+def test_numbers_are_recognized_by_kind():
+    """A whole-valued float or Decimal is a whole number, taken exactly; a
+    Decimal is a float field's or a float tag's finite number."""
+    order = ib_async.PegBestOrder("BUY", 100, 50, 100.0, Decimal(100), 0.01)
+    assert (order.minTradeQty, order.minCompeteSize) == (100, 100)
+    assert ib_async.VolatilityOrder("BUY", 1, 25, 2.0).volatilityType == 2
+    assert ib_async.ComboRouting(legInPriority=0.0).params == (
+        TagValue("LeginPrio", "0"),
+    )
+    algo = ib_async.AccumulateDistribute(componentSize=Decimal(2**53 + 1))
+    assert TagValue("componentSize", str(2**53 + 1)) in algo.params
+    assert ib_async.Vwap(maxPctVol=Decimal("0.25")).params == (
+        TagValue("maxPctVol", "0.25"),
+    )
+
+
+def test_numpy_numbers_are_numbers():
+    np = pytest.importorskip("numpy")
+    order = LimitOrder("BUY", np.int64(100), np.float64(50.5), displaySize=np.int64(10))
+    assert order.displaySize == 10 and type(order.displaySize) is int
+    discretionary = ib_async.DiscretionaryOrder("BUY", 100, 50, np.int64(1))
+    assert discretionary.discretionaryAmt == 1.0
+
+
+def test_infinity_is_named_where_it_is_allowed():
+    with pytest.raises(
+        OrderTypeError, match="lmtPrice must be a finite number, not inf"
+    ):
+        LimitOrder("BUY", 100, math.inf)
+    with pytest.raises(OrderTypeError, match=r"a finite number or \+Infinity"):
+        LimitOrder("BUY", 100, 50, competeAgainstBestOffset="lots")
+    order = LimitOrder("BUY", 100, 50, competeAgainstBestOffset=math.inf)
+    assert order.competeAgainstBestOffset == Decimal("Infinity")
+
+
+def test_a_modifier_clash_names_whoever_set_the_field():
+    hand = Adjustment("Hand adjust", (FieldValue("smartComboRoutingParams", []),))
+    with pytest.raises(
+        OrderTypeError,
+        match=r"Hand adjust cannot also set smartComboRoutingParams "
+        r"\(Combo routing sets it\)",
+    ):
+        ib_async.StopOrder(
+            "SELL", 1, 4, routing=ib_async.ComboRouting(nonGuaranteed=True), adjust=hand
+        )
+
+
+def test_none_for_a_field_is_its_unset_value():
+    order = LimitOrder("BUY", 1, 1, tif=None, outsideRth=None, algo=Adaptive())
+    assert (order.tif, order.outsideRth) == ("", False)
+    assert ordertypes.modifiedOrder(readBack(orderType="LMT"), tif=None).tif == ""
+    assert not ordertypes.spec.isSet("tif", None)
+
+
+def test_a_hand_built_adjustment_is_checked_as_any_field():
+    hand = Adjustment("Hand adjust", (FieldValue("triggerPrice", math.nan),))
+    with pytest.raises(OrderTypeError, match="Hand adjust: triggerPrice must be"):
+        ib_async.StopOrder("SELL", 1, 4, adjust=hand)
+
+
+def test_an_unset_default_is_never_shared():
+    a = LimitOrder("BUY", 1, 50, softDollarTier=None)
+    b = LimitOrder("BUY", 1, 50, softDollarTier=None)
+    assert a.softDollarTier is not b.softDollarTier
+    a.softDollarTier.name = "TIER"
+    assert b.softDollarTier.name == ""
+    assert ORDER_DEFAULTS["softDollarTier"].name == ""
+
+
+@pytest.mark.parametrize(
+    ("make", "message"),
+    [
+        (lambda: LimitOrder("BUY", 1, 50, outsideRth="false"), "True or False"),
+        (lambda: LimitOrder("BUY", 1, 50, tif=1), "a string"),
+        (
+            lambda: ordertypes.modifiedOrder(readBack(orderType="LMT"), hidden="no"),
+            "True or False",
+        ),
+    ],
+)
+def test_a_bool_or_str_field_takes_only_its_kind(make, message):
+    with pytest.raises(OrderTypeError, match=message):
+        make()
+
+
+def test_the_catalog_refuses_a_code_ibkr_does_not_have(monkeypatch):
+    typo = dataclasses.replace(catalog.ALGOS[0], orderTypes=("LMT", "MKT "))
+    monkeypatch.setattr(catalog, "ALGOS", (typo, *catalog.ALGOS[1:]))
+    with pytest.raises(ValueError, match=r"not in IBKR_ORDER_TYPES: \['MKT '\]"):
+        catalog._checkCodes()
+
+
+def test_only_a_string_tag_names_its_allowed_values():
+    with pytest.raises(ValueError, match="only string tag values"):
+        Param("x", "algoParams", "doc", tag="x", kind=Kind.INT, allowed=("1",))
+
+
+def test_combo_routing_enforces_a_required_parameter():
+    required = Param("x", "smartComboRoutingParams", "doc", tag="X", kind=Kind.BOOL)
+    with pytest.raises(OrderTypeError, match="needs x"):
+        ordertypes.spec.buildRouting((required,), {})
+
+
+def test_a_tag_refusal_names_its_constructor():
+    with pytest.raises(OrderTypeError, match="^Adaptive: priority is one of"):
+        Adaptive(priority="urgent")

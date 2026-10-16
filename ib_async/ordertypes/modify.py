@@ -15,7 +15,7 @@ import dataclasses
 from typing import Any
 
 from ..order import Order
-from .spec import ORDER_DEFAULTS, OrderTypeError, baseOrderType
+from .spec import OrderTypeError, baseOrderType, checkedFields, unset
 
 # Fields TWS fills in on a live order and refuses back on a modification;
 # reset unless a change sets them. A read-back order shows them filled in,
@@ -46,16 +46,27 @@ def modifiedOrder(
       bracket's child, so a reprice cannot detach an exit from its entry);
     - transmit is set;
     - the fields TWS fills in (``SERVER_FILLED``) are reset unless
-      ``changes`` sets them.
+      ``changes`` sets them: pass an iceberg's ``displaySize`` and a
+      volatility order's ``volatilityType`` again to keep them.
 
     Refuses a totalQuantity below the quantity already filled, which IBKR
-    rejects.
+    rejects; ``changes`` the rules above would override: a parentId (use
+    ``preserveParentId``), transmit, or a volatility for an order type
+    without "VOL"; and a change that is not a value of its field, as the
+    order types refuse one (a price that is not a number, say).
 
     Example::
 
         trade = ib.openTrades()[0]
         ib.placeOrder(trade.contract, modifiedOrder(trade.order, lmtPrice=50.10))
     """
+    changes = checkedFields("modifiedOrder", changes)
+    overridden = sorted(set(changes) & {"parentId", "transmit"})
+    if overridden:
+        raise OrderTypeError(
+            f"modifiedOrder sets {', '.join(overridden)} itself; "
+            "preserveParentId keeps the parentId"
+        )
     updated = dataclasses.replace(
         # A deep copy: the live order's lists (algoParams, conditions, ...)
         # must not change with the copy's.
@@ -63,13 +74,18 @@ def modifiedOrder(
         **{"orderType": baseOrderType(order), **changes},
     )
     if "VOL" not in updated.orderType:
+        if changes.get("volatility") is not None:
+            raise OrderTypeError(
+                f"a {updated.orderType} order takes no volatility, "
+                "only an order type with VOL does"
+            )
         updated.volatility = None
     if updated.parentId and not preserveParentId:
-        updated.parentId = ORDER_DEFAULTS["parentId"]
+        updated.parentId = unset("parentId")
     updated.transmit = True
     for name in SERVER_FILLED:
         if name not in changes:
-            setattr(updated, name, ORDER_DEFAULTS[name])
+            setattr(updated, name, unset(name))
     filled = updated.filledQuantity
     if filled and updated.totalQuantity is not None and updated.totalQuantity < filled:
         raise OrderTypeError(

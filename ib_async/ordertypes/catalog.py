@@ -2,7 +2,8 @@
 
 The order type constructors (``generated.py``) and their documentation
 (``docs/ordertypes.rst``) are generated from this catalog by
-``scripts/generate_ordertypes.py``; tests fail when either is out of date.
+``scripts/generate_ordertypes.py``; ``make ruff`` fails when either is out
+of date.
 
 Each entry records the fields IBKR expects for the order type and the
 products and exchanges IBKR lists it for. Order fields that any order can
@@ -16,7 +17,9 @@ from __future__ import annotations
 import dataclasses
 
 from ..order import COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID
+from ..util import checkUnique
 from .spec import (
+    ADJUSTABLE,
     AlgoSpec,
     FieldIn,
     FieldValue,
@@ -25,6 +28,7 @@ from .spec import (
     OrderTypeSpec,
     Param,
     Stability,
+    checkTagParams,
 )
 
 STABLE, VENUE, ADVANCED = Stability.STABLE, Stability.VENUE, Stability.ADVANCED
@@ -1001,6 +1005,12 @@ ALGOS: tuple[AlgoSpec, ...] = (
     ),
 )
 
+# Each constructor and each strategy once, or a later one would shadow it.
+checkUnique(
+    "order type and algo classes",
+    [*(s.className for s in CATALOG), *(a.className for a in ALGOS)],
+)
+checkUnique("algo strategies", (spec.strategy for spec in ALGOS))
 # The algos by constructor name, and by strategy (to name an order's algo).
 ALGO_SPECS: dict[str, AlgoSpec] = {spec.className: spec for spec in ALGOS}
 ALGO_BY_STRATEGY: dict[str, AlgoSpec] = {spec.strategy: spec for spec in ALGOS}
@@ -1035,6 +1045,7 @@ COMBO_ROUTING: tuple[Param, ...] = (
         Kind.BOOL,
     ),
 )
+checkTagParams("ComboRouting", COMBO_ROUTING, "smartComboRoutingParams")
 
 
 # --- order options: fields any order type takes --------------------------------
@@ -1254,3 +1265,23 @@ NOT_BUILT: dict[str, str] = {
     "PMV": VOLATILITY_PEG,
     "PSV": VOLATILITY_PEG,
 }
+
+
+def _checkCodes() -> None:
+    """Refuse an order type code the catalog uses that is not IBKR's (an
+    order type's, one an algo or an adjustment works), and a code of
+    IBKR's that is not either built or said why not, or is both."""
+    built = {spec.orderType for spec in CATALOG}
+    used = built | set(NOT_BUILT) | set(ADJUSTABLE)
+    used |= {code for algo in ALGOS for code in algo.orderTypes}
+    unknown = sorted(used - set(IBKR_ORDER_TYPES))
+    untold = sorted(set(IBKR_ORDER_TYPES) - built - set(NOT_BUILT))
+    both = sorted(built & set(NOT_BUILT))
+    if unknown or untold or both:
+        raise ValueError(
+            f"codes not in IBKR_ORDER_TYPES: {unknown}; neither built nor in "
+            f"NOT_BUILT: {untold}; both built and in NOT_BUILT: {both}"
+        )
+
+
+_checkCodes()

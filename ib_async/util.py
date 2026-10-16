@@ -11,6 +11,7 @@ import os
 import signal
 import sys
 import time
+from collections import Counter
 from collections.abc import (
     AsyncIterator,
     Awaitable,
@@ -41,6 +42,13 @@ globalErrorEvent: Event = Event()
 """
 Event to emit global exceptions.
 """
+
+
+def checkUnique(what: str, names: Iterable[str]) -> None:
+    """Refuse a name given twice among ``names`` (``what`` they are)."""
+    twice = sorted(name for name, count in Counter(names).items() if count > 1)
+    if twice:
+        raise ValueError(f"{what} given twice: {', '.join(twice)}")
 
 
 def _optional(module: str, needed: str) -> Any:
