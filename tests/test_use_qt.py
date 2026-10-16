@@ -53,3 +53,12 @@ def test_qt6_libraries_use_exec(monkeypatch, qtLib, called):
     FakeEventLoop.calls = []
     util.useQt(qtLib, period=3600)
     assert FakeEventLoop.calls == [called]
+
+
+def test_use_qt_without_qt_says_how_to_get_it(monkeypatch):
+    def missing(name: str) -> None:
+        raise ImportError(name)
+
+    monkeypatch.setattr(util, "import_module", missing)
+    with pytest.raises(ImportError, match="requires PySide6.*: pip install PySide6"):
+        util.useQt("PySide6")

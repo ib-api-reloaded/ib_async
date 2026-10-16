@@ -45,7 +45,8 @@ Event to emit global exceptions.
 
 def _optional(module: str, needed: str) -> Any:
     """The optional dependency ``module``, imported when first used;
-    refused with ``needed``, which says how to install it."""
+    refused with ``needed``, which says what needs it and how to install
+    it."""
     try:
         return import_module(module)
     except ImportError as e:
@@ -126,7 +127,9 @@ def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
       labels: If supplied, keep only these columns, in this order.
     """
     pd = _optional(
-        "pandas", "util.pandasDf() requires pandas, which ib_async does not install."
+        "pandas",
+        "util.pandasDf() requires pandas, which ib_async does not install: "
+        "pip install pandas",
     )
 
     columns, data = _table(objs)
@@ -507,7 +510,10 @@ def barplot(bars, title="", upColor="blue", downColor="red"):
     a DataFrame (from :func:`df` or :func:`pandasDf`) or as a list of bar
     objects.
     """
-    needed = "util.barplot() requires matplotlib, which ib_async does not install."
+    needed = (
+        "util.barplot() requires matplotlib, which ib_async does not install: "
+        "pip install matplotlib"
+    )
     plt = _optional("matplotlib.pyplot", needed)
     Line2D = _optional("matplotlib.lines", needed).Line2D
     Rectangle = _optional("matplotlib.patches", needed).Rectangle
@@ -911,8 +917,12 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
 
     if qtLib not in {"PyQt5", "PyQt6", "PySide2", "PySide6"}:
         raise RuntimeError(f"Unknown Qt library: {qtLib}")
-    qc = import_module(qtLib + ".QtCore")
-    qw = import_module(qtLib + ".QtWidgets")
+    needed = (
+        f"util.useQt() with {qtLib} requires {qtLib}, which ib_async does not "
+        f"install: pip install {qtLib}"
+    )
+    qc = _optional(qtLib + ".QtCore", needed)
+    qw = _optional(qtLib + ".QtWidgets", needed)
     global qApp
     qApp = (  # type: ignore[name-defined]
         qw.QApplication.instance() or qw.QApplication(sys.argv)
