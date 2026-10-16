@@ -9,7 +9,7 @@
 # bindings bundled into the package without needing ``protoc`` or
 # ``grpcio-tools``.
 
-.PHONY: help sync protos ordertypes datarequests audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-report test-matrix test-repeat examples-check format clean
+.PHONY: help sync protos ordertypes datarequests audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-report test-deep test-matrix test-repeat examples-check format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -48,6 +48,9 @@ help:
 	@echo "  test     - run the owned test suite"
 	@echo "  test-report - the suite once, each failure reported whole, and any hang"
 	@echo "                (PYTEST_ARGS=\"tests/test_x.py -k y\" to select)"
+	@echo "  test-deep   - test-report with the property tests at SCALE times their"
+	@echo "                examples (default 20): the simulated-TWS and registry state"
+	@echo "                machines and the value properties, before a release"
 	@echo "  test-matrix - run the suite on each configured Python version, each in its"
 	@echo "                own .venvs/py<version> environment and time-boxed; logs in"
 	@echo "                .venvs/logs/ (PYTHONS=\"3.13 3.15\" for a subset)"
@@ -135,6 +138,12 @@ test:
 # .venvs/logs/test/. PYTEST_ARGS selects, e.g. PYTEST_ARGS="tests/test_x.py -k y".
 test-report:
 	$(RELEASEKIT) test -- $(PYTEST_ARGS)
+
+# The property tests (tests/_property.py) run SCALE times their examples:
+# every interleaving the state machines can reach in a few minutes.
+SCALE ?= 20
+test-deep:
+	IB_ASYNC_PROPERTY_SCALE=$(SCALE) $(RELEASEKIT) test -- $(PYTEST_ARGS)
 
 test-matrix:
 	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v))
