@@ -116,8 +116,8 @@ from ib_async._server_versions import (
     UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM,
 )
 from ib_async._subscriptions import MktDataSub, MktDepthSub, PnLSingleSub, TickByTickSub
-from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
 from ib_async.client import Client as _Client
+from ib_async.client import _formatField
 from ib_async.contract import ComboLeg, Contract, TagValue
 from ib_async.decoder import _CONV, _PROTO_MSG_CLASSES, Decoder, _initProtoMsgClasses
 from ib_async.objects import (
@@ -3487,8 +3487,8 @@ def test_send_encodes_positive_infinity_as_ibkr_infinity_string():
     and silently corrupts mid-peg-to-mid orders.
     """
 
-    assert _FORMAT_HANDLERS_EMPTY[float](math.inf) == "Infinity"
-    assert _FORMAT_HANDLERS_KEEP[float](math.inf) == "Infinity"
+    assert _formatField(math.inf, makeEmpty=True) == "Infinity"
+    assert _formatField(math.inf, makeEmpty=False) == "Infinity"
 
 
 def test_send_encodes_unset_double_as_empty_when_makeempty():
@@ -3498,8 +3498,8 @@ def test_send_encodes_unset_double_as_empty_when_makeempty():
     """
 
     UNSET_DOUBLE = sys.float_info.max
-    assert _FORMAT_HANDLERS_EMPTY[float](UNSET_DOUBLE) == ""
-    assert _FORMAT_HANDLERS_KEEP[float](UNSET_DOUBLE) != ""
+    assert _formatField(UNSET_DOUBLE, makeEmpty=True) == ""
+    assert _formatField(UNSET_DOUBLE, makeEmpty=False) != ""
 
 
 def test_send_encodes_unset_integer_as_empty_when_makeempty():
@@ -3507,8 +3507,8 @@ def test_send_encodes_unset_integer_as_empty_when_makeempty():
     path; matches IBKR's ``make_field_handle_empty``.
     """
 
-    assert _FORMAT_HANDLERS_EMPTY[int](UNSET_INTEGER) == ""
-    assert _FORMAT_HANDLERS_KEEP[int](UNSET_INTEGER) == str(UNSET_INTEGER)
+    assert _formatField(UNSET_INTEGER, makeEmpty=True) == ""
+    assert _formatField(UNSET_INTEGER, makeEmpty=False) == str(UNSET_INTEGER)
 
 
 def test_send_encodes_bool_as_zero_or_one_string():
@@ -3517,8 +3517,8 @@ def test_send_encodes_bool_as_zero_or_one_string():
     arrives as the Python repr ``"True"`` / ``"False"`` and TWS rejects.
     """
 
-    assert _FORMAT_HANDLERS_EMPTY[bool](True) == "1"
-    assert _FORMAT_HANDLERS_EMPTY[bool](False) == "0"
+    assert _formatField(True, makeEmpty=True) == "1"
+    assert _formatField(False, makeEmpty=True) == "0"
 
 
 def test_send_encodes_none_as_empty_string():
@@ -3527,7 +3527,7 @@ def test_send_encodes_none_as_empty_string():
     field tuples don't crash.
     """
 
-    assert _FORMAT_HANDLERS_EMPTY[type(None)](None) == ""
+    assert _formatField(None, makeEmpty=True) == ""
 
 
 def test_safe_decimal_rejects_every_ibkr_unset_sentinel_string():
@@ -3654,7 +3654,7 @@ def test_send_round_trips_full_field_tuple_with_infinity_and_unset():
         UNSET_INTEGER,
         math.inf,
     ]
-    parts = [_FORMAT_HANDLERS_EMPTY.get(type(f), str)(f) for f in fields]
+    parts = [_formatField(f, makeEmpty=True) for f in fields]
     assert parts == [
         "TEST",
         "42",

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import IntEnum
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from eventkit import Event, Op, event_class
 
@@ -52,6 +52,10 @@ class HaltedStatus(IntEnum):
 
 def _new_news_deque() -> deque[NewsTick]:
     return deque(maxlen=_NEWS_MAXLEN)
+
+
+def _new_update_event() -> TickerUpdateEvent:
+    return TickerUpdateEvent("updateEvent")
 
 
 @dataclass(slots=True)
@@ -215,18 +219,19 @@ class Ticker:
 
     defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
     created: bool = False
-    # Per-Ticker update event. Assigned in __post_init__ — declared as
-    # a field (typed Any to avoid a forward reference to
-    # ``TickerUpdateEvent`` which is defined further down) so that
-    # ``slots=True`` reserves a slot for it.
-    updateEvent: Any = field(default=None, repr=False)
+    # The update event of this Ticker. It is a field so that
+    # ``slots=True`` reserves a slot for it. ``TickerUpdateEvent`` is
+    # defined further down, and the factory looks it up when a Ticker is
+    # created.
+    updateEvent: TickerUpdateEvent = field(
+        default_factory=_new_update_event, repr=False
+    )
 
     def __post_init__(self):
         # when copying a dataclass, the __post_init__ runs again, so we
         # want to make sure if this was _already_ created, we don't overwrite
         # everything with _another_ post_init clear.
         if not self.created:
-            self.updateEvent = TickerUpdateEvent("updateEvent")
             # Reset all float fields to the configured unset sentinel.
             # Users may provide a custom sentinel (e.g., -1.0) via IBDefaults(unset=...).
             # This ensures consistent unset semantics across all float-typed fields.
@@ -538,7 +543,7 @@ class BarList(list[RealTimeBar]):
         return id(self)
 
 
-def _wholeCount(value: object) -> int | None:
+def _wholeCount(value: int) -> int | None:
     """``value`` as an int when it is a whole number (an int, numpy's; a
     bool is not), at least 1; else None."""
     if isinstance(value, bool) or not isinstance(value, numbers.Integral):
@@ -547,7 +552,7 @@ def _wholeCount(value: object) -> int | None:
     return count if count >= 1 else None
 
 
-def _positiveVolume(value: object) -> Decimal | None:
+def _positiveVolume(value: Decimal | float) -> Decimal | None:
     """``value`` as a Decimal when it is a finite real number (a Decimal,
     an int, a float, a fraction, numpy's; a bool is not) above 0, read as
     an Order's numbers are (:func:`~ib_async.order.finiteDecimal`): an int

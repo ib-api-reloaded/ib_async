@@ -83,7 +83,7 @@ class FlexReport:
         """Get the set of topics that can be extracted from this report."""
         return {node.tag for node in self.root.iter() if node.attrib}
 
-    def extract(self, topic: str, parseNumbers=True) -> list:
+    def extract(self, topic: str, parseNumbers: bool = True) -> list[DynamicObject]:
         """
         Extract items of given topic and return as list of objects.
 

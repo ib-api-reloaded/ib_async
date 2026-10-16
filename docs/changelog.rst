@@ -306,6 +306,40 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 These were broken on v2.x against modern TWS / Gateway versions and
 are fixed in v3.0:
 
+* **A repeated commission report fired its events twice.** TWS repeats
+  an execution and its commission report, for instance after a
+  reconnect. The repeated execution was already ignored. The repeated
+  report fired ``commissionReportEvent`` again, so a handler that summed
+  commissions counted them twice. A report equal to the one already on
+  the fill is now ignored.
+* **A what-if reply without margins raised in the handler.** On the
+  protobuf path, TWS omits an unset optional field instead of sending
+  the unset double. The what-if branch of ``openOrder`` called
+  ``float()`` on the resulting empty string. A what-if preview could
+  then raise and leave ``whatIfOrder`` waiting. An empty margin now
+  means "no margins yet", the same as the unset double.
+* **A malformed RT volume tick left the Ticker partly updated.** For an
+  RT volume string with an unreadable time field, ``rtVolume`` and
+  ``vwap`` were set before parsing the time raised. Every part is now
+  parsed before any part is assigned.
+* **A historical news row with an unreadable time lost the whole
+  answer.** The first such row raised in ``historicalNews``. The row is
+  now dropped and an error is logged. The request completes with the
+  other rows.
+* **``Watchdog.stop()`` did not end the startup or retry wait.** The
+  wait ran to its end. The Watchdog then connected once more to the app
+  it had been told to stop, terminated it again and fired
+  ``stoppedEvent`` twice. With the default settings, this was a 30
+  second window after every stop. The wait now ends at once.
+  ``Watchdog`` also takes its ``sleep`` function as a field, so tests
+  drive it without a clock.
+* **``util.parseIBDatetime`` accepted values it could not read.** An
+  unknown time zone name or an epoch outside the datetime range now
+  raises ``ValueError``. Before, it produced a wrong value or one that
+  failed later. ``reqHeadTimeStampAsync`` reports the error as the
+  request's error.
+* **``FlexReport.load`` on a file that is not XML** now raises
+  ``FlexError`` instead of an XML parser error.
 * **``Execution.time`` off by the host's or TimezoneTWS's UTC offset.**
   TWS reports execution times as ``YYYYmmdd-HH:MM:SS``, IBKR's zone-less
   UTC form, which was read as TimezoneTWS or host-local time; it is now
@@ -526,8 +560,8 @@ are fixed in v3.0:
   big-endian raw integer prefix. The legacy NUL-text framing was
   silently dropped by server 201+.
 * **Wire-boundary None-coalesce** at the protobuf converter entry
-  mirrors the binary path's ``_FORMAT_HANDLERS[type(None)] =
-  lambda _: ""`` behaviour: callers that stamp ``None`` onto plain-
+  mirrors the binary path, which writes ``None`` as ``""``: callers
+  that stamp ``None`` onto plain-
   scalar dataclass fields (e.g. an order-preview path setting
   ``parentId = None``) now produce wire frames with the field at its
   dataclass default rather than absent, which TWS rejected as

@@ -192,8 +192,8 @@ def test_create_order_proto_writes_decimal_quantity_via_canonical_string():
 def test_create_order_proto_coerces_none_plain_int_fields_to_dataclass_default():
     # Live regression: icli's whatIf-preview path stamps
     # ``parentId = None`` on a fresh-copy Order to suppress the parent
-    # link. The binary path's ``_FORMAT_HANDLERS[type(None)] = lambda
-    # _: ""`` formatter mapped that to ``""``, which TWS parses as the
+    # link. The binary path's ``_formatField`` writes None as ``""``,
+    # which TWS parses as the
     # field's wire default (``0`` for ``parentId``). The protobuf path
     # has no equivalent and used to skip the field entirely, leaving
     # TWS to read proto3-absent as its own ``UNSET_INTEGER`` sentinel

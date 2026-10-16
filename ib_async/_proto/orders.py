@@ -15,6 +15,7 @@ outbound order, say).
 
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableMapping
 from decimal import Decimal
 
 from .._pb import (
@@ -93,35 +94,25 @@ def _decimalToWireString(value: Decimal | None) -> str:
 # --- Order ---------------------------------------------------------------
 
 
-def _fillTagValueMap(items: list[TagValue] | None, target: object) -> None:
+def _fillTagValueMap(
+    items: list[TagValue] | None, target: MutableMapping[str, str]
+) -> None:
     """Copy a domain ``list[TagValue]`` into a proto ``map<string,string>``.
 
-    Empty / ``None`` lists leave the target untouched so the field
-    stays unset on the wire.
-    The target arg is a ``ScalarMap[str, str]`` from the parent proto;
-    typed as ``object`` here because the protobuf generated stubs don't
-    expose a public name we can import.
+    An empty or ``None`` list leaves the target untouched, so the field
+    stays unset on the wire. The target is the map field of the parent
+    proto, which is a mutable mapping of strings.
     """
     if not items:
         return
     for tv in items:
-        target[tv.tag] = tv.value  # type: ignore[index]
+        target[tv.tag] = tv.value
 
 
-def _parseTagValueList(source: object) -> list[TagValue]:
+def _parseTagValueList(source: Mapping[str, str]) -> list[TagValue]:
     """Decode a proto ``map<string,string>`` into a domain
-    ``list[TagValue]``.
-
-    The source arg is a ``ScalarMap[str, str]`` from the parent proto;
-    typed as ``object`` here because the protobuf generated stubs don't
-    expose a public name we can import.
-    """
-    if not source:
-        return []
-    out: list[TagValue] = []
-    for tag, value in source.items():  # type: ignore[attr-defined]
-        out.append(TagValue(tag=tag, value=value))
-    return out
+    ``list[TagValue]``. The source is the map field of the parent proto."""
+    return [TagValue(tag=tag, value=value) for tag, value in source.items()]
 
 
 def createOrderProto(order: Order) -> Order_pb2.Order:

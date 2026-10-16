@@ -5,15 +5,17 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import ib_async as ibi
-from ib_async.client import _FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP
+from ib_async.client import _formatField
 from ib_async.contract import TagValue
 
 OPTIONS = [TagValue("a", "1"), TagValue("b", "2")]
 
 
 def test_tuple_and_list_options_encode_identically():
-    for handlers in (_FORMAT_HANDLERS_EMPTY, _FORMAT_HANDLERS_KEEP):
-        assert handlers[tuple](tuple(OPTIONS)) == handlers[list](OPTIONS) == "a=1;b=2;"
+    for makeEmpty in (True, False):
+        asTuple = _formatField(tuple(OPTIONS), makeEmpty)
+        asList = _formatField(OPTIONS, makeEmpty)
+        assert asTuple == asList == "a=1;b=2;"
 
 
 def test_each_ib_gets_its_own_defaults():

@@ -59,6 +59,9 @@ from ib_async.objects import (
     HistogramData,
     HistoricalNews,
     HistoricalSchedule,
+    HistoricalTick,
+    HistoricalTickBidAsk,
+    HistoricalTickLast,
     IBDefaults,
     NewsArticle,
     NewsBulletin,
@@ -971,7 +974,7 @@ class IB:
         )
         return result
 
-    def subscriptions(self) -> list:
+    def subscriptions(self) -> list[Subscription]:
         """List of every live :class:`Subscription` (market data,
         tick-by-tick, market depth, realtime / historical bars,
         scanner, PnL). Replaces the pre-refactor ``IB.subscribers()``
@@ -1724,7 +1727,7 @@ class IB:
         useRth: bool,
         ignoreSize: bool = False,
         miscOptions: Sequence[TagValue] = (),
-    ) -> list:
+    ) -> list[HistoricalTick] | list[HistoricalTickBidAsk] | list[HistoricalTickLast]:
         """
         Request historical ticks. The time resolution of the ticks
         is one second.
@@ -2633,11 +2636,11 @@ class IB:
         readonly: bool,
         account: str,
         accounts: list[str],
-    ) -> dict[str, Awaitable[Any]]:
+    ) -> dict[str, Awaitable[list[Position] | list[Trade] | None]]:
         """Return the requests connect sends to sync state, by name.
 
         Only requests selected by ``fetchFields`` are included."""
-        reqs: dict[str, Awaitable[Any]] = {}
+        reqs: dict[str, Awaitable[list[Position] | list[Trade] | None]] = {}
         if fetchFields & StartupFetch.POSITIONS:
             reqs["positions"] = self.reqPositionsAsync()
         if not readonly and fetchFields & StartupFetch.ORDERS_OPEN:

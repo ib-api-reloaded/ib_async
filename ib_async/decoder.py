@@ -9,9 +9,131 @@ import sys
 import types
 import typing
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Final
+from types import GenericAlias, UnionType
+from typing import TYPE_CHECKING, Any, Final, TypeAlias
+
+from eventkit import Event
+from google.protobuf.message import Message
+
+if TYPE_CHECKING:
+    from ._pb.AccountDataEnd_pb2 import AccountDataEnd as AccountDataEndProto
+    from ._pb.AccountSummary_pb2 import AccountSummary as AccountSummaryProto
+    from ._pb.AccountSummaryEnd_pb2 import AccountSummaryEnd as AccountSummaryEndProto
+    from ._pb.AccountUpdateMulti_pb2 import (
+        AccountUpdateMulti as AccountUpdateMultiProto,
+    )
+    from ._pb.AccountUpdateMultiEnd_pb2 import (
+        AccountUpdateMultiEnd as AccountUpdateMultiEndProto,
+    )
+    from ._pb.AccountUpdateTime_pb2 import AccountUpdateTime as AccountUpdateTimeProto
+    from ._pb.AccountValue_pb2 import AccountValue as AccountValueProto
+    from ._pb.CommissionAndFeesReport_pb2 import (
+        CommissionAndFeesReport as CommissionAndFeesReportProto,
+    )
+    from ._pb.CompletedOrder_pb2 import CompletedOrder as CompletedOrderProto
+    from ._pb.CompletedOrdersEnd_pb2 import (
+        CompletedOrdersEnd as CompletedOrdersEndProto,
+    )
+    from ._pb.ConfigResponse_pb2 import ConfigResponse as ConfigResponseProto
+    from ._pb.ContractData_pb2 import ContractData as ContractDataProto
+    from ._pb.ContractDataEnd_pb2 import ContractDataEnd as ContractDataEndProto
+    from ._pb.CurrentTime_pb2 import CurrentTime as CurrentTimeProto
+    from ._pb.CurrentTimeInMillis_pb2 import (
+        CurrentTimeInMillis as CurrentTimeInMillisProto,
+    )
+    from ._pb.DisplayGroupList_pb2 import DisplayGroupList as DisplayGroupListProto
+    from ._pb.DisplayGroupUpdated_pb2 import (
+        DisplayGroupUpdated as DisplayGroupUpdatedProto,
+    )
+    from ._pb.ErrorMessage_pb2 import ErrorMessage as ErrorMessageProto
+    from ._pb.ExecutionDetails_pb2 import ExecutionDetails as ExecutionDetailsProto
+    from ._pb.ExecutionDetailsEnd_pb2 import (
+        ExecutionDetailsEnd as ExecutionDetailsEndProto,
+    )
+    from ._pb.FamilyCodes_pb2 import FamilyCodes as FamilyCodesProto
+    from ._pb.HeadTimestamp_pb2 import HeadTimestamp as HeadTimestampProto
+    from ._pb.HistogramData_pb2 import HistogramData as HistogramDataProto
+    from ._pb.HistoricalData_pb2 import HistoricalData as HistoricalDataProto
+    from ._pb.HistoricalDataEnd_pb2 import HistoricalDataEnd as HistoricalDataEndProto
+    from ._pb.HistoricalDataUpdate_pb2 import (
+        HistoricalDataUpdate as HistoricalDataUpdateProto,
+    )
+    from ._pb.HistoricalNews_pb2 import HistoricalNews as HistoricalNewsProto
+    from ._pb.HistoricalNewsEnd_pb2 import HistoricalNewsEnd as HistoricalNewsEndProto
+    from ._pb.HistoricalSchedule_pb2 import (
+        HistoricalSchedule as HistoricalScheduleProto,
+    )
+    from ._pb.HistoricalTicks_pb2 import HistoricalTicks as HistoricalTicksProto
+    from ._pb.HistoricalTicksBidAsk_pb2 import (
+        HistoricalTicksBidAsk as HistoricalTicksBidAskProto,
+    )
+    from ._pb.HistoricalTicksLast_pb2 import (
+        HistoricalTicksLast as HistoricalTicksLastProto,
+    )
+    from ._pb.ManagedAccounts_pb2 import ManagedAccounts as ManagedAccountsProto
+    from ._pb.MarketDataType_pb2 import MarketDataType as MarketDataTypeProto
+    from ._pb.MarketDepth_pb2 import MarketDepth as MarketDepthProto
+    from ._pb.MarketDepthExchanges_pb2 import (
+        MarketDepthExchanges as MarketDepthExchangesProto,
+    )
+    from ._pb.MarketDepthL2_pb2 import MarketDepthL2 as MarketDepthL2Proto
+    from ._pb.MarketRule_pb2 import MarketRule as MarketRuleProto
+    from ._pb.NewsArticle_pb2 import NewsArticle as NewsArticleProto
+    from ._pb.NewsBulletin_pb2 import NewsBulletin as NewsBulletinProto
+    from ._pb.NewsProviders_pb2 import NewsProviders as NewsProvidersProto
+    from ._pb.NextValidId_pb2 import NextValidId as NextValidIdProto
+    from ._pb.OpenOrder_pb2 import OpenOrder as OpenOrderProto
+    from ._pb.OpenOrdersEnd_pb2 import OpenOrdersEnd as OpenOrdersEndProto
+    from ._pb.OrderBound_pb2 import OrderBound as OrderBoundProto
+    from ._pb.OrderStatus_pb2 import OrderStatus as OrderStatusProto
+    from ._pb.PnL_pb2 import PnL as PnLProto
+    from ._pb.PnLSingle_pb2 import PnLSingle as PnLSingleProto
+    from ._pb.PortfolioValue_pb2 import PortfolioValue as PortfolioValueProto
+    from ._pb.Position_pb2 import Position as PositionProto
+    from ._pb.PositionEnd_pb2 import PositionEnd as PositionEndProto
+    from ._pb.PositionMulti_pb2 import PositionMulti as PositionMultiProto
+    from ._pb.PositionMultiEnd_pb2 import PositionMultiEnd as PositionMultiEndProto
+    from ._pb.RealTimeBarTick_pb2 import RealTimeBarTick as RealTimeBarTickProto
+    from ._pb.ReceiveFA_pb2 import ReceiveFA as ReceiveFAProto
+    from ._pb.ReplaceFAEnd_pb2 import ReplaceFAEnd as ReplaceFAEndProto
+    from ._pb.RerouteMarketDataRequest_pb2 import (
+        RerouteMarketDataRequest as RerouteMarketDataRequestProto,
+    )
+    from ._pb.RerouteMarketDepthRequest_pb2 import (
+        RerouteMarketDepthRequest as RerouteMarketDepthRequestProto,
+    )
+    from ._pb.ScannerData_pb2 import ScannerData as ScannerDataProto
+    from ._pb.ScannerParameters_pb2 import ScannerParameters as ScannerParametersProto
+    from ._pb.SecDefOptParameter_pb2 import (
+        SecDefOptParameter as SecDefOptParameterProto,
+    )
+    from ._pb.SecDefOptParameterEnd_pb2 import (
+        SecDefOptParameterEnd as SecDefOptParameterEndProto,
+    )
+    from ._pb.SmartComponents_pb2 import SmartComponents as SmartComponentsProto
+    from ._pb.SoftDollarTiers_pb2 import SoftDollarTiers as SoftDollarTiersProto
+    from ._pb.SymbolSamples_pb2 import SymbolSamples as SymbolSamplesProto
+    from ._pb.TickByTickData_pb2 import TickByTickData as TickByTickDataProto
+    from ._pb.TickGeneric_pb2 import TickGeneric as TickGenericProto
+    from ._pb.TickNews_pb2 import TickNews as TickNewsProto
+    from ._pb.TickOptionComputation_pb2 import (
+        TickOptionComputation as TickOptionComputationProto,
+    )
+    from ._pb.TickPrice_pb2 import TickPrice as TickPriceProto
+    from ._pb.TickReqParams_pb2 import TickReqParams as TickReqParamsProto
+    from ._pb.TickSize_pb2 import TickSize as TickSizeProto
+    from ._pb.TickSnapshotEnd_pb2 import TickSnapshotEnd as TickSnapshotEndProto
+    from ._pb.TickString_pb2 import TickString as TickStringProto
+    from ._pb.UpdateConfigResponse_pb2 import (
+        UpdateConfigResponse as UpdateConfigResponseProto,
+    )
+    from ._pb.UserInfo_pb2 import UserInfo as UserInfoProto
+    from ._pb.VerifyCompleted_pb2 import VerifyCompleted as VerifyCompletedProto
+    from ._pb.VerifyMessageApi_pb2 import VerifyMessageApi as VerifyMessageApiProto
+    from ._pb.WshEventData_pb2 import WshEventData as WshEventDataProto
+    from ._pb.WshMetaData_pb2 import WshMetaData as WshMetaDataProto
 
 from . import _proto as _converters
 from ._proto.safe import safe_decimal
@@ -82,6 +204,7 @@ from .order import (
 from .util import (
     UNSET_DOUBLE,
     UNSET_INTEGER,
+    Dataclass,
     ZoneInfo,
     parseIBDatetime,
     splitIBLastTradeDate,
@@ -96,7 +219,27 @@ from .wrapper import Wrapper
 # ``safe_decimal`` returns ``Decimal | None`` (``None`` for empty / "nan" /
 # malformed input) so binary-path handlers and protobuf converters share
 # the same Decimal-coherent shape on the way into the wrapper.
-_CONV: Final[dict[type, Callable[[str], Any]]] = {
+# ``Coerced`` is the set of classes that Decoder.parse() converts a wire
+# string to. ``WireScalar`` is the wider set of classes that the binary
+# handlers read fields as.
+Coerced: TypeAlias = type[int] | type[float] | type[bool] | type[Decimal]
+WireScalar: TypeAlias = type[str] | Coerced
+# A field annotation in the form the wire dataclasses use. It is a class,
+# ``X | None``, ``list[X]``, or the unevaluated string of one of these.
+Annotation: TypeAlias = (
+    WireScalar
+    | type[datetime]
+    | type[date]
+    | type[Dataclass]
+    | type[Event]
+    | UnionType
+    | GenericAlias
+    | str
+)
+
+_CONV: Final[
+    dict[WireScalar, Callable[[str], str | int | float | bool | Decimal | None]]
+] = {
     str: lambda f: f,
     int: lambda f: int(f or 0),
     float: lambda f: float(f or 0),
@@ -110,8 +253,8 @@ class _ParseField:
     """How Decoder.parse() coerces one int/float/Decimal/bool field."""
 
     name: str
-    typ: type
-    default: Any
+    typ: Coerced
+    default: str | int | float | bool | Decimal | None
     # A Decimal field where +Infinity is a value, not unset (the class's
     # ``_INFINITE_FIELDS``).
     infinite: bool = False
@@ -157,8 +300,8 @@ class _ProtoHandler:
     """How a Decoder reads one protobuf message: its class, and the bound
     method that handles a parsed one."""
 
-    protoClass: type
-    handle: Callable[[Any], None]
+    protoClass: type[Message]
+    handle: Callable[[Message], None]
 
 
 # Per-canonical-msgId protobuf message classes, for every message in
@@ -270,7 +413,7 @@ def _initProtoMsgClasses() -> None:
     _PROTO_MSG_CLASSES.update(classes)
 
 
-def _resolveCoerceType(annotation: Any) -> type | None:
+def _resolveCoerceType(annotation: Annotation) -> Coerced | None:
     """Return the target coercion type for a dataclass field annotation.
 
     Walks ``T | None`` / ``Optional[T]`` / ``Union[T, None]`` down to
@@ -286,8 +429,9 @@ def _resolveCoerceType(annotation: Any) -> type | None:
             if inner in (int, float, bool, Decimal):
                 return inner
         return None
-    if annotation in (int, float, bool, Decimal):
-        return annotation
+    for scalar in (int, float, bool, Decimal):
+        if annotation is scalar:
+            return scalar
     return None
 
 
@@ -482,7 +626,7 @@ class Decoder:
                 len(payload),
             )
             return
-        proto: Any = None
+        proto: Message | None = None
         try:
             proto = entry.protoClass()
             proto.ParseFromString(payload)
@@ -533,7 +677,7 @@ class Decoder:
     # arguments the binary-path equivalent passes to its wrapper method,
     # so wrapper code stays unaware of which encoding the wire used.
 
-    def _protoError(self, proto: Any) -> None:
+    def _protoError(self, proto: ErrorMessageProto) -> None:
         # ``ErrorMessage`` is the protobuf-form of msgId 4. Without this
         # handler, server-pushed errors arriving as proto frames would
         # silently debug-drop and the user would never see them. Live
@@ -545,7 +689,7 @@ class Decoder:
             a.reqId, a.errorCode, a.errorMsg, a.advancedOrderRejectJson, a.errorTime
         )
 
-    def _protoOrderStatus(self, proto: Any) -> None:
+    def _protoOrderStatus(self, proto: OrderStatusProto) -> None:
         s = _converters.orders.createOrderStatus(proto)
         self.wrapper.orderStatus(
             s.orderId,
@@ -561,7 +705,7 @@ class Decoder:
             s.mktCapPrice,
         )
 
-    def _protoOpenOrder(self, proto: Any) -> None:
+    def _protoOpenOrder(self, proto: OpenOrderProto) -> None:
         # An OpenOrder frame missing any of contract / order / orderState
         # is malformed — the binary path delivers an empty-fielded openOrder
         # to user code in that case, which can poison the trade registry
@@ -576,20 +720,20 @@ class Decoder:
         orderId, contract, order, state = _converters.orders.createOpenOrder(proto)
         self.wrapper.openOrder(orderId, contract, order, state)
 
-    def _protoOpenOrderEnd(self, proto: Any) -> None:
+    def _protoOpenOrderEnd(self, proto: OpenOrdersEndProto) -> None:
         self.wrapper.openOrderEnd()
 
-    def _protoCompletedOrder(self, proto: Any) -> None:
+    def _protoCompletedOrder(self, proto: CompletedOrderProto) -> None:
         decoded = _converters.orders.createCompletedOrder(proto)
         if decoded is None:
             return
         contract, order, state = decoded
         self.wrapper.completedOrder(contract, order, state)
 
-    def _protoCompletedOrdersEnd(self, proto: Any) -> None:
+    def _protoCompletedOrdersEnd(self, proto: CompletedOrdersEndProto) -> None:
         self.wrapper.completedOrdersEnd()
 
-    def _protoExecutionDetails(self, proto: Any) -> None:
+    def _protoExecutionDetails(self, proto: ExecutionDetailsProto) -> None:
         reqId, contract, execution = _converters.orders.createExecutionDetails(proto)
         # Wire ``Execution.time`` is a string in IBKR's
         # ``"YYYYmmdd HH:MM:SS [tz]"`` format. The converter leaves it
@@ -601,16 +745,16 @@ class Decoder:
             execution.time = self._normalizeExecutionTime(proto.execution.time)
         self.wrapper.execDetails(reqId, contract, execution)
 
-    def _protoExecutionDetailsEnd(self, proto: Any) -> None:
+    def _protoExecutionDetailsEnd(self, proto: ExecutionDetailsEndProto) -> None:
         # ExecutionDetailsEnd carries just a reqId.
         reqId = proto.reqId if proto.HasField("reqId") else -1
         self.wrapper.execDetailsEnd(reqId)
 
-    def _protoCommissionReport(self, proto: Any) -> None:
+    def _protoCommissionReport(self, proto: CommissionAndFeesReportProto) -> None:
         report = _converters.orders.createCommissionReport(proto)
         self.wrapper.commissionReport(report)
 
-    def _protoContractData(self, proto: Any) -> None:
+    def _protoContractData(self, proto: ContractDataProto) -> None:
         # ContractData wraps reqId + contract + contractDetails. Our
         # converter unwraps the inner contract+details into a single
         # ``ContractDetails`` (with ``.contract`` populated).
@@ -618,7 +762,7 @@ class Decoder:
         details = _converters.contracts.createContractDetailsFromContractData(proto)
         self.wrapper.contractDetails(reqId, details)
 
-    def _protoBondContractData(self, proto: Any) -> None:
+    def _protoBondContractData(self, proto: ContractDataProto) -> None:
         # BondContractData uses the same proto shape as ContractData.
         # Bond-specific fields populate on the same ``ContractDetails``
         # dataclass; dispatch to ``Wrapper.bondContractDetails`` for
@@ -632,7 +776,7 @@ class Decoder:
         details = _converters.contracts.createContractDetailsFromContractData(proto)
         self.wrapper.bondContractDetails(reqId, details)
 
-    def _protoContractDataEnd(self, proto: Any) -> None:
+    def _protoContractDataEnd(self, proto: ContractDataEndProto) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
         self.wrapper.contractDetailsEnd(reqId)
 
@@ -661,7 +805,7 @@ class Decoder:
                 time = time.replace(tzinfo=ZoneInfo(str(tz)))
         return time.astimezone(self.wrapper.defaultTimezone)
 
-    def _protoOrderBound(self, proto: Any) -> None:
+    def _protoOrderBound(self, proto: OrderBoundProto) -> None:
         permId = proto.permId if proto.HasField("permId") else 0
         clientId = proto.clientId if proto.HasField("clientId") else 0
         orderId = proto.orderId if proto.HasField("orderId") else 0
@@ -674,14 +818,14 @@ class Decoder:
     # tolerance the binary path's ``wrap()`` factory gives a wrapper
     # object that does not implement every callback.
 
-    def _protoVerifyMessageAPI(self, proto: Any) -> None:
+    def _protoVerifyMessageAPI(self, proto: VerifyMessageApiProto) -> None:
         method = getattr(self.wrapper, "verifyMessageAPI", None)
         if method is None:
             return
         apiData = proto.apiData if proto.HasField("apiData") else ""
         method(apiData)
 
-    def _protoVerifyCompleted(self, proto: Any) -> None:
+    def _protoVerifyCompleted(self, proto: VerifyCompletedProto) -> None:
         method = getattr(self.wrapper, "verifyCompleted", None)
         if method is None:
             return
@@ -689,7 +833,7 @@ class Decoder:
         errorText = proto.errorText if proto.HasField("errorText") else ""
         method(isSuccessful, errorText)
 
-    def _protoDisplayGroupList(self, proto: Any) -> None:
+    def _protoDisplayGroupList(self, proto: DisplayGroupListProto) -> None:
         method = getattr(self.wrapper, "displayGroupList", None)
         if method is None:
             return
@@ -697,7 +841,7 @@ class Decoder:
         groups = proto.groups if proto.HasField("groups") else ""
         method(reqId, groups)
 
-    def _protoDisplayGroupUpdated(self, proto: Any) -> None:
+    def _protoDisplayGroupUpdated(self, proto: DisplayGroupUpdatedProto) -> None:
         method = getattr(self.wrapper, "displayGroupUpdated", None)
         if method is None:
             return
@@ -705,7 +849,7 @@ class Decoder:
         contractInfo = proto.contractInfo if proto.HasField("contractInfo") else ""
         method(reqId, contractInfo)
 
-    def _protoConfigResponse(self, proto: Any) -> None:
+    def _protoConfigResponse(self, proto: ConfigResponseProto) -> None:
         # ConfigResponse carries nested ``LockAndExitConfig`` / ``ApiConfig``
         # / ``MessageConfig`` / ``OrdersConfig`` sub-messages with no flat
         # equivalent — the wrapper hook receives the raw proto.
@@ -713,18 +857,18 @@ class Decoder:
         if method is not None:
             method(proto)
 
-    def _protoUpdateConfigResponse(self, proto: Any) -> None:
+    def _protoUpdateConfigResponse(self, proto: UpdateConfigResponseProto) -> None:
         method = getattr(self.wrapper, "updateConfigResponseProtoBuf", None)
         if method is not None:
             method(proto)
 
     # --- accounts / positions handlers ------------------------------------
 
-    def _protoUpdateAccountValue(self, proto: Any) -> None:
+    def _protoUpdateAccountValue(self, proto: AccountValueProto) -> None:
         a = _converters.accounts.createUpdateAccountValueArgs(proto)
         self.wrapper.updateAccountValue(a.tag, a.val, a.currency, a.account)
 
-    def _protoUpdatePortfolio(self, proto: Any) -> None:
+    def _protoUpdatePortfolio(self, proto: PortfolioValueProto) -> None:
         a = _converters.accounts.createUpdatePortfolioArgs(proto)
         self.wrapper.updatePortfolio(
             a.contract,
@@ -737,84 +881,84 @@ class Decoder:
             a.account,
         )
 
-    def _protoUpdateAccountTime(self, proto: Any) -> None:
+    def _protoUpdateAccountTime(self, proto: AccountUpdateTimeProto) -> None:
         ts = proto.timeStamp if proto.HasField("timeStamp") else ""
         self.wrapper.updateAccountTime(ts)
 
-    def _protoAccountDownloadEnd(self, proto: Any) -> None:
+    def _protoAccountDownloadEnd(self, proto: AccountDataEndProto) -> None:
         account = proto.accountName if proto.HasField("accountName") else ""
         self.wrapper.accountDownloadEnd(account)
 
-    def _protoManagedAccounts(self, proto: Any) -> None:
+    def _protoManagedAccounts(self, proto: ManagedAccountsProto) -> None:
         self.wrapper.managedAccounts(
             _converters.accounts.createManagedAccountsList(proto)
         )
 
-    def _protoPosition(self, proto: Any) -> None:
+    def _protoPosition(self, proto: PositionProto) -> None:
         a = _converters.accounts.createPositionArgs(proto)
         self.wrapper.position(a.account, a.contract, a.posSize, a.avgCost)
 
-    def _protoPositionEnd(self, proto: Any) -> None:
+    def _protoPositionEnd(self, proto: PositionEndProto) -> None:
         self.wrapper.positionEnd()
 
-    def _protoAccountSummary(self, proto: Any) -> None:
+    def _protoAccountSummary(self, proto: AccountSummaryProto) -> None:
         a = _converters.accounts.createAccountSummaryArgs(proto)
         self.wrapper.accountSummary(a.reqId, a.account, a.tag, a.value, a.currency)
 
-    def _protoAccountSummaryEnd(self, proto: Any) -> None:
+    def _protoAccountSummaryEnd(self, proto: AccountSummaryEndProto) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
         self.wrapper.accountSummaryEnd(reqId)
 
-    def _protoPositionMulti(self, proto: Any) -> None:
+    def _protoPositionMulti(self, proto: PositionMultiProto) -> None:
         a = _converters.accounts.createPositionMultiArgs(proto)
         self.wrapper.positionMulti(
             a.reqId, a.account, a.modelCode, a.contract, a.pos, a.avgCost
         )
 
-    def _protoPositionMultiEnd(self, proto: Any) -> None:
+    def _protoPositionMultiEnd(self, proto: PositionMultiEndProto) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
         self.wrapper.positionMultiEnd(reqId)
 
-    def _protoAccountUpdateMulti(self, proto: Any) -> None:
+    def _protoAccountUpdateMulti(self, proto: AccountUpdateMultiProto) -> None:
         a = _converters.accounts.createAccountUpdateMultiArgs(proto)
         self.wrapper.accountUpdateMulti(
             a.reqId, a.account, a.modelCode, a.tag, a.val, a.currency
         )
 
-    def _protoAccountUpdateMultiEnd(self, proto: Any) -> None:
+    def _protoAccountUpdateMultiEnd(self, proto: AccountUpdateMultiEndProto) -> None:
         reqId = proto.reqId if proto.HasField("reqId") else -1
         self.wrapper.accountUpdateMultiEnd(reqId)
 
     # --- market data handlers ---------------------------------------------
 
-    def _protoPriceSizeTick(self, proto: Any) -> None:
+    def _protoPriceSizeTick(self, proto: TickPriceProto) -> None:
         a = _converters.market_data.createPriceSizeTickArgs(proto, self.serverVersion)
         self.wrapper.priceSizeTick(a.reqId, a.tickType, a.price, a.size, a.attrib)
 
-    def _protoTickSize(self, proto: Any) -> None:
+    def _protoTickSize(self, proto: TickSizeProto) -> None:
         a = _converters.market_data.createTickSizeArgs(proto)
         self.wrapper.tickSize(a.reqId, a.tickType, a.size)
 
-    def _protoTickGeneric(self, proto: Any) -> None:
+    def _protoTickGeneric(self, proto: TickGenericProto) -> None:
         a = _converters.market_data.createTickGenericArgs(proto)
         self.wrapper.tickGeneric(a.reqId, a.tickType, a.value)
 
-    def _protoTickString(self, proto: Any) -> None:
+    def _protoTickString(self, proto: TickStringProto) -> None:
         a = _converters.market_data.createTickStringArgs(proto)
         self.wrapper.tickString(a.reqId, a.tickType, a.value)
 
-    def _protoTickReqParams(self, proto: Any) -> None:
+    def _protoTickReqParams(self, proto: TickReqParamsProto) -> None:
         a = _converters.market_data.createTickReqParamsArgs(proto)
         self.wrapper.tickReqParams(
             a.reqId, a.minTick, a.bboExchange, a.snapshotPermissions
         )
 
-    def _protoTickSnapshotEnd(self, proto: Any) -> None:
+    def _protoTickSnapshotEnd(self, proto: TickSnapshotEndProto) -> None:
         self.wrapper.tickSnapshotEnd(
             _converters.market_data.createTickSnapshotEndReqId(proto)
         )
 
-    def _protoTickOptionComputation(self, proto: Any) -> None:
+    def _protoTickOptionComputation(self, proto: TickOptionComputationProto) -> None:
         a = _converters.market_data.createTickOptionComputationArgs(proto)
         self.wrapper.tickOptionComputation(
             a.reqId,
@@ -830,7 +974,7 @@ class Decoder:
             a.undPrice,
         )
 
-    def _protoTickByTick(self, proto: Any) -> None:
+    def _protoTickByTick(self, proto: TickByTickDataProto) -> None:
         a = _converters.market_data.dispatchTickByTick(proto)
         if isinstance(a, _converters.market_data.TickByTickAllLastArgs):
             self.wrapper.tickByTickAllLast(
@@ -857,17 +1001,17 @@ class Decoder:
             self.wrapper.tickByTickMidPoint(a.reqId, a.time, a.midPoint)
         # else None — oneof not set, drop (matches binary path)
 
-    def _protoMarketDataType(self, proto: Any) -> None:
+    def _protoMarketDataType(self, proto: MarketDataTypeProto) -> None:
         a = _converters.market_data.createMarketDataTypeArgs(proto)
         self.wrapper.marketDataType(a.reqId, a.marketDataType)
 
-    def _protoUpdateMktDepth(self, proto: Any) -> None:
+    def _protoUpdateMktDepth(self, proto: MarketDepthProto) -> None:
         a = _converters.market_data.createUpdateMktDepthArgs(proto)
         self.wrapper.updateMktDepth(
             a.reqId, a.position, a.operation, a.side, a.price, a.size
         )
 
-    def _protoUpdateMktDepthL2(self, proto: Any) -> None:
+    def _protoUpdateMktDepthL2(self, proto: MarketDepthL2Proto) -> None:
         a = _converters.market_data.createUpdateMktDepthL2Args(proto)
         self.wrapper.updateMktDepthL2(
             a.reqId,
@@ -880,35 +1024,35 @@ class Decoder:
             a.isSmartDepth,
         )
 
-    def _protoMktDepthExchanges(self, proto: Any) -> None:
+    def _protoMktDepthExchanges(self, proto: MarketDepthExchangesProto) -> None:
         self.wrapper.mktDepthExchanges(
             _converters.market_data.createMarketDepthExchangesList(proto)
         )
 
-    def _protoRerouteMktDataReq(self, proto: Any) -> None:
+    def _protoRerouteMktDataReq(self, proto: RerouteMarketDataRequestProto) -> None:
         a = _converters.market_data.createRerouteMktDataReqArgs(proto)
         self.wrapper.rerouteMktDataReq(a.reqId, a.conId, a.exchange)
 
-    def _protoRerouteMktDepthReq(self, proto: Any) -> None:
+    def _protoRerouteMktDepthReq(self, proto: RerouteMarketDepthRequestProto) -> None:
         a = _converters.market_data.createRerouteMktDepthReqArgs(proto)
         self.wrapper.rerouteMktDepthReq(a.reqId, a.conId, a.exchange)
 
     # --- historical-data handlers -----------------------------------------
 
-    def _protoHistoricalData(self, proto: Any) -> None:
+    def _protoHistoricalData(self, proto: HistoricalDataProto) -> None:
         a = _converters.historical.createHistoricalDataBars(proto)
         for bar in a.bars:
             self.wrapper.historicalData(a.reqId, bar)
 
-    def _protoHistoricalDataEnd(self, proto: Any) -> None:
+    def _protoHistoricalDataEnd(self, proto: HistoricalDataEndProto) -> None:
         a = _converters.historical.createHistoricalDataEndArgs(proto)
         self.wrapper.historicalDataEnd(a.reqId, a.start, a.end)
 
-    def _protoHistoricalDataUpdate(self, proto: Any) -> None:
+    def _protoHistoricalDataUpdate(self, proto: HistoricalDataUpdateProto) -> None:
         a = _converters.historical.createHistoricalDataUpdateArgs(proto)
         self.wrapper.historicalDataUpdate(a.reqId, a.bar)
 
-    def _protoRealtimeBar(self, proto: Any) -> None:
+    def _protoRealtimeBar(self, proto: RealTimeBarTickProto) -> None:
         a = _converters.historical.createRealtimeBarArgs(proto)
         self.wrapper.realtimeBar(
             a.reqId,
@@ -922,56 +1066,56 @@ class Decoder:
             a.count,
         )
 
-    def _protoHeadTimestamp(self, proto: Any) -> None:
+    def _protoHeadTimestamp(self, proto: HeadTimestampProto) -> None:
         a = _converters.historical.createHeadTimestampArgs(proto)
         self.wrapper.headTimestamp(a.reqId, a.headTimestamp)
 
-    def _protoHistogramData(self, proto: Any) -> None:
+    def _protoHistogramData(self, proto: HistogramDataProto) -> None:
         a = _converters.historical.createHistogramDataArgs(proto)
         self.wrapper.histogramData(a.reqId, a.items)
 
-    def _protoHistoricalSchedule(self, proto: Any) -> None:
+    def _protoHistoricalSchedule(self, proto: HistoricalScheduleProto) -> None:
         a = _converters.historical.createHistoricalScheduleArgs(proto)
         self.wrapper.historicalSchedule(
             a.reqId, a.startDateTime, a.endDateTime, a.timeZone, a.sessions
         )
 
-    def _protoHistoricalTicks(self, proto: Any) -> None:
+    def _protoHistoricalTicks(self, proto: HistoricalTicksProto) -> None:
         a = _converters.historical.createHistoricalTicksArgs(proto)
         self.wrapper.historicalTicks(a.reqId, a.ticks, a.done)
 
-    def _protoHistoricalTicksBidAsk(self, proto: Any) -> None:
+    def _protoHistoricalTicksBidAsk(self, proto: HistoricalTicksBidAskProto) -> None:
         a = _converters.historical.createHistoricalTicksBidAskArgs(proto)
         self.wrapper.historicalTicksBidAsk(a.reqId, a.ticks, a.done)
 
-    def _protoHistoricalTicksLast(self, proto: Any) -> None:
+    def _protoHistoricalTicksLast(self, proto: HistoricalTicksLastProto) -> None:
         a = _converters.historical.createHistoricalTicksLastArgs(proto)
         self.wrapper.historicalTicksLast(a.reqId, a.ticks, a.done)
 
     # --- news + WSH handlers ---------------------------------------------
 
-    def _protoUpdateNewsBulletin(self, proto: Any) -> None:
+    def _protoUpdateNewsBulletin(self, proto: NewsBulletinProto) -> None:
         a = _converters.news.createUpdateNewsBulletinArgs(proto)
         self.wrapper.updateNewsBulletin(a.msgId, a.msgType, a.message, a.origExchange)
 
-    def _protoNewsProviders(self, proto: Any) -> None:
+    def _protoNewsProviders(self, proto: NewsProvidersProto) -> None:
         self.wrapper.newsProviders(_converters.news.createNewsProviders(proto))
 
-    def _protoNewsArticle(self, proto: Any) -> None:
+    def _protoNewsArticle(self, proto: NewsArticleProto) -> None:
         a = _converters.news.createNewsArticleArgs(proto)
         self.wrapper.newsArticle(a.reqId, a.articleType, a.articleText)
 
-    def _protoHistoricalNews(self, proto: Any) -> None:
+    def _protoHistoricalNews(self, proto: HistoricalNewsProto) -> None:
         a = _converters.news.createHistoricalNewsArgs(proto)
         self.wrapper.historicalNews(
             a.reqId, a.time, a.providerCode, a.articleId, a.headline
         )
 
-    def _protoHistoricalNewsEnd(self, proto: Any) -> None:
+    def _protoHistoricalNewsEnd(self, proto: HistoricalNewsEndProto) -> None:
         a = _converters.news.createHistoricalNewsEndArgs(proto)
         self.wrapper.historicalNewsEnd(a.reqId, a.hasMore)
 
-    def _protoTickNews(self, proto: Any) -> None:
+    def _protoTickNews(self, proto: TickNewsProto) -> None:
         a = _converters.news.createTickNewsArgs(proto)
         self.wrapper.tickNews(
             a.reqId,
@@ -982,22 +1126,22 @@ class Decoder:
             a.extraData,
         )
 
-    def _protoWshMetaData(self, proto: Any) -> None:
+    def _protoWshMetaData(self, proto: WshMetaDataProto) -> None:
         a = _converters.news.createWshMetaDataArgs(proto)
         self.wrapper.wshMetaData(a.reqId, a.dataJson)
 
-    def _protoWshEventData(self, proto: Any) -> None:
+    def _protoWshEventData(self, proto: WshEventDataProto) -> None:
         a = _converters.news.createWshEventDataArgs(proto)
         self.wrapper.wshEventData(a.reqId, a.dataJson)
 
     # --- scanner + PnL handlers ---------------------------------------------
 
-    def _protoScannerParameters(self, proto: Any) -> None:
+    def _protoScannerParameters(self, proto: ScannerParametersProto) -> None:
         self.wrapper.scannerParameters(
             _converters.scanner.createScannerParametersXml(proto)
         )
 
-    def _protoScannerData(self, proto: Any) -> None:
+    def _protoScannerData(self, proto: ScannerDataProto) -> None:
         a = _converters.scanner.createScannerDataArgs(proto)
         for el in a.elements:
             self.wrapper.scannerData(
@@ -1011,11 +1155,11 @@ class Decoder:
             )
         self.wrapper.scannerDataEnd(a.reqId)
 
-    def _protoPnL(self, proto: Any) -> None:
+    def _protoPnL(self, proto: PnLProto) -> None:
         a = _converters.scanner.createPnLArgs(proto)
         self.wrapper.pnl(a.reqId, a.dailyPnL, a.unrealizedPnL, a.realizedPnL)
 
-    def _protoPnLSingle(self, proto: Any) -> None:
+    def _protoPnLSingle(self, proto: PnLSingleProto) -> None:
         a = _converters.scanner.createPnLSingleArgs(proto)
         self.wrapper.pnlSingle(
             a.reqId, a.pos, a.dailyPnL, a.unrealizedPnL, a.realizedPnL, a.value
@@ -1023,22 +1167,22 @@ class Decoder:
 
     # --- REST handlers ----------------------------------------------------
 
-    def _protoNextValidId(self, proto: Any) -> None:
+    def _protoNextValidId(self, proto: NextValidIdProto) -> None:
         self.wrapper.nextValidId(_converters.rest.createNextValidIdOrderId(proto))
 
-    def _protoCurrentTime(self, proto: Any) -> None:
+    def _protoCurrentTime(self, proto: CurrentTimeProto) -> None:
         self.wrapper.currentTime(_converters.rest.createCurrentTimeSeconds(proto))
 
-    def _protoCurrentTimeInMillis(self, proto: Any) -> None:
+    def _protoCurrentTimeInMillis(self, proto: CurrentTimeInMillisProto) -> None:
         self.wrapper.currentTimeInMillis(
             _converters.rest.createCurrentTimeInMillisMillis(proto)
         )
 
-    def _protoUserInfo(self, proto: Any) -> None:
+    def _protoUserInfo(self, proto: UserInfoProto) -> None:
         a = _converters.rest.createUserInfoArgs(proto)
         self.wrapper.userInfo(a.reqId, a.whiteBrandingId)
 
-    def _protoSecDefOptParameter(self, proto: Any) -> None:
+    def _protoSecDefOptParameter(self, proto: SecDefOptParameterProto) -> None:
         a = _converters.rest.createSecDefOptParameterArgs(proto)
         self.wrapper.securityDefinitionOptionParameter(
             a.reqId,
@@ -1050,35 +1194,35 @@ class Decoder:
             a.strikes,
         )
 
-    def _protoSecDefOptParameterEnd(self, proto: Any) -> None:
+    def _protoSecDefOptParameterEnd(self, proto: SecDefOptParameterEndProto) -> None:
         self.wrapper.securityDefinitionOptionParameterEnd(
             _converters.rest.createSecDefOptParameterEndReqId(proto)
         )
 
-    def _protoSoftDollarTiers(self, proto: Any) -> None:
+    def _protoSoftDollarTiers(self, proto: SoftDollarTiersProto) -> None:
         a = _converters.rest.createSoftDollarTiersArgs(proto)
         self.wrapper.softDollarTiers(a.reqId, a.tiers)
 
-    def _protoSymbolSamples(self, proto: Any) -> None:
+    def _protoSymbolSamples(self, proto: SymbolSamplesProto) -> None:
         a = _converters.rest.createSymbolSamplesArgs(proto)
         self.wrapper.symbolSamples(a.reqId, a.contractDescriptions)
 
-    def _protoSmartComponents(self, proto: Any) -> None:
+    def _protoSmartComponents(self, proto: SmartComponentsProto) -> None:
         a = _converters.rest.createSmartComponentsArgs(proto)
         self.wrapper.smartComponents(a.reqId, a.components)
 
-    def _protoMarketRule(self, proto: Any) -> None:
+    def _protoMarketRule(self, proto: MarketRuleProto) -> None:
         a = _converters.rest.createMarketRuleArgs(proto)
         self.wrapper.marketRule(a.marketRuleId, a.priceIncrements)
 
-    def _protoFamilyCodes(self, proto: Any) -> None:
+    def _protoFamilyCodes(self, proto: FamilyCodesProto) -> None:
         self.wrapper.familyCodes(_converters.accounts.createFamilyCodes(proto))
 
-    def _protoReceiveFA(self, proto: Any) -> None:
+    def _protoReceiveFA(self, proto: ReceiveFAProto) -> None:
         a = _converters.accounts.createReceiveFAArgs(proto)
         self.wrapper.receiveFA(a.faDataType, a.xml)
 
-    def _protoReplaceFAEnd(self, proto: Any) -> None:
+    def _protoReplaceFAEnd(self, proto: ReplaceFAEndProto) -> None:
         a = _converters.accounts.createReplaceFAEndArgs(proto)
         self.wrapper.replaceFAEnd(a.reqId, a.text)
 
@@ -1116,10 +1260,12 @@ class Decoder:
                         continue
                 typ = _resolveCoerceType(raw)
                 if typ is not None:
+                    # A field without a default gets None when unset.
+                    default = (
+                        None if field.default is dataclasses.MISSING else field.default
+                    )
                     plan.append(
-                        _ParseField(
-                            field.name, typ, field.default, field.name in infinite
-                        )
+                        _ParseField(field.name, typ, default, field.name in infinite)
                     )
             entries = tuple(plan)
             _PARSE_FIELDS[cls] = entries
@@ -2017,7 +2163,7 @@ class Decoder:
         if tickType in _TICK_BY_TICK_LAST_TYPES:
             price, size, mask, exchange, specialConditions = fields
             mask = int(mask)
-            attrib: Any = TickAttribLast(
+            attribLast = TickAttribLast(
                 pastLimit=bool(mask & 1), unreported=bool(mask & 2)
             )
 
@@ -2027,14 +2173,14 @@ class Decoder:
                 time,
                 float(price),
                 float(size),
-                attrib,
+                attribLast,
                 exchange,
                 specialConditions,
             )
         elif tickType == 3:
             bidPrice, askPrice, bidSize, askSize, mask = fields
             mask = int(mask)
-            attrib = TickAttribBidAsk(
+            attribBidAsk = TickAttribBidAsk(
                 bidPastLow=bool(mask & 1), askPastHigh=bool(mask & 2)
             )
 
@@ -2045,7 +2191,7 @@ class Decoder:
                 float(askPrice),
                 float(bidSize),
                 float(askSize),
-                attrib,
+                attribBidAsk,
             )
         elif tickType == 4:
             (midPoint,) = fields

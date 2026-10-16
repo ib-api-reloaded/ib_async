@@ -9,9 +9,10 @@ import time
 from collections import OrderedDict, defaultdict
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import date as date_
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Final, TypeAlias
+from typing import TYPE_CHECKING, Final, TypeAlias, overload
 from zoneinfo import ZoneInfo
 
 from ib_async._requests import (
@@ -94,6 +95,8 @@ from ib_async.util import (
 )
 
 if TYPE_CHECKING:
+    from ib_async._pb.ConfigResponse_pb2 import ConfigResponse
+    from ib_async._pb.UpdateConfigResponse_pb2 import UpdateConfigResponse
     from ib_async.ib import IB
 
 
@@ -538,8 +541,15 @@ class Wrapper:
         globalErrorEvent.emit(error)
         self.reset()
 
-    def _normalizeDatetime(self, value: datetime | Any) -> datetime | Any:
-        """Convert datetime values to the configured default timezone."""
+    @overload
+    def _normalizeDatetime(self, value: datetime) -> datetime: ...
+
+    @overload
+    def _normalizeDatetime(self, value: date_) -> date_: ...
+
+    def _normalizeDatetime(self, value: datetime | date_) -> datetime | date_:
+        """Convert a datetime to the configured default time zone. A date
+        has no time zone, so it is returned unchanged."""
         if not isinstance(value, datetime):
             return value
 
@@ -864,9 +874,10 @@ class Wrapper:
             # stripped. Stored on the trade as `serverOrder` so callers
             # can read fields that the MUTABLE_ORDER_FIELDS allowlist
             # does not yet propagate into ``trade.order``.
-            serverOrderSnapshot = Order(
-                **{k: v for k, v in dataclassAsDict(order).items() if v != "?"}
-            )
+            serverOrderSnapshot = dataclasses.replace(order)
+            for orderField in dataclasses.fields(serverOrderSnapshot):
+                if getattr(serverOrderSnapshot, orderField.name) == "?":
+                    setattr(serverOrderSnapshot, orderField.name, orderField.default)
             if trade:
                 for fieldName in MUTABLE_ORDER_FIELDS:
                     setattr(trade.order, fieldName, getattr(order, fieldName))
@@ -1244,7 +1255,9 @@ class Wrapper:
 
         self.requests.set_result(key)
 
-    def _dateShortBars(self, bars: Any, startDateStr: str, endDateStr: str) -> None:
+    def _dateShortBars(
+        self, bars: list[BarData], startDateStr: str, endDateStr: str
+    ) -> None:
         """Stamp years onto the ``formatDate=3`` bars held for a request.
 
         The response bounds IB reports alongside the dataset are full
@@ -1479,7 +1492,9 @@ class Wrapper:
             self._logger.debug(f"tickSize: Unknown reqId: {reqId}")
             return
 
-        price = self.defaultEmptyPrice
+        # The price logged with the tick. It is the price of the tick's
+        # side, or None when that side has no price yet.
+        price: float | None = self.defaultEmptyPrice
 
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tickType in {0, 69}:
@@ -2277,7 +2292,9 @@ class Wrapper:
 
         self.ib.errorEvent.emit(reqId, errorCode, errorString, contract)
 
-    def _refilled(self, bars: BarDataList, refill: asyncio.Future) -> None:
+    def _refilled(
+        self, bars: BarDataList, refill: asyncio.Future[BarDataList | None]
+    ) -> None:
         """A bust event's refill of answered ``bars`` has ended: announce
         the bars, replaced, as an update (nobody awaits the refill), when
         it was answered; refused (None), cancelled or failed, there is
@@ -2328,7 +2345,7 @@ class Wrapper:
     def displayGroupUpdated(self, reqId: int, contractInfo: str):
         """TWS display-group sync — update notification."""
 
-    def configResponseProtoBuf(self, configResponseProto: Any):
+    def configResponseProtoBuf(self, configResponseProto: ConfigResponse) -> None:
         """Carries nested config sub-messages (LockAndExitConfig,
         ApiConfig, MessageConfig, OrdersConfig). Raw proto delivery —
         no domain dataclass equivalent exists. Settles the matching
@@ -2339,7 +2356,9 @@ class Wrapper:
                 ReqIdKey(configResponseProto.reqId), configResponseProto
             )
 
-    def updateConfigResponseProtoBuf(self, updateConfigResponseProto: Any):
+    def updateConfigResponseProtoBuf(
+        self, updateConfigResponseProto: UpdateConfigResponse
+    ) -> None:
         """Carries config-update result + changed-fields list. Raw
         proto delivery — no domain dataclass equivalent exists.
         Settles the matching ReqIdKey if the proto carries a reqId so

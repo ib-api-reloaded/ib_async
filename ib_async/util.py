@@ -18,16 +18,24 @@ from collections.abc import (
     Callable,
     Iterable,
     Iterator,
+    Mapping,
     Sequence,
 )
-from dataclasses import fields, is_dataclass
+from collections.abc import (
+    Set as AbstractSet,
+)
+from dataclasses import Field, fields, is_dataclass
 from decimal import Decimal
+from enum import Enum
 from importlib import import_module
+from types import ModuleType
 from typing import (
     TYPE_CHECKING,
-    Any,
+    ClassVar,
     Final,
+    Protocol,
     TypeAlias,
+    runtime_checkable,
 )
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -35,8 +43,59 @@ import nest_asyncio
 from eventkit import Event
 from eventkit.util import get_event_loop as _threadEventLoop
 
+
+class Dataclass(Protocol):
+    """Any dataclass instance."""
+
+    __dataclass_fields__: ClassVar[dict[str, Field[FieldValue]]]
+
+
+class _HasDict(Protocol):
+    """An object that stores its values as attributes, such as a FlexReport
+    row."""
+
+    __dict__: dict[str, FieldValue]
+
+
+# An open, high, low or close value of a bar.
+Ohlc: TypeAlias = Decimal | float | None
+
 if TYPE_CHECKING:
+    import pandas as pd
     import polars as pl
+    from matplotlib.figure import Figure
+
+    from ib_async.depth import DepthBook
+    from ib_async.objects import BarData, RealTimeBar
+
+    # A value that a field of an ib_async dataclass can hold. The alias
+    # refers to itself and to imports made only for type checking. For
+    # that reason it is defined only for the type checker. Annotations are
+    # strings and never evaluate it.
+    FieldValue: TypeAlias = (
+        str
+        | bytes
+        | int
+        | float
+        | bool
+        | Decimal
+        | dt.date
+        | dt.datetime
+        | dt.time
+        | dt.timedelta
+        | Enum
+        | Event
+        | Dataclass
+        | DepthBook
+        | Sequence["FieldValue"]
+        | Mapping[str, "FieldValue"]
+        | None
+    )
+    # One row for :func:`df`. A row is a dataclass, a tuple, a mapping or
+    # an object that stores its values as attributes.
+    Record: TypeAlias = (
+        Dataclass | tuple[FieldValue, ...] | Mapping[str, FieldValue] | _HasDict
+    )
 
 globalErrorEvent: Event = Event()
 """
@@ -51,7 +110,7 @@ def checkUnique(what: str, names: Iterable[str]) -> None:
         raise ValueError(f"{what} given twice: {', '.join(twice)}")
 
 
-def _optional(module: str, needed: str) -> Any:
+def _optional(module: str, needed: str) -> ModuleType:
     """The optional dependency ``module``, imported when first used;
     refused with ``needed``, which says what needs it and how to install
     it."""
@@ -76,7 +135,7 @@ UNSET_DECIMAL: Final = Decimal(2**127 - 1)
 Time_t: TypeAlias = dt.time | dt.datetime
 
 
-def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame:
+def df(objs: Iterable[Record], labels: Sequence[str] | None = None) -> pl.DataFrame:
     """
     Create a polars DataFrame with one row per object. The objects are of
     one kind: dataclasses (such as ``BarData``), namedtuples, dicts,
@@ -120,9 +179,11 @@ def df(objs: Iterable[Any], labels: Sequence[str] | None = None) -> pl.DataFrame
     return frame.select(labels) if labels else frame
 
 
-# Returns a pandas.DataFrame, typed Any: pandas is not a dependency, not
-# even for type checking or the docs.
-def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
+# pandas is not a dependency, not even for the docs. The return type
+# resolves only when pandas is installed where the types are checked.
+def pandasDf(
+    objs: Iterable[Record], labels: Sequence[str] | None = None
+) -> pd.DataFrame:
     """
     Same as :func:`df`, but returns a ``pandas.DataFrame``, for where polars
     is not available (PyPy). pandas infers each column's type itself:
@@ -147,22 +208,29 @@ def pandasDf(objs: Iterable[Any], labels: Sequence[str] | None = None) -> Any:
     return frame[list(labels)] if labels else frame
 
 
-def _table(objs: Iterable[Any]) -> tuple[list[str], list[tuple[Any, ...]]]:
-    """Column names and one tuple of values per object, for :func:`df`."""
+def _table(objs: Iterable[Record]) -> tuple[list[str], list[tuple[FieldValue, ...]]]:
+    """Return the column names and one tuple of values per object, for
+    :func:`df`. All objects are treated as the same kind as the first."""
     rows = list(objs)
     if not rows:
         return [], []
     first = rows[0]
     if is_dataclass(first):
         return [field.name for field in fields(first)], [
-            dataclassAsTuple(o) for o in rows
+            dataclassAsTuple(o)
+            for o in rows
+            if is_dataclass(o) and not isinstance(o, type)
         ]
     if isinstance(first, tuple):
         columns = list(getattr(first, "_fields", ())) or [
             f"column_{i}" for i in range(len(first))
         ]
-        return columns, rows
-    records = rows if isinstance(first, dict) else [vars(o) for o in rows]
+        return columns, [row for row in rows if isinstance(row, tuple)]
+    records: list[Mapping[str, FieldValue]]
+    if isinstance(first, Mapping):
+        records = [row for row in rows if isinstance(row, Mapping)]
+    else:
+        records = [vars(o) for o in rows]
     # every key of every record, in first-seen order; a missing one is null
     columns = list(dict.fromkeys(key for record in records for key in record))
     return columns, [tuple(record.get(c) for c in columns) for record in records]
@@ -187,7 +255,7 @@ _FLOAT_EXACT_INT = 2**53
 _POLARS_DECIMAL_DIGITS = 38
 
 
-def _columnKind(values: list[Any]) -> type | str | None:
+def _columnKind(values: list[FieldValue]) -> type | str | None:
     """The one kind of the column's values polars holds as a typed column
     without changing any: a scalar type of its own (ints and floats
     together are numbers, while every int is exact as a float), with no
@@ -228,7 +296,7 @@ def _columnKind(values: list[Any]) -> type | str | None:
     return next(iter(kinds), _NUMBER)
 
 
-def _series(pl: Any, name: str, values: list[Any]) -> Any:
+def _series(polars: ModuleType, name: str, values: list[FieldValue]) -> pl.Series:
     """The polars Series of a df column: typed when polars holds every
     value as it is (see :func:`_columnKind`), else objects."""
     kind = _columnKind(values)
@@ -237,16 +305,16 @@ def _series(pl: Any, name: str, values: list[Any]) -> Any:
             # Only ints beside floats convert, to Float64 (exactly); any
             # other value polars cannot hold as it is (an int past its
             # widest integer type) fails, and the column is objects.
-            return pl.Series(name, values, strict=kind != _NUMBER)
-        except (pl.exceptions.PolarsError, TypeError, ValueError, OverflowError):
+            return polars.Series(name, values, strict=kind != _NUMBER)
+        except (polars.exceptions.PolarsError, TypeError, ValueError, OverflowError):
             pass
     # polars converts an enum member it meets first to its value even in an
     # object column; a plain object ahead of the values, dropped after,
     # keeps every value as it is.
-    return pl.Series(name, [object(), *values], dtype=pl.Object).slice(1)
+    return polars.Series(name, [object(), *values], dtype=polars.Object).slice(1)
 
 
-def dataclassAsDict(obj) -> dict:
+def dataclassAsDict(obj: Dataclass) -> dict[str, FieldValue]:
     """
     Return dataclass values as ``dict``.
     This is a non-recursive variant of ``dataclasses.asdict``.
@@ -257,7 +325,7 @@ def dataclassAsDict(obj) -> dict:
     return {field.name: getattr(obj, field.name) for field in fields(obj)}
 
 
-def dataclassAsTuple(obj) -> tuple[Any, ...]:
+def dataclassAsTuple(obj: Dataclass) -> tuple[FieldValue, ...]:
     """
     Return dataclass values as ``tuple``.
     This is a non-recursive variant of ``dataclasses.astuple``.
@@ -268,7 +336,7 @@ def dataclassAsTuple(obj) -> tuple[Any, ...]:
     return tuple(getattr(obj, field.name) for field in fields(obj))
 
 
-def dataclassNonDefaults(obj) -> dict[str, Any]:
+def dataclassNonDefaults(obj: Dataclass) -> dict[str, FieldValue]:
     """
     For a ``dataclass`` instance get the fields that are different from the
     default values and return as ``dict``.
@@ -351,7 +419,9 @@ DISPLAY_BOILERPLATE_STRINGS: Final[frozenset[str]] = frozenset(
 )
 
 
-def _carriesDisplayInformation(name: str, value: Any, default: Any) -> bool:
+def _carriesDisplayInformation(
+    name: str, value: FieldValue, default: FieldValue
+) -> bool:
     """Whether one field's value tells a reader something.
 
     The single predicate behind :func:`dataclassDisplayFields`; see the
@@ -382,7 +452,7 @@ def _carriesDisplayInformation(name: str, value: Any, default: Any) -> bool:
     return True
 
 
-def dataclassDisplayFields(obj) -> dict[str, Any]:
+def dataclassDisplayFields(obj: Dataclass) -> dict[str, FieldValue]:
     """
     For a ``dataclass`` instance get the fields worth SHOWING a human, in
     declaration order, and return as ``dict``.
@@ -409,7 +479,7 @@ def dataclassDisplayFields(obj) -> dict[str, Any]:
     }
 
 
-def dataclassDisplayValue(value: Any) -> str:
+def dataclassDisplayValue(value: FieldValue) -> str:
     """Render one field value for display.
 
     ``Decimal`` prints as its plain numeric string (``29403.25``, ``1``)
@@ -425,13 +495,13 @@ def dataclassDisplayValue(value: Any) -> str:
     return repr(value)
 
 
-def dataclassDisplayPairs(attrs: dict[str, Any]) -> str:
+def dataclassDisplayPairs(attrs: dict[str, FieldValue]) -> str:
     """Render display fields as the ``name=value, name=value`` repr body."""
 
     return ", ".join(f"{k}={dataclassDisplayValue(v)}" for k, v in attrs.items())
 
 
-def dataclassRepr(obj) -> str:
+def dataclassRepr(obj: Dataclass) -> str:
     """
     Provide a culled representation of the given ``dataclass`` instance,
     showing only the fields that carry information under
@@ -455,7 +525,13 @@ def isnamedtupleinstance(x):
     return all(isinstance(n, str) for n in f)
 
 
-def tree(obj):
+# The values that :func:`tree` returns. JSON can hold all of them.
+TreeValue: TypeAlias = (
+    bool | int | float | str | bytes | list["TreeValue"] | dict[str, "TreeValue"]
+)
+
+
+def tree(obj: FieldValue | AbstractSet[FieldValue]) -> TreeValue:
     """
     Convert object to a tree of lists, dicts and simple values.
     The result can be serialized to JSON.
@@ -466,22 +542,58 @@ def tree(obj):
     if isinstance(obj, dt.date | dt.time):
         return obj.isoformat()
 
-    if isinstance(obj, dict):
+    if isinstance(obj, Mapping):
         return {k: tree(v) for k, v in obj.items()}
 
     if isnamedtupleinstance(obj):
-        return {f: tree(getattr(obj, f)) for f in obj._fields}
+        names: tuple[str, ...] = getattr(obj, "_fields")
+        return {f: tree(getattr(obj, f)) for f in names}
 
-    if isinstance(obj, list | tuple | set):
+    if isinstance(obj, list | tuple | set | frozenset):
         return [tree(i) for i in obj]
 
-    if is_dataclass(obj):
+    if is_dataclass(obj) and not isinstance(obj, type):
         return {obj.__class__.__qualname__: tree(dataclassNonDefaults(obj))}
 
     return str(obj)
 
 
-def _ohlcRows(bars) -> list[tuple[Any, Any, Any, Any]]:
+OhlcRow: TypeAlias = tuple[Ohlc, Ohlc, Ohlc, Ohlc]
+
+
+@runtime_checkable
+class _PandasBars(Protocol):
+    """The methods of a pandas DataFrame of bars that :func:`barplot`
+    uses."""
+
+    def __getitem__(self, columns: list[str]) -> _PandasBars: ...
+    def itertuples(self, index: bool, name: None) -> Iterable[OhlcRow]: ...
+
+
+@runtime_checkable
+class _PolarsBars(Protocol):
+    """The methods of a polars DataFrame of bars that :func:`barplot`
+    uses."""
+
+    def select(self, *columns: str) -> _PolarsBars: ...
+    def rows(self) -> list[OhlcRow]: ...
+
+
+if TYPE_CHECKING:
+    # Bars to plot. These are a pandas or polars DataFrame of bars, or bar
+    # objects.
+    Bars: TypeAlias = _PandasBars | _PolarsBars | Iterable[BarData | RealTimeBar]
+
+
+def _plottedPrice(value: Ohlc, bar: int) -> float:
+    """Return a bar's price as a float for plotting. Raise ``ValueError``
+    if the bar has no price, because such a bar cannot be drawn."""
+    if value is None:
+        raise ValueError(f"bar {bar} has no price to plot")
+    return float(value)
+
+
+def _ohlcRows(bars: Bars) -> list[OhlcRow]:
     """
     ``(open, high, low, close)`` per bar, from a polars DataFrame (from
     :func:`df`), a pandas DataFrame (from :func:`pandasDf`) or bar objects
@@ -489,15 +601,17 @@ def _ohlcRows(bars) -> list[tuple[Any, Any, Any, Any]]:
     """
     # pandas first: a polars DataFrame has no itertuples, but a pandas one
     # may have a select
-    if hasattr(bars, "itertuples"):  # a pandas DataFrame
+    if isinstance(bars, _PandasBars):
         ohlc = bars[["open", "high", "low", "close"]]
         return list(ohlc.itertuples(index=False, name=None))
-    if hasattr(bars, "select"):  # a polars DataFrame
+    if isinstance(bars, _PolarsBars):
         return bars.select("open", "high", "low", "close").rows()
     return [(b.open, b.high, b.low, b.close) for b in bars]
 
 
-def barplot(bars, title="", upColor="blue", downColor="red"):
+def barplot(
+    bars: Bars, title: str = "", upColor: str = "blue", downColor: str = "red"
+) -> Figure:
     """
     Create candlestick plot for the given bars. The bars can be given as
     a DataFrame (from :func:`df` or :func:`pandasDf`) or as a list of bar
@@ -517,7 +631,8 @@ def barplot(bars, title="", upColor="blue", downColor="red"):
     ax.set_title(title)
     ax.grid(True)
     fig.set_size_inches(10, 6)
-    for n, (open_, high, low, close) in enumerate(ohlcTups):
+    for n, row in enumerate(ohlcTups):
+        open_, high, low, close = (_plottedPrice(v, n) for v in row)
         if close >= open_:
             color = upColor
             bodyHi, bodyLo = close, open_
@@ -633,7 +748,7 @@ def logToConsole(level=logging.INFO, fmt=None):
     _attachHandler(logging.StreamHandler(), level, fmt)
 
 
-def isNan(x: object) -> bool:
+def isNan(x: FieldValue) -> bool:
     """Not-a-number test for any value: True for float and Decimal NaN,
     False for everything else (never raises, unlike ``math.isnan``)."""
     return x != x  # noqa: PLR0124 - NaN is the only value unequal to itself
@@ -879,6 +994,27 @@ def startLoop():
     patchAsyncio()
 
 
+class _QtSignal(Protocol):
+    def connect(self, slot: Callable[[], None]) -> None: ...
+
+
+class _QtTimer(Protocol):
+    """The members of a Qt timer that :func:`useQt` uses."""
+
+    timeout: _QtSignal
+
+    def start(self, msec: int) -> None: ...
+    def stop(self) -> None: ...
+
+
+class _QtEventLoop(Protocol):
+    """The methods of a Qt event loop that :func:`useQt` uses."""
+
+    def quit(self) -> None: ...
+    def exec(self) -> int: ...
+    def exec_(self) -> int: ...
+
+
 def useQt(qtLib: str = "PyQt5", period: float = 0.01):
     """
     Run combined Qt5/asyncio event loop.
@@ -921,7 +1057,7 @@ def useQt(qtLib: str = "PyQt5", period: float = 0.01):
         qw.QApplication.instance() or qw.QApplication(sys.argv)
     )
     loop = getLoop()
-    stack: list = []
+    stack: list[tuple[_QtEventLoop, _QtTimer]] = []
     qt_step()
 
 

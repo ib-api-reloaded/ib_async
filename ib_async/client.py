@@ -9,10 +9,11 @@ import math
 import struct
 import time
 from collections import deque
-from collections.abc import Callable
-from typing import Any, Final
+from collections.abc import Callable, Sequence
+from decimal import Decimal
 
 from eventkit import Event
+from google.protobuf.message import Message
 
 from . import _pb_msgids as _M
 from . import _proto as _converters
@@ -42,83 +43,67 @@ from ._server_versions import (
     MIN_SERVER_VER_UNDO_RFQ_FIELDS,
 )
 from .connection import Connection
-from .contract import Contract
+from .contract import Contract, TagValue
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
 from .order import OrderCancel
 from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
 
+# A value written as one field of a binary request message.
+WireField = Contract | float | int | str | bool | Decimal | Sequence[TagValue] | None
 
-def _make_format_handlers(makeEmpty: bool) -> dict[Any, Callable[[Any], str]]:
-    """Build the IBKR-protocol field-format handler table.
 
-    The two module-level dict instances below
-    (``_FORMAT_HANDLERS_EMPTY`` / ``_FORMAT_HANDLERS_KEEP``) are
-    constructed once at import time; ``Client.send`` selects between
-    them by the ``makeEmpty`` flag instead of rebuilding the dict
-    (and its closures) on every outbound message.
+def _formatContract(c: Contract) -> str:
+    """Format a contract as its fields in IBKR's order, separated by NUL."""
+    return "\0".join(
+        str(f)
+        for f in (
+            c.conId,
+            c.symbol,
+            c.secType,
+            c.lastTradeDateOrContractMonth,
+            c.strike,
+            c.right,
+            c.multiplier,
+            c.exchange,
+            c.primaryExchange,
+            c.currency,
+            c.localSymbol,
+            c.tradingClass,
+        )
+    )
+
+
+def _formatField(field: WireField, makeEmpty: bool) -> str:
+    """Return the wire text for one field of a binary message.
+
+    With ``makeEmpty``, the IBKR unset values ``UNSET_INTEGER`` and
+    ``UNSET_DOUBLE`` are written as the empty string. The server expects
+    the empty string for an unset field. Without ``makeEmpty``, they are
+    written unchanged. Positive infinity is written as ``Infinity``,
+    which is the only spelling the server accepts. One example is
+    ``competeAgainstBestOffset`` set to
+    ``COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID``. The checks use the exact
+    type. A ``bool`` is written as ``1`` or ``0``, not as an ``int``. A
+    ``Decimal`` is written with ``str``.
     """
-    # fmt: off
-    return {
-        # Contracts are formatted in IBKR null delimiter format
-        Contract: lambda c: "\0".join([
-            str(f)
-            for f in (
-                c.conId,
-                c.symbol,
-                c.secType,
-                c.lastTradeDateOrContractMonth,
-                c.strike,
-                c.right,
-                c.multiplier,
-                c.exchange,
-                c.primaryExchange,
-                c.currency,
-                c.localSymbol,
-                c.tradingClass,
-            )
-        ]),
-
-        # Float conversion has 3 stages:
-        #  - Convert 'IBKR unset' double to empty (if requested)
-        #  - Convert positive infinity to the literal ``"Infinity"``
-        #    (not ``"Infinite"``); the server parses ``"Infinity"`` for fields like
-        #    ``competeAgainstBestOffset = COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID``
-        #    and rejects any other spelling. Sending ``"Infinite"``
-        #    silently corrupts those mid-peg orders.
-        #  - else, convert float to string normally
-        float: lambda f: ""
-        if (makeEmpty and f == UNSET_DOUBLE)
-        else ("Infinity" if (f == math.inf) else str(f)),
-
-        # Int conversion has 2 stages:
-        #  - Convert 'IBKR unset' to empty (if requested)
-        #  - else, convert int to string normally
-        int: lambda f: "" if makeEmpty and f == UNSET_INTEGER else str(f),
-
-        # None is always just an empty string.
-        # (due to a quirk of Python, 'type(None)' is how you properly generate the NoneType value)
-        type(None): lambda _: "",
-
-        # Strings are always strings
-        str: lambda s: s,
-
-        # Bools become strings "1" or "0"
-        bool: lambda b: "1" if b else "0",
-
-        # Sequences of tags become semicolon-appended KV pairs
-        list: lambda lst: "".join([f"{v.tag}={v.value};" for v in lst]),
-        tuple: lambda tup: "".join([f"{v.tag}={v.value};" for v in tup]),
-    }
-    # fmt: on
-
-
-_FORMAT_HANDLERS_EMPTY: Final[dict[Any, Callable[[Any], str]]] = _make_format_handlers(
-    makeEmpty=True
-)
-_FORMAT_HANDLERS_KEEP: Final[dict[Any, Callable[[Any], str]]] = _make_format_handlers(
-    makeEmpty=False
-)
+    if isinstance(field, Contract):  # any Contract subclass
+        return _formatContract(field)
+    if type(field) is str:
+        return field
+    if type(field) is bool:
+        return "1" if field else "0"
+    if type(field) is int:
+        return "" if makeEmpty and field == UNSET_INTEGER else str(field)
+    if type(field) is float:
+        if makeEmpty and field == UNSET_DOUBLE:
+            return ""
+        return "Infinity" if field == math.inf else str(field)
+    if field is None:
+        return ""
+    if type(field) is list or type(field) is tuple:
+        return "".join(f"{v.tag}={v.value};" for v in field)
+    return str(field)
 
 
 class Client:
@@ -273,7 +258,9 @@ class Client:
         body = struct.pack(">I", wireMsgId) + serialized
         self.sendMsg(body)
 
-    def _tryProto(self, canonicalMsgId: int, build_proto: Callable[[], Any]) -> bool:
+    def _tryProto(
+        self, canonicalMsgId: int, build_proto: Callable[[], Message]
+    ) -> bool:
         """Emit the protobuf-encoded frame for ``canonicalMsgId`` when the
         negotiated server supports it. Returns True when the proto path
         handled the send so callers can early-return; False when the caller
@@ -424,18 +411,13 @@ class Client:
         if wasReady:
             self.apiEnd.emit()
 
-    def send(self, *fields, makeEmpty=True):
+    def send(self, *fields: WireField, makeEmpty: bool = True) -> None:
         """Serialize and send the given fields using the IB socket protocol.
 
         if 'makeEmpty' is True (default), then the IBKR values representing "no value"
         become the empty string."""
         if not self.isConnected():
             raise ConnectionError("Not connected")
-
-        # The two handler dicts are built once at module import — see
-        # ``_make_format_handlers`` above for the full table including
-        # the per-type lambdas and their inline rationales.
-        FORMAT_HANDLERS = _FORMAT_HANDLERS_EMPTY if makeEmpty else _FORMAT_HANDLERS_KEEP
 
         # First field is always the canonical msgId; remaining fields are
         # the body. Pre-201 servers receive both as NUL-terminated text;
@@ -446,15 +428,11 @@ class Client:
         # that's not in PROTOBUF_MSG_IDS, anything below its proto gate)
         # is affected.
         msgId = fields[0]
+        if not isinstance(msgId, int):
+            raise TypeError(f"the first field is the message id, not {msgId!r}")
         body = io.StringIO()
         for field in fields[1:]:
-            # Fetch type converter for this field (falls back to 'str(field)' as a default for unmatched types)
-            # (extra `isinstance()` wrapper needed here because Contract subclasses are their own type, but we want
-            #  to only match against the Contract parent class for formatting operations)
-            convert = FORMAT_HANDLERS.get(
-                Contract if isinstance(field, Contract) else type(field), str
-            )
-            body.write(convert(field))
+            body.write(_formatField(field, makeEmpty))
             body.write("\0")
 
         text = body.getvalue().encode()
@@ -993,7 +971,7 @@ class Client:
         # (192): IBKR drops the legacy ``VERSION=1`` prefix and appends
         # ``extOperator`` + ``manualOrderIndicator``. There's also an
         # interim RFQ_FIELDS triplet on servers in [187, 190).
-        fields: list[Any] = [4]
+        fields: list[WireField] = [4]
         if self.serverVersion() < MIN_SERVER_VER_CME_TAGGING_FIELDS:
             fields.append(1)  # legacy VERSION
         fields.append(orderId)
@@ -1033,7 +1011,7 @@ class Client:
 
         if self._tryProto(_M.REQ_EXECUTIONS, _proto):
             return
-        fields: list[Any] = [
+        fields: list[WireField] = [
             7,
             3,
             reqId,
@@ -1213,7 +1191,7 @@ class Client:
         # The trailing ``reqId`` field only exists at server gate 157+
         # (REPLACE_FA_END). Sending it to a sub-157 server desyncs the
         # frame, so the write is gated.
-        fields: list[Any] = [19, 1, faData, cxml]
+        fields: list[WireField] = [19, 1, faData, cxml]
         if self.serverVersion() >= MIN_SERVER_VER_REPLACE_FA_END:
             fields.append(reqId)
         self.send(*fields)
@@ -1296,7 +1274,7 @@ class Client:
 
         if self._tryProto(_M.EXERCISE_OPTIONS, _proto):
             return
-        fields: list[Any] = [
+        fields: list[WireField] = [
             21,
             2,
             reqId,
@@ -1533,7 +1511,7 @@ class Client:
 
         # Binary wire layout: pre-192 carries VERSION=1 prefix; >=192
         # drops VERSION and appends extOperator + manualOrderIndicator.
-        fields: list[Any] = [58]
+        fields: list[WireField] = [58]
         if self.serverVersion() < MIN_SERVER_VER_CME_TAGGING_FIELDS:
             fields.append(1)  # legacy VERSION
         if self.serverVersion() >= MIN_SERVER_VER_CME_TAGGING_FIELDS:

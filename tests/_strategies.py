@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 
 import ib_async as ibi
 from ib_async._pb import Order_pb2
-from ib_async.order import ORDER_FIELD_TYPES, Order
+from ib_async.order import ORDER_FIELD_TYPES, Order, OrderScalar
 
 codes = st.text(
     alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ", min_size=1, max_size=6
@@ -25,7 +25,7 @@ NOT_ON_THE_WIRE = {
 
 
 def orderField(
-    name: str, kind: type
+    name: str, kind: OrderScalar
 ) -> st.SearchStrategy[Decimal | float | int | bool | str]:
     if kind is Decimal:
         return quantities if "Quantity" in name or name == "cashQty" else prices

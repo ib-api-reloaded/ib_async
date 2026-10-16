@@ -8,8 +8,8 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
-from types import MappingProxyType
-from typing import Any, ClassVar, NamedTuple, get_args, get_type_hints
+from types import GenericAlias, MappingProxyType, UnionType
+from typing import ClassVar, NamedTuple, TypeAlias, get_args, get_type_hints
 
 from eventkit import Event
 
@@ -524,7 +524,7 @@ class OrderState:
     whatIfErrorCode: int = 0
     whatIfErrorString: str = ""
 
-    commission = _CommissionAlias()
+    commission: ClassVar[_CommissionAlias[Decimal | None]] = _CommissionAlias()
 
     @property
     def whatIfRefused(self) -> bool:
@@ -851,7 +851,15 @@ class PercentChangeCondition(OrderCondition):
     exch: str = ""
 
 
-def _scalar(hint: Any) -> type | None:
+# The type of a scalar Order field.
+OrderScalar: TypeAlias = (
+    type[Decimal] | type[float] | type[int] | type[bool] | type[str]
+)
+
+
+def _scalar(
+    hint: OrderScalar | type[SoftDollarTier] | UnionType | GenericAlias,
+) -> OrderScalar | None:
     """The scalar type an Order field annotated ``hint`` holds (Decimal,
     float, int, bool or str), if any."""
     kinds = get_args(hint) or (hint,)
@@ -861,7 +869,7 @@ def _scalar(hint: Any) -> type | None:
 # The scalar type each scalar Order field holds, by field; resolved here,
 # at the end of the module, once every type the annotations name is
 # defined.
-ORDER_FIELD_TYPES: Mapping[str, type] = MappingProxyType(
+ORDER_FIELD_TYPES: Mapping[str, OrderScalar] = MappingProxyType(
     {
         name: scalar
         for name, hint in get_type_hints(Order).items()

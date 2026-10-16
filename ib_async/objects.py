@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
 from decimal import Decimal
-from typing import Any, overload
+from typing import ClassVar, Generic, Protocol, TypeVar, overload
 
 from eventkit import Event
 
@@ -97,34 +97,54 @@ class Execution:
     __str__ = dataclassRepr
 
 
-class _CommissionAlias:
-    """``commission``, the v2.x name of ``commissionAndFees``: reading or
-    setting it warns (``DeprecationWarning``) and reads or sets
-    ``commissionAndFees``. Declared in a class body, unannotated, so it is
-    not a dataclass field: the constructor and ``dataclasses.replace`` take
-    ``commissionAndFees`` alone. Typed ``Any``, as ``commissionAndFees``'s
-    type is its class's: a Decimal on CommissionReport and OrderState, a
-    float on OrderStateNumeric, a string once ``formatted()``. Removal
-    target: v4.0."""
+V = TypeVar("V")
+
+
+class _HasCommissionAndFees(Protocol[V]):
+    """A class with a ``commissionAndFees`` field of type ``V``."""
+
+    commissionAndFees: V
+
+
+class _CommissionAlias(Generic[V]):
+    """The ``commission`` attribute, which was the v2.x name of
+    ``commissionAndFees``.
+
+    Reading or setting ``commission`` emits a ``DeprecationWarning`` and
+    reads or sets ``commissionAndFees``. The alias is declared in a class
+    body as a ``ClassVar``, so it is not a dataclass field. The
+    constructor and ``dataclasses.replace`` take only
+    ``commissionAndFees``. ``V`` is the type of the field in the class
+    that declares the alias. The alias is to be removed in v4.0."""
 
     @overload
-    def __get__(self, obj: None, objtype: type | None = None) -> _CommissionAlias: ...
+    def __get__(
+        self, obj: None, objtype: type[_HasCommissionAndFees[V]] | None = None
+    ) -> _CommissionAlias[V]: ...
 
     @overload
-    def __get__(self, obj: Any, objtype: type | None = None) -> Any: ...
+    def __get__(
+        self,
+        obj: _HasCommissionAndFees[V],
+        objtype: type[_HasCommissionAndFees[V]] | None = None,
+    ) -> V: ...
 
-    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
+    def __get__(
+        self,
+        obj: _HasCommissionAndFees[V] | None,
+        objtype: type[_HasCommissionAndFees[V]] | None = None,
+    ) -> _CommissionAlias[V] | V:
         if obj is None:
             return self
         self._warn(obj)
         return obj.commissionAndFees
 
-    def __set__(self, obj: Any, value: Any) -> None:
+    def __set__(self, obj: _HasCommissionAndFees[V], value: V) -> None:
         self._warn(obj)
         obj.commissionAndFees = value
 
     @staticmethod
-    def _warn(obj: object) -> None:
+    def _warn(obj: _HasCommissionAndFees[V]) -> None:
         warnings.warn(
             f"{type(obj).__name__}.commission is deprecated; use "
             "commissionAndFees instead. It will be removed in v4.0.",
@@ -147,7 +167,7 @@ class CommissionReport:
     yield_: Decimal | None = None
     yieldRedemptionDate: int = 0
 
-    commission = _CommissionAlias()
+    commission: ClassVar[_CommissionAlias[Decimal | None]] = _CommissionAlias()
 
     # Same display policy as ``Execution`` above.
     __repr__ = dataclassRepr
@@ -486,18 +506,21 @@ class AccountValue:
         return safe_decimal(self.value)
 
 
-# Tick and depth records — slotted frozen dataclasses. Numeric
-# ``price`` / ``size`` fields are ``float``, as ``Ticker``'s are: these
-# tick records are stored verbatim onto ``ticker.ticks`` /
-# ``ticker.tickByTicks``, so the inner type tracks Ticker exactly, and
-# the per-tick path stays float for speed.
+# Tick and depth records. These are slotted frozen dataclasses. The
+# numeric ``price`` and ``size`` fields are ``float``, the same as on
+# ``Ticker``. The tick records are stored unchanged in ``ticker.ticks``
+# and ``ticker.tickByTicks``, so their types match Ticker exactly. The
+# per-tick path uses float for speed. ``TickData.price`` is None for a
+# size tick on a side that has no price yet. ``Ticker.bid`` is None in
+# the same case.
 
 
 @dataclass(slots=True, frozen=True)
 class TickData:
     time: datetime
     tickType: int
-    price: float
+    # None for a size tick on a side that has no price yet.
+    price: float | None
     size: float
 
 
@@ -905,12 +928,12 @@ class IBDefaults:
     """A simple way to provide default values when populating API data."""
 
     # optionally replace IBKR using -1 price and 0 size when quotes don't exist
-    emptyPrice: Any = -1
-    emptySize: Any = 0
+    emptyPrice: float = -1
+    emptySize: float = 0
 
     # optionally replace ib_async default for all instance variable values before populated from API updates
     # Note: None is the universal unset sentinel. Legacy code may compare against this using ==
-    unset: Any = None
+    unset: float | None = None
 
     # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
     timezone: tzinfo = UTC

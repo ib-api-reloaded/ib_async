@@ -369,8 +369,7 @@ class Forex(Contract):
         attrs.pop("secType")
         s = "Forex("
         if "symbol" in attrs and "currency" in attrs:
-            pair = attrs.pop("symbol")
-            pair += attrs.pop("currency")
+            pair = f"{attrs.pop('symbol')}{attrs.pop('currency')}"
             s += "'" + pair + "'" + (", " if attrs else "")
         s += util.dataclassDisplayPairs(attrs)
         s += ")"
