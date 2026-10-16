@@ -1,10 +1,8 @@
 """Single-flight semantics for globally-keyed wrapper requests.
 
 Concurrent callers of requests keyed by a fixed string (``"openOrders"``,
-``"completedOrders"``, ``"positions"``, ...) must share one in-flight
-future. Without that, the second caller's ``startReq`` would overwrite the
-first caller's future and the first caller would block forever on the next
-end-of-stream callback.
+``"completedOrders"``, ``"positions"``, ...) share one request: it is sent
+once, and its one answer settles every caller's own future.
 """
 
 from __future__ import annotations
@@ -20,20 +18,14 @@ from ib_async.order import Order, OrderState
 pytestmark = pytest.mark.asyncio
 
 
-async def test_open_orders_concurrent_callers_share_future():
+async def test_open_orders_concurrent_callers_share_one_answer():
     ib = ibi.IB()
-    req1, isNew1 = ib.wrapper.requests.open(
-        SingletonKey("openOrders"), single_flight=True
-    )
-    f1 = req1.future
-    req2, isNew2 = ib.wrapper.requests.open(
-        SingletonKey("openOrders"), single_flight=True
-    )
-    f2 = req2.future
+    s1 = ib.wrapper.requests.share(SingletonKey("openOrders"))
+    s2 = ib.wrapper.requests.share(SingletonKey("openOrders"))
 
-    assert isNew1 is True
-    assert isNew2 is False
-    assert f1 is f2
+    assert (s1.isNew, s2.isNew) == (True, False)
+    f1, f2 = s1.future, s2.future
+    assert f1 is not f2
 
     contract = ibi.Stock("ABC", "SMART", "USD")
     order = Order(orderId=1, clientId=0, permId=42)
@@ -41,27 +33,20 @@ async def test_open_orders_concurrent_callers_share_future():
     ib.wrapper.openOrder(1, contract, order, orderState)
     ib.wrapper.openOrderEnd()
 
-    # Both attached awaiters resolve from the single end-of-stream callback.
+    # Both callers resolve from the single end-of-stream callback.
     r1, r2 = await asyncio.gather(f1, f2)
     assert r1 is r2
     assert len(r1) == 1
     assert r1[0].order.permId == 42
 
 
-async def test_completed_orders_concurrent_callers_share_future():
+async def test_completed_orders_concurrent_callers_share_one_answer():
     ib = ibi.IB()
-    req1, isNew1 = ib.wrapper.requests.open(
-        SingletonKey("completedOrders"), single_flight=True
-    )
-    f1 = req1.future
-    req2, isNew2 = ib.wrapper.requests.open(
-        SingletonKey("completedOrders"), single_flight=True
-    )
-    f2 = req2.future
+    s1 = ib.wrapper.requests.share(SingletonKey("completedOrders"))
+    s2 = ib.wrapper.requests.share(SingletonKey("completedOrders"))
 
-    assert isNew1 is True
-    assert isNew2 is False
-    assert f1 is f2
+    assert (s1.isNew, s2.isNew) == (True, False)
+    f1, f2 = s1.future, s2.future
 
     contract = ibi.Stock("ABC", "SMART", "USD")
     order = Order(orderId=2, clientId=0, permId=99)
@@ -75,20 +60,14 @@ async def test_completed_orders_concurrent_callers_share_future():
     assert r1[0].order.permId == 99
 
 
-async def test_attach_reissues_after_settle():
+async def test_a_request_is_sent_again_after_it_settles():
     """After a request settles, the next caller starts a fresh request."""
     ib = ibi.IB()
-    req1, isNew1 = ib.wrapper.requests.open(
-        SingletonKey("positions"), single_flight=True
-    )
-    f1 = req1.future
-    assert isNew1 is True
+    s1 = ib.wrapper.requests.share(SingletonKey("positions"))
+    assert s1.isNew is True
     ib.wrapper.positionEnd()
-    await f1
+    await s1.future
 
-    req2, isNew2 = ib.wrapper.requests.open(
-        SingletonKey("positions"), single_flight=True
-    )
-    f2 = req2.future
-    assert isNew2 is True
-    assert f2 is not f1
+    s2 = ib.wrapper.requests.share(SingletonKey("positions"))
+    assert s2.isNew is True
+    assert s2.future is not s1.future

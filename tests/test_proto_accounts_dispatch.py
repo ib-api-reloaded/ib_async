@@ -143,7 +143,7 @@ def test_managed_accounts_proto_populates_accounts_list():
 
 def test_account_download_end_proto_settles_singleton_request():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(SingletonKey("accountValues"), container=[])
+    req = ib.wrapper.requests.open(SingletonKey("accountValues"), container=[])
     assert not req.future.done()
 
     proto = AccountDataEnd_pb2.AccountDataEnd(accountName="DU1")
@@ -180,7 +180,7 @@ def test_position_proto_zero_quantity_drops_cached_entry():
 
 def test_position_end_proto_settles_singleton_request():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(SingletonKey("positions"), container=[])
+    req = ib.wrapper.requests.open(SingletonKey("positions"), container=[])
     assert not req.future.done()
 
     ib.client.decoder.processProtoBuf(
@@ -209,7 +209,7 @@ def test_account_summary_proto_lands_in_acct_summary_dict():
 
 def test_account_summary_end_proto_settles_reqId():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(42), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(42), container=[])
     assert not req.future.done()
 
     proto = AccountSummaryEnd_pb2.AccountSummaryEnd(reqId=42)
@@ -260,7 +260,7 @@ def test_account_update_multi_proto_lands_with_modelCode():
 
 def test_account_update_multi_end_proto_settles_reqId():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     assert not req.future.done()
 
     proto = AccountUpdateMultiEnd_pb2.AccountUpdateMultiEnd(reqId=7)

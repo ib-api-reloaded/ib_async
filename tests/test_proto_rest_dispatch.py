@@ -86,7 +86,7 @@ def test_next_valid_id_proto_does_not_raise():
 
 def test_current_time_proto_settles_singleton():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(SingletonKey("currentTime"), container=[])
+    req = ib.wrapper.requests.open(SingletonKey("currentTime"), container=[])
     proto = CurrentTime_pb2.CurrentTime(currentTime=1700000000)
     ib.client.decoder.processProtoBuf(49, proto.SerializeToString())
     assert req.future.done()
@@ -95,7 +95,7 @@ def test_current_time_proto_settles_singleton():
 def test_current_time_in_millis_proto_settles_singleton_with_millis():
     """v3.0 NEW capability — settles the millis-precision singleton."""
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(SingletonKey("currentTimeInMillis"), container=[])
+    req = ib.wrapper.requests.open(SingletonKey("currentTimeInMillis"), container=[])
     proto = CurrentTimeInMillis_pb2.CurrentTimeInMillis(
         currentTimeInMillis=1700000000123
     )
@@ -109,7 +109,7 @@ def test_user_info_proto_settles_reqId():
     ``whiteBrandingId`` payload (mirrors binary path behaviour). The
     waiter sees the future done but no value bound."""
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = UserInfo_pb2.UserInfo(reqId=7, whiteBrandingId="ibapi")
     ib.client.decoder.processProtoBuf(107, proto.SerializeToString())
     assert req.future.done()
@@ -117,7 +117,7 @@ def test_user_info_proto_settles_reqId():
 
 def test_sec_def_opt_parameter_proto_appends_to_reqId_list():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = SecDefOptParameter_pb2.SecDefOptParameter(
         reqId=7,
         exchange="SMART",
@@ -150,7 +150,7 @@ def test_soft_dollar_tiers_proto_does_not_raise():
 
 def test_symbol_samples_proto_settles_reqId():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = SymbolSamples_pb2.SymbolSamples(reqId=7)
     cd = proto.contractDescriptions.add()
     cd.contract.symbol = "AAPL"
@@ -165,7 +165,7 @@ def test_symbol_samples_proto_settles_reqId():
 
 def test_smart_components_proto_settles_reqId():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = SmartComponents_pb2.SmartComponents(reqId=7)
     c = proto.smartComponents.add()
     c.bitNumber, c.exchange, c.exchangeLetter = 1, "ARCA", "P"
@@ -175,7 +175,7 @@ def test_smart_components_proto_settles_reqId():
 
 def test_market_rule_proto_settles_composite_key():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(CompositeKey("marketRule", (5,)), container=[])
+    req = ib.wrapper.requests.open(CompositeKey("marketRule", (5,)), container=[])
     proto = MarketRule_pb2.MarketRule(marketRuleId=5)
     pi = proto.priceIncrements.add()
     pi.lowEdge, pi.increment = 0.0, 0.01
@@ -196,7 +196,7 @@ def test_family_codes_proto_does_not_raise():
 
 def test_receive_fa_proto_settles_singleton():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(SingletonKey("requestFA"), container=[])
+    req = ib.wrapper.requests.open(CompositeKey("requestFA", (2,)), container=[])
     proto = ReceiveFA_pb2.ReceiveFA(faDataType=2, xml="<fa/>")
     ib.client.decoder.processProtoBuf(16, proto.SerializeToString())
     assert req.future.done()

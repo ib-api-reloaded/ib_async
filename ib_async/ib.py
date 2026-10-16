@@ -22,9 +22,11 @@ from ib_async import util
 from ib_async._requests import (
     CompositeKey,
     ReqIdKey,
+    Request,
     RequestKey,
     SingletonKey,
     WhatIfKey,
+    refusedAsNone,
 )
 from ib_async._subscriptions import (
     HistoricalBarsSub,
@@ -139,6 +141,12 @@ def _qualifyInPlace(contract: Contract, qualified: Contract) -> None:
     is given, in place."""
     for f in dataclasses.fields(qualified):
         setattr(contract, f.name, getattr(qualified, f.name))
+
+
+def _refusedAsEmptySchedule(_code: int, _text: str) -> HistoricalSchedule:
+    """What reqHistoricalSchedule answers when IBKR refuses it, as on its
+    timeout."""
+    return HistoricalSchedule()
 
 
 def _optionSearches(underlying: Contract, months: Sequence[str]) -> list[Contract]:
@@ -579,71 +587,108 @@ class IB:
     def _run(self, *awaitables: Awaitable):
         return util.run(*awaitables, timeout=self.RequestTimeout)
 
-    # Every ``req*Async`` method below opens a typed Request on
-    # ``self.wrapper.requests`` and sends the matching wire message.
-    # These three helpers package the open + reqId-allocation +
-    # bounded-await steps so call sites don't have to re-derive the
-    # boilerplate.
+    # Each ``req*Async`` method below opens a typed Request on
+    # ``self.wrapper.requests`` and sends the matching wire message. The
+    # helpers below open a request on a new reqId, cancel a request with
+    # IBKR when its awaiter finishes for any reason, start or join a
+    # single-flight request, and wait with a timeout.
 
     def _openReqIdRequest(
-        self, *, contract: Contract | None = None, container: Any = None
-    ) -> tuple[int, asyncio.Future]:
-        """Allocate a fresh reqId, register a :class:`ReqIdKey` request
-        on it, and return the ``(reqId, future)`` pair the caller needs
-        to send the wire message and return the future to its awaiter.
-        """
-        reqId = self.client.getReqId()
-        req, _ = self.wrapper.requests.open(
-            ReqIdKey(reqId), contract=contract, container=container
+        self,
+        *,
+        contract: Contract | None = None,
+        container: Any = None,
+        refusal: Callable[[int, str], Any] | None = None,
+    ) -> Request:
+        """Allocate a new reqId and register a :class:`ReqIdKey` request.
+
+        Send the wire message with ``request.reqId`` (read from the key,
+        which a bust event may move) and await ``request.future``."""
+        return self.wrapper.requests.open(
+            ReqIdKey(self.client.getReqId()),
+            contract=contract,
+            container=container,
+            refusal=refusal,
         )
-        return reqId, req.future
+
+    def _withdraw(self, opened: Request, cancel: Callable[[int], object]) -> None:
+        """End request ``opened`` and stop expecting any answer for it.
+
+        Sends the wire ``cancel`` for its current reqId, unless the
+        connection is gone or the request was already cancelled (for
+        example by ``ib.cancelHeadTimeStamp``)."""
+        if self.client.isConnected() and not opened.withdrawn:
+            cancel(opened.reqId)
+        self.wrapper.requests.withdraw(opened.key)
+
+    @contextlib.contextmanager
+    def _cancelling(
+        self, opened: Request, cancel: Callable[[int], object]
+    ) -> Iterator[None]:
+        """Call :meth:`_withdraw` on ``opened`` when the block exits,
+        whether it was answered, refused, timed out or cancelled."""
+        try:
+            yield
+        finally:
+            self._withdraw(opened, cancel)
+
+    def _abandonHistorical(self, opened: Request) -> None:
+        """Clean up historical data request ``opened`` after a timeout or
+        cancellation.
+
+        Withdraws it (see :meth:`_withdraw`) and closes its keepUpToDate
+        subscription, if any, on its current reqId."""
+        reqId = opened.reqId
+        self._withdraw(opened, self.client.cancelHistoricalData)
+        sub = self.wrapper.subscriptions.get_sub(reqId)
+        if sub is not None:
+            sub.close(send_cancel=False)
 
     def _startSingletonRequest(
-        self, name: str, send: Callable[[], object]
+        self, key: RequestKey, send: Callable[[], object], args: tuple = ()
     ) -> asyncio.Future:
-        """Open or attach to the single-flight :class:`SingletonKey`
-        request named ``name`` and return its future.
+        """Open or join the single-flight request ``key`` and return this
+        caller's future.
 
         Only the call that opens the request runs ``send()`` (the wire
-        ``client.req*`` call); a concurrent caller attaches to the
-        in-flight result instead of issuing a duplicate. If ``send()``
-        raises (e.g. a server too old for the request, or no connection),
-        the request is withdrawn before the exception propagates, so no
-        caller is left attached to a future that can never settle.
+        ``client.req*`` call). Concurrent callers join the in-flight
+        request instead of sending a duplicate. Each caller has its own
+        future, so one caller's timeout or cancel does not affect the
+        others (see :meth:`RequestRegistry.share`).
+
+        ``args`` are the arguments ``send`` sends that IBKR's answer does
+        not echo. A caller with different ``args`` is refused, so it is
+        not given the answer to a different request.
+
+        If ``send()`` raises (e.g. the server is too old for the request,
+        or there is no connection), the request is cancelled before the
+        exception propagates, so no caller waits on a future that can
+        never settle.
         """
-        req, isNew = self.wrapper.requests.open(SingletonKey(name), single_flight=True)
-        if isNew:
+        shared = self.wrapper.requests.share(key, args=args)
+        if shared.isNew:
             try:
                 send()
             except BaseException:
-                self.wrapper.requests.cancel(SingletonKey(name))
+                self.wrapper.requests.cancel(key, "not sent")
                 raise
-        return req.future
+        return shared.future
 
     async def _awaitOrTimeout(
-        self,
-        key: RequestKey,
-        future: asyncio.Future,
-        timeout: float,
-        name: str,
+        self, future: asyncio.Future, timeout: float, name: str
     ) -> Any | None:
-        """Await ``future`` up to ``timeout`` seconds.
+        """Await ``future`` for up to ``timeout`` seconds (0 means no
+        timeout). Returns its result, or None after logging a timeout
+        tagged with ``name``.
 
-        On a timeout this logs an error tagged with ``name``, cancels
-        the registry entry under ``key`` so a late wire callback finds
-        nothing to settle (and so a single-flight peer doesn't attach
-        to a dead future), and returns ``None``. Otherwise returns the
-        future's result.
-
-        Centralises the ``wait_for + log + requests.cancel`` pattern
-        used across the bounded-timeout ``req*Async`` methods.
+        A timeout cancels ``future``, which ends its request (for a
+        single-flight request, once its last caller has left). A late wire
+        callback then has nothing to settle.
         """
         try:
-            await asyncio.wait_for(future, timeout)
-            return future.result()
+            return await asyncio.wait_for(future, timeout or None)
         except TimeoutError:
             self._logger.error(f"{name}: Timeout")
-            self.wrapper.requests.cancel(key, "timeout")
             return None
 
     def waitOnUpdate(self, timeout: float = 0) -> bool:
@@ -766,12 +811,14 @@ class IB:
     def _accountForUpdates(
         self, account: str, accounts: list[str], fetchFields: StartupFetch
     ) -> str:
-        """The account connect subscribes to for portfolio and account
-        updates: the one given, else the only managed one, else none. IBKR
-        streams portfolio updates for one account at a time, so with
-        several accounts and none chosen, :meth:`portfolio` stays empty;
-        say so, when connect fetches account updates at all, rather than
-        leave it silent."""
+        """Pick the account that connect subscribes to for portfolio and
+        account updates.
+
+        Returns the given account, else the only managed account, else "".
+        IBKR streams portfolio updates for one account at a time, so with
+        several accounts and none chosen, :meth:`portfolio` stays empty.
+        In that case, if connect fetches account updates, log a message
+        explaining why."""
         if account:
             return account
         if len(accounts) == 1:
@@ -1609,6 +1656,8 @@ class IB:
             )
             return
         sub.close()  # sends cancelHistoricalData(reqId) + sets bars done
+        # a request still filling the bars (after a bust event) ends too
+        self.wrapper.requests.withdraw(ReqIdKey(bars.reqId))
 
     def reqHistoricalSchedule(
         self,
@@ -1739,7 +1788,7 @@ class IB:
         whatToShow: HistoricalData,
         useRTH: bool,
         formatDate: int = 1,
-    ) -> datetime.datetime:
+    ) -> datetime.datetime | None:
         """
         Get the datetime of earliest available historical data
         for the contract.
@@ -1753,6 +1802,10 @@ class IB:
                 Trading Hours, if False then show all data.
             formatDate: If set to 2 then the result is returned as a
                 timezone-aware datetime.datetime with UTC timezone.
+
+        Returns:
+            The datetime, or None when IBKR refuses the request (unless
+            :attr:`RaiseRequestErrors`, when it raises).
         """
         return self._run(
             self.reqHeadTimeStampAsync(contract, whatToShow, useRTH, formatDate)
@@ -2351,7 +2404,7 @@ class IB:
         providerCode: str,
         articleId: str,
         newsArticleOptions: Sequence[TagValue] = (),
-    ) -> NewsArticle:
+    ) -> NewsArticle | None:
         """
         Get the body of a news article.
 
@@ -2401,7 +2454,7 @@ class IB:
             totalResults: Maximum number of headlines to fetch (300 max).
             historicalNewsOptions: Unknown.
             timeout: Seconds to wait for the headlines; on timeout the
-                result is None.
+                result is None. 0 waits for as long as it takes.
 
         Note: users report, with IBKR's own clients too, that the server
         does not reliably keep to the date range: results can run back
@@ -2437,7 +2490,7 @@ class IB:
 
     def requestFA(self, faDataType: int):
         """
-        Requests to change the FA configuration.
+        Request the FA configuration of one data type, as XML.
 
         This method is blocking.
 
@@ -2449,7 +2502,8 @@ class IB:
                   accounts in the group.
                 * 2 = Profiles: Let you allocate shares on an
                   account-by-account basis using a predefined calculation
-                  value.
+                  value. Servers from version 177 no longer have them:
+                  asking one raises ``ValueError``, without sending.
                 * 3 = Account Aliases: Let you easily identify the accounts
                   by meaningful names rather than account numbers.
         """
@@ -2487,6 +2541,8 @@ class IB:
         else:
             self.client.cancelWshMetaData(reqId)
             self.wrapper._wshMetaReqId = 0
+            # its awaiter, if any, is cancelled rather than left waiting
+            self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def reqWshEventData(self, data: WshEventData):
         """
@@ -2515,6 +2571,8 @@ class IB:
         else:
             self.client.cancelWshEventData(reqId)
             self.wrapper._wshEventReqId = 0
+            # its awaiter, if any, is cancelled rather than left waiting
+            self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def getWshMetaData(self) -> str:
         """
@@ -2563,7 +2621,7 @@ class IB:
         """
         return self._run(self.getWshEventDataAsync(data))
 
-    def reqUserInfo(self) -> str:
+    def reqUserInfo(self) -> str | None:
         """Get the White Branding ID of the user."""
         return self._run(self.reqUserInfoAsync())
 
@@ -2576,8 +2634,9 @@ class IB:
         account: str,
         accounts: list[str],
     ) -> dict[str, Awaitable[Any]]:
-        """The requests connect sends to sync its state, by name; each one
-        only if ``fetchFields`` asks for it."""
+        """Return the requests connect sends to sync state, by name.
+
+        Only requests selected by ``fetchFields`` are included."""
         reqs: dict[str, Awaitable[Any]] = {}
         if fetchFields & StartupFetch.POSITIONS:
             reqs["positions"] = self.reqPositionsAsync()
@@ -2757,18 +2816,20 @@ class IB:
         subs: list[MktDataSub] = []
         tickers: list[Ticker] = []
         for contract in contracts:
-            reqId, future = self._openReqIdRequest(contract=contract)
-            futures.append(future)
+            opened = self._openReqIdRequest(contract=contract)
+            futures.append(opened.future)
             # Private, unpooled Ticker per snapshot — see
             # SubscriptionRegistry.new_snapshot_ticker.
             ticker = self.wrapper.subscriptions.new_snapshot_ticker(contract)
             tickers.append(ticker)
             sub = MktDataSub(
-                reqId=reqId, contract=contract, ticker=ticker, snapshot=True
+                reqId=opened.reqId, contract=contract, ticker=ticker, snapshot=True
             )
             self.wrapper.subscriptions.add(sub)
             subs.append(sub)
-            self.client.reqMktData(reqId, contract, "", True, regulatorySnapshot, [])
+            self.client.reqMktData(
+                opened.reqId, contract, "", True, regulatorySnapshot, []
+            )
 
         try:
             await asyncio.gather(*futures)
@@ -2795,14 +2856,23 @@ class IB:
         # and are settled by the wrapper handler keyed on the orderId.
         # Use ``WhatIfKey`` so the open key matches the settle key — a
         # plain ``ReqIdKey`` here would never resolve.
-        req, _ = self.wrapper.requests.open(WhatIfKey(orderId), contract=contract)
+        # A refused whatIf answers an OrderState carrying the refusal.
+        req = self.wrapper.requests.open(
+            WhatIfKey(orderId),
+            contract=contract,
+            refusal=lambda code, text: OrderState(
+                whatIfErrorCode=code, whatIfErrorString=text
+            ),
+        )
         future = req.future
         self.client.placeOrder(orderId, contract, whatIfOrder)
         return future
 
     def reqCurrentTimeAsync(self) -> Awaitable[datetime.datetime]:
         """Async sibling of :meth:`reqCurrentTime`."""
-        return self._startSingletonRequest("currentTime", self.client.reqCurrentTime)
+        return self._startSingletonRequest(
+            SingletonKey("currentTime"), self.client.reqCurrentTime
+        )
 
     def reqCurrentTimeInMillisAsync(self) -> Awaitable[int]:
         """Return the IB server clock in milliseconds since the Unix epoch.
@@ -2814,22 +2884,26 @@ class IB:
         on the legacy NUL-separated wire.
         """
         return self._startSingletonRequest(
-            "currentTimeInMillis", self.client.reqCurrentTimeInMillis
+            SingletonKey("currentTimeInMillis"), self.client.reqCurrentTimeInMillis
         )
 
     def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
         """Async sibling of :meth:`reqAccountUpdates`."""
+        # IBKR's answer names an account, not necessarily the one asked
+        # for ("" for the only one): one account's request at a time.
         return self._startSingletonRequest(
-            "accountValues", lambda: self.client.reqAccountUpdates(True, account)
+            SingletonKey("accountValues"),
+            lambda: self.client.reqAccountUpdates(True, account),
+            args=(account,),
         )
 
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
     ) -> Awaitable[None]:
         """Async sibling of :meth:`reqAccountUpdatesMulti`."""
-        reqId, future = self._openReqIdRequest()
-        self.client.reqAccountUpdatesMulti(reqId, account, modelCode, False)
-        return future
+        opened = self._openReqIdRequest()
+        self.client.reqAccountUpdatesMulti(opened.reqId, account, modelCode, False)
+        return opened.future
 
     async def accountSummaryAsync(self, account: str = "") -> list[AccountValue]:
         """Async sibling of :meth:`accountSummary`."""
@@ -2846,7 +2920,7 @@ class IB:
 
     def reqAccountSummaryAsync(self) -> Awaitable[None]:
         """Async sibling of :meth:`reqAccountSummary`."""
-        reqId, future = self._openReqIdRequest()
+        opened = self._openReqIdRequest()
         tags = (
             "AccountType,NetLiquidation,TotalCashValue,SettledCash,"
             "AccruedCash,BuyingPower,EquityWithLoanValue,"
@@ -2860,21 +2934,29 @@ class IB:
             "DayTradesRemainingT+2,DayTradesRemainingT+3,"
             "DayTradesRemainingT+4,Leverage,$LEDGER:ALL"
         )
-        self.client.reqAccountSummary(reqId, "All", tags)
-        return future
+        self.client.reqAccountSummary(opened.reqId, "All", tags)
+        return opened.future
 
     def reqOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         """Async sibling of :meth:`reqOpenOrders`."""
-        return self._startSingletonRequest("openOrders", self.client.reqOpenOrders)
+        # reqOpenOrders and reqAllOpenOrders share one answer, which does
+        # not say which was asked: one of them at a time.
+        return self._startSingletonRequest(
+            SingletonKey("openOrders"), self.client.reqOpenOrders, args=("this client",)
+        )
 
     def reqAllOpenOrdersAsync(self) -> Awaitable[list[Trade]]:
         """Async sibling of :meth:`reqAllOpenOrders`."""
-        return self._startSingletonRequest("openOrders", self.client.reqAllOpenOrders)
+        return self._startSingletonRequest(
+            SingletonKey("openOrders"), self.client.reqAllOpenOrders, args=("all",)
+        )
 
     def reqCompletedOrdersAsync(self, apiOnly: bool) -> Awaitable[list[Trade]]:
         """Async sibling of :meth:`reqCompletedOrders`."""
         return self._startSingletonRequest(
-            "completedOrders", lambda: self.client.reqCompletedOrders(apiOnly)
+            SingletonKey("completedOrders"),
+            lambda: self.client.reqCompletedOrders(apiOnly),
+            args=(apiOnly,),
         )
 
     def reqExecutionsAsync(
@@ -2882,53 +2964,51 @@ class IB:
     ) -> Awaitable[list[Fill]]:
         """Async sibling of :meth:`reqExecutions`."""
         execFilter = execFilter or ExecutionFilter()
-        reqId, future = self._openReqIdRequest()
-        self.client.reqExecutions(reqId, execFilter)
-        return future
+        opened = self._openReqIdRequest()
+        self.client.reqExecutions(opened.reqId, execFilter)
+        return opened.future
 
     def reqPositionsAsync(self) -> Awaitable[list[Position]]:
         """Async sibling of :meth:`reqPositions`."""
-        return self._startSingletonRequest("positions", self.client.reqPositions)
+        return self._startSingletonRequest(
+            SingletonKey("positions"), self.client.reqPositions
+        )
 
     async def reqPositionsMultiAsync(
         self, account: str = "", modelCode: str = ""
     ) -> list[Position]:
         """Async sibling of :meth:`reqPositionsMulti`."""
-        reqId, future = self._openReqIdRequest()
-        self.client.reqPositionsMulti(reqId, account, modelCode)
-        try:
-            return await future
-        finally:
-            # a subscription that keeps sending updates; this asks once
-            self.client.cancelPositionsMulti(reqId)
+        opened = self._openReqIdRequest()
+        self.client.reqPositionsMulti(opened.reqId, account, modelCode)
+        # a subscription that keeps sending updates; this asks once
+        with self._cancelling(opened, self.client.cancelPositionsMulti):
+            return await opened.future
 
     def reqContractDetailsAsync(
         self, contract: Contract
     ) -> Awaitable[list[ContractDetails]]:
         """Async sibling of :meth:`reqContractDetails`."""
-        reqId, future = self._openReqIdRequest(contract=contract)
-        self.client.reqContractDetails(reqId, contract)
-        return future
+        opened = self._openReqIdRequest(contract=contract)
+        self.client.reqContractDetails(opened.reqId, contract)
+        return opened.future
 
     async def reqMatchingSymbolsAsync(
         self, pattern: str
     ) -> list[ContractDescription] | None:
         """Async sibling of :meth:`reqMatchingSymbols`."""
-        reqId, future = self._openReqIdRequest()
-        self.client.reqMatchingSymbols(reqId, pattern)
-        return await self._awaitOrTimeout(
-            ReqIdKey(reqId), future, 4, "reqMatchingSymbolsAsync"
-        )
+        opened = self._openReqIdRequest()
+        self.client.reqMatchingSymbols(opened.reqId, pattern)
+        return await self._awaitOrTimeout(opened.future, 4, "reqMatchingSymbolsAsync")
 
     async def reqMarketRuleAsync(
         self, marketRuleId: int
     ) -> list[PriceIncrement] | None:
         """Async sibling of :meth:`reqMarketRule`."""
-        key = CompositeKey("marketRule", (marketRuleId,))
-        req, isNew = self.wrapper.requests.open(key, single_flight=True)
-        if isNew:
-            self.client.reqMarketRule(marketRuleId)
-        return await self._awaitOrTimeout(key, req.future, 1, "reqMarketRuleAsync")
+        future = self._startSingletonRequest(
+            CompositeKey("marketRule", (marketRuleId,)),
+            lambda: self.client.reqMarketRule(marketRuleId),
+        )
+        return await self._awaitOrTimeout(future, 1, "reqMarketRuleAsync")
 
     async def reqHistoricalDataAsync(
         self,
@@ -2961,8 +3041,8 @@ class IB:
         bars.formatDate = formatDate
         bars.keepUpToDate = keepUpToDate
         bars.chartOptions = chartOptions or []
-        reqId, future = self._openReqIdRequest(contract=contract, container=bars)
-        bars.reqId = reqId
+        opened = self._openReqIdRequest(contract=contract, container=bars)
+        reqId = bars.reqId = opened.reqId
         if keepUpToDate:
             self.wrapper.subscriptions.add(
                 HistoricalBarsSub(reqId=reqId, contract=contract, bars=bars)
@@ -2980,22 +3060,17 @@ class IB:
             keepUpToDate,
             chartOptions,
         )
+        future = opened.future
         task = asyncio.wait_for(future, timeout) if timeout else future
         try:
             await task
         except TimeoutError:
-            self.client.cancelHistoricalData(reqId)
+            self._abandonHistorical(opened)
             self._logger.warning(f"reqHistoricalData: Timeout for {contract}")
             bars.clear()
-            # Settle the registry entry and close the keepUpToDate
-            # subscription (if any) so the registry indexes don't
-            # leak the now-cancelled reqId. ``send_cancel=False``
-            # because the cancelHistoricalData wire message went out
-            # above already.
-            self.wrapper.requests.cancel(ReqIdKey(reqId), "timeout")
-            sub = self.wrapper.subscriptions.get_sub(reqId)
-            if sub is not None:
-                sub.close(send_cancel=False)
+        except asyncio.CancelledError:
+            self._abandonHistorical(opened)
+            raise
 
         return bars
 
@@ -3018,10 +3093,12 @@ class IB:
         duration = checkDuration(
             numDays if isinstance(numDays, str) else f"{numDays} D"
         )
-        reqId, future = self._openReqIdRequest(contract=contract)
+        opened = self._openReqIdRequest(
+            contract=contract, refusal=_refusedAsEmptySchedule
+        )
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalData(
-            reqId,
+            opened.reqId,
             contract,
             end,
             duration,
@@ -3033,17 +3110,19 @@ class IB:
             chartOptions,
         )
 
+        # Bounded: IBKR drops rather than answers some durations, which
+        # would leave the caller hanging with no reqId to cancel by hand.
+        future = opened.future
         task = asyncio.wait_for(future, timeout) if timeout else future
         try:
             return await task
         except TimeoutError:
-            # Without this the await was unbounded: a duration IBKR drops
-            # rather than answers left the caller hanging with no reqId to
-            # cancel by hand.
-            self.client.cancelHistoricalData(reqId)
+            self._abandonHistorical(opened)
             self._logger.warning(f"reqHistoricalSchedule: Timeout for {contract}")
-            self.wrapper.requests.cancel(ReqIdKey(reqId), "timeout")
             return HistoricalSchedule()
+        except asyncio.CancelledError:
+            self._abandonHistorical(opened)
+            raise
 
     def reqHistoricalTicksAsync(
         self,
@@ -3058,11 +3137,11 @@ class IB:
     ) -> Awaitable[list]:
         """Async sibling of :meth:`reqHistoricalTicks`."""
         miscOptions = _tagValueList(miscOptions)
-        reqId, future = self._openReqIdRequest(contract=contract)
+        opened = self._openReqIdRequest(contract=contract)
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalTicks(
-            reqId,
+            opened.reqId,
             contract,
             start,
             end,
@@ -3072,7 +3151,7 @@ class IB:
             ignoreSize,
             miscOptions,
         )
-        return future
+        return opened.future
 
     async def reqHeadTimeStampAsync(
         self,
@@ -3080,34 +3159,36 @@ class IB:
         whatToShow: HistoricalData,
         useRTH: bool,
         formatDate: int,
-    ) -> datetime.datetime:
+    ) -> datetime.datetime | None:
         """Async sibling of :meth:`reqHeadTimeStamp`."""
-        reqId, future = self._openReqIdRequest(contract=contract)
-        self.client.reqHeadTimeStamp(reqId, contract, whatToShow, useRTH, formatDate)
-        await future
-
-        self.client.cancelHeadTimeStamp(reqId)
-        return future.result()
+        opened = self._openReqIdRequest(contract=contract, refusal=refusedAsNone)
+        self.client.reqHeadTimeStamp(
+            opened.reqId, contract, whatToShow, useRTH, formatDate
+        )
+        # IBKR holds a head timestamp request open, against its limit on
+        # open historical requests, until it is cancelled.
+        with self._cancelling(opened, self.client.cancelHeadTimeStamp):
+            return await opened.future
 
     def reqSmartComponentsAsync(self, bboExchange):
         """Async sibling of :meth:`reqSmartComponents`."""
-        reqId, future = self._openReqIdRequest()
-        self.client.reqSmartComponents(reqId, bboExchange)
-        return future
+        opened = self._openReqIdRequest()
+        self.client.reqSmartComponents(opened.reqId, bboExchange)
+        return opened.future
 
     def reqMktDepthExchangesAsync(self) -> Awaitable[list[DepthMktDataDescription]]:
         """Async sibling of :meth:`reqMktDepthExchanges`."""
         return self._startSingletonRequest(
-            "mktDepthExchanges", self.client.reqMktDepthExchanges
+            SingletonKey("mktDepthExchanges"), self.client.reqMktDepthExchanges
         )
 
     def reqHistogramDataAsync(
         self, contract: Contract, useRTH: bool, period: str
     ) -> Awaitable[list[HistogramData]]:
         """Async sibling of :meth:`reqHistogramData`."""
-        reqId, future = self._openReqIdRequest(contract=contract)
-        self.client.reqHistogramData(reqId, contract, useRTH, period)
-        return future
+        opened = self._openReqIdRequest(contract=contract)
+        self.client.reqHistogramData(opened.reqId, contract, useRTH, period)
+        return opened.future
 
     async def reqScannerDataAsync(
         self,
@@ -3126,25 +3207,25 @@ class IB:
             scannerSubscriptionFilterOptions or [],
         )
 
-        req, _ = self.wrapper.requests.open(
-            ReqIdKey(dataList.reqId), container=dataList
-        )
-        future = req.future
-        await future
-
-        # Tear down through the Subscription so the registry indexes
-        # drop the entry and ``dataList.updateEvent`` is set done. A
-        # bare ``client.cancelScannerSubscription`` would leak the
-        # ScannerSub and leave any awaiter on the event hung.
-        sub = self.wrapper.subscriptions.get_sub(dataList.reqId)
-        if sub is not None:
-            sub.close()
-        return future.result()
+        req = self.wrapper.requests.open(ReqIdKey(dataList.reqId), container=dataList)
+        try:
+            return await req.future
+        finally:
+            # However the scan ends (answered, refused, or abandoned by a
+            # timeout or cancellation), tear down through the Subscription
+            # so the registry indexes drop the entry and
+            # ``dataList.updateEvent`` is set done; a bare
+            # ``client.cancelScannerSubscription`` would leak the
+            # ScannerSub and leave any awaiter on the event hung.
+            sub = self.wrapper.subscriptions.get_sub(dataList.reqId)
+            if sub is not None:
+                sub.close(send_cancel=self.client.isConnected())
+            self.wrapper.requests.withdraw(ReqIdKey(dataList.reqId))
 
     def reqScannerParametersAsync(self) -> Awaitable[str]:
         """Async sibling of :meth:`reqScannerParameters`."""
         return self._startSingletonRequest(
-            "scannerParams", self.client.reqScannerParameters
+            SingletonKey("scannerParams"), self.client.reqScannerParameters
         )
 
     async def calculateImpliedVolatilityAsync(
@@ -3156,16 +3237,14 @@ class IB:
     ) -> OptionComputation | None:
         """Async sibling of :meth:`calculateImpliedVolatility`."""
         implVolOptions = _tagValueList(implVolOptions)
-        reqId, future = self._openReqIdRequest(contract=contract)
+        opened = self._openReqIdRequest(contract=contract, refusal=refusedAsNone)
         self.client.calculateImpliedVolatility(
-            reqId, contract, optionPrice, underPrice, implVolOptions
+            opened.reqId, contract, optionPrice, underPrice, implVolOptions
         )
-        try:
+        with self._cancelling(opened, self.client.cancelCalculateImpliedVolatility):
             return await self._awaitOrTimeout(
-                ReqIdKey(reqId), future, 4, "calculateImpliedVolatilityAsync"
+                opened.future, 4, "calculateImpliedVolatilityAsync"
             )
-        finally:
-            self.client.cancelCalculateImpliedVolatility(reqId)
 
     async def calculateOptionPriceAsync(
         self,
@@ -3176,16 +3255,14 @@ class IB:
     ) -> OptionComputation | None:
         """Async sibling of :meth:`calculateOptionPrice`."""
         optPrcOptions = _tagValueList(optPrcOptions)
-        reqId, future = self._openReqIdRequest(contract=contract)
+        opened = self._openReqIdRequest(contract=contract, refusal=refusedAsNone)
         self.client.calculateOptionPrice(
-            reqId, contract, volatility, underPrice, optPrcOptions
+            opened.reqId, contract, volatility, underPrice, optPrcOptions
         )
-        try:
+        with self._cancelling(opened, self.client.cancelCalculateOptionPrice):
             return await self._awaitOrTimeout(
-                ReqIdKey(reqId), future, 4, "calculateOptionPriceAsync"
+                opened.future, 4, "calculateOptionPriceAsync"
             )
-        finally:
-            self.client.cancelCalculateOptionPrice(reqId)
 
     def reqSecDefOptParamsAsync(
         self,
@@ -3195,11 +3272,15 @@ class IB:
         underlyingConId: int,
     ) -> Awaitable[list[OptionChain]]:
         """Async sibling of :meth:`reqSecDefOptParams`."""
-        reqId, future = self._openReqIdRequest()
+        opened = self._openReqIdRequest()
         self.client.reqSecDefOptParams(
-            reqId, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId
+            opened.reqId,
+            underlyingSymbol,
+            futFopExchange,
+            underlyingSecType,
+            underlyingConId,
         )
-        return future
+        return opened.future
 
     async def reqOptionStrikesAsync(
         self, underlying: Contract, *months: str
@@ -3239,7 +3320,7 @@ class IB:
     def reqNewsProvidersAsync(self) -> Awaitable[list[NewsProvider]]:
         """Async sibling of :meth:`reqNewsProviders`."""
         return self._startSingletonRequest(
-            "newsProviders", self.client.reqNewsProviders
+            SingletonKey("newsProviders"), self.client.reqNewsProviders
         )
 
     def reqNewsArticleAsync(
@@ -3247,12 +3328,14 @@ class IB:
         providerCode: str,
         articleId: str,
         newsArticleOptions: Sequence[TagValue] = (),
-    ) -> Awaitable[NewsArticle]:
+    ) -> Awaitable[NewsArticle | None]:
         """Async sibling of :meth:`reqNewsArticle`."""
         newsArticleOptions = _tagValueList(newsArticleOptions)
-        reqId, future = self._openReqIdRequest()
-        self.client.reqNewsArticle(reqId, providerCode, articleId, newsArticleOptions)
-        return future
+        opened = self._openReqIdRequest(refusal=refusedAsNone)
+        self.client.reqNewsArticle(
+            opened.reqId, providerCode, articleId, newsArticleOptions
+        )
+        return opened.future
 
     async def reqHistoricalNewsAsync(
         self,
@@ -3266,23 +3349,29 @@ class IB:
     ) -> list[HistoricalNews] | None:
         """Async sibling of :meth:`reqHistoricalNews`."""
         historicalNewsOptions = _tagValueList(historicalNewsOptions)
-        reqId, future = self._openReqIdRequest()
+        opened = self._openReqIdRequest()
         start = util.formatIBDatetime(startDateTime)
         end = util.formatIBDatetime(endDateTime)
         self.client.reqHistoricalNews(
-            reqId, conId, providerCodes, start, end, totalResults, historicalNewsOptions
+            opened.reqId,
+            conId,
+            providerCodes,
+            start,
+            end,
+            totalResults,
+            historicalNewsOptions,
         )
         return await self._awaitOrTimeout(
-            ReqIdKey(reqId), future, timeout, "reqHistoricalNewsAsync"
+            opened.future, timeout, "reqHistoricalNewsAsync"
         )
 
     async def requestFAAsync(self, faDataType: int):
         """Async sibling of :meth:`requestFA`."""
-        key = SingletonKey("requestFA")
         future = self._startSingletonRequest(
-            "requestFA", lambda: self.client.requestFA(faDataType)
+            CompositeKey("requestFA", (int(faDataType),)),
+            lambda: self.client.requestFA(faDataType),
         )
-        return await self._awaitOrTimeout(key, future, 4, "requestFAAsync")
+        return await self._awaitOrTimeout(future, 4, "requestFAAsync")
 
     async def getWshMetaDataAsync(self) -> str:
         """Async sibling of :meth:`getWshMetaData`."""
@@ -3290,7 +3379,7 @@ class IB:
             self.cancelWshMetaData()
 
         self.reqWshMetaData()
-        req, _ = self.wrapper.requests.open(
+        req = self.wrapper.requests.open(
             ReqIdKey(self.wrapper._wshMetaReqId), container=""
         )
         future = req.future
@@ -3304,7 +3393,7 @@ class IB:
             self.cancelWshEventData()
 
         self.reqWshEventData(data)
-        req, _ = self.wrapper.requests.open(
+        req = self.wrapper.requests.open(
             ReqIdKey(self.wrapper._wshEventReqId), container=""
         )
         future = req.future
@@ -3313,11 +3402,11 @@ class IB:
         self.cancelWshEventData()
         return future.result()
 
-    def reqUserInfoAsync(self):
+    def reqUserInfoAsync(self) -> Awaitable[str | None]:
         """Async sibling of :meth:`reqUserInfo`."""
-        reqId, future = self._openReqIdRequest()
-        self.client.reqUserInfo(reqId)
-        return future
+        opened = self._openReqIdRequest(refusal=refusedAsNone)
+        self.client.reqUserInfo(opened.reqId)
+        return opened.future
 
     # --- Public API expansion ----
 
@@ -3329,13 +3418,15 @@ class IB:
 
     def reqSoftDollarTiersAsync(self) -> Awaitable[list]:
         """Fetch the soft-dollar tier list available to this account."""
-        reqId, future = self._openReqIdRequest()
-        self.client.reqSoftDollarTiers(reqId)
-        return future
+        opened = self._openReqIdRequest()
+        self.client.reqSoftDollarTiers(opened.reqId)
+        return opened.future
 
     def reqFamilyCodesAsync(self) -> Awaitable[list]:
         """Fetch the FamilyCode list (FA users only)."""
-        return self._startSingletonRequest("familyCodes", self.client.reqFamilyCodes)
+        return self._startSingletonRequest(
+            SingletonKey("familyCodes"), self.client.reqFamilyCodes
+        )
 
     def cancelHeadTimeStamp(self, reqId: int):
         """Cancel an in-flight reqHeadTimeStamp.
@@ -3346,7 +3437,7 @@ class IB:
         send any End frame after a head-timestamp cancel).
         """
         self.client.cancelHeadTimeStamp(reqId)
-        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelHeadTimeStamp")
+        self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def cancelHistogramData(self, reqId: int):
         """Cancel an in-flight reqHistogramData.
@@ -3355,7 +3446,7 @@ class IB:
         :meth:`cancelHeadTimeStamp` for the rationale.
         """
         self.client.cancelHistogramData(reqId)
-        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelHistogramData")
+        self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def cancelContractData(self, reqId: int):
         """Cancel an in-flight reqContractDetails. Protobuf-only — TWS / IBG
@@ -3364,7 +3455,7 @@ class IB:
         Settles the registry future so the awaiter wakes.
         """
         self.client.cancelContractData(reqId)
-        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelContractData")
+        self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def cancelHistoricalTicks(self, reqId: int):
         """Cancel an in-flight reqHistoricalTicks. Protobuf-only —
@@ -3373,7 +3464,7 @@ class IB:
         Settles the registry future so the awaiter wakes.
         """
         self.client.cancelHistoricalTicks(reqId)
-        self.wrapper.requests.cancel(ReqIdKey(reqId), "cancelHistoricalTicks")
+        self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def queryDisplayGroups(self, reqId: int):
         """Query the TWS display-group list. Server replies via
@@ -3399,9 +3490,9 @@ class IB:
         the raw ``ConfigResponse`` proto carrying nested
         LockAndExitConfig / ApiConfig / MessageConfig / OrdersConfig
         sub-messages."""
-        reqId, future = self._openReqIdRequest()
-        self.client.reqConfig(reqId)
-        return future
+        opened = self._openReqIdRequest()
+        self.client.reqConfig(opened.reqId)
+        return opened.future
 
     def updateConfigAsync(
         self,
@@ -3416,9 +3507,9 @@ class IB:
         server >= 221 (MIN_SERVER_VER_UPDATE_CONFIG). The future settles
         with the raw ``UpdateConfigResponse`` proto carrying status +
         changed-fields list."""
-        reqId, future = self._openReqIdRequest()
+        opened = self._openReqIdRequest()
         self.client.updateConfig(
-            reqId,
+            opened.reqId,
             lockAndExit=lockAndExit,
             messages=messages,
             api=api,
@@ -3426,7 +3517,7 @@ class IB:
             acceptedWarnings=acceptedWarnings,
             resetAPIOrderSequence=resetAPIOrderSequence,
         )
-        return future
+        return opened.future
 
 
 if __name__ == "__main__":

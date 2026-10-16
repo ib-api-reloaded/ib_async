@@ -1177,14 +1177,17 @@ class Client:
         self.send(17, 1)
 
     def requestFA(self, faData):
-        # FA Profiles (faData == 2) were de-supported at server gate 177.
-        # Reject this request locally instead of letting the server
-        # bounce it.
+        # FA Profiles (faData == 2) were de-supported at server gate 177:
+        # refuse the request here rather than send one no server answers.
         if (
             self.serverVersion() >= MIN_SERVER_VER_FA_PROFILE_DESUPPORT
             and int(faData) == 2
         ):
-            return
+            raise ValueError(
+                "FA profiles (faDataType 2) are not supported from server "
+                f"version {MIN_SERVER_VER_FA_PROFILE_DESUPPORT}; this one is "
+                f"{self.serverVersion()}"
+            )
 
         def _proto():
             return _converters.accounts.createFARequestProto(faData)

@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
+import pytest
+
 import ib_async as ibi
 from ib_async._requests import ReqIdKey
 
@@ -24,7 +26,7 @@ def _wiredIB() -> ibi.IB:
     ib = ibi.IB()
     ib.client = MagicMock()
     ib.client.getReqId.side_effect = iter(range(300, 1000))
-    ib.client.isConnected.return_value = False
+    ib.client.isConnected.return_value = True
     return ib
 
 
@@ -161,3 +163,26 @@ def test_unanswered_request_times_out_instead_of_hanging():
     assert schedule == ibi.HistoricalSchedule()
     ib.client.cancelHistoricalData.assert_called_once_with(300)
     assert ib.wrapper.requests.get(ReqIdKey(300)) is None
+
+
+async def test_a_cancelled_historical_request_is_cancelled_with_ibkr():
+    """A caller's own cancellation (or a sync call's RequestTimeout) ends
+    the request with IBKR and closes its keepUpToDate subscription."""
+    ib = _wiredIB()
+    for reqId, start in (
+        (
+            300,
+            lambda: ib.reqHistoricalDataAsync(
+                _stock(), "", "1 D", "1 hour", "TRADES", True, keepUpToDate=True
+            ),
+        ),
+        (301, lambda: ib.reqHistoricalScheduleAsync(_stock(), 5)),
+    ):
+        task = asyncio.ensure_future(start())
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        ib.client.cancelHistoricalData.assert_called_with(reqId)
+        assert ib.wrapper.subscriptions.get_sub(reqId) is None
+    assert len(ib.wrapper.requests) == 0

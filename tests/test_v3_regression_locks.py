@@ -347,7 +347,7 @@ def test_tick_option_computation_vega_theta_sentinel_maps_to_none():
     # Pre-register an in-flight request so the wrapper's
     # "reply from calculateImpliedVolatility / calculateOptionPrice"
     # branch fires and we can inspect the produced OptionComputation.
-    request, _isNew = ib.wrapper.requests.open(ReqIdKey(reqId))
+    request = ib.wrapper.requests.open(ReqIdKey(reqId))
 
     ib.wrapper.tickOptionComputation(
         reqId,
@@ -383,7 +383,7 @@ def test_tick_option_computation_other_sentinels_still_map_to_none():
     """
     ib = ibi.IB()
     reqId = 43
-    request, _isNew = ib.wrapper.requests.open(ReqIdKey(reqId))
+    request = ib.wrapper.requests.open(ReqIdKey(reqId))
 
     ib.wrapper.tickOptionComputation(
         reqId,
@@ -461,7 +461,7 @@ def test_head_timestamp_zone_info_not_found_surfaces_as_request_error():
     """
     ib = ibi.IB()
     reqId = 77
-    request, _isNew = ib.wrapper.requests.open(ReqIdKey(reqId))
+    request = ib.wrapper.requests.open(ReqIdKey(reqId))
 
     # An unknown-timezone wire string — IBKR's ``YYYYmmdd HH:MM:SS Tz``
     # shape with a TZ name not in the host's tzdata. ``ZoneInfo`` raises
@@ -480,7 +480,7 @@ def test_head_timestamp_value_error_still_surfaces_as_request_error():
     """
     ib = ibi.IB()
     reqId = 78
-    request, _isNew = ib.wrapper.requests.open(ReqIdKey(reqId))
+    request = ib.wrapper.requests.open(ReqIdKey(reqId))
 
     ib.wrapper.headTimestamp(reqId, "not-a-date")
 
@@ -495,7 +495,7 @@ def test_head_timestamp_success_path_resolves_with_datetime():
     """
     ib = ibi.IB()
     reqId = 79
-    request, _isNew = ib.wrapper.requests.open(ReqIdKey(reqId))
+    request = ib.wrapper.requests.open(ReqIdKey(reqId))
 
     ib.wrapper.headTimestamp(reqId, "20221125 10:00:00 US/Eastern")
 
@@ -597,15 +597,15 @@ def test_replace_fa_appends_reqid_at_gate_157():
 
 def test_request_fa_rejects_profile_faData_at_gate_177():
     """faData=2 (Profiles) was de-supported at server gate 177
-    (FA_PROFILE_DESUPPORT). ``requestFA`` must reject the request
-    locally without putting anything on the wire, which avoids a server
-    bounce.
+    (FA_PROFILE_DESUPPORT). ``requestFA`` must refuse the request
+    without putting anything on the wire, which no server would answer.
     """
     assert MIN_SERVER_VER_FA_PROFILE_DESUPPORT == 177
     ib = _ibAtVersion(MIN_SERVER_VER_FA_PROFILE_DESUPPORT)
     sent = _captureSend(ib)
 
-    ib.client.requestFA(faData=2)
+    with pytest.raises(ValueError, match="FA profiles"):
+        ib.client.requestFA(faData=2)
     assert sent == []
 
 
@@ -881,7 +881,7 @@ def test_cancel_async_method_settles_in_flight_future(cancel_name: str):
 
     # Pre-open the in-flight registry entry the cancel must settle.
     reqId = 12345
-    request, _isNew = ib.wrapper.requests.open(ReqIdKey(reqId))
+    request = ib.wrapper.requests.open(ReqIdKey(reqId))
 
     # Stub the wire-side cancel so we don't need a real connection.
     setattr(ib.client, cancel_name, lambda _reqId: None)

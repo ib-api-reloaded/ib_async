@@ -79,7 +79,7 @@ def test_news_bulletin_proto_lands_in_msgId_dict():
 
 def test_news_providers_proto_settles_singleton():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(SingletonKey("newsProviders"), container=[])
+    req = ib.wrapper.requests.open(SingletonKey("newsProviders"), container=[])
     proto = NewsProviders_pb2.NewsProviders()
     p = proto.newsProviders.add()
     p.providerCode, p.providerName = "BRFG", "Briefing.com"
@@ -92,7 +92,7 @@ def test_news_providers_proto_settles_singleton():
 
 def test_news_article_proto_settles_reqId():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = NewsArticle_pb2.NewsArticle(reqId=7, articleType=1, articleText="<html/>")
     ib.client.decoder.processProtoBuf(83, proto.SerializeToString())
     assert req.future.done()
@@ -103,7 +103,7 @@ def test_news_article_proto_settles_reqId():
 
 def test_historical_news_proto_appends_to_reqId_list():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = HistoricalNews_pb2.HistoricalNews(
         reqId=7,
         time="2026-05-09 09:30:00.0",
@@ -139,7 +139,7 @@ def test_tick_news_proto_appends_to_news_ticks():
 
 def test_wsh_meta_data_proto_settles_reqId():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = WshMetaData_pb2.WshMetaData(reqId=7, dataJson='{"foo": "bar"}')
     ib.client.decoder.processProtoBuf(104, proto.SerializeToString())
     assert req.future.done()
@@ -148,7 +148,7 @@ def test_wsh_meta_data_proto_settles_reqId():
 
 def test_wsh_event_data_proto_settles_reqId():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = WshEventData_pb2.WshEventData(reqId=7, dataJson='[{"event": "x"}]')
     ib.client.decoder.processProtoBuf(105, proto.SerializeToString())
     assert req.future.done()
@@ -156,7 +156,7 @@ def test_wsh_event_data_proto_settles_reqId():
 
 def test_scanner_parameters_proto_settles_singleton():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(SingletonKey("scannerParams"), container=[])
+    req = ib.wrapper.requests.open(SingletonKey("scannerParams"), container=[])
     proto = ScannerParameters_pb2.ScannerParameters(xml="<xml/>")
     ib.client.decoder.processProtoBuf(19, proto.SerializeToString())
     assert req.future.done()
@@ -165,7 +165,7 @@ def test_scanner_parameters_proto_settles_singleton():
 
 def test_scanner_data_proto_dispatches_per_element_then_calls_end():
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = ScannerData_pb2.ScannerData(reqId=7)
     el = proto.scannerDataElement.add()
     el.rank, el.marketName = 0, "ARCA"

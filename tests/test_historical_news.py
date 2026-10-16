@@ -11,7 +11,7 @@ from ib_async._requests import ReqIdKey
 def test_historical_news_request_accumulates_list_results():
     ib = ibi.IB()
     req_id = 7
-    req, _ = ib.wrapper.requests.open(ReqIdKey(req_id))
+    req = ib.wrapper.requests.open(ReqIdKey(req_id))
     future = req.future
 
     ib.wrapper.historicalNews(

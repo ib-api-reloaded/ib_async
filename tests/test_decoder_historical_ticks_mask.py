@@ -18,7 +18,7 @@ def _decode_historical_bidask_with_mask(mask: int):
     decoder = Decoder(ib.wrapper, serverVersion=176)
 
     req_id = 11
-    req, _ = ib.wrapper.requests.open(ReqIdKey(req_id))
+    req = ib.wrapper.requests.open(ReqIdKey(req_id))
 
     # Synthetic wire payload: msgId, reqId, n=1, [time, mask, priceBid,
     # priceAsk, sizeBid, sizeAsk] * n, done.

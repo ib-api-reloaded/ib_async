@@ -34,7 +34,7 @@ requiresSplitEndFrame = pytest.mark.skipif(
 
 
 def _openBarRequest(ib: ibi.IB, reqId: int = 1):
-    req, _ = ib.wrapper.requests.open(ReqIdKey(reqId))
+    req = ib.wrapper.requests.open(ReqIdKey(reqId))
     return req.future
 
 

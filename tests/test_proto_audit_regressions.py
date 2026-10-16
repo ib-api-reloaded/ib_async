@@ -101,7 +101,7 @@ from ib_async._proto.scanner import (
     createScannerParametersXml,
     createScannerSubscriptionRequestProto,
 )
-from ib_async._requests import ReqIdKey, SingletonKey
+from ib_async._requests import CompositeKey, ReqIdKey, SingletonKey
 from ib_async._requests import ReqIdKey as _ReqIdKey
 from ib_async._requests import SingletonKey as _SingletonKey
 from ib_async._server_versions import (
@@ -2963,7 +2963,7 @@ def test_disconnect_clears_in_flight_futures_with_connection_error():
     """
 
     ib = ibi.IB()
-    req, _opened = ib.wrapper.requests.open(_SingletonKey("openOrders"))
+    req = ib.wrapper.requests.open(_SingletonKey("openOrders"))
     future = req.future
     assert not future.done()
 
@@ -3297,7 +3297,7 @@ def test_account_download_end_settles_future_after_values_and_portfolio():
     """
 
     ib = ibi.IB()
-    req, _is_new = ib.wrapper.requests.open(_SingletonKey("accountValues"))
+    req = ib.wrapper.requests.open(_SingletonKey("accountValues"))
     future = req.future
 
     ib.wrapper.updateAccountValue("NetLiquidation", "100000.00", "USD", "DU1")
@@ -3371,7 +3371,7 @@ def test_position_drops_zero_and_appends_to_live_request():
     """
 
     ib = ibi.IB()
-    req, _is_new = ib.wrapper.requests.open(_SingletonKey("positions"), container=[])
+    req = ib.wrapper.requests.open(_SingletonKey("positions"), container=[])
     future = req.future
 
     contract = ibi.Stock("AAPL", "SMART", "USD")
@@ -3413,7 +3413,7 @@ def test_receive_fa_settles_request_fa_future_with_xml_payload():
     singleton future must resolve with the body."""
 
     ib = ibi.IB()
-    req, _is_new = ib.wrapper.requests.open(_SingletonKey("requestFA"), container="")
+    req = ib.wrapper.requests.open(CompositeKey("requestFA", (1,)), container="")
     future = req.future
 
     xml = (
@@ -3443,7 +3443,7 @@ def test_account_summary_end_settles_per_reqid_future():
     accumulate into ``acctSummary`` keyed by (account, tag, currency)."""
 
     ib = ibi.IB()
-    req, _is_new = ib.wrapper.requests.open(_ReqIdKey(11))
+    req = ib.wrapper.requests.open(_ReqIdKey(11))
     future = req.future
 
     ib.wrapper.accountSummary(11, "DU1", "NetLiquidation", "100000", "USD")
@@ -4536,19 +4536,15 @@ def test_pnl_single_subscription_mutates_in_place_for_user_references():
 
 
 def test_singleton_request_third_caller_attaches_after_two_sharers():
-    """Single-flight refcount tracks every attached caller, not just
-    the first attach. A third caller attaches to the same future."""
+    """A shared request counts every attached caller, not just the first
+    attach: a third caller attaches to the same request."""
 
     ib = ibi.IB()
-    a, isNewA = ib.wrapper.requests.open(SingletonKey("openOrders"), single_flight=True)
-    b, isNewB = ib.wrapper.requests.open(SingletonKey("openOrders"), single_flight=True)
-    c, isNewC = ib.wrapper.requests.open(SingletonKey("openOrders"), single_flight=True)
+    shares = [ib.wrapper.requests.share(SingletonKey("openOrders")) for _ in range(3)]
 
-    assert isNewA is True
-    assert isNewB is False
-    assert isNewC is False
-    assert a is b is c
-    assert a.refcount == 3
+    assert [s.isNew for s in shares] == [True, False, False]
+    req = ib.wrapper.requests.get(SingletonKey("openOrders"))
+    assert req is not None and req.followers == [s.future for s in shares]
 
 
 def test_ticker_post_init_resets_every_float_field_to_defaults_unset():
@@ -4586,7 +4582,7 @@ def test_late_data_after_set_result_does_not_corrupt_user_container():
     the accumulator from late writes."""
 
     ib = ibi.IB()
-    req, _ = ib.wrapper.requests.open(ReqIdKey(500))
+    req = ib.wrapper.requests.open(ReqIdKey(500))
     container = req.container
     bar1 = BarData(date="20251020 15:00:00", open=1, high=2, low=0, close=1, volume=10)
     ib.wrapper.historicalData(500, bar1)
@@ -4931,7 +4927,7 @@ def test_contract_create_routes_news_and_event_secTypes():
 def test_order_convenience_constructors_coerce_decimal():
     """``LimitOrder``, ``MarketOrder``, ``StopOrder``, ``StopLimitOrder``
     all accept ``Decimal | float | int | str`` for monetary fields and
-    funnel through ``_toDecimal`` so binary-float imprecision (e.g.
+    funnel through ``finiteDecimal`` so binary-float imprecision (e.g.
     ``Decimal(0.1) → 0.10000…0055``) cannot leak into wire messages.
     """
 

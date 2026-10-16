@@ -356,6 +356,35 @@ are fixed in v3.0:
   ``reqHistoricalData``). The docstring notes that IBKR's server does
   not reliably keep to the date range, as users found with IBKR's own
   clients too. (:issue:`108`)
+* **``reqHeadTimeStamp`` left failed and abandoned requests open.** IBKR
+  holds a head timestamp request open, against its limit of 50 open
+  historical requests, until it is cancelled; the cancel was only sent
+  for an answered request, so a request that failed or that a timeout or
+  cancellation gave up on kept its slot. It is now cancelled however it
+  ends. A request its awaiter gives up on is also no longer kept in the
+  client's own request table. (:issue:`149`)
+* **A refused request answers its own kind of empty.** With
+  ``RaiseRequestErrors`` off, a refused ``reqHeadTimeStamp``,
+  ``reqNewsArticle``, ``reqUserInfo``, ``calculateImpliedVolatility`` or
+  ``calculateOptionPrice`` answers ``None``, and ``reqHistoricalSchedule``
+  an empty ``HistoricalSchedule``, where each answered an empty list.
+  ``reqSoftDollarTiers`` and ``reqFamilyCodes`` are answered (they never
+  were), and ``requestFA`` for FA profiles on a server that no longer has
+  them raises ``ValueError`` instead of waiting for an answer that never
+  comes.
+* **Requests IBKR keeps open are ended however their caller stops.**
+  ``reqHistoricalData`` and ``reqHistoricalSchedule`` sent
+  ``cancelHistoricalData`` only on their own timeout; a caller's
+  cancellation, or the timeout of a sync call (``RequestTimeout``), left
+  the request open with IBKR and a ``keepUpToDate`` subscription
+  streaming into bars nobody had. ``reqPositionsMulti`` and the option
+  calculations no longer send their cancel after a disconnect, which
+  hid the disconnect behind a "Not connected" error.
+* **Concurrent callers of one request no longer share one future.**
+  Callers of a request asked once for all of them (positions, open
+  orders, a market rule, the startup sync) each get a future of their
+  own: one caller's timeout or cancellation used to cancel the request
+  for every caller.
 * **``AccountValue.decimalValue``** returned ``None`` for every
   per-currency monetary value on TWS installs with TWS API 10.47's
   ``$LEDGER-`` prefix setting on — the default for new installs. The

@@ -14,6 +14,7 @@ import pytest
 
 import ib_async as ibi
 from ib_async._subscriptions import (
+    HistoricalBarsSub,
     MktDataSub,
     MktDepthSub,
     PnLSingleSub,
@@ -365,3 +366,15 @@ def test_wrapper_reset_replaces_subscription_registry():
 
 def test_the_registry_repr_does_not_print_its_wrapper():
     assert "Wrapper(" not in repr(ibi.IB().wrapper.subscriptions)
+
+
+def test_a_moved_subscription_keeps_its_bars_in_step():
+    ib = ibi.IB()
+    bars = ibi.BarDataList()
+    bars.reqId = 1
+    sub = HistoricalBarsSub(reqId=1, contract=ibi.Stock("X", "SMART", "USD"), bars=bars)
+    ib.wrapper.subscriptions.add(sub)
+    ib.wrapper.subscriptions.move(sub, 2)
+    assert (sub.reqId, bars.reqId) == (2, 2)
+    assert ib.wrapper.subscriptions.get_sub(2) is sub
+    assert ib.wrapper.subscriptions.get_sub(1) is None

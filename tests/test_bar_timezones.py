@@ -26,7 +26,7 @@ def test_realtime_bars_use_configured_default_timezone():
 def test_historical_data_with_explicit_timezone_uses_default_timezone():
     eastern = ZoneInfo("America/New_York")
     ib = ibi.IB(defaults=ibi.IBDefaults(timezone=eastern))
-    req, _ = ib.wrapper.requests.open(ReqIdKey(1))
+    req = ib.wrapper.requests.open(ReqIdKey(1))
     future = req.future
 
     bar = ibi.BarData(date="20251020 15:00:00 UTC")
@@ -39,7 +39,7 @@ def test_historical_data_with_explicit_timezone_uses_default_timezone():
 def test_historical_data_without_timezone_uses_default_timezone():
     eastern = ZoneInfo("America/New_York")
     ib = ibi.IB(defaults=ibi.IBDefaults(timezone=eastern))
-    req, _ = ib.wrapper.requests.open(ReqIdKey(1))
+    req = ib.wrapper.requests.open(ReqIdKey(1))
     future = req.future
 
     bar = ibi.BarData(date="20251020  15:00:00")

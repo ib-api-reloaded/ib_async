@@ -71,7 +71,7 @@ def test_open_order_proto_creates_trade_via_existing_wrapper_path():
 def test_open_order_end_proto_settles_singleton_request():
     ib = ibi.IB()
     # Open a singleton waiter for the openOrders accumulator.
-    req, _ = ib.wrapper.requests.open(SingletonKey("openOrders"), container=[])
+    req = ib.wrapper.requests.open(SingletonKey("openOrders"), container=[])
     fut = req.future
     assert not fut.done()
 
@@ -130,7 +130,7 @@ def test_order_status_proto_updates_existing_trade():
 def test_contract_data_proto_appends_to_request_registry():
     ib = ibi.IB()
     req_id = 7
-    req, _ = ib.wrapper.requests.open(ReqIdKey(req_id), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(req_id), container=[])
 
     proto = ContractData_pb2.ContractData()
     proto.reqId = req_id

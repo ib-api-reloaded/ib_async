@@ -6,6 +6,8 @@ import asyncio
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+import pytest
+
 import ib_async as ibi
 from ib_async import Position, Stock
 
@@ -14,7 +16,7 @@ def _ib() -> ibi.IB:
     ib = ibi.IB()
     ib.client = MagicMock()
     ib.client.getReqId.return_value = 7
-    ib.client.isConnected.return_value = False
+    ib.client.isConnected.return_value = True
     return ib
 
 
@@ -56,3 +58,17 @@ async def test_model_rows_leave_the_account_positions_alone():
     await request
     [position] = ib.positions()
     assert position.position == Decimal(100)
+
+
+async def test_a_disconnect_surfaces_as_itself():
+    """The cancel is not sent once the connection is gone, so it cannot
+    replace the disconnect with its own error."""
+    ib = _ib()
+    request = asyncio.ensure_future(ib.reqPositionsMultiAsync("DU1", "Growth"))
+    await asyncio.sleep(0)
+    ib.client.isConnected.return_value = False
+    ib.client.cancelPositionsMulti.side_effect = ConnectionError("Not connected")
+    ib.wrapper.requests.fail_all(ConnectionError("Socket disconnect"))
+    with pytest.raises(ConnectionError, match="Socket disconnect"):
+        await request
+    ib.client.cancelPositionsMulti.assert_not_called()

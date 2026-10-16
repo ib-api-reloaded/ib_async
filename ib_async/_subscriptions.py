@@ -117,6 +117,12 @@ class Subscription:
         (bars list, scanner data list) override.
         """
 
+    def _movedTo(self, reqId: int) -> None:
+        """Take ``reqId`` as this subscription's own (it was sent again
+        under it). Subclasses whose subscriber object carries the reqId
+        (a bars list) keep it in step."""
+        self.reqId = reqId
+
 
 # ---- market-data family -----------------------------------------------------
 
@@ -190,6 +196,11 @@ class RealTimeBarsSub(Subscription):
         if self.bars is not None:
             self.bars.updateEvent.set_done()
 
+    def _movedTo(self, reqId: int) -> None:
+        super()._movedTo(reqId)
+        if self.bars is not None:
+            self.bars.reqId = reqId
+
 
 @dataclass
 class HistoricalBarsSub(Subscription):
@@ -203,6 +214,11 @@ class HistoricalBarsSub(Subscription):
     def _set_done(self) -> None:
         if self.bars is not None:
             self.bars.updateEvent.set_done()
+
+    def _movedTo(self, reqId: int) -> None:
+        super()._movedTo(reqId)
+        if self.bars is not None:
+            self.bars.reqId = reqId
 
 
 @dataclass
@@ -346,6 +362,13 @@ class SubscriptionRegistry:
             self._by_pnl_key.pop((sub.account, sub.modelCode), None)
         elif isinstance(sub, PnLSingleSub):
             self._by_pnl_single_key.pop((sub.account, sub.modelCode, sub.conId), None)
+
+    def move(self, sub: Subscription, reqId: int) -> None:
+        """Register ``sub`` under ``reqId`` instead (it was sent again
+        under it)."""
+        self._unregister(sub)
+        sub._movedTo(reqId)
+        self.add(sub)
 
     # ---- queries --------------------------------------------------------
 

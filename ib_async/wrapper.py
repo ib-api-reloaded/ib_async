@@ -20,6 +20,7 @@ from ib_async._requests import (
     RequestRegistry,
     SingletonKey,
     WhatIfKey,
+    refusedAsNone,
 )
 from ib_async._subscriptions import (
     HistoricalBarsSub,
@@ -41,6 +42,7 @@ from ib_async.depth import DepthOperation
 from ib_async.objects import (
     AccountValue,
     BarData,
+    BarDataList,
     CommissionReport,
     DepthMktDataDescription,
     Dividends,
@@ -291,6 +293,7 @@ class RequestError(Exception):
 _WARNING_CODES: Final[frozenset[int]] = frozenset(
     {105, 110, 165, 321, 329, 399, 404, 434, 492, 1100, 1101, 1102, 10167, 10349}
 )
+
 
 # Cap on the size of ``_pendingCommissionReports``. A commissionReport
 # whose execId never gets a paired execDetails on this client (e.g.
@@ -896,11 +899,10 @@ class Wrapper:
                 self._logger.info("openOrder: %s", trade)
 
             self.permId2Trade.setdefault(order.permId, trade)
-            # If a reqOpenOrdersAsync / reqAllOpenOrdersAsync is currently
-            # collecting, accumulate the snapshot; otherwise this is a
-            # live order update arriving outside any pending request and
-            # should fire the live event instead.
-            if SingletonKey("openOrders") in self.requests:
+            # An open orders request's answer, collected (or dropped, once
+            # its caller gave up on it); otherwise this is a live order
+            # update arriving outside any request and fires the live event.
+            if self.requests.answering(SingletonKey("openOrders")):
                 self.requests.append(SingletonKey("openOrders"), trade)
             else:
                 self.ib.openOrderEvent.emit(trade)
@@ -1074,7 +1076,9 @@ class Wrapper:
             contract = Contract.recreate(contract)
 
         execId = execution.execId
-        isLive = ReqIdKey(reqId) not in self.requests
+        # A row of a reqExecutions answer (even one its caller gave up on)
+        # is history; any other execution is a live fill.
+        isLive = not self.requests.answering(ReqIdKey(reqId))
         time = self.lastTime if isLive else execution.time
         # If a commissionReport for this execId arrived ahead of the
         # fill (rare cross-client / startup-replay race), drain the
@@ -1965,8 +1969,8 @@ class Wrapper:
         self.msgId2NewsBulletin[msgId] = bulletin
         self.ib.newsBulletinEvent.emit(bulletin)
 
-    def receiveFA(self, _faDataType: int, faXmlData: str):
-        self.requests.set_result(SingletonKey("requestFA"), faXmlData)
+    def receiveFA(self, faDataType: int, faXmlData: str):
+        self.requests.set_result(CompositeKey("requestFA", (faDataType,)), faXmlData)
 
     def replaceFAEnd(self, _reqId: int, _text: str):
         # No client-side waiter today; the binary path's wrap() factory
@@ -2048,13 +2052,13 @@ class Wrapper:
         self.requests.set_result(ReqIdKey(reqId), dataJson)
 
     def userInfo(self, reqId: int, whiteBrandingId: str):
-        self.requests.set_result(ReqIdKey(reqId))
+        self.requests.set_result(ReqIdKey(reqId), whiteBrandingId)
 
     def softDollarTiers(self, reqId: int, tiers: list[SoftDollarTier]):
-        pass
+        self.requests.set_result(ReqIdKey(reqId), tiers)
 
     def familyCodes(self, familyCodes: list[FamilyCode]):
-        pass
+        self.requests.set_result(SingletonKey("familyCodes"), familyCodes)
 
     def error(
         self,
@@ -2127,25 +2131,22 @@ class Wrapper:
                 self._logger.info(msg)
         else:
             self._logger.error(msg)
-            if isRequest:
+            # A bust event's request is sent again below, not refused.
+            resent = errorCode == 10225 and isinstance(
+                self.subscriptions.get_sub(reqId), HistoricalBarsSub
+            )
+            if isRequest and not resent:
                 # the request failed — settle the future via whichever
                 # typed key it was actually registered under
                 assert inflightRequest is not None  # noqa: S101 - narrows for the type checker
                 if self.ib.RaiseRequestErrors:
                     error = RequestError(reqId, errorCode, errorString)
                     self.requests.set_error(inflightRequest.key, error)
-                elif isinstance(inflightRequest.key, WhatIfKey):
-                    # A whatIf answers an OrderState, so the refusal rides on
-                    # one (never the default list accumulator, which handed
-                    # callers `[]` typed as OrderState).
-                    self.requests.set_result(
-                        inflightRequest.key,
-                        OrderState(
-                            whatIfErrorCode=errorCode, whatIfErrorString=errorString
-                        ),
-                    )
                 else:
-                    self.requests.set_result(inflightRequest.key)
+                    self.requests.refuse(inflightRequest.key, errorCode, errorString)
+            elif (owed := self.requests.owedReqIdKey(reqId)) is not None:
+                # the end of an answer owed to a request already ended
+                self.requests.set_result(owed)
             elif trade:
                 # something is wrong with the order, cancel it
                 if advancedOrderRejectJson:
@@ -2189,13 +2190,22 @@ class Wrapper:
                 self.pendingTickers.add(ticker)
         elif errorCode == 10225:
             # Bust event occurred, current subscription is deactivated.
-            # Re-subscribe immediately so bars keep flowing.
+            # Re-subscribe immediately so bars keep flowing, under a fresh
+            # reqId: whatever IBKR still sends for the old one (such as its
+            # reply to the cancel) then answers nothing.
             sub = self.subscriptions.get_sub(reqId)
+            newReqId = 0
+            if isinstance(sub, RealTimeBarsSub | HistoricalBarsSub):
+                newReqId = self.ib.client.getReqId()
+                self.subscriptions.move(sub, newReqId)
+                self._logger.info(
+                    "Bust event: reqId %s sent again as %s", reqId, newReqId
+                )
             if isinstance(sub, RealTimeBarsSub):
                 rtBars = sub.bars
                 self.ib.client.cancelRealTimeBars(reqId)
                 self.ib.client.reqRealTimeBars(
-                    reqId,
+                    newReqId,
                     rtBars.contract,
                     rtBars.barSize,
                     rtBars.whatToShow,
@@ -2204,9 +2214,22 @@ class Wrapper:
                 )
             elif isinstance(sub, HistoricalBarsSub):
                 hBars = sub.bars
+                # The answer starts over: the request awaiting it (or, once
+                # answered, a new one nobody awaits) fills the bars afresh.
+                hBars.clear()
+                moved = self.requests.move(ReqIdKey(reqId), ReqIdKey(newReqId))
+                if moved is None:
+                    unawaited = self.requests.open(
+                        ReqIdKey(newReqId),
+                        container=hBars,
+                        refusal=refusedAsNone,
+                    ).future
+                    unawaited.add_done_callback(
+                        lambda future: self._refilled(hBars, future)
+                    )
                 self.ib.client.cancelHistoricalData(reqId)
                 self.ib.client.reqHistoricalData(
-                    reqId,
+                    newReqId,
                     hBars.contract,
                     hBars.endDateTime,
                     hBars.durationStr,
@@ -2229,12 +2252,30 @@ class Wrapper:
         # data") is a warning that still completes via tickSnapshotEnd. Close
         # is idempotent, so reqTickersAsync re-closing in its ``finally`` is a
         # no-op.
+        # Likewise a keepUpToDate historical request refused before its
+        # answer: its subscription will never stream, and its caller may
+        # never get the bars to cancel it by. (A bust event's subscription
+        # moved to its fresh reqId above.)
         if not isWarning:
             sub = self.subscriptions.get_sub(reqId)
-            if isinstance(sub, MktDataSub) and sub.snapshot:
+            if (isinstance(sub, MktDataSub) and sub.snapshot) or (
+                isinstance(sub, HistoricalBarsSub) and isRequest
+            ):
                 sub.close(send_cancel=False)
 
         self.ib.errorEvent.emit(reqId, errorCode, errorString, contract)
+
+    def _refilled(self, bars: BarDataList, refill: asyncio.Future) -> None:
+        """A bust event's refill of answered ``bars`` has ended: announce
+        the bars, replaced, as an update (nobody awaits the refill), when
+        it was answered; refused (None), cancelled or failed, there is
+        nothing to announce."""
+        # exception() also retrieves an error nobody else will, so it is not
+        # logged as never retrieved
+        answered = not refill.cancelled() and refill.exception() is None
+        if answered and refill.result() is bars:
+            self.ib.barUpdateEvent.emit(bars, True)
+            bars.updateEvent.emit(bars, True)
 
     def tcpDataArrived(self):
         self.lastTime = datetime.now(self.defaultTimezone)

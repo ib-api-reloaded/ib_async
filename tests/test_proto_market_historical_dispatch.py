@@ -146,7 +146,7 @@ def test_reroute_mkt_data_req_proto_does_not_raise():
 
 def test_head_timestamp_proto_settles_reqId():
     ib = _ibAtVersion(207)
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     assert not req.future.done()
     proto = HeadTimestamp_pb2.HeadTimestamp(reqId=7, headTimestamp="20100101 09:30:00")
     ib.client.decoder.processProtoBuf(88, proto.SerializeToString())
@@ -155,7 +155,7 @@ def test_head_timestamp_proto_settles_reqId():
 
 def test_histogram_data_proto_settles_reqId_with_items():
     ib = _ibAtVersion(207)
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = HistogramData_pb2.HistogramData(reqId=7)
     e = proto.histogramDataEntries.add()
     e.price, e.size = 150.0, "100"
@@ -168,7 +168,7 @@ def test_histogram_data_proto_settles_reqId_with_items():
 
 def test_historical_data_end_proto_settles_singleton():
     ib = _ibAtVersion(207)
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = HistoricalDataEnd_pb2.HistoricalDataEnd(
         reqId=7, startDateStr="20260101", endDateStr="20260509"
     )
@@ -206,7 +206,7 @@ def test_tick_by_tick_oneof_dispatch_routes_to_all_last():
 
 def test_historical_schedule_proto_settles_reqId():
     ib = _ibAtVersion(207)
-    req, _ = ib.wrapper.requests.open(ReqIdKey(7), container=[])
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = HistoricalSchedule_pb2.HistoricalSchedule(
         reqId=7,
         startDateTime="20260509 09:30:00",

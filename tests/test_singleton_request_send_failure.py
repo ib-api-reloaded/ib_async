@@ -53,5 +53,8 @@ def test_concurrent_callers_share_one_send():
     first = ib.reqPositionsAsync()
     second = ib.reqPositionsAsync()
 
-    assert first is second
     ib.client.reqPositions.assert_called_once()
+    # Each caller has a future of its own; one answer settles both.
+    assert first is not second
+    ib.wrapper.requests.set_result(SingletonKey("positions"), ["p"])
+    assert first.result() == second.result() == ["p"]
