@@ -66,9 +66,9 @@ def normalize_none_scalars(obj: Any) -> Any:
 
 
 # These wire strings are IBKR's "unset Decimal" sentinel: max int32,
-# max int64, max double in upper-case-E scientific form, and the
-# most-negative int64. Any of these arriving as the wire string for a Decimal field
-# means "no value" — the caller's domain ``Decimal | None`` should
+# max int64, max double (in each spelling it arrives in), and the
+# most-negative int64. Any of these arriving as the wire string for a
+# Decimal field means "no value" — the caller's domain ``Decimal | None`` should
 # stay ``None`` instead of carrying a 2.1 billion or 1.8e308 fake
 # quantity that would corrupt every downstream calculation.
 _DECIMAL_UNSET_STRINGS: Final[frozenset[str]] = frozenset(
