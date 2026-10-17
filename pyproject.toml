@@ -54,7 +54,9 @@ test = [
     "pytest-xdist>=3.5,<4",
 ]
 dev = [
-    "mypy>=1.11.0",
+    # mypy runs on CPython only (CI skips it on PyPy). mypy 2 needs
+    # ast-serialize, which has no PyPy wheel.
+    "mypy>=1.11.0; implementation_name != 'pypy'",
     "ruff>=0.17.0,<0.18.0",
     { include-group = "test" },
 ]
