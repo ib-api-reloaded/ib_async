@@ -2,7 +2,52 @@
 
 # ib_async
 
-## Update
+## Versions and branches
+
+In December 2026, IBKR will require TWS / IB Gateway 10.51 or later for
+API connections. ib_async 3.0, on the `next-protobuf` branch, is the
+version built for that. After December it is the only supported version.
+Until then, 2.1.0 and the `next` branch are transitional and get no new
+features. All performance, feature and usability work goes into 3.0.
+
+|                     | 2.1.0                             | `next`                     | `next-protobuf`                    |
+| ------------------- | --------------------------------- | -------------------------- | ---------------------------------- |
+| What it is          | Released on PyPI in December 2025 | 2.x fixes made after 2.1.0 | ib_async 3.0                       |
+| Wire protocol       | IBKR's text protocol              | IBKR's text protocol       | IBKR's protobuf protocol           |
+| API server version  | Up to 178                         | Up to 178                  | Up to 226 (TWS / IB Gateway 10.51) |
+| Python              | 3.10+                             | 3.11+                      | 3.11 to 3.15, PyPy 3.11 and 3.12   |
+| After December 2026 | Legacy, unsupported               | Legacy, unsupported        | Supported                          |
+
+Three version numbers are involved, and they are often confused:
+
+- **Your TWS / IB Gateway version**, such as 10.51. IBKR sets the minimum.
+- **The API server version**, such as 178 or 226. The client and the
+  gateway agree on it when they connect: the highest version both
+  support. ib_async logs it on connect.
+- **The ib_async version**, such as 2.1.0 or 3.0.0. It decides the
+  highest API server version the client can use.
+
+Upgrading from 2.x to 3.0 changes some APIs. See the
+[changelog](docs/changelog.rst) and the [upgrade guide](docs/migration/v3.md).
+
+### Use ib_async from a checkout
+
+For a live trading system, we recommend depending on a local checkout of
+ib_async instead of the PyPI package. When you hit a problem, you can fix
+it right next to your own code and keep going, instead of waiting days to
+months for a release. Please send the fix back as a pull request too.
+
+```bash
+git clone -b next-protobuf https://github.com/ib-api-reloaded/ib_async.git
+cd ib_async
+make protos        # generates the protobuf bindings; needs uv
+cd ../your-project
+uv add --editable ../ib_async     # or: pip install -e ../ib_async
+```
+
+The protobuf bindings are generated, not committed. Run `make protos`
+again after pulling a change that updates the TWS API version pinned in
+`pyproject.toml`.
 
 ## Introduction
 
@@ -61,7 +106,7 @@ Requirements:
 - Make sure the [API port is enabled](https://ibkrcampus.com/ibkr-api-page/twsapi-doc/#tws-download) and 'Download open orders on connection' is checked.
 - You may also want to increase the Java memory usage under `Configure->Settings->Memory Allocation` to 4096 MB minimum to prevent gateway crashes when loading bulk data.
 
-The ibapi package from IB is not needed. `ib_async` implements the full IBKR API binary protocol internally.
+The ibapi package from IB is not needed. `ib_async` implements the IBKR API protocol itself.
 
 ## Build Manually
 
@@ -102,7 +147,7 @@ The Makefile encapsulates this. After `uv sync --all-groups`:
 #    on first run, then builds from the local cache.
 make protos
 
-# 2. Owned test suite (~1000 tests).
+# 2. Test suite.
 make test
 
 # 3. Linters.
@@ -120,10 +165,9 @@ the build needs. To keep building a pruned
 pin, point `IB_TWSAPI_ARCHIVE` at a copy of its archive; the pinned
 SHA256 still applies.
 
-`make help` lists every target. The build hook bundles freshly-
-generated bindings into the artifact regardless of whether
-`_pb/` was already on disk — release engineering doesn't depend
-on local state.
+`make help` lists every target. `make build` regenerates the bindings
+before building, so the wheel and sdist never depend on what is already
+in `_pb/`.
 
 ## Generate Docs
 
