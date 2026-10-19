@@ -21,9 +21,9 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "aeventkit>=3.0.0,<4.0.0",
+    "aeventkit>=3.0.1,<4.0.0",
     "anest-asyncio>=2.0.0,<3.0.0",
-    "protobuf>=5.0.0,<7.0.0",
+    "protobuf>=7.36.2,<8.0.0",
     "tzdata>=2025.2"
 ]
 
@@ -49,7 +49,7 @@ test = [
     "numpy>=2.0,<3.0; implementation_name != 'pypy'",
     # hypothesis 6.156 and later ship compiled wheels with no PyPy 3.12
     # build; 6.155.7 is the last version with a wheel for it.
-    "hypothesis>=6.100,<7; implementation_name != 'pypy' or python_version != '3.12'",
+    "hypothesis>=6.156,<7; implementation_name != 'pypy' or python_version != '3.12'",
     "hypothesis==6.155.7; implementation_name == 'pypy' and python_version == '3.12'",
     "pytest-xdist>=3.5,<4",
 ]
@@ -63,15 +63,13 @@ dev = [
 # Generating the protobuf bindings (`make protos`, release builds) only;
 # kept out of `dev` so test environments never install or build grpcio.
 protos = [
-    "grpcio-tools>=1.60.0",
+    "grpcio-tools>=1.84.0,<2.0.0",
 ]
 docs = [
-    # Python 3.12+ gets the newest releases. On 3.11 the newest
-    # sphinx-autodoc-typehints that installs targets Sphinx 8, so Sphinx
-    # stays on 8 there (Sphinx 9 deprecates the API that release uses).
-    "sphinx>=9.1.0,<10.0.0; python_version >= '3.12'",
-    "sphinx>=8.1.0,<9.0.0; python_version < '3.12'",
-    "sphinx-autodoc-typehints>=3.0.0,<4.0.0",
+    # sphinx-autodoc-typehints 3.6.1 is the last release for Python 3.11
+    # and the first for Sphinx 9. Python 3.12 and later get newer releases.
+    "sphinx>=9.0.4,<10.0.0",
+    "sphinx-autodoc-typehints>=3.6.1,<4.0.0",
     "sphinx-rtd-theme>=3.0.0,<4.0.0",
     "myst-parser>=4.0.0,<6.0.0",
     # so the API docs resolve util.df()'s return type
@@ -93,7 +91,7 @@ examples = [
 #
 # To bump: ``make twsapi-bump V=<version>`` fetches and checks the
 # archive, then rewrites the two keys below; follow with ``make
-# protos`` + tests + audit. ``make twsapi-status`` lists the versions
+# protos`` + tests. ``make twsapi-status`` lists the versions
 # IBKR still serves. The IBKR URL convention drops the first dot of
 # ``API_Version``, so 10.51.01 → 1051.01.
 version = "1051.01"
