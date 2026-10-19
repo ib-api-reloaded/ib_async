@@ -21,21 +21,27 @@ jobs:
       name: github-pages
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: 3.12
 
       - name: Install uv toolchain
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.2
 
       - name: Install dependencies
         run: |
           uv sync --frozen --group docs
+
+      # The API pages import ib_async, which needs the generated bindings.
+      - name: Generate protobuf bindings
+        run: make protos
+        env:
+          UV_FROZEN: "1"
 
       - name: Build documentation
         run: |
@@ -45,10 +51,10 @@ jobs:
 
       - name: Upload documentation artifact
         if: ${{ github.event_name == 'push' }}
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: html
 
       - name: Deploy documentation
         if: ${{ github.event_name == 'push' }}
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

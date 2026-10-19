@@ -24,15 +24,15 @@ jobs:
       UV_FROZEN: "1"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.3.2
 
       - name: Read TWS API version pin
         id: twsapi
@@ -45,7 +45,7 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - name: Cache TWS API archive
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ib_async/twsapi-${{ steps.twsapi.outputs.version }}
           key: twsapi-${{ steps.twsapi.outputs.version }}
@@ -53,7 +53,7 @@ jobs:
       - name: Generate protobuf bindings
         run: make protos
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pb-bindings
           path: ib_async/_pb/
@@ -75,19 +75,19 @@ jobs:
       UV_FROZEN: "1"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.3.2
 
       - name: Download the protobuf bindings from the protos job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: pb-bindings
           path: ib_async/_pb/
@@ -122,15 +122,15 @@ jobs:
         python-version: ["3.11", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.3.2
 
       - name: Read TWS API version pin
         id: twsapi
@@ -140,7 +140,7 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - name: Cache TWS API archive
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ib_async/twsapi-${{ steps.twsapi.outputs.version }}
           key: twsapi-${{ steps.twsapi.outputs.version }}
