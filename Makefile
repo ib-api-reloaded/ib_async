@@ -9,11 +9,15 @@
 # bindings bundled into the package without needing ``protoc`` or
 # ``grpcio-tools``.
 
-.PHONY: help sync protos ordertypes datarequests audit twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck lint test test-report test-deep test-matrix test-repeat examples-check format clean
+.PHONY: help sync protos ordertypes datarequests twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck prettier lint test test-report test-deep test-matrix test-repeat examples-check format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
 RELEASEKIT ?= releasekit
+# Markdown, YAML and JSON formatting. The version is pinned so local runs
+# and CI format the same way.
+PRETTIER ?= npx --yes prettier@3.9.10
+PRETTIER_FILES := git ls-files -z "*.md" "*.yml" "*.yaml" "*.json"
 
 # test: per-test limit, and extra `uv run` arguments. To test against a
 # sibling checkout before its release, do not set UV_RUN_ARGS by hand.
@@ -36,7 +40,7 @@ help:
 	@echo "  twsapi-bump V=<version> - re-pin TWS API (fetch, verify, prime cache)"
 	@echo "  build    - regenerate protos, then build sdist + wheel into dist/"
 	@echo "  release-check - every reason not to publish this version now"
-	@echo "  release  - protos + lint + audit + test, build from HEAD, smoke install; no upload"
+	@echo "  release  - protos + lint + test, build from HEAD, smoke install; no upload"
 	@echo "  publish-dry-run - everything publish does locally; prints the upload and tag steps"
 	@echo "  publish  - release, upload to PyPI, tag, verify the published release"
 	@echo "  publish-test - the same against TestPyPI"
@@ -53,8 +57,9 @@ help:
 	@echo "  examples-check  - lint, typecheck and structure-check examples/ (never connects)"
 	@echo "  ruff     - ruff check + ruff format --check"
 	@echo "  typecheck - mypy"
-	@echo "  lint     - ruff + typecheck"
-	@echo "  format   - ruff format"
+	@echo "  prettier - prettier --check on the tracked Markdown, YAML and JSON"
+	@echo "  lint     - ruff + typecheck + prettier"
+	@echo "  format   - ruff format and prettier --write"
 	@echo "  clean    - remove dist/, build/, $(PB_DIR)/, caches"
 
 sync:
@@ -92,8 +97,8 @@ twsapi-bump:
 build: protos
 	uv build
 
-# Release pipeline (steps in [tool.releasekit]): protos, lint, audit and
-# tests in the working tree; then protos and build in a clean export of
+# Release pipeline (steps in [tool.releasekit]): protos, lint and tests
+# in the working tree; then protos and build in a clean export of
 # HEAD, metadata check and a clean-environment smoke install. ``publish``
 # adds the preflight checks (pushed, untagged, unpublished, higher
 # version, changelog), the upload, the tag and a smoke install from PyPI.
@@ -123,7 +128,10 @@ ruff:
 typecheck:
 	uv run mypy --pretty ib_async/
 
-lint: ruff typecheck
+prettier:
+	$(PRETTIER_FILES) | xargs -0 $(PRETTIER) --check
+
+lint: ruff typecheck prettier
 
 test:
 	uv run --no-dev --group test $(UV_RUN_ARGS) $(PYTEST)
@@ -165,6 +173,7 @@ examples-check:
 
 format:
 	uv run python -m ruff format ib_async/ tests/
+	$(PRETTIER_FILES) | xargs -0 $(PRETTIER) --write --log-level warn
 
 clean:
 	rm -rf dist/ build/ $(PB_DIR)/ .mypy_cache/ .ruff_cache/

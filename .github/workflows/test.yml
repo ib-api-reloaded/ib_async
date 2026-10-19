@@ -95,6 +95,11 @@ jobs:
       - name: Ruff
         run: make ruff
 
+      - name: Prettier
+        # Formatting does not depend on the interpreter, so one is enough.
+        if: ${{ matrix.python-version == '3.14' }}
+        run: make prettier
+
       - name: MyPy
         if: ${{ !startsWith(matrix.python-version, 'pypy') }}
         run: make typecheck
