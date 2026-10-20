@@ -528,6 +528,8 @@ are fixed in v3.0:
   protobuf branch so it applies on both wire paths.
 * **``tickOptionComputation``** correctly maps the ``-2`` sentinel
   to ``None`` for vega and theta (was a tautology returning ``-2.0``).
+  A volatility, price or greek missing from a protobuf message is
+  ``None`` too. It was ``0.0``, which read as a computed value.
 * **``PnLSingle.position``** no longer truncates fractional positions
   to ``int``.
 * **``HistogramData.size``** is now a ``Decimal`` (was buggy

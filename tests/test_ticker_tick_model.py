@@ -336,16 +336,17 @@ class TickProcessing(RuleBasedStateMachine):
         tickType=st.sampled_from(sorted(GREEKS_TICK_MAP)),
         values=st.lists(
             st.one_of(
-                st.sampled_from([-1.0, -2.0]),
+                st.sampled_from([-1.0, -2.0, None]),
                 st.floats(0, 5).map(lambda v: round(v, 4)),
             ),
             min_size=8,
             max_size=8,
         ),
     )
-    def option_computation(self, tickType: int, values: list[float]) -> None:
+    def option_computation(self, tickType: int, values: list[float | None]) -> None:
         """Send greeks. IBKR sends -1 for an unknown price or volatility and
-        -2 for an unknown greek. The Ticker stores both as None."""
+        -2 for an unknown greek. A value missing from a protobuf message
+        arrives as None. The Ticker stores all three as None."""
         self.wrapper.tickOptionComputation(self.reqId, tickType, 1, *values)
         unset = (-1, -2, -1, -1, -2, -2, -2, -1)
         shown = [None if v == u else v for v, u in zip(values, unset, strict=True)]

@@ -12,10 +12,9 @@ working.
 It covers ``MARKET_DEPTH``, ``MARKET_DEPTH_L2``,
 ``MKT_DEPTH_EXCHANGES``, ``REROUTE_MKT_DATA_REQ``,
 ``REROUTE_MKT_DEPTH_REQ`` and ``DELTA_NEUTRAL_VALIDATION`` too. The
-tickOptionComputation shape mirrors the binary path's silent treatment
-of IBKR's sentinels (``-1``, ``-2``) so the wrapper's existing
-``tickOptionComputation`` ``if x != -1 else None`` logic continues to
-apply post-decode.
+tickOptionComputation values pass IBKR's "not computed" values (``-1``,
+``-2``) through, as the binary path does, and the wrapper maps them to
+``None``. A value missing from the message decodes to ``None``.
 
 Wire shapes:
 
@@ -146,14 +145,14 @@ class TickOptionComputationArgs:
     reqId: int
     tickType: int
     tickAttrib: int
-    impliedVol: float
-    delta: float
-    optPrice: float
-    pvDividend: float
-    gamma: float
-    vega: float
-    theta: float
-    undPrice: float
+    impliedVol: float | None
+    delta: float | None
+    optPrice: float | None
+    pvDividend: float | None
+    gamma: float | None
+    vega: float | None
+    theta: float | None
+    undPrice: float | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -367,23 +366,22 @@ def createTickOptionComputationArgs(
     """``Wrapper.tickOptionComputation(reqId, tickType, tickAttrib, impliedVol,
     delta, optPrice, pvDividend, gamma, vega, theta, undPrice)`` args.
 
-    The wrapper itself maps IBKR sentinels (``-1``, ``-2``) to ``None``
-    on the resulting ``OptionComputation`` so we pass the wire values
-    through unchanged. Unset doubles default to 0.0; the wrapper's
-    sentinel checks treat ``0.0`` as "real value", so negative
-    sentinels are produced only when the wire actually carries them.
+    The wire values pass through unchanged. The wrapper maps IBKR's
+    "not computed" values (``-1``, ``-2``) to ``None`` on the resulting
+    ``OptionComputation``. A value missing from the message is ``None``
+    too, never ``0.0``, which would read as a computed value.
     """
     reqId = proto.reqId if proto.HasField("reqId") else 0
     tickType = proto.tickType if proto.HasField("tickType") else 0
     tickAttrib = proto.tickAttrib if proto.HasField("tickAttrib") else 0
-    impliedVol = float(proto.impliedVol) if proto.HasField("impliedVol") else 0.0
-    delta = float(proto.delta) if proto.HasField("delta") else 0.0
-    optPrice = float(proto.optPrice) if proto.HasField("optPrice") else 0.0
-    pvDividend = float(proto.pvDividend) if proto.HasField("pvDividend") else 0.0
-    gamma = float(proto.gamma) if proto.HasField("gamma") else 0.0
-    vega = float(proto.vega) if proto.HasField("vega") else 0.0
-    theta = float(proto.theta) if proto.HasField("theta") else 0.0
-    undPrice = float(proto.undPrice) if proto.HasField("undPrice") else 0.0
+    impliedVol = float(proto.impliedVol) if proto.HasField("impliedVol") else None
+    delta = float(proto.delta) if proto.HasField("delta") else None
+    optPrice = float(proto.optPrice) if proto.HasField("optPrice") else None
+    pvDividend = float(proto.pvDividend) if proto.HasField("pvDividend") else None
+    gamma = float(proto.gamma) if proto.HasField("gamma") else None
+    vega = float(proto.vega) if proto.HasField("vega") else None
+    theta = float(proto.theta) if proto.HasField("theta") else None
+    undPrice = float(proto.undPrice) if proto.HasField("undPrice") else None
     return TickOptionComputationArgs(
         reqId=reqId,
         tickType=tickType,

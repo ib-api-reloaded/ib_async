@@ -69,6 +69,10 @@ from ib_async._proto.market_data import (
     createUpdateMktDepthL2Args,
     dispatchTickByTick,
 )
+from ib_async._server_versions import MAX_CLIENT_VER
+from ib_async.decoder import Decoder
+from ib_async.util import getLoop
+from tests._sim import SimulatedTws
 
 # ---------------------------------------------------------------------------
 # TickPrice — combined price + size
@@ -207,8 +211,37 @@ def test_tick_option_computation_empty_proto():
     assert args.reqId == 0
     assert args.tickType == 0
     assert args.tickAttrib == 0
-    assert args.impliedVol == 0.0
-    assert args.undPrice == 0.0
+    # A value IBKR did not send is unknown, not 0.0.
+    assert args.impliedVol is None
+    assert args.delta is None
+    assert args.optPrice is None
+    assert args.pvDividend is None
+    assert args.gamma is None
+    assert args.vega is None
+    assert args.theta is None
+    assert args.undPrice is None
+
+
+def test_tick_option_computation_missing_greeks_reach_the_ticker_as_none():
+    tws = SimulatedTws(getLoop())
+    ticker = tws.ib.reqMktData(ibi.Stock("A", "SMART", "USD", conId=10))
+    reqId = tws.asks[-1].reqId
+    tws.run()
+    proto = TickOptionComputation_pb2.TickOptionComputation(
+        reqId=reqId,
+        tickType=13,  # model greeks
+        tickAttrib=1,
+        impliedVol=0.25,
+        delta=0.5,
+        optPrice=1.5,
+        gamma=0.05,
+        undPrice=100.0,
+    )
+    Decoder(tws.wrapper, MAX_CLIENT_VER)._protoTickOptionComputation(proto)
+    greeks = ticker.modelGreeks
+    assert greeks is not None
+    assert (greeks.pvDividend, greeks.vega, greeks.theta) == (None, None, None)
+    assert (greeks.delta, greeks.gamma, greeks.undPrice) == (0.5, 0.05, 100.0)
 
 
 def test_tick_option_computation_full_round_trip():
