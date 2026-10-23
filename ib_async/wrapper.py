@@ -2158,6 +2158,9 @@ class Wrapper:
                 self._logger.info(msg)
         else:
             self._logger.error(msg)
+            # Before the API starts, an error is the reason TWS refuses
+            # the connection, such as 326 for a client id already in use.
+            self.ib.client.startupError(errorCode, errorString)
             # A bust event's request is sent again below, not refused.
             resent = errorCode == 10225 and isinstance(
                 self.subscriptions.get_sub(reqId), HistoricalBarsSub

@@ -205,11 +205,17 @@ class Client:
         self.clientId = -1
         self.optCapab = ""
         self.connectOptions = b""
+        # Set while connectAsync waits for the API to start. A disconnect
+        # before the start fails it, so connectAsync raises at once.
+        self._apiStarting: asyncio.Future[None] | None = None
         self.reset()
 
     def reset(self):
         self.connState = Client.DISCONNECTED
         self._apiReady = False
+        # The server's error from before the API started, such as 326
+        # for a client id already in use. TWS closes the socket after it.
+        self._refusal = ""
         self._serverVersion = 0
         self._data = b""
         self._hasReqId = False
@@ -366,6 +372,7 @@ class Client:
             self.port = int(port)
             self.clientId = int(clientId)
             self.connState = Client.CONNECTING
+            self._apiStarting = getLoop().create_future()
             timeout = timeout or None
             await asyncio.wait_for(self.conn.connectAsync(host, port), timeout)
             self._logger.info("Connected")
@@ -378,7 +385,7 @@ class Client:
                 )
             )
             self.conn.sendMsg(msg)
-            await asyncio.wait_for(self.apiStart, timeout)
+            await asyncio.wait_for(self._apiStarting, timeout)
             self._logger.info("API connection ready")
         except BaseException as e:
             self.disconnect()
@@ -404,6 +411,7 @@ class Client:
         # becomes a no-op (just logs "Disconnected.").
         wasReady = self.isReady()
         self.connState = Client.DISCONNECTED
+        self._failApiStart("Disconnected before the API started")
         self.conn.disconnect()
         if wasReady:
             self.wrapper.connectionClosed()
@@ -527,8 +535,7 @@ class Client:
                         elif canonicalMsgId == 15:
                             self._accounts = list(self.wrapper.accounts)
                         if self._hasReqId and self._accounts:
-                            self._apiReady = True
-                            self.apiStart.emit()
+                            self._startedApi()
                     continue
                 fields = [
                     str(wireMsgId),
@@ -567,8 +574,7 @@ class Client:
                         _, _, accts = fields
                         self._accounts = [a for a in accts.split(",") if a]
                     if self._hasReqId and self._accounts:
-                        self._apiReady = True
-                        self.apiStart.emit()
+                        self._startedApi()
 
                 # decode and handle the message
                 self.decoder.interpret(fields)
@@ -576,18 +582,46 @@ class Client:
         if self._tcpDataProcessed:
             self._tcpDataProcessed()
 
+    def _startedApi(self) -> None:
+        self._apiReady = True
+        if self._apiStarting is not None and not self._apiStarting.done():
+            self._apiStarting.set_result(None)
+        self.apiStart.emit()
+
+    def _failApiStart(self, reason: str) -> None:
+        if self._apiStarting is not None and not self._apiStarting.done():
+            self._apiStarting.set_exception(ConnectionError(reason))
+
+    def startupError(self, errorCode: int, errorString: str) -> None:
+        """Record a server error that arrived before the API started.
+
+        TWS sends an error such as 326 (client id already in use) and
+        then closes the socket. The close fails ``connectAsync`` with
+        this error as the reason. After the API starts this does nothing.
+        """
+        if not self._apiReady:
+            self._refusal = f"Error {errorCode}: {errorString}"
+
     def _onSocketDisconnected(self, msg):
         wasReady = self.isReady()
         if not self.isConnected():
             self._logger.info("Disconnected.")
         elif not msg:
-            msg = "Peer closed connection."
-            if not wasReady:
-                msg += f" clientId {self.clientId} already in use?"
+            if self._refusal:
+                msg = f"Peer closed connection after {self._refusal}"
+            else:
+                msg = "Peer closed connection."
+                if not wasReady:
+                    msg += f" clientId {self.clientId} already in use?"
 
         if msg:
             self._logger.error(msg)
             self.apiError.emit(msg)
+
+        if not wasReady:
+            self._failApiStart(
+                self._refusal or msg or "Peer closed connection during the handshake"
+            )
 
         # ``connectionClosed`` is the single teardown path: it fails
         # every in-flight request, closes every Subscription, sets done

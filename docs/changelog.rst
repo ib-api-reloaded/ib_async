@@ -375,6 +375,15 @@ are fixed in v3.0:
 * **``connect`` requested positions whatever ``fetchFields`` said**;
   ``StartupFetch.POSITIONS`` now controls it like the other fields.
   (:issue:`84`)
+* **``connect`` waited out its timeout when TWS refused the connection.**
+  For a client id already in use, TWS sends error 326 and closes the
+  socket. ``connect`` kept waiting for the API to start, and with
+  ``timeout=0`` it waited forever. A close before the API starts now
+  raises ``ConnectionError`` at once, with the server's error as the
+  message: ``Error 326: Unable to connect as the client id is already in
+  use. Retry with a unique client id.`` A server too old for the client
+  and a ``disconnect()`` during the connect raise it too. (:issue:`242`,
+  thanks to @daniel-debrun)
 * **``util.useQt`` with PySide6** runs Qt's loop with ``exec()``; it used
   the deprecated ``exec_()``. (:issue:`134`, thanks to @Flippo24)
 * **``IBC(twsVersion=...)`` takes a string**, as macOS needs: ``"10.19"``,
@@ -591,8 +600,8 @@ are fixed in v3.0:
   of ``pip install ib_async`` get the bindings without needing
   ``protoc`` or ``grpcio-tools``; only the runtime ``protobuf``
   dependency is declared. ``scripts/release.py`` orchestrates the
-  full pipeline (fetch + extract → generate → ruff + mypy → parity
-  audit → owned tests → ``uv build`` → clean-venv smoke install).
+  full pipeline (fetch + extract → generate → ruff + mypy → owned
+  tests → ``uv build`` → clean-venv smoke install).
   Publishing is gated behind ``--publish``.
 * **Makefile** targets: ``make protos`` / ``make build`` /
   ``make release`` / ``make publish`` / ``make test`` /

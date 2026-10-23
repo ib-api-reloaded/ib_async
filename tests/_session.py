@@ -11,13 +11,13 @@ import asyncio
 import struct
 
 import ib_async as ibi
-from ib_async._pb import ManagedAccounts_pb2, NextValidId_pb2
+from ib_async._pb import ErrorMessage_pb2, ManagedAccounts_pb2, NextValidId_pb2
 from ib_async._pb_msgids import PROTOBUF_MSG_ID
 from ib_async._server_versions import MAX_CLIENT_VER
 from ib_async.client import Client
 from ib_async.util import getLoop
 
-NEXT_VALID_ID, MANAGED_ACCOUNTS = 9, 15
+ERROR, NEXT_VALID_ID, MANAGED_ACCOUNTS = 4, 9, 15
 
 
 class RecordingConnection:
@@ -101,6 +101,17 @@ def managedAccountsFrame(accounts: list[str], proto: bool) -> bytes:
     return frame(
         struct.pack(">I", PROTOBUF_MSG_ID + MANAGED_ACCOUNTS)
         + message.SerializeToString()
+    )
+
+
+def errorFrame(reqId: int, errorCode: int, errorMsg: str, proto: bool) -> bytes:
+    if not proto:
+        return binaryFrame(ERROR, str(reqId), str(errorCode), errorMsg, "", "0")
+    message = ErrorMessage_pb2.ErrorMessage(
+        id=reqId, errorCode=errorCode, errorMsg=errorMsg
+    )
+    return frame(
+        struct.pack(">I", PROTOBUF_MSG_ID + ERROR) + message.SerializeToString()
     )
 
 

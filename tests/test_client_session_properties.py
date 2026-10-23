@@ -24,6 +24,7 @@ from ib_async.client import Client
 from tests._property import examples
 from tests._session import (
     Session,
+    errorFrame,
     handshake,
     managedAccountsFrame,
     nextValidIdFrame,
@@ -112,18 +113,107 @@ def test_peer_close_before_connect_emits_no_events():
     assert session.client.connState == Client.DISCONNECTED
 
 
-def test_peer_close_before_api_ready_reports_client_id_in_use():
+def test_peer_close_before_api_ready_fails_connect():
     session = Session()
     task = session.connect(clientId=3)
     session.receive(handshake(MAX_CLIENT_VER))
     with patch.object(session.ib.wrapper, "connectionClosed") as closed:
         session.client._onSocketDisconnected("")
+        session.run()
     closed.assert_not_called()
     assert session.ended == 0
-    assert session.errors == ["Peer closed connection. clientId 3 already in use?"]
+    reason = "Peer closed connection. clientId 3 already in use?"
+    assert session.errors[0] == reason
     assert session.client.connState == Client.DISCONNECTED
-    task.cancel()
+    error = task.exception()
+    assert isinstance(error, ConnectionError) and str(error) == reason
+
+
+CLIENT_ID_IN_USE = (
+    "Unable to connect as the client id is already in use. "
+    "Retry with a unique client id."
+)
+
+
+@given(
+    version=st.integers(MIN_SERVER_VER_PROTOBUF, MAX_CLIENT_VER), proto=st.booleans()
+)
+@examples()
+def test_client_id_in_use_fails_connect_with_the_server_error(version, proto):
+    # TWS answers startApi with error 326 and closes the socket. connect
+    # has no timeout here, so only the close can end it.
+    session = Session()
+    task = session.connect(clientId=3)
+    session.receive(handshake(version), errorFrame(-1, 326, CLIENT_ID_IN_USE, proto))
+    assert not task.done()
+    session.client._onSocketDisconnected("")
     session.run()
+    error = task.exception()
+    assert isinstance(error, ConnectionError)
+    assert str(error) == f"Error 326: {CLIENT_ID_IN_USE}"
+    assert (
+        session.errors[0]
+        == f"Peer closed connection after Error 326: {CLIENT_ID_IN_USE}"
+    )
+    assert session.started == 0 and not session.client.isConnected()
+
+
+def test_peer_close_during_handshake_fails_connect():
+    session = Session()
+    task = session.connect()
+    session.client._onSocketDisconnected("")
+    session.run()
+    error = task.exception()
+    assert isinstance(error, ConnectionError)
+    assert str(error) == "Peer closed connection during the handshake"
+
+
+def test_client_disconnect_while_connecting_fails_connect():
+    session = Session()
+    task = session.connect()
+    session.receive(handshake(MAX_CLIENT_VER))
+    session.client.disconnect()
+    session.run()
+    error = task.exception()
+    assert isinstance(error, ConnectionError)
+    assert str(error) == "Disconnected before the API started"
+
+
+def test_server_too_old_fails_connect():
+    session = Session()
+    task = session.connect()
+    session.receive(handshake(Client.MinClientVersion - 1))
+    error = task.exception()
+    assert isinstance(error, ConnectionError)
+    assert str(error) == "TWS/gateway version must be >= 972"
+    assert session.conn.closed >= 1
+
+
+def test_error_after_api_start_does_not_mark_a_refusal():
+    session = Session()
+    ready(session)
+    session.receive(
+        errorFrame(-1, 1100, "Connectivity between IBKR and TWS lost.", False)
+    )
+    session.client._onSocketDisconnected("")
+    assert session.errors == ["Peer closed connection."]
+
+
+def test_ib_connect_raises_client_id_in_use():
+    session = Session()
+    task = session.loop.create_task(
+        session.ib.connectAsync("127.0.0.1", 7497, clientId=3, timeout=0)
+    )
+    session.run()
+    session.receive(
+        handshake(MAX_CLIENT_VER), errorFrame(-1, 326, CLIENT_ID_IN_USE, True)
+    )
+    session.client._onSocketDisconnected("")
+    session.run()
+    error = task.exception()
+    assert isinstance(error, ConnectionError)
+    assert str(error) == f"Error 326: {CLIENT_ID_IN_USE}"
+    assert not session.ib.isConnected()
 
 
 def test_peer_close_after_api_ready_tears_down_once():
