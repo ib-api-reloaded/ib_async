@@ -1,5 +1,3 @@
-# Adapted from https://tomasfarias.dev/articles/sphinx-docs-with-poetry-and-github-pages/
-# (the original used Poetry; this project is uv/PEP 621 only.)
 name: docs
 on:
   push:
