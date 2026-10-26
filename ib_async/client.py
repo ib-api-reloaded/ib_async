@@ -395,6 +395,14 @@ class Client:
             if isinstance(e, ConnectionRefusedError):
                 self._logger.error("Make sure API port on TWS/IBG is open")
             raise
+        finally:
+            # The future lives only for this call. A refused or timed-out
+            # socket connect raises before the await, and disconnect() then
+            # fails the future with nobody waiting on it, so read its
+            # failure here; otherwise the loop reports it as never retrieved.
+            starting, self._apiStarting = self._apiStarting, None
+            if starting is not None and starting.done() and not starting.cancelled():
+                starting.exception()
 
     def disconnect(self):
         """Disconnect from IB connection."""

@@ -13,6 +13,7 @@ state.
 from __future__ import annotations
 
 import asyncio
+import gc
 from unittest.mock import patch
 
 import pytest
@@ -23,6 +24,7 @@ from ib_async._server_versions import MAX_CLIENT_VER, MIN_SERVER_VER_PROTOBUF
 from ib_async.client import Client
 from tests._property import examples
 from tests._session import (
+    RecordingConnection,
     Session,
     errorFrame,
     handshake,
@@ -177,6 +179,34 @@ def test_client_disconnect_while_connecting_fails_connect():
     error = task.exception()
     assert isinstance(error, ConnectionError)
     assert str(error) == "Disconnected before the API started"
+
+
+class RefusingConnection(RecordingConnection):
+    """A fake connection whose socket connect is refused, as while TWS
+    restarts and its API port is closed."""
+
+    async def connectAsync(self, host: str, port: int) -> None:
+        raise ConnectionRefusedError(111, "Connect call failed")
+
+
+def test_refused_socket_connect_reports_nothing_to_the_loop():
+    # A caller retries while the port refuses. Each attempt raises from
+    # connectAsync and leaves no unread future failure for the loop's
+    # exception handler, which an interactive app shows as a crash.
+    session = Session()
+    session.client.conn = RefusingConnection()  # type: ignore[assignment]
+    reported: list[dict[str, object]] = []
+    session.loop.set_exception_handler(lambda loop, context: reported.append(context))
+    try:
+        for _ in range(2):
+            task = session.connect()
+            assert isinstance(task.exception(), ConnectionRefusedError)
+            del task
+        gc.collect()
+    finally:
+        session.loop.set_exception_handler(None)
+    assert reported == []
+    assert session.client._apiStarting is None
 
 
 def test_server_too_old_fails_connect():
