@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import Flag, auto
 from operator import attrgetter
-from typing import Any, Self
+from typing import Any, Generic, Self, overload
 
 from eventkit import Event
 
@@ -53,6 +53,7 @@ from ib_async.objects import (
     AccountValue,
     BarDataList,
     DepthMktDataDescription,
+    EmptyT,
     Execution,
     ExecutionFilter,
     Fill,
@@ -190,7 +191,7 @@ def _optionSearches(underlying: Contract, months: Sequence[str]) -> list[Contrac
     ]
 
 
-class IB:
+class IB(Generic[EmptyT]):
     """
     Provides both a blocking and an asynchronous interface
     to the IB API, using asyncio networking and event loop.
@@ -394,9 +395,21 @@ class IB:
     MaxSyncedSubAccounts: int = 50
     TimezoneTWS: str = ""
 
-    def __init__(self, defaults: IBDefaults | None = None):
+    @overload
+    def __init__(self: IB[None], defaults: None = None) -> None: ...
+
+    @overload
+    def __init__(self, defaults: IBDefaults[EmptyT]) -> None: ...
+
+    def __init__(self, defaults: IBDefaults[EmptyT] | None = None) -> None:
+        """``defaults`` sets the values market data shows where IBKR has no
+        number (see :class:`.IBDefaults`); its ``EmptyT`` is this IB's.
+        Each IB gets its own ``IBDefaults()`` when none is given."""
         self._createEvents()
-        self.wrapper = Wrapper(self, defaults=defaults or IBDefaults())
+        # Without ``defaults`` the Wrapper's field factory makes the IB's own.
+        self.wrapper: Wrapper[EmptyT] = (
+            Wrapper(self) if defaults is None else Wrapper(self, defaults=defaults)
+        )
         self.client = Client(self.wrapper)
         self.errorEvent += self._onError
         self.client.apiEnd += self.disconnectedEvent
@@ -941,7 +954,7 @@ class IB:
         """List of all executions from this session."""
         return [fill.execution for fill in self.wrapper.fills.values()]
 
-    def ticker(self, contract: Contract) -> Ticker | None:
+    def ticker(self, contract: Contract) -> Ticker[EmptyT] | None:
         """
         Get ticker of the given contract. It must have been requested before
         with reqMktData with the same contract object. The ticker may not be
@@ -952,11 +965,11 @@ class IB:
         """
         return self.wrapper.subscriptions.ticker_for_contract(contract)
 
-    def tickers(self) -> list[Ticker]:
+    def tickers(self) -> list[Ticker[EmptyT]]:
         """Get a list of all tickers."""
         return self.wrapper.subscriptions.pooled_tickers()
 
-    def pendingTickers(self) -> list[Ticker]:
+    def pendingTickers(self) -> list[Ticker[EmptyT]]:
         """Get a list of all tickers that have pending ticks or domTicks."""
         return list(self.wrapper.pendingTickers)
 
@@ -996,7 +1009,7 @@ class IB:
 
     def reqTickers(
         self, *contracts: Contract, regulatorySnapshot: bool = False
-    ) -> list[Ticker]:
+    ) -> list[Ticker[EmptyT]]:
         """
         Request and return a list of snapshot tickers.
         The list is returned when all tickers are ready.
@@ -1821,7 +1834,7 @@ class IB:
         snapshot: bool = False,
         regulatorySnapshot: bool = False,
         mktDataOptions: Sequence[TagValue] = (),
-    ) -> Ticker:
+    ) -> Ticker[EmptyT]:
         """
         Subscribe to tick data or request a snapshot.
         Returns the Ticker that holds the market data. The ticker will
@@ -1963,7 +1976,7 @@ class IB:
         tickType: str,
         numberOfTicks: int = 0,
         ignoreSize: bool = False,
-    ) -> Ticker:
+    ) -> Ticker[EmptyT]:
         """
         Subscribe to tick-by-tick data and return the Ticker that
         holds the ticks in ticker.tickByTicks.
@@ -2046,7 +2059,7 @@ class IB:
         numRows: int = 5,
         isSmartDepth: bool = False,
         mktDepthOptions=None,
-    ) -> Ticker:
+    ) -> Ticker[EmptyT]:
         """
         Subscribe to market depth data (a.k.a. DOM, L2 or order book).
 
@@ -2800,7 +2813,7 @@ class IB:
 
     async def reqTickersAsync(
         self, *contracts: Contract, regulatorySnapshot: bool = False
-    ) -> list[Ticker]:
+    ) -> list[Ticker[EmptyT]]:
         """Async sibling of :meth:`reqTickers`.
 
         Each returned Ticker is a *private*, point-in-time snapshot object,
@@ -2816,8 +2829,8 @@ class IB:
         # concurrent snapshots for the same contract coexist with each
         # other (and with any live streaming subscription).
         futures: list[Awaitable[Any]] = []
-        subs: list[MktDataSub] = []
-        tickers: list[Ticker] = []
+        subs: list[MktDataSub[EmptyT]] = []
+        tickers: list[Ticker[EmptyT]] = []
         for contract in contracts:
             opened = self._openReqIdRequest(contract=contract)
             futures.append(opened.future)

@@ -17,8 +17,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, Protocol, TypeVar
 
+from ib_async.objects import EmptyT
 from ib_async.ticker import Ticker
 
 if TYPE_CHECKING:
@@ -40,6 +41,15 @@ _S = TypeVar("_S", bound="Subscription")
 # --------------------------------------------------------------------------
 # Subscription base + concrete types
 # --------------------------------------------------------------------------
+
+
+class _Registered(Protocol):
+    """What a :class:`Subscription` needs from the registry it is in: the
+    client to send its cancel with, and the indexes to leave on close."""
+
+    def _cancelClient(self) -> Client | None: ...
+
+    def _unregister(self, sub: Subscription) -> None: ...
 
 
 @dataclass
@@ -71,7 +81,7 @@ class Subscription:
 
     # Set by :meth:`SubscriptionRegistry.add`. Cleared on close. Not part
     # of the public API.
-    _registry: SubscriptionRegistry | None = field(default=None, repr=False)
+    _registry: _Registered | None = field(default=None, repr=False)
 
     # ---- public API ------------------------------------------------------
 
@@ -94,8 +104,8 @@ class Subscription:
         self.closed = True
         registry = self._registry
         try:
-            if send_cancel and registry is not None and registry._wrapper is not None:
-                client = registry._wrapper.ib.client
+            if send_cancel and registry is not None:
+                client = registry._cancelClient()
                 if client is not None:
                     self._send_cancel(client)
         finally:
@@ -128,7 +138,7 @@ class Subscription:
 
 
 @dataclass
-class MktDataSub(Subscription):
+class MktDataSub(Subscription, Generic[EmptyT]):
     """``IB.reqMktData`` — streaming top-of-book + generic ticks.
 
     A streaming subscription's :class:`Ticker` is shared per contract by
@@ -140,7 +150,7 @@ class MktDataSub(Subscription):
 
     KIND: ClassVar[str | None] = "mktData"
 
-    ticker: Ticker = None  # type: ignore[assignment]
+    ticker: Ticker[EmptyT] = None  # type: ignore[assignment]
     snapshot: bool = False
     genericTickList: str = ""
 
@@ -156,7 +166,7 @@ class MktDataSub(Subscription):
 
 
 @dataclass
-class TickByTickSub(Subscription):
+class TickByTickSub(Subscription, Generic[EmptyT]):
     """``IB.reqTickByTickData`` — per-trade or per-quote stream.
 
     The four IB tick types (``"Last"``, ``"AllLast"``, ``"BidAsk"``,
@@ -166,7 +176,7 @@ class TickByTickSub(Subscription):
     instance can have its own kind without mutating shared state.
     """
 
-    ticker: Ticker = None  # type: ignore[assignment]
+    ticker: Ticker[EmptyT] = None  # type: ignore[assignment]
     tickType: str = ""
 
     def _send_cancel(self, client: Client) -> None:
@@ -174,12 +184,12 @@ class TickByTickSub(Subscription):
 
 
 @dataclass
-class MktDepthSub(Subscription):
+class MktDepthSub(Subscription, Generic[EmptyT]):
     """``IB.reqMktDepth`` — DOM (level-2) book updates."""
 
     KIND: ClassVar[str | None] = "mktDepth"
 
-    ticker: Ticker = None  # type: ignore[assignment]
+    ticker: Ticker[EmptyT] = None  # type: ignore[assignment]
     isSmartDepth: bool = False
 
     def _send_cancel(self, client: Client) -> None:
@@ -275,7 +285,7 @@ class PnLSingleSub(Subscription):
 
 
 @dataclass(slots=True, eq=False)
-class SubscriptionRegistry:
+class SubscriptionRegistry(Generic[EmptyT]):
     """Owns lifecycle and lookup for every live :class:`Subscription`.
 
     The registry is the single source of truth: every index it holds is
@@ -290,17 +300,19 @@ class SubscriptionRegistry:
     """
 
     # The owning Wrapper, for a Subscription.close to find the IB client.
-    _wrapper: Wrapper | None = field(default=None, repr=False)
+    _wrapper: Wrapper[EmptyT] | None = field(default=None, repr=False)
     _by_reqid: dict[int, Subscription] = field(default_factory=dict, init=False)
     # Hot-path view; equal value identity to ``MktDataSub.ticker`` /
     # ``TickByTickSub.ticker`` / ``MktDepthSub.ticker`` for the same
     # reqId. Tick handlers do one dict.get on this map.
-    _ticker_by_reqid: dict[int, Ticker] = field(default_factory=dict, init=False)
+    _ticker_by_reqid: dict[int, Ticker[EmptyT]] = field(
+        default_factory=dict, init=False
+    )
     # Per-contract Ticker pool. The same Ticker is shared across all
     # market-data shapes (mktData / tickByTick / mktDepth / snapshot)
     # for a given contract so a single Ticker reflects every live
     # tick stream. Keyed by ``hash(contract)``, as the market-data index.
-    _tickers: dict[int, Ticker] = field(default_factory=dict, init=False)
+    _tickers: dict[int, Ticker[EmptyT]] = field(default_factory=dict, init=False)
     # (identity, kind) -> Subscription, where identity is the
     # contract's hash (see _market_data_identity) and kind is the
     # IB-level market-data type ("mktData", "Last", "AllLast",
@@ -352,6 +364,11 @@ class SubscriptionRegistry:
 
         sub._registry = self
 
+    def _cancelClient(self) -> Client | None:
+        """The IB client a closing subscription sends its cancel with."""
+
+        return self._wrapper.ib.client if self._wrapper is not None else None
+
     def _unregister(self, sub: Subscription) -> None:
         """Remove ``sub`` from every index. Called from :meth:`Subscription.close`."""
 
@@ -383,14 +400,14 @@ class SubscriptionRegistry:
 
         return self._by_reqid.get(reqId)
 
-    def get_ticker(self, reqId: int) -> Ticker | None:
+    def get_ticker(self, reqId: int) -> Ticker[EmptyT] | None:
         """Hot-path lookup: one ``dict.get`` to find the ticker for a tick reqId."""
 
         return self._ticker_by_reqid.get(reqId)
 
     # ---- ticker pool ----------------------------------------------------
 
-    def get_or_create_ticker(self, contract: Contract) -> Ticker:
+    def get_or_create_ticker(self, contract: Contract) -> Ticker[EmptyT]:
         """Return the pooled :class:`Ticker` for ``contract``, allocating
         one with the wrapper's :class:`IBDefaults` if no entry exists yet.
         """
@@ -409,7 +426,7 @@ class SubscriptionRegistry:
             self._tickers[key] = ticker
         return ticker
 
-    def new_snapshot_ticker(self, contract: Contract) -> Ticker:
+    def new_snapshot_ticker(self, contract: Contract) -> Ticker[EmptyT]:
         """Allocate a fresh, *unpooled* :class:`Ticker` for a one-shot snapshot.
 
         Unlike :meth:`get_or_create_ticker`, the returned Ticker is **not**
@@ -439,13 +456,13 @@ class SubscriptionRegistry:
             )
         return Ticker(contract=contract, defaults=self._wrapper.defaults)
 
-    def ticker_for_contract(self, contract: Contract) -> Ticker | None:
+    def ticker_for_contract(self, contract: Contract) -> Ticker[EmptyT] | None:
         """Return the pooled Ticker for ``contract`` if one exists. Used
         by :meth:`IB.ticker` as the public lookup."""
 
         return self._tickers.get(hash(contract))
 
-    def pooled_tickers(self) -> list[Ticker]:
+    def pooled_tickers(self) -> list[Ticker[EmptyT]]:
         """Snapshot of every pooled Ticker. Used by :meth:`IB.tickers`
         and by :meth:`Wrapper.connectionClosed` to set done on every
         Ticker's ``updateEvent``."""

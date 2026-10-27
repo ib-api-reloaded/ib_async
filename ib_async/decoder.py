@@ -12,7 +12,7 @@ from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
 from types import GenericAlias, UnionType
-from typing import TYPE_CHECKING, Any, Final, TypeAlias
+from typing import TYPE_CHECKING, Any, Final, Generic, TypeAlias
 
 from eventkit import Event
 from google.protobuf.message import Message
@@ -178,6 +178,7 @@ from .objects import (
     BarData,
     CommissionReport,
     DepthMktDataDescription,
+    EmptyT,
     Execution,
     FamilyCode,
     HistogramData,
@@ -435,10 +436,10 @@ def _resolveCoerceType(annotation: Annotation) -> Coerced | None:
     return None
 
 
-class Decoder:
+class Decoder(Generic[EmptyT]):
     """Decode IB messages and invoke corresponding wrapper methods."""
 
-    def __init__(self, wrapper: Wrapper, serverVersion: int):
+    def __init__(self, wrapper: Wrapper[EmptyT], serverVersion: int):
         self.wrapper = wrapper
         self.serverVersion = serverVersion
         self.logger = logging.getLogger("ib_async.Decoder")

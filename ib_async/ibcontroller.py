@@ -8,13 +8,14 @@ import sys
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, Generic
 
 from eventkit import Event
 
 from ib_async import util
 from ib_async.contract import Contract, Forex
 from ib_async.ib import IB
+from ib_async.objects import EmptyT
 
 # Each IBC option's command-line switch, (on Unix, on Windows): one ending
 # in "=" or ":" takes the value; "" is none (twsVersion goes first, bare).
@@ -243,7 +244,7 @@ class IBC:
 
 
 @dataclass
-class Watchdog:
+class Watchdog(Generic[EmptyT]):
     """
     Start, connect and watch over the TWS or gateway app and try to keep it
     up and running. It is intended to be used in an event-driven
@@ -310,7 +311,7 @@ class Watchdog:
     ]
 
     controller: IBC
-    ib: IB
+    ib: IB[EmptyT]
     host: str = "127.0.0.1"
     port: int = 7497
     clientId: int = 1

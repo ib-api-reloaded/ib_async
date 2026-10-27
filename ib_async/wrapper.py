@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date as date_
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Final, TypeAlias, overload
+from typing import TYPE_CHECKING, Final, Generic, TypeAlias, overload
 from zoneinfo import ZoneInfo
 
 from ib_async._requests import (
@@ -48,6 +48,7 @@ from ib_async.objects import (
     DepthMktDataDescription,
     Dividends,
     EfpData,
+    EmptyT,
     Execution,
     FamilyCode,
     Fill,
@@ -351,11 +352,11 @@ MUTABLE_ORDER_FIELDS: Final[tuple[str, ...]] = (
 
 
 @dataclass
-class Wrapper:
+class Wrapper(Generic[EmptyT]):
     """Wrapper implementation for use with the IB class."""
 
     # reference back to IB so wrapper can access API methods
-    ib: IB
+    ib: IB[EmptyT]
 
     accountValues: dict[tuple[str, str, str, str], AccountValue] = field(init=False)
     """ (account, tag, currency, modelCode) -> AccountValue """
@@ -397,7 +398,7 @@ class Wrapper:
     msgId2NewsBulletin: dict[int, NewsBulletin] = field(init=False)
     """ msgId -> NewsBulletin """
 
-    pendingTickers: set[Ticker] = field(init=False)
+    pendingTickers: set[Ticker[EmptyT]] = field(init=False)
 
     lastTime: datetime = field(init=False)
     """ UTC time of last network packet arrival. """
@@ -423,7 +424,7 @@ class Wrapper:
     request's future, accumulator container, and originating contract.
     See :mod:`ib_async._requests`."""
 
-    subscriptions: SubscriptionRegistry = field(init=False)
+    subscriptions: SubscriptionRegistry[EmptyT] = field(init=False)
     """Source of truth for live data subscriptions: mktData, tickByTick,
     mktDepth, real-time bars, historical bars with keepUpToDate, scanner,
     PnL. See :mod:`ib_async._subscriptions`."""
@@ -434,7 +435,7 @@ class Wrapper:
     _timeoutHandle: asyncio.TimerHandle | None = None
 
     # value used when a field has missing, empty, or not populated data
-    defaults: IBDefaults = field(default_factory=IBDefaults)
+    defaults: IBDefaults[EmptyT] = field(default_factory=IBDefaults)
 
     def __post_init__(self):
         # extract values from defaults objects just to use locally
@@ -622,7 +623,7 @@ class Wrapper:
 
     # Helper methods for tick processing
 
-    def _processTimestampTick(self, ticker: Ticker, fieldName: str, value: str):
+    def _processTimestampTick(self, ticker: Ticker[EmptyT], fieldName: str, value: str):
         """Convert timestamp string to datetime and set on ticker field."""
         timestamp = int(value)
         # Only populate if timestamp isn't '0' (we don't want to report "last trade: 20,000 days ago")
@@ -634,7 +635,7 @@ class Wrapper:
             )
 
     def _processRtVolumeTick(
-        self, ticker: Ticker, tickType: int, value: str
+        self, ticker: Ticker[EmptyT], tickType: int, value: str
     ) -> tuple[float, float] | None:
         """
         Parse RT Volume or RT Trade Volume tick.
@@ -1420,6 +1421,11 @@ class Wrapper:
         if attrib is not None:
             ticker.tickAttrib = attrib
 
+        # The values the ticker shows: the wire's, or the empty values of
+        # ``defaults`` for a side IBKR reports as having no quote.
+        shownPrice: float | EmptyT = price
+        shownSize: float | EmptyT = size
+
         # Allow overwriting IBKR's default "empty price" of -1 when there is no qty/size on a side.
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tickType in {1, 66}:
@@ -1429,35 +1435,31 @@ class Wrapper:
             # Bid/Ask updates always have a Price+Size delivered at the same time, while the
             # other properties are mainly price-only delivery methods.
             if size == 0:
-                price = self.defaultEmptyPrice
-                size = self.defaultEmptySize
+                shownPrice = self.defaultEmptyPrice
+                shownSize = self.defaultEmptySize
 
             ticker.prevBid = ticker.bid
             ticker.prevBidSize = ticker.bidSize
-            ticker.bid = price
-            ticker.bidSize = size
+            ticker.bid = shownPrice
+            ticker.bidSize = shownSize
         elif tickType in {2, 67}:
             if size == 0:
-                price = self.defaultEmptyPrice
-                size = self.defaultEmptySize
+                shownPrice = self.defaultEmptyPrice
+                shownSize = self.defaultEmptySize
 
             ticker.prevAsk = ticker.ask
             ticker.prevAskSize = ticker.askSize
-            ticker.ask = price
-            ticker.askSize = size
+            ticker.ask = shownPrice
+            ticker.askSize = shownSize
         elif tickType in {4, 68}:
             # for 'last' values, price can be valid with size=0 for updates like 'last SPX price' since SPX doesn't trade
             # Workaround: for TICK-NYSE, it is valid to have price=-1, size=0 because it can float between -10,000 and 10,000
             #             and it also never reports a size. As a workaround, check if ticker.close exists as a proxy for "not TICK-NYSE"
             #             because TICK-NYSE never has open/close values populated.
-            if (
-                price == -1
-                and size == 0
-                and ticker.close is not None
-                and ticker.close > 0
-            ):
-                price = self.defaultEmptyPrice
-                size = self.defaultEmptySize
+            close = ticker.close
+            if price == -1 and size == 0 and self.defaults.isPrice(close) and close > 0:
+                shownPrice = self.defaultEmptyPrice
+                shownSize = self.defaultEmptySize
 
             # BUG? IBKR is sometimes sending a GOOD VALUE followed by a PREVIOUS value all under tickType=4?
             # e.g. I get the SPX close delivered first with size=0, then I get another data point with size=1 priced one point lower,
@@ -1467,8 +1469,8 @@ class Wrapper:
 
             ticker.prevLast = ticker.last
             ticker.prevLastSize = ticker.lastSize
-            ticker.last = price
-            ticker.lastSize = size
+            ticker.last = shownPrice
+            ticker.lastSize = shownSize
         else:
             if tickType not in PRICE_TICK_MAP:
                 # a tick type IBKR added after this release: skip it
@@ -1479,11 +1481,25 @@ class Wrapper:
 
             setattr(ticker, PRICE_TICK_MAP[tickType], price)
 
-        if price or size:
-            tick = TickData(self.lastTime, tickType, price, size)
-            ticker.ticks.append(tick)
-
+        self._logTick(ticker, tickType, shownPrice, shownSize)
         self.pendingTickers.add(ticker)
+
+    def _logTick(
+        self,
+        ticker: Ticker[EmptyT],
+        tickType: int,
+        price: float | EmptyT | None,
+        size: float | EmptyT,
+    ) -> None:
+        """Append a tick to ``ticker.ticks`` if it carries a price or a size
+        other than 0. A tick with only empty values and zeros (a side
+        emptied, a size tick with no price and no size) is not logged,
+        whatever values ``defaults`` uses."""
+        defaults = self.defaults
+        if (defaults.isPrice(price) and price != 0) or (
+            defaults.isSize(size) and size != 0
+        ):
+            ticker.ticks.append(TickData(self.lastTime, tickType, price, size))
 
     def tickSize(self, reqId: int, tickType: int, size: float):
         ticker = self._get_ticker(reqId)
@@ -1492,9 +1508,9 @@ class Wrapper:
             self._logger.debug(f"tickSize: Unknown reqId: {reqId}")
             return
 
-        # The price logged with the tick. It is the price of the tick's
-        # side, or None when that side has no price yet.
-        price: float | None = self.defaultEmptyPrice
+        # The price logged with the tick: the price of the tick's side, or
+        # an empty value when that side has none.
+        price: float | EmptyT | None = self.defaultEmptyPrice
 
         # https://interactivebrokers.github.io/tws-api/tick_types.html
         if tickType in {0, 69}:
@@ -1538,10 +1554,7 @@ class Wrapper:
 
             setattr(ticker, SIZE_TICK_MAP[tickType], size)
 
-        if price or size:
-            tick = TickData(self.lastTime, tickType, price, size)
-            ticker.ticks.append(tick)
-
+        self._logTick(ticker, tickType, price, size)
         self.pendingTickers.add(ticker)
 
     def tickSnapshotEnd(self, reqId: int):
@@ -1575,14 +1588,16 @@ class Wrapper:
             self._logger.debug(f"tickByTickAllLast: Unknown reqId: {reqId}")
             return
 
+        shownPrice: float | EmptyT = price
+        shownSize: float | EmptyT = size
         if price == -1 and size == 0:
-            price = self.defaultEmptyPrice
-            size = self.defaultEmptySize
+            shownPrice = self.defaultEmptyPrice
+            shownSize = self.defaultEmptySize
 
         ticker.prevLast = ticker.last
         ticker.prevLastSize = ticker.lastSize
-        ticker.last = price
-        ticker.lastSize = size
+        ticker.last = shownPrice
+        ticker.lastSize = shownSize
 
         # Wire-reported exchange tick time (epoch seconds) is authoritative;
         # ``self.lastTime`` is a local-clock fallback used only when the
@@ -1595,8 +1610,8 @@ class Wrapper:
         tick = TickByTickAllLast(
             tickType,
             tickTime,
-            price,
-            size,
+            shownPrice,
+            shownSize,
             tickAttribLast,
             exchange,
             specialConditions,
@@ -1685,7 +1700,9 @@ class Wrapper:
                     ticker.prevLastSize = ticker.lastSize
                     ticker.last = price
                     ticker.lastSize = size
-                    tick = TickData(self.lastTime, tickType, price, size)
+                    tick: TickData[EmptyT] = TickData(
+                        self.lastTime, tickType, price, size
+                    )
                     ticker.ticks.append(tick)
             elif tickType == 59:
                 # Dividend tick:
@@ -1715,19 +1732,21 @@ class Wrapper:
             return
 
         try:
-            value = float(value)
-            # The "empty size" clamp normalizes IBKR's "no quote" sentinel
-            # (negative / zero values for sided book metrics) into the
-            # user-configured empty value. But certain tick types carry
-            # signed semantics or a -1 unset code that must survive — see
-            # ``_GENERIC_TICK_NO_CLAMP`` for the rationale.
-            if tickType not in _GENERIC_TICK_NO_CLAMP:
-                value = value if value > 0 else self.defaultEmptySize
+            number = float(value)
         except ValueError:
             self._logger.error(
                 f"[tickType {tickType}] genericTick: malformed value: {value!r}"
             )
             return
+
+        # The "empty size" clamp normalizes IBKR's "no quote" sentinel
+        # (negative / zero values for sided book metrics) into the
+        # user-configured empty value. But certain tick types carry
+        # signed semantics or a -1 unset code that must survive — see
+        # ``_GENERIC_TICK_NO_CLAMP`` for the rationale.
+        shown: float | EmptyT = number
+        if tickType not in _GENERIC_TICK_NO_CLAMP and not number > 0:
+            shown = self.defaultEmptySize
 
         if tickType not in GENERIC_TICK_MAP:
             # a tick type IBKR added after this release: skip it
@@ -1736,13 +1755,14 @@ class Wrapper:
             )
             return
 
+        # The halted ticks are never clamped, so ``number`` is what they show.
         if tickType in _HALTED_TICKS:
             with suppress(ValueError):
-                value = HaltedStatus(int(value))
+                shown = HaltedStatus(int(number))
 
-        setattr(ticker, GENERIC_TICK_MAP[tickType], value)
+        setattr(ticker, GENERIC_TICK_MAP[tickType], shown)
 
-        tick = TickData(self.lastTime, tickType, value, 0)
+        tick = TickData(self.lastTime, tickType, shown, 0)
         ticker.ticks.append(tick)
         self.pendingTickers.add(ticker)
 

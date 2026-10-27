@@ -289,6 +289,29 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   pandas is still needed (it requires pandas and pyarrow). polars runs
   on CPython only; on PyPy, ``util.pandasDf()`` builds a pandas DataFrame
   the same way (pandas is not a dependency: install it yourself).
+* **The empty values of ``IBDefaults`` can be any value, and are typed.**
+  ``emptyPrice``, ``emptySize`` and ``unset`` take a number (IBKR's -1
+  and 0, NaN), None, an enum member or any other sentinel. ``IBDefaults``,
+  ``IB``, ``Ticker``, ``TickData`` and ``TickByTickAllLast`` are generic
+  over ``EmptyT``, the type of the empty values that are not numbers,
+  which is None by default: ``IB(IBDefaults(emptyPrice=Missing.PRICE))``
+  is an ``IB[Missing]`` and its tickers' ``bid`` is
+  ``float | Missing | None``. A bare ``IB`` or ``Ticker`` means
+  ``EmptyT = None``, as before. ``IBDefaults`` is frozen; build a new
+  one to change a value. Python before 3.13 installs
+  ``typing_extensions`` for the type parameter's default.
+* **ib_async reads a value as a number only through
+  ``IBDefaults.isPrice`` and ``isSize``**: a finite number that is not an
+  empty value. ``Ticker.hasBidAsk``, ``midpoint`` and ``marketPrice``
+  use them instead of comparing with -1, so with ``emptyPrice=None`` a
+  bid of -1 (a spread can quote it) is a price. ``marketPrice`` returns
+  None, not an empty value, when there is no price. The tick filters
+  (``updateEvent.trades()``, ``bids()`` and the rest) emit None for an
+  empty price or size, as ``midpoints()`` does for a missing midpoint.
+* **``Ticker.ticks`` logs a tick only when it carries a price or a size
+  other than 0**, whatever the empty values are. A side emptied (size 0)
+  is no longer logged as a ``TickData(-1, 0)`` placeholder with the
+  default values; with ``emptyPrice=None`` it never was.
 
 **Removed**
 
@@ -384,6 +407,13 @@ are fixed in v3.0:
   use. Retry with a unique client id.`` A server too old for the client
   and a ``disconnect()`` during the connect raise it too. (:issue:`242`,
   thanks to @daniel-debrun)
+* **Empty values other than numbers and None broke the quote.** With an
+  enum or string ``emptySize``, ``hasBidAsk``, ``midpoint`` and
+  ``marketPrice`` raised ``TypeError``, as did a ``last`` tick while
+  ``close`` held the ``unset`` value; with NaN, ``marketPrice`` returned
+  the NaN. With the default -1 and 0, an emptied quote side reached
+  bars built from ``updateEvent.bids()`` as a price of -1. A stateful
+  test now drives every tick handler with each kind of empty value.
 * **``util.useQt`` with PySide6** runs Qt's loop with ``exec()``; it used
   the deprecated ``exec_()``. (:issue:`134`, thanks to @Flippo24)
 * **``IBC(twsVersion=...)`` takes a string**, as macOS needs: ``"10.19"``,

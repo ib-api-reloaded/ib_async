@@ -24,7 +24,8 @@ dependencies = [
     "aeventkit>=3.0.1,<4.0.0",
     "anest-asyncio>=2.0.0,<3.0.0",
     "protobuf>=7.36.2,<8.0.0",
-    "tzdata>=2025.2"
+    "typing-extensions>=4.16.0 ; python_full_version < '3.13'",
+    "tzdata>=2025.2",
 ]
 
 [project.optional-dependencies]

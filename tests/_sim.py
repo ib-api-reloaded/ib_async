@@ -24,6 +24,7 @@ import functools
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import Enum
 from typing import TypeVar
 from unittest.mock import MagicMock
 
@@ -35,6 +36,9 @@ CONTRACT = ibi.Stock("SIM", "SMART", "USD", conId=1)
 CLIENT_ID = 7
 
 T = TypeVar("T")
+
+# The empty values (IBDefaults) the tests use that are not numbers.
+TestEmpty = Enum | str | None
 
 # The argument types the client's request methods receive.
 ClientArg = (
@@ -141,9 +145,14 @@ class Ask:
 class SimulatedTws:
     """An IB instance and a simulated server, both in this process."""
 
-    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+    def __init__(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        defaults: ibi.IBDefaults[TestEmpty] | None = None,
+    ) -> None:
         self.loop = loop
-        self.ib = ibi.IB()
+        # The IB's empty values (see IBDefaults); IBKR's -1 and 0 by default.
+        self.ib = ibi.IB() if defaults is None else ibi.IB(defaults)
         self.client = MagicMock()
         self.client.isConnected.return_value = True
         self._reqIds = iter(range(1000, 10**6))
@@ -173,7 +182,7 @@ class SimulatedTws:
         self.connected = True
 
     @property
-    def wrapper(self) -> Wrapper:
+    def wrapper(self) -> Wrapper[None] | Wrapper[TestEmpty]:
         """The current wrapper. A disconnect resets its registries."""
         return self.ib.wrapper
 

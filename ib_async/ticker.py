@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import IntEnum
-from typing import ClassVar
+from typing import ClassVar, Generic
 
 from eventkit import Event, Op, event_class
 
@@ -20,6 +20,7 @@ from ib_async.objects import (
     Dividends,
     DOMLevel,
     EfpData,
+    EmptyT,
     IBDefaults,
     MktDepthData,
     NewsTick,
@@ -59,7 +60,7 @@ def _new_update_event() -> TickerUpdateEvent:
 
 
 @dataclass(slots=True)
-class Ticker:
+class Ticker(Generic[EmptyT]):
     """
     Current market data such as bid, ask, last price, etc. for a contract.
 
@@ -79,6 +80,12 @@ class Ticker:
     ``lastGreeks`` attributes. There is also ``modelGreeks`` that conveys
     the greeks as calculated by Interactive Brokers' option model.
 
+    A numeric field holds a number, or one of the empty values of
+    ``defaults`` (:class:`.IBDefaults`): ``unset`` before its first tick,
+    ``emptyPrice`` and ``emptySize`` for a side with no quote. ``EmptyT``
+    is the type of the empty values that are not numbers.
+    ``defaults.isPrice`` and ``defaults.isSize`` tell a number from them.
+
     Events:
         * ``updateEvent`` (ticker: :class:`.Ticker`)
     """
@@ -89,99 +96,99 @@ class Ticker:
     time: datetime | None = None
     timestamp: float | None = None
     marketDataType: int = 1
-    minTick: float | None = None
-    bid: float | None = None
-    bidSize: float | None = None
+    minTick: float | EmptyT | None = None
+    bid: float | EmptyT | None = None
+    bidSize: float | EmptyT | None = None
     bidExchange: str = ""
-    ask: float | None = None
-    askSize: float | None = None
+    ask: float | EmptyT | None = None
+    askSize: float | EmptyT | None = None
     askExchange: str = ""
-    last: float | None = None
-    lastSize: float | None = None
+    last: float | EmptyT | None = None
+    lastSize: float | EmptyT | None = None
     lastExchange: str = ""
     lastTimestamp: datetime | None = None
-    prevBid: float | None = None
-    prevBidSize: float | None = None
-    prevAsk: float | None = None
-    prevAskSize: float | None = None
-    prevLast: float | None = None
-    prevLastSize: float | None = None
-    volume: float | None = None
-    open: float | None = None
-    high: float | None = None
-    low: float | None = None
-    close: float | None = None
-    vwap: float | None = None
-    low13week: float | None = None
-    high13week: float | None = None
-    low26week: float | None = None
-    high26week: float | None = None
-    low52week: float | None = None
-    high52week: float | None = None
-    bidYield: float | None = None
-    askYield: float | None = None
-    lastYield: float | None = None
-    markPrice: float | None = None
-    halted: HaltedStatus | float | None = None
-    rtHistVolatility: float | None = None
-    rtVolume: float | None = None
-    rtTradeVolume: float | None = None
+    prevBid: float | EmptyT | None = None
+    prevBidSize: float | EmptyT | None = None
+    prevAsk: float | EmptyT | None = None
+    prevAskSize: float | EmptyT | None = None
+    prevLast: float | EmptyT | None = None
+    prevLastSize: float | EmptyT | None = None
+    volume: float | EmptyT | None = None
+    open: float | EmptyT | None = None
+    high: float | EmptyT | None = None
+    low: float | EmptyT | None = None
+    close: float | EmptyT | None = None
+    vwap: float | EmptyT | None = None
+    low13week: float | EmptyT | None = None
+    high13week: float | EmptyT | None = None
+    low26week: float | EmptyT | None = None
+    high26week: float | EmptyT | None = None
+    low52week: float | EmptyT | None = None
+    high52week: float | EmptyT | None = None
+    bidYield: float | EmptyT | None = None
+    askYield: float | EmptyT | None = None
+    lastYield: float | EmptyT | None = None
+    markPrice: float | EmptyT | None = None
+    halted: HaltedStatus | float | EmptyT | None = None
+    rtHistVolatility: float | EmptyT | None = None
+    rtVolume: float | EmptyT | None = None
+    rtTradeVolume: float | EmptyT | None = None
     rtTime: datetime | None = None
-    avVolume: float | None = None
-    tradeCount: float | None = None
-    tradeRate: float | None = None
-    volumeRate: float | None = None
+    avVolume: float | EmptyT | None = None
+    tradeCount: float | EmptyT | None = None
+    tradeRate: float | EmptyT | None = None
+    volumeRate: float | EmptyT | None = None
     # generic tick 595: the volume traded in the last 3, 5 and 10 minutes
-    volumeRate3Min: float | None = None
-    volumeRate5Min: float | None = None
-    volumeRate10Min: float | None = None
-    shortable: float | None = None
-    shortableShares: float | None = None
-    indexFuturePremium: float | None = None
-    futuresOpenInterest: float | None = None
-    putOpenInterest: float | None = None
-    callOpenInterest: float | None = None
-    putVolume: float | None = None
-    callVolume: float | None = None
-    avOptionVolume: float | None = None
-    histVolatility: float | None = None
-    impliedVolatility: float | None = None
-    openInterest: float | None = None
-    lastRthTrade: float | None = None
+    volumeRate3Min: float | EmptyT | None = None
+    volumeRate5Min: float | EmptyT | None = None
+    volumeRate10Min: float | EmptyT | None = None
+    shortable: float | EmptyT | None = None
+    shortableShares: float | EmptyT | None = None
+    indexFuturePremium: float | EmptyT | None = None
+    futuresOpenInterest: float | EmptyT | None = None
+    putOpenInterest: float | EmptyT | None = None
+    callOpenInterest: float | EmptyT | None = None
+    putVolume: float | EmptyT | None = None
+    callVolume: float | EmptyT | None = None
+    avOptionVolume: float | EmptyT | None = None
+    histVolatility: float | EmptyT | None = None
+    impliedVolatility: float | EmptyT | None = None
+    openInterest: float | EmptyT | None = None
+    lastRthTrade: float | EmptyT | None = None
     lastRegTime: str = ""
     optionBidExch: str = ""
     optionAskExch: str = ""
-    bondFactorMultiplier: float | None = None
-    creditmanMarkPrice: float | None = None
-    creditmanSlowMarkPrice: float | None = None
+    bondFactorMultiplier: float | EmptyT | None = None
+    creditmanMarkPrice: float | EmptyT | None = None
+    creditmanSlowMarkPrice: float | EmptyT | None = None
     delayedLastTimestamp: datetime | None = None
-    delayedHalted: HaltedStatus | float | None = None
+    delayedHalted: HaltedStatus | float | EmptyT | None = None
     reutersMutualFunds: str = ""
-    etfNavClose: float | None = None
-    etfNavPriorClose: float | None = None
-    etfNavBid: float | None = None
-    etfNavAsk: float | None = None
-    etfNavLast: float | None = None
-    etfFrozenNavLast: float | None = None
-    etfNavHigh: float | None = None
-    etfNavLow: float | None = None
+    etfNavClose: float | EmptyT | None = None
+    etfNavPriorClose: float | EmptyT | None = None
+    etfNavBid: float | EmptyT | None = None
+    etfNavAsk: float | EmptyT | None = None
+    etfNavLast: float | EmptyT | None = None
+    etfFrozenNavLast: float | EmptyT | None = None
+    etfNavHigh: float | EmptyT | None = None
+    etfNavLow: float | EmptyT | None = None
     socialMarketAnalytics: str = ""
-    estimatedIpoMidpoint: float | None = None
-    finalIpoLast: float | None = None
+    estimatedIpoMidpoint: float | EmptyT | None = None
+    finalIpoLast: float | EmptyT | None = None
     # Odd-lot quote board (TickType 105-110, IBKR ``ODD_LOT_*``). Sized
     # smaller than round-lot prints; arrives only when the user includes
     # the ODD_LOT generic tick in ``reqMktData``.
-    oddLotBid: float | None = None
-    oddLotAsk: float | None = None
-    oddLotBidSize: float | None = None
-    oddLotAskSize: float | None = None
+    oddLotBid: float | EmptyT | None = None
+    oddLotAsk: float | EmptyT | None = None
+    oddLotBidSize: float | EmptyT | None = None
+    oddLotAskSize: float | EmptyT | None = None
     oddLotBidExch: str = ""
     oddLotAskExch: str = ""
     dividends: Dividends | None = None
-    ticks: list[TickData] = field(default_factory=list)
-    tickByTicks: list[TickByTickAllLast | TickByTickBidAsk | TickByTickMidPoint] = (
-        field(default_factory=list)
-    )
+    ticks: list[TickData[EmptyT]] = field(default_factory=list)
+    tickByTicks: list[
+        TickByTickAllLast[EmptyT] | TickByTickBidAsk | TickByTickMidPoint
+    ] = field(default_factory=list)
     dom: DepthBook = field(default_factory=DepthBook)
     domTicks: list[MktDepthData] = field(default_factory=list)
     bidGreeks: OptionComputation | None = None
@@ -196,10 +203,10 @@ class Ticker:
     highEfp: EfpData | None = None
     lowEfp: EfpData | None = None
     closeEfp: EfpData | None = None
-    auctionVolume: float | None = None
-    auctionPrice: float | None = None
-    auctionImbalance: float | None = None
-    regulatoryImbalance: float | None = None
+    auctionVolume: float | EmptyT | None = None
+    auctionPrice: float | EmptyT | None = None
+    auctionImbalance: float | EmptyT | None = None
+    regulatoryImbalance: float | EmptyT | None = None
     bboExchange: str = ""
     snapshotPermissions: int = 0
     # Most-recent per-quote attribute flags decoded from the wire
@@ -217,7 +224,7 @@ class Ticker:
     # ``dataclassRepr`` output unchanged on tickers without news.
     news: deque[NewsTick] = field(default_factory=_new_news_deque, repr=False)
 
-    defaults: IBDefaults = field(default_factory=IBDefaults, repr=False)
+    defaults: IBDefaults[EmptyT] = field(default_factory=IBDefaults, repr=False)
     created: bool = False
     # The update event of this Ticker. It is a field so that
     # ``slots=True`` reserves a slot for it. ``TickerUpdateEvent`` is
@@ -360,32 +367,33 @@ class Ticker:
 
     __str__ = __repr__
 
-    def isUnset(self, value) -> bool:
-        # if value is None, it is unset.
-        # else, if value matches the default unset sentinel, it is unset.
-        dev = self.defaults.unset
-        return value is None or (value == dev)
+    def isUnset(self, value: float | EmptyT | None) -> bool:
+        """Whether ``value`` is None or the ``unset`` value of ``defaults``
+        (the same object, so a NaN ``unset`` is recognized too)."""
+        unset = self.defaults.unset
+        return value is None or value is unset or value == unset
+
+    def _hasSize(self, size: float | EmptyT | None) -> bool:
+        """Whether ``size`` is a size above 0."""
+        return self.defaults.isSize(size) and size > 0
 
     def hasBidAsk(self) -> bool:
-        """See if this ticker has a valid bid and ask."""
-        return (
-            self.bid is not None
-            and self.bid != -1
-            and self.bidSize is not None
-            and self.bidSize > 0
-            and self.ask is not None
-            and self.ask != -1
-            and self.askSize is not None
-            and self.askSize > 0
-        )
+        """Whether the bid and the ask each have a price and a size above 0."""
+        return self.midpoint() is not None
 
     def midpoint(self) -> float | None:
         """
-        Return average of bid and ask, or None if no valid bid and ask
-        are available.
+        Return average of bid and ask, or None unless the bid and the ask
+        each have a price and a size above 0.
         """
-        if self.hasBidAsk() and self.bid is not None and self.ask is not None:
-            return (self.bid + self.ask) * 0.5
+        bid, ask = self.bid, self.ask
+        if (
+            self.defaults.isPrice(bid)
+            and self.defaults.isPrice(ask)
+            and self._hasSize(self.bidSize)
+            and self._hasSize(self.askSize)
+        ):
+            return (bid + ask) * 0.5
         return None
 
     def marketPrice(self) -> float | None:
@@ -394,17 +402,19 @@ class Ticker:
 
         * last price if within current bid/ask or no bid/ask available;
         * average of bid and ask (midpoint).
-        """
-        price: float | None
-        if self.hasBidAsk() and self.bid is not None and self.ask is not None:
-            if self.last is not None and self.bid <= self.last <= self.ask:
-                price = self.last
-            else:
-                price = self.midpoint()
-        else:
-            price = self.last
 
-        return price
+        None when there is neither: an empty value is not a price.
+        """
+        mid = self.midpoint()
+        last, bid, ask = self.last, self.bid, self.ask
+        if not self.defaults.isPrice(last):
+            return mid
+        if mid is None:
+            return last
+        if self.defaults.isPrice(bid) and self.defaults.isPrice(ask):
+            if bid <= last <= ask:
+                return last
+        return mid
 
 
 @event_class
@@ -440,7 +450,12 @@ class TickerUpdateEvent(Event):
 
 @event_class
 class Tickfilter(Op):
-    """Tick filtering event operators that ``emit(time, price, size)``."""
+    """Tick filtering event operators that ``emit(time, price, size)``.
+
+    ``price`` and ``size`` are floats, or None for a tick without one: an
+    empty value of the ticker's :class:`~ib_async.objects.IBDefaults`
+    (a side with no quote) is emitted as None, as a midpoint without a
+    bid and ask is."""
 
     _tickTypes: set[int]
 
@@ -448,10 +463,16 @@ class Tickfilter(Op):
         Op.__init__(self, source)
         self._tickTypes = set(tickTypes)
 
-    def on_source(self, ticker):
+    def on_source(self, ticker: Ticker[EmptyT]) -> None:
+        defaults = ticker.defaults
         for t in ticker.ticks:
             if t.tickType in self._tickTypes:
-                self.emit(t.time, t.price, t.size)
+                price, size = t.price, t.size
+                self.emit(
+                    t.time,
+                    price if defaults.isPrice(price) else None,
+                    size if defaults.isSize(size) else None,
+                )
 
     def timebars(self, timer: Event, maxBars: int | None = None) -> TimeBars:
         """
@@ -513,7 +534,7 @@ class Tickfilter(Op):
 
 @event_class
 class Midpoints(Tickfilter):
-    def on_source(self, ticker):
+    def on_source(self, ticker: Ticker[EmptyT]) -> None:
         if ticker.ticks:
             self.emit(ticker.time, ticker.midpoint(), 0)
 

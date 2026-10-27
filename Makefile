@@ -125,8 +125,9 @@ ruff:
 	$(PYTHON) scripts/generate_ordertypes.py --check
 	$(PYTHON) scripts/generate_datarequests.py --check
 
+# tests/typecheck_*.py are static pins: mypy checks them, pytest never runs them.
 typecheck:
-	uv run mypy --pretty ib_async/
+	uv run mypy --pretty ib_async/ tests/typecheck_empty_values.py
 
 prettier:
 	$(PRETTIER_FILES) | xargs -0 $(PRETTIER) --check

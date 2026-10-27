@@ -921,6 +921,7 @@ dependencies = [
     { name = "aeventkit" },
     { name = "anest-asyncio" },
     { name = "protobuf" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
     { name = "tzdata" },
 ]
 
@@ -978,6 +979,7 @@ requires-dist = [
     { name = "anest-asyncio", specifier = ">=2.0.0,<3.0.0" },
     { name = "polars", marker = "extra == 'polars'", specifier = ">=2.0.0,<3.0.0" },
     { name = "protobuf", specifier = ">=7.36.2,<8.0.0" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'", specifier = ">=4.16.0" },
     { name = "tzdata", specifier = ">=2025.2" },
 ]
 provides-extras = ["polars"]

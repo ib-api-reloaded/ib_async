@@ -2,18 +2,29 @@
 
 from __future__ import annotations
 
+import math
+import sys
 import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
 from decimal import Decimal
-from typing import ClassVar, Generic, Protocol, TypeVar, overload
+from typing import ClassVar, Generic, Protocol, TypeGuard, overload
 
 from eventkit import Event
 
 from ._proto.safe import safe_decimal
 from .contract import Contract, ScanData, TagValue
 from .util import EPOCH, dataclassRepr
+
+if sys.version_info >= (3, 13):
+    from typing import TypeVar
+else:
+    from typing_extensions import TypeVar
+
+#: The type of the user's empty values (see :class:`IBDefaults`) that are
+#: not numbers. None by default, as for IBKR's -1 and 0 and for None.
+EmptyT = TypeVar("EmptyT", default=None)
 
 
 @dataclass
@@ -507,21 +518,22 @@ class AccountValue:
 
 
 # Tick and depth records. These are slotted frozen dataclasses. The
-# numeric ``price`` and ``size`` fields are ``float``, the same as on
-# ``Ticker``. The tick records are stored unchanged in ``ticker.ticks``
-# and ``ticker.tickByTicks``, so their types match Ticker exactly. The
-# per-tick path uses float for speed. ``TickData.price`` is None for a
-# size tick on a side that has no price yet. ``Ticker.bid`` is None in
-# the same case.
+# numeric ``price`` and ``size`` fields are ``float``; the per-tick path
+# uses float for speed. ``TickData`` and ``TickByTickAllLast`` also hold
+# the empty values of :class:`IBDefaults` for a side or trade with no
+# quote, as ``Ticker`` does, so they are generic over its ``EmptyT``.
+# ``TickData.price`` is None for a size tick on a side that has no price
+# yet. ``Ticker.bid`` is None in the same case.
 
 
 @dataclass(slots=True, frozen=True)
-class TickData:
+class TickData(Generic[EmptyT]):
     time: datetime
     tickType: int
-    # None for a size tick on a side that has no price yet.
-    price: float | None
-    size: float
+    # The empty values for a side with no quote; None for a size tick on a
+    # side that has no price yet.
+    price: float | EmptyT | None
+    size: float | EmptyT
 
 
 @dataclass(slots=True, frozen=True)
@@ -552,11 +564,12 @@ class HistoricalTickLast:
 
 
 @dataclass(slots=True, frozen=True)
-class TickByTickAllLast:
+class TickByTickAllLast(Generic[EmptyT]):
     tickType: int
     time: datetime
-    price: float
-    size: float
+    # The empty values for a trade IBKR sends as price -1 and size 0.
+    price: float | EmptyT
+    size: float | EmptyT
     tickAttribLast: TickAttribLast
     exchange: str
     specialConditions: str
@@ -923,17 +936,50 @@ class DynamicObject:
         return f"{clsName}({kwargs})"
 
 
-@dataclass
-class IBDefaults:
-    """A simple way to provide default values when populating API data."""
+def _isFinite(value: float | EmptyT | None) -> TypeGuard[float]:
+    """Whether ``value`` is a finite int or float (not a bool)."""
+    return (
+        isinstance(value, float | int)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
 
-    # optionally replace IBKR using -1 price and 0 size when quotes don't exist
-    emptyPrice: float = -1
-    emptySize: float = 0
 
-    # optionally replace ib_async default for all instance variable values before populated from API updates
-    # Note: None is the universal unset sentinel. Legacy code may compare against this using ==
-    unset: float | None = None
+@dataclass(frozen=True, slots=True)
+class IBDefaults(Generic[EmptyT]):
+    """The values market data shows where IBKR has no number.
 
-    # optionally change the timezone used for log history events in objects (no impact on orders or data processing)
+    IBKR marks a quote side with no orders by a price of -1 and a size of
+    0. ``emptyPrice`` and ``emptySize`` are what a Ticker, its tick log
+    and its tick-by-tick log show instead. ``unset`` is the value of each
+    numeric Ticker field before its first tick. ``timezone`` is the zone
+    of the times in tick and log records; orders and requests do not use
+    it.
+
+    Each empty value can be any value the user reads as "no number": a
+    number (the -1 and 0 IBKR sends, NaN), None, an enum member or any
+    other sentinel. ``EmptyT`` is the type of the values that are not
+    numbers; a Ticker's numeric fields are typed ``float | EmptyT | None``.
+    ``IBDefaults(emptyPrice=Missing.PRICE, emptySize=Missing.SIZE)`` makes
+    an ``IBDefaults[Missing]``, and the IB built from it an
+    ``IB[Missing]``.
+
+    ib_async itself reads a value as a number only through
+    :meth:`isPrice` and :meth:`isSize`, so an empty value never reaches
+    its arithmetic or comparisons.
+    """
+
+    emptyPrice: float | EmptyT = -1
+    emptySize: float | EmptyT = 0
+    unset: float | EmptyT | None = None
     timezone: tzinfo = UTC
+
+    def isPrice(self, value: float | EmptyT | None) -> TypeGuard[float]:
+        """Whether ``value`` is a price: a finite number that is neither
+        ``emptyPrice`` nor ``unset``."""
+        return _isFinite(value) and value not in (self.emptyPrice, self.unset)
+
+    def isSize(self, value: float | EmptyT | None) -> TypeGuard[float]:
+        """Whether ``value`` is a size: a finite number that is neither
+        ``emptySize`` nor ``unset``."""
+        return _isFinite(value) and value not in (self.emptySize, self.unset)
