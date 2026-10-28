@@ -185,6 +185,15 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ended (answered, refused, failed, abandoned, cancelled with IBKR, not
   sent, ended by a disconnect), subscriptions, and errors and warnings by
   code. Counting adds no work per market data tick.
+* **``IB.requestTimeoutEvent``** emits a ``TimedOutRequest`` (the method,
+  its time limit, the reqId and the contract) when a request's time limit
+  passes: ``reqHistoricalDataAsync``, ``reqHistoricalScheduleAsync``,
+  ``reqHistoricalNewsAsync``, ``reqMatchingSymbolsAsync``,
+  ``reqMarketRuleAsync``, ``requestFAAsync``, the ``calculate*Async``
+  methods, and the requests ``connect`` makes at startup. These calls still
+  return what they returned before (an empty result, or None), so the
+  event is how a program tells a timeout from an empty answer. Counted in
+  ``Counters.requestsTimedOut``.
 
 **Changed (breaking)**
 

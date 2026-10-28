@@ -51,6 +51,7 @@ class Tally:
     requestsWithdrawn: int = 0
     requestsNotSent: int = 0
     requestsDisconnected: int = 0
+    requestsTimedOut: int = 0
     answersDiscarded: int = 0
     answersForgotten: int = 0
     subscriptionsAdded: int = 0
@@ -136,6 +137,9 @@ class Counters:
     requestsNotSent: int
     #: Requests a disconnect ended.
     requestsDisconnected: int
+    #: Requests whose time limit passed (IB.requestTimeoutEvent). Not a
+    #: way to end: each also ended as abandoned or withdrawn.
+    requestsTimedOut: int
     #: Answers that arrived for abandoned requests.
     answersDiscarded: int
     #: Answers expected for abandoned requests that never came.

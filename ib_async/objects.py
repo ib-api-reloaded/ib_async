@@ -827,6 +827,23 @@ class ConnectionStats:
     numMsgSent: int
 
 
+@dataclass(slots=True, frozen=True)
+class TimedOutRequest:
+    """A request whose time limit passed before IBKR answered it, as
+    ``IB.requestTimeoutEvent`` emits it. The call returned its usual result
+    for a timeout (an empty one, or None)."""
+
+    #: The IB method, such as "reqHistoricalDataAsync", or for a request
+    #: connect makes at startup, what it fetches, such as "positions".
+    name: str
+    #: The time limit, in seconds.
+    timeout: float
+    #: The request's reqId; None for one IBKR answers without a reqId.
+    reqId: int | None = None
+    #: The contract the request is about, if any.
+    contract: Contract | None = None
+
+
 class BarDataList(list[BarData]):
     """
     List of :class:`.BarData` that also stores all request parameters.

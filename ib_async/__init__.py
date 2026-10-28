@@ -85,6 +85,7 @@ from .objects import (
     TickByTickBidAsk,
     TickByTickMidPoint,
     TickData,
+    TimedOutRequest,
     TradeLogEntry,
     WshEventData,
 )
@@ -211,6 +212,7 @@ __all__ = [
     "TickByTickBidAsk",
     "TickByTickMidPoint",
     "TickData",
+    "TimedOutRequest",
     "TradeLogEntry",
     "BracketOrder",
     "ExecutionCondition",

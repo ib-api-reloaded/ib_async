@@ -81,6 +81,7 @@ from ib_async.objects import (
     ScannerSubscription,
     SmartComponent,
     TagValue,
+    TimedOutRequest,
     TradeLogEntry,
     WshEventData,
 )
@@ -357,6 +358,11 @@ class IB(Generic[EmptyT]):
           specified with :meth:`.setTimeout`. The value emitted is the period
           in seconds since the last update.
 
+        * ``requestTimeoutEvent`` (request: :class:`.TimedOutRequest`):
+          A request's time limit passed before IBKR answered it. The call
+          returns its usual result for a timeout, an empty one or None, so
+          this event tells a timeout apart from an empty answer.
+
         Note that it is not advisable to place new requests inside an event
         handler as it may lead to too much recursion.
     """
@@ -389,6 +395,7 @@ class IB(Generic[EmptyT]):
         "wshEvent",
         "errorEvent",
         "timeoutEvent",
+        "requestTimeoutEvent",
     )
 
     RequestTimeout: float = 0
@@ -451,6 +458,7 @@ class IB(Generic[EmptyT]):
         self.wshEvent = Event("wshEvent")
         self.errorEvent = Event("errorEvent")
         self.timeoutEvent = Event("timeoutEvent")
+        self.requestTimeoutEvent = Event("requestTimeoutEvent")
 
     def __del__(self):
         # ``__del__`` runs during garbage collection — exceptions
@@ -712,11 +720,16 @@ class IB(Generic[EmptyT]):
         return shared.future
 
     async def _awaitOrTimeout(
-        self, future: asyncio.Future, timeout: float, name: str
+        self,
+        future: asyncio.Future,
+        timeout: float,
+        name: str,
+        reqId: int | None = None,
+        contract: Contract | None = None,
     ) -> Any | None:
         """Await ``future`` for up to ``timeout`` seconds (0 means no
         timeout). Returns its result, or None after logging a timeout
-        tagged with ``name``.
+        tagged with ``name`` and reporting it (:meth:`_timedOut`).
 
         A timeout cancels ``future``, which ends its request (for a
         single-flight request, once its last caller has left). A late wire
@@ -726,7 +739,21 @@ class IB(Generic[EmptyT]):
             return await asyncio.wait_for(future, timeout or None)
         except TimeoutError:
             self._logger.error(f"{name}: Timeout")
+            self._timedOut(name, timeout, reqId, contract)
             return None
+
+    def _timedOut(
+        self,
+        name: str,
+        timeout: float,
+        reqId: int | None = None,
+        contract: Contract | None = None,
+    ) -> None:
+        """Count a request whose time limit passed and emit
+        ``requestTimeoutEvent``. The caller has ended the request; the
+        call's result stays as it was."""
+        self.wrapper.tally.requestsTimedOut += 1
+        self.requestTimeoutEvent.emit(TimedOutRequest(name, timeout, reqId, contract))
 
     def waitOnUpdate(self, timeout: float = 0) -> bool:
         """
@@ -2736,6 +2763,9 @@ class IB(Generic[EmptyT]):
                     msg = f"{name} request timed out"
                     errors.append(msg)
                     self._logger.error(msg)
+                    # A request times out only under a limit.
+                    assert timeout is not None  # noqa: S101 - narrows for the type checker
+                    self._timedOut(name, timeout)
 
             # the request for executions must come after all orders are in
             if fetchFields & StartupFetch.EXECUTIONS:
@@ -2745,6 +2775,8 @@ class IB(Generic[EmptyT]):
                     msg = "executions request timed out"
                     errors.append(msg)
                     self._logger.error(msg)
+                    assert timeout is not None  # noqa: S101 - narrows for the type checker
+                    self._timedOut("executions", timeout)
 
             if raiseSyncErrors and len(errors) > 0:
                 raise ConnectionError(errors)
@@ -3040,7 +3072,9 @@ class IB(Generic[EmptyT]):
         """Async sibling of :meth:`reqMatchingSymbols`."""
         with self._reqIdRequest() as opened:
             self.client.reqMatchingSymbols(opened.reqId, pattern)
-        return await self._awaitOrTimeout(opened.future, 4, "reqMatchingSymbolsAsync")
+        return await self._awaitOrTimeout(
+            opened.future, 4, "reqMatchingSymbolsAsync", opened.reqId
+        )
 
     async def reqMarketRuleAsync(
         self, marketRuleId: int
@@ -3111,6 +3145,7 @@ class IB(Generic[EmptyT]):
         except TimeoutError:
             self._abandonHistorical(opened)
             self._logger.warning(f"reqHistoricalData: Timeout for {contract}")
+            self._timedOut("reqHistoricalDataAsync", timeout, opened.reqId, contract)
             bars.clear()
         except asyncio.CancelledError:
             self._abandonHistorical(opened)
@@ -3163,6 +3198,9 @@ class IB(Generic[EmptyT]):
         except TimeoutError:
             self._abandonHistorical(opened)
             self._logger.warning(f"reqHistoricalSchedule: Timeout for {contract}")
+            self._timedOut(
+                "reqHistoricalScheduleAsync", timeout, opened.reqId, contract
+            )
             return HistoricalSchedule()
         except asyncio.CancelledError:
             self._abandonHistorical(opened)
@@ -3287,7 +3325,11 @@ class IB(Generic[EmptyT]):
             )
         with self._cancelling(opened, self.client.cancelCalculateImpliedVolatility):
             return await self._awaitOrTimeout(
-                opened.future, 4, "calculateImpliedVolatilityAsync"
+                opened.future,
+                4,
+                "calculateImpliedVolatilityAsync",
+                opened.reqId,
+                contract,
             )
 
     async def calculateOptionPriceAsync(
@@ -3305,7 +3347,7 @@ class IB(Generic[EmptyT]):
             )
         with self._cancelling(opened, self.client.cancelCalculateOptionPrice):
             return await self._awaitOrTimeout(
-                opened.future, 4, "calculateOptionPriceAsync"
+                opened.future, 4, "calculateOptionPriceAsync", opened.reqId, contract
             )
 
     def reqSecDefOptParamsAsync(
@@ -3406,7 +3448,7 @@ class IB(Generic[EmptyT]):
                 historicalNewsOptions,
             )
         return await self._awaitOrTimeout(
-            opened.future, timeout, "reqHistoricalNewsAsync"
+            opened.future, timeout, "reqHistoricalNewsAsync", opened.reqId
         )
 
     async def requestFAAsync(self, faDataType: int):
