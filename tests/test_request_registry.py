@@ -15,6 +15,7 @@ network. They cover the documented invariants:
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 
 import pytest
@@ -187,6 +188,36 @@ async def test_fail_all_wakes_everyone():
         with pytest.raises(ConnectionError, match="disconnect"):
             req.future.result()
     assert len(reg) == 0
+
+
+async def test_fail_all_reports_no_dropped_future_to_the_loop():
+    """A caller that dropped its future (plain or shared) before the
+    disconnect gets no "Future exception was never retrieved" report. A
+    caller still awaiting gets the error."""
+    reg = RequestRegistry()
+    loop = asyncio.get_running_loop()
+    reported: list[dict[str, object]] = []
+    loop.set_exception_handler(lambda loop, context: reported.append(context))
+    try:
+        reg.open(ReqIdKey(12))
+        reg.share(SingletonKey("positions"))
+
+        async def wait(future: asyncio.Future[None]) -> None:
+            await future
+
+        awaiter = asyncio.create_task(wait(reg.open(ReqIdKey(13)).future))
+        await asyncio.sleep(0)
+
+        reg.fail_all(ConnectionError("disconnect"))
+        with pytest.raises(ConnectionError, match="disconnect"):
+            await awaiter
+        del awaiter
+        for _ in range(3):
+            await asyncio.sleep(0)
+        gc.collect()
+    finally:
+        loop.set_exception_handler(None)
+    assert reported == []
 
 
 async def test_fail_all_skips_already_done_futures():

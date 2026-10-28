@@ -507,9 +507,18 @@ class RequestRegistry:
         Used on disconnect so no awaiter hangs on a future that will never
         resolve. Afterwards the registry is empty and no answers are
         expected.
+
+        The client reports the disconnect itself (``apiEnd``,
+        ``IB.disconnectedEvent``). A caller that dropped its future before
+        the disconnect gets no second report: each failure set here is
+        marked as read, so the loop does not report "Future exception was
+        never retrieved". An awaiter still gets ``exc`` raised.
         """
 
         for req in list(self._reqs.values()):
+            failing = [f for f in (req.future, *req.followers) if not f.done()]
             req.settle(exc=exc)
+            for future in failing:
+                future.exception()
         self._reqs.clear()
         self._owed.clear()

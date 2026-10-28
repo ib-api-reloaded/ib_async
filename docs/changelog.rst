@@ -407,6 +407,13 @@ are fixed in v3.0:
   use. Retry with a unique client id.`` A server too old for the client
   and a ``disconnect()`` during the connect raise it too. (:issue:`242`,
   thanks to @daniel-debrun)
+* **A disconnect reported dropped requests as errors.** When a disconnect
+  failed a request whose caller no longer held its future, the event loop
+  reported "Future exception was never retrieved". An interactive app,
+  such as one built on prompt_toolkit, shows that as a crash. The
+  disconnect is reported once, by ``disconnectedEvent``, and the requests
+  it ends report nothing more. A caller still awaiting a request gets
+  ``ConnectionError``.
 * **Empty values other than numbers and None broke the quote.** With an
   enum or string ``emptySize``, ``hasBidAsk``, ``midpoint`` and
   ``marketPrice`` raised ``TypeError``, as did a ``last`` tick while
