@@ -431,6 +431,16 @@ are fixed in v3.0:
   contract in ``reqTickersAsync`` left the snapshot subscriptions of every
   contract registered. These requests are now cancelled when their send
   raises, and ``reqTickersAsync`` removes its snapshot subscriptions.
+* **A stream IBKR refused stayed registered.** After an error such as 354
+  (not subscribed) or 200 (no security definition) for ``reqMktData``,
+  ``reqTickByTickData``, ``reqMktDepth`` or another stream, IBKR serves
+  nothing for it, but its subscription stayed. A later request for the
+  contract, after fixing the subscription, was deduplicated onto it: it
+  sent nothing and returned a Ticker that never updated. The errors IBKR
+  documents as ending a request (101, 200, 309, 316, 354, 10089, 10186) now
+  end the subscription, without a cancel; the Ticker keeps its data, and
+  the next request is sent and updates the same Ticker. Errors after which
+  the stream goes on (such as 10090, 10167 or 10197) leave it as it was.
 * **Empty values other than numbers and None broke the quote.** With an
   enum or string ``emptySize``, ``hasBidAsk``, ``midpoint`` and
   ``marketPrice`` raised ``TypeError``, as did a ``last`` tick while

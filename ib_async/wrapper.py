@@ -298,6 +298,25 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
     {105, 110, 165, 321, 329, 399, 404, 434, 492, 1100, 1101, 1102, 10167, 10349}
 )
 
+# Errors after which IBKR does not serve a stream (market data, tick by
+# tick, depth, bars, scanner, PnL): the request has to change and be sent
+# again. From https://interactivebrokers.github.io/tws-api/message_codes.html
+# and IBKR's resolution page for 10089:
+#   101   max number of tickers reached
+#   200   no security definition for the request
+#   309   max number of market depth requests reached
+#   316   market depth HALTED, re-subscribe
+#   354   not subscribed to the requested market data
+#   10089 requires an additional market data subscription
+#   10186 not subscribed, and delayed data not enabled
+# Not here, because the stream goes on or IBKR does not say it ended: 102
+# (the live request with that id continues), 322, 10090 and 10091 (part of
+# the data not subscribed; the rest arrives), 10167 (delayed data shown),
+# 10197 (competing live session).
+STREAM_ENDING_CODES: Final[frozenset[int]] = frozenset(
+    {101, 200, 309, 316, 354, 10089, 10186}
+)
+
 
 # Cap on the size of ``_pendingCommissionReports``. A commissionReport
 # whose execId never gets a paired execDetails on this client (e.g.
@@ -2306,10 +2325,16 @@ class Wrapper(Generic[EmptyT]):
         # answer: its subscription will never stream, and its caller may
         # never get the bars to cancel it by. (A bust event's subscription
         # moved to its fresh reqId above.)
+        # And any stream refused with an error that ends it
+        # (STREAM_ENDING_CODES): left registered, it would be deduplicated
+        # onto by the next request for the contract, which would then get
+        # a Ticker that never updates. Closing keeps the Ticker's data.
         if not isWarning:
             sub = self.subscriptions.get_sub(reqId)
-            if (isinstance(sub, MktDataSub) and sub.snapshot) or (
-                isinstance(sub, HistoricalBarsSub) and isRequest
+            if sub is not None and (
+                (isinstance(sub, MktDataSub) and sub.snapshot)
+                or (isinstance(sub, HistoricalBarsSub) and isRequest)
+                or errorCode in STREAM_ENDING_CODES
             ):
                 sub.close(send_cancel=False)
 

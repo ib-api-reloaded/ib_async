@@ -401,8 +401,10 @@ class SimulatedTws:
         self.wrapper.error(ask.reqId, 317, "Market depth data has been RESET", "")
 
     def refuseStream(self, ask: Ask, code: int = 354) -> None:
-        """Send an error for a stream. Code 354 means not subscribed."""
+        """Send an error for a stream. Code 354 means not subscribed; the
+        server serves nothing more for it."""
         assert ask.reqId is not None
+        ask.answered = True
         self.wrapper.error(
             ask.reqId, code, "Requested market data is not subscribed", ""
         )

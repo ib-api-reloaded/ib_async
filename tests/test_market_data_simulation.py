@@ -255,8 +255,9 @@ class MarketDataSimulation(RuleBasedStateMachine):
     def refuse_stream(self, data: st.DataObject) -> None:
         """Send error 354 (not subscribed) for a stream.
 
-        A refused snapshot can never complete, so its subscription ends. A
-        refused stream stays open until the client cancels it."""
+        IBKR serves nothing after it, so the subscription ends without a
+        cancel, a snapshot's and a stream's alike. The next request for the
+        contract is sent, not deduplicated onto the refused one."""
         candidates = self.liveStreams()
         if not candidates:
             return
@@ -264,8 +265,7 @@ class MarketDataSimulation(RuleBasedStateMachine):
         assert isinstance(stream, Stream)
         before = len(self.tws.cancels)
         self.tws.refuseStream(stream.ask)
-        if stream.kind == SNAPSHOT:
-            stream.live = False
+        stream.live = False
         assert len(self.tws.cancels) == before
 
     @rule()
