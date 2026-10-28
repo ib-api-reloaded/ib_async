@@ -272,6 +272,48 @@ def test_a_subscription_whose_send_raises_is_unregistered():
     assert ticker.updateEvent.done() is False
 
 
+def test_a_pooled_ticker_no_stream_was_sent_for_leaves_the_pool():
+    """The send that raised was the only one for the Ticker: it never
+    subscribed, so it is not left in the pool (``ib.tickers()``)."""
+    ib = ibi.IB()
+    reg = ib.wrapper.subscriptions
+    contract = _stock(1)
+    ticker = reg.get_or_create_ticker(contract)
+
+    with (
+        pytest.raises(TypeError),
+        reg.sending(MktDataSub(reqId=86, contract=contract, ticker=ticker)),
+    ):
+        raise TypeError("rejected")
+
+    assert reg.pooled_tickers() == []
+    assert reg.ticker_for_contract(contract) is None
+
+
+def test_a_pooled_ticker_a_stream_was_sent_for_stays_in_the_pool():
+    """A Ticker that served a stream keeps its place, and its identity for
+    a caller holding it, when a later send for it raises."""
+    ib = ibi.IB()
+    ib.client = MagicMock()
+    reg = ib.wrapper.subscriptions
+    contract = _stock(1)
+    ticker = reg.get_or_create_ticker(contract)
+    served = MktDataSub(reqId=87, contract=contract, ticker=ticker)
+    with reg.sending(served):
+        pass
+    served.close()
+
+    with (
+        pytest.raises(TypeError),
+        reg.sending(
+            TickByTickSub(reqId=88, contract=contract, ticker=ticker, tickType="Last")
+        ),
+    ):
+        raise TypeError("rejected")
+
+    assert reg.pooled_tickers() == [ticker]
+
+
 def test_a_pnl_subscription_whose_send_raises_is_unregistered():
     reg, client = _registry_with_mock_client()
     pnl = PnLSub(

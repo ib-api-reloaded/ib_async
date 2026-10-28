@@ -371,6 +371,8 @@ def test_a_stream_the_encoder_rejects_leaves_no_subscription(name: str) -> None:
     refusal, sent = attempt(session, lambda: retry.rejected(session.ib))
     assert refusal is not None and sent == 0, (name, refusal, sent)
     assert len(session.ib.wrapper.subscriptions) == 0, name
+    # No Ticker is pooled for a stream never subscribed.
+    assert session.ib.tickers() == [], name
 
     refusal, sent = attempt(session, lambda: retry.corrected(session.ib))
     assert refusal is None and sent == 1, (name, refusal, sent)

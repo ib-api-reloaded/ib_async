@@ -422,7 +422,8 @@ are fixed in v3.0:
   never updated. ``reqMktData``, ``reqTickByTickData``, ``reqMktDepth``,
   ``reqRealTimeBars``, ``reqPnL``, ``reqPnLSingle`` and
   ``reqScannerSubscription`` now remove the subscription when their send
-  raises.
+  raises, and a Ticker created for that call, which never subscribed, is
+  not listed by ``ib.tickers()``.
 * **A rejected request argument left the request open.** A request such
   as ``reqContractDetailsAsync``, ``reqHistoricalDataAsync`` or
   ``whatIfOrderAsync`` whose argument the encoder refused raised and sent

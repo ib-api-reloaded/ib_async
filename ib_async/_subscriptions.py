@@ -314,6 +314,10 @@ class SubscriptionRegistry(Generic[EmptyT]):
     # for a given contract so a single Ticker reflects every live
     # tick stream. Keyed by ``hash(contract)``, as the market-data index.
     _tickers: dict[int, Ticker[EmptyT]] = field(default_factory=dict, init=False)
+    # Keys of pooled Tickers some stream's request was sent for (see
+    # sending). A pooled Ticker no request was ever sent for is dropped
+    # from the pool when its send raises.
+    _sentFor: set[int] = field(default_factory=set, init=False)
     # (identity, kind) -> Subscription, where identity is the
     # contract's hash (see _market_data_identity) and kind is the
     # IB-level market-data type ("mktData", "Last", "AllLast",
@@ -377,6 +381,11 @@ class SubscriptionRegistry(Generic[EmptyT]):
         deduplicated by contract. ``add`` runs before the block, so a
         duplicate is refused before anything is sent. ``None`` registers
         nothing, for a request that has no subscription.
+
+        A pooled Ticker created for this call, that no request was ever
+        sent for, leaves the pool too, so ``IB.tickers()`` does not list a
+        contract never subscribed. One that served a stream stays, with
+        its data and its identity for a caller holding it.
         """
         if sub is not None:
             self.add(sub)
@@ -385,7 +394,25 @@ class SubscriptionRegistry(Generic[EmptyT]):
         except BaseException:
             if sub is not None:
                 sub.close(send_cancel=False)
+                key = self._pooledKey(sub)
+                if key is not None and key not in self._sentFor:
+                    del self._tickers[key]
             raise
+        if sub is not None and (key := self._pooledKey(sub)) is not None:
+            self._sentFor.add(key)
+
+    def _pooledKey(self, sub: Subscription) -> int | None:
+        """The pool key of ``sub``'s Ticker, or None if it is not pooled.
+
+        Only streams use pooled Tickers; their contracts are hashable. A
+        snapshot's Ticker is private, and its contract may be unqualified,
+        which has no hash."""
+        if isinstance(sub, MktDataSub) and sub.snapshot:
+            return None
+        if not isinstance(sub, MktDataSub | TickByTickSub | MktDepthSub):
+            return None
+        key = hash(sub.contract)
+        return key if self._tickers.get(key) is sub.ticker else None
 
     def _cancelClient(self) -> Client | None:
         """The IB client a closing subscription sends its cancel with."""
