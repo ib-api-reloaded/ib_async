@@ -195,6 +195,12 @@ def test_refused_socket_connect_reports_nothing_to_the_loop():
     # exception handler, which an interactive app shows as a crash.
     session = Session()
     session.client.conn = RefusingConnection()  # type: ignore[assignment]
+    # Free what earlier tests left on the shared loop before the handler is
+    # installed, so only this test's own futures can reach it. Without
+    # reference counting (PyPy) a dropped future is freed only when the
+    # garbage collector runs.
+    session.run()
+    gc.collect()
     reported: list[dict[str, object]] = []
     session.loop.set_exception_handler(lambda loop, context: reported.append(context))
     try:
