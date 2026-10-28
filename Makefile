@@ -159,10 +159,12 @@ test-report:
 # Run the property tests (tests/_property.py) with SCALE times as many
 # examples, on all cores (pytest-xdist), to explore far more state-machine
 # interleavings in a few minutes. The default run stays serial so output is
-# in order and a hang shows which test it was in.
+# in order and a hang shows which test it was in. A test's limit grows with
+# SCALE, as its examples do; the run's own limit still bounds a hang.
 SCALE ?= 20
 test-deep:
-	IB_ASYNC_PROPERTY_SCALE=$(SCALE) $(RELEASEKIT) test -- -n auto $(LOOP_ARGS) $(PYTEST_ARGS)
+	TEST_TIMEOUT=$$(( $(TEST_TIMEOUT) * $(SCALE) )) IB_ASYNC_PROPERTY_SCALE=$(SCALE) \
+		$(RELEASEKIT) test -- -n auto $(LOOP_ARGS) $(PYTEST_ARGS)
 
 test-matrix:
 	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v)) -- $(LOOP_ARGS)
