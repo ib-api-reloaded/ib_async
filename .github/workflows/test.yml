@@ -107,6 +107,12 @@ jobs:
       - name: Tests
         run: make test
 
+      - name: Tests on one shared event loop
+        # Each test above runs on a loop of its own (tests/_loops.py). Here
+        # every test runs on one loop, as an application does, so a test
+        # that leaves a task or a callback behind fails.
+        run: make test LOOP=shared
+
       - name: Examples
         # The examples are checked, never run (they need a TWS / IB
         # Gateway), so one interpreter is enough.
