@@ -135,7 +135,7 @@ def test_startLoop_allows_sync_calls_inside_a_running_loop():
 
 
         async def cell():
-            return util.run(asyncio.wait_for(asyncio.sleep(0.01, result=42), 1))
+            return util.run(asyncio.wait_for(asyncio.sleep(0, result=42), 1))
 
 
         assert asyncio.run(cell()) == 42

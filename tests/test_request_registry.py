@@ -291,8 +291,10 @@ async def test_a_request_its_awaiter_abandons_is_forgotten():
     it does not stay registered, and late data for it is dropped."""
     reg = RequestRegistry()
     req = reg.open(ReqIdKey(1))
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(req.future, 0.001)
+    # The awaiter stops waiting, as its timeout does; then the future's
+    # done callbacks run.
+    req.future.cancel()
+    await asyncio.sleep(0)
     assert len(reg) == 0
     reg.append(ReqIdKey(1), "late")  # no-op: nothing to append to
     assert req.container == []
@@ -321,13 +323,15 @@ async def test_one_callers_timeout_leaves_the_others_waiting():
     assert not patientShare.isNew
     patient = patientShare.future
 
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(impatient, 0.01)
+    # One caller stops waiting, as its timeout does; then its future's done
+    # callbacks run.
+    impatient.cancel()
+    await asyncio.sleep(0)
     req = reg.get(key)
     assert req is not None and req.followers == [patient]
 
     reg.set_result(key, ["rule"])
-    assert await asyncio.wait_for(patient, 1) == ["rule"]
+    assert await patient == ["rule"]
 
 
 async def test_followers_settle_with_the_request_at_once():

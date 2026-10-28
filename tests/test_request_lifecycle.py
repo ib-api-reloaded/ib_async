@@ -13,6 +13,7 @@ import pytest
 import ib_async as ibi
 from ib_async._requests import ReqIdKey, RequestRegistry, SingletonKey
 from ib_async._subscriptions import HistoricalBarsSub
+from tests._clock import installClock
 
 EXECUTED = dt.datetime(2026, 10, 14, 15, 30, tzinfo=dt.UTC)
 
@@ -39,8 +40,11 @@ async def test_late_rows_of_an_abandoned_executions_request_are_history():
     ib = connected()
     task = asyncio.ensure_future(ib.reqExecutionsAsync())
     await asyncio.sleep(0)
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(task, 0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    # Let the cancelled request's done callbacks run.
+    await asyncio.sleep(0)
     assert len(ib.wrapper.requests) == 0
 
     stock = ibi.Stock("X", "SMART", "USD")
@@ -185,12 +189,17 @@ async def test_a_market_rule_not_sent_is_not_left_open():
     assert len(ib.wrapper.requests) == 0
 
 
-async def test_a_timeout_of_zero_waits_for_the_answer():
+async def test_a_timeout_of_zero_waits_for_the_answer(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    clock = installClock(asyncio.get_running_loop(), monkeypatch)
     ib = connected()
     task = asyncio.ensure_future(
         ib.reqHistoricalNewsAsync(1, "BZ", "", "", 10, timeout=0)
     )
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0)
+    clock.advance(3600)
+    await asyncio.sleep(0)
     assert not task.done()
     ib.wrapper.historicalNewsEnd(500, False)
     assert await task == []
@@ -213,14 +222,15 @@ async def test_a_refused_keep_up_to_date_request_closes_its_subscription():
 
 async def test_a_request_cancelled_with_ibkr_is_owed_nothing():
     """reqHeadTimeStamp cancels its request with IBKR however it ends, so
-    a timeout leaves no answer owed to it."""
+    a caller that stops waiting leaves no answer owed to it."""
     ib = connected()
     task = asyncio.ensure_future(
         ib.reqHeadTimeStampAsync(ibi.Stock("X", "SMART", "USD"), "TRADES", True, 1)
     )
     await asyncio.sleep(0)
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(task, 0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
     assert not ib.wrapper.requests.answering(ReqIdKey(500))
 
 
@@ -228,8 +238,11 @@ async def test_an_error_ends_an_owed_answer():
     ib = connected()
     task = asyncio.ensure_future(ib.reqExecutionsAsync())
     await asyncio.sleep(0)
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(task, 0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    # Let the cancelled request's done callbacks run.
+    await asyncio.sleep(0)
     assert ib.wrapper.requests.answering(ReqIdKey(500))
     ib.wrapper.error(500, 162, "Historical Market Data Service error", "")
     assert not ib.wrapper.requests.answering(ReqIdKey(500))
@@ -239,8 +252,9 @@ async def test_an_abandoned_scan_ends_its_subscription():
     ib = connected()
     task = asyncio.ensure_future(ib.reqScannerDataAsync(ibi.ScannerSubscription()))
     await asyncio.sleep(0)
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(task, 0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
     assert ib.wrapper.subscriptions.get_sub(500) is None
     ib.client.cancelScannerSubscription.assert_called_once_with(500)
 
@@ -270,7 +284,10 @@ async def test_cancelling_wsh_metadata_cancels_its_awaiter():
     assert await second == "{}"
 
 
-async def test_a_request_abandoned_after_a_bust_ends_its_resent_subscription():
+async def test_a_request_abandoned_after_a_bust_ends_its_resent_subscription(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    clock = installClock(asyncio.get_running_loop(), monkeypatch)
     ib = connected()
     contract = ibi.Stock("X", "SMART", "USD")
     task = asyncio.ensure_future(
@@ -282,11 +299,12 @@ async def test_a_request_abandoned_after_a_bust_ends_its_resent_subscription():
             "TRADES",
             True,
             keepUpToDate=True,
-            timeout=0.05,
+            timeout=5,
         )
     )
     await asyncio.sleep(0)
     ib.wrapper.error(500, 10225, "Bust event occurred", "")
+    clock.advance(5.1)
     await task
     assert [c.args[0] for c in ib.client.cancelHistoricalData.call_args_list] == [
         500,

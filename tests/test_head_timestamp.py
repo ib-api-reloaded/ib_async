@@ -36,6 +36,14 @@ async def request(ib: ibi.IB) -> asyncio.Task[dt.datetime]:
     return task
 
 
+async def abandon(task: asyncio.Task[dt.datetime]) -> None:
+    """Stop waiting for the answer, as a caller's timeout does: cancel the
+    waiting task."""
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
 async def test_an_answered_request_is_cancelled():
     ib = connected()
     task = await request(ib)
@@ -53,11 +61,9 @@ async def test_a_request_whose_answer_fails_to_parse_is_cancelled():
     ib.client.cancelHeadTimeStamp.assert_called_once_with(REQ_ID)
 
 
-async def test_a_request_abandoned_by_a_timeout_is_cancelled():
+async def test_an_abandoned_request_is_cancelled():
     ib = connected()
-    task = await request(ib)
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(task, 0.01)
+    await abandon(await request(ib))
     ib.client.cancelHeadTimeStamp.assert_called_once_with(REQ_ID)
 
 
@@ -74,17 +80,13 @@ async def test_many_abandoned_requests_each_free_their_slot():
     cancelled, so none stays open."""
     ib = connected()
     for _ in range(60):
-        task = await request(ib)
-        with pytest.raises(TimeoutError):
-            await asyncio.wait_for(task, 0.001)
+        await abandon(await request(ib))
     assert ib.client.cancelHeadTimeStamp.call_count == 60
 
 
 async def test_an_abandoned_request_is_not_left_registered():
     ib = connected()
-    task = await request(ib)
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(task, 0.01)
+    await abandon(await request(ib))
     assert len(ib.wrapper.requests) == 0
 
 

@@ -38,14 +38,18 @@ def _sentBanner() -> bytes:
     conn = _RecordingConnection()
     ib.client.conn = conn  # type: ignore[assignment]
 
-    # No server answers, so the API-start wait times out once the
-    # banner is out; only the banner matters here.
-    with pytest.raises((asyncio.TimeoutError, TimeoutError)):
-        ibi.util.getLoop().run_until_complete(
-            ib.client.connectAsync("127.0.0.1", 7497, 1, timeout=0.01)
-        )
-
-    return conn.sent[0]
+    # The banner goes out as soon as the socket connects. No server
+    # answers, so the connect is then cancelled; only the banner matters.
+    loop = ibi.util.getLoop()
+    connecting = loop.create_task(
+        ib.client.connectAsync("127.0.0.1", 7497, 1, timeout=0)
+    )
+    loop.run_until_complete(asyncio.sleep(0))
+    banner = conn.sent[0]
+    connecting.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        loop.run_until_complete(connecting)
+    return banner
 
 
 def test_banner_advertises_ibkr_10_51_server_version():

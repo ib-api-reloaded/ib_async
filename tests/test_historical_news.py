@@ -4,8 +4,11 @@ import asyncio
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
+import pytest
+
 import ib_async as ibi
 from ib_async._requests import ReqIdKey
+from tests._clock import installClock
 
 
 def test_historical_news_request_accumulates_list_results():
@@ -37,15 +40,23 @@ def test_historical_news_request_accumulates_list_results():
     assert result[0].time == datetime(2025, 10, 20, 15, 0, tzinfo=UTC)
 
 
-async def test_historical_news_timeout_is_the_callers():
+async def test_historical_news_timeout_is_the_callers(
+    monkeypatch: pytest.MonkeyPatch,
+):
     """The wait is a parameter (it was fixed at 4 seconds, short for 300
     headlines): with no answer, the request gives up after ``timeout``."""
 
+    clock = installClock(asyncio.get_running_loop(), monkeypatch)
     ib = ibi.IB()
     ib.client = MagicMock()
     ib.client.getReqId.return_value = 7
     ib.client.isConnected.return_value = False
-    started = asyncio.get_running_loop().time()
-    result = await ib.reqHistoricalNewsAsync(8314, "BZ", "", "", 300, timeout=0.05)
-    assert result is None
-    assert asyncio.get_running_loop().time() - started < 1
+    news = asyncio.ensure_future(
+        ib.reqHistoricalNewsAsync(8314, "BZ", "", "", 300, timeout=300)
+    )
+    await asyncio.sleep(0)
+    clock.advance(5)
+    await asyncio.sleep(0)
+    assert not news.done()
+    clock.advance(296)
+    assert await news is None

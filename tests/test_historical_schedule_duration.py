@@ -16,6 +16,7 @@ import pytest
 
 import ib_async as ibi
 from ib_async._requests import ReqIdKey
+from tests._clock import installClock
 
 # Positional layout of the outbound ``client.reqHistoricalData`` call.
 REQ_ID, CONTRACT, END, DURATION, BAR_SIZE = 0, 1, 2, 3, 4
@@ -150,15 +151,19 @@ def test_barSizeSetting_formatDate_and_chartOptions_reach_the_wire():
 # -- timeout ------------------------------------------------------------------
 
 
-def test_unanswered_request_times_out_instead_of_hanging():
+def test_unanswered_request_times_out_instead_of_hanging(
+    monkeypatch: pytest.MonkeyPatch,
+):
     """A duration IBKR drops rather than answers left the await unbounded
     with no reqId in the caller's hands to cancel by."""
     ib = _wiredIB()
     loop = ibi.util.getLoop()
+    clock = installClock(loop, monkeypatch)
 
-    schedule = loop.run_until_complete(
-        ib.reqHistoricalScheduleAsync(_stock(), "400 D", timeout=0.01)
-    )
+    task = loop.create_task(ib.reqHistoricalScheduleAsync(_stock(), "400 D", timeout=6))
+    loop.run_until_complete(asyncio.sleep(0))
+    clock.advance(6.1)
+    schedule = loop.run_until_complete(task)
 
     assert schedule == ibi.HistoricalSchedule()
     ib.client.cancelHistoricalData.assert_called_once_with(300)
