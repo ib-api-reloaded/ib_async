@@ -155,6 +155,27 @@ class RequestSimulation(RuleBasedStateMachine):
         started.endedConnected = self.tws.connected
         self.tws.run()
 
+    @rule(data=st.data())
+    def cancel_with_ibkr(self, data: st.DataObject) -> None:
+        """Cancel a waiting head timestamp request with IBKR by its reqId
+        (IB.cancelHeadTimeStamp). Its caller gets CancelledError and IBKR
+        sends no answer."""
+        if not self.tws.connected:
+            return
+        pending = [
+            s
+            for s in self.started
+            if s.expect == PENDING and s.kind == "reqHeadTimeStamp"
+        ]
+        if not pending:
+            return
+        started = pending[data.draw(st.integers(0, len(pending) - 1))]
+        assert started.ask.reqId is not None
+        self.ib.cancelHeadTimeStamp(started.ask.reqId)
+        started.expect = CANCELLED
+        started.endedConnected = True
+        self.tws.run()
+
     # -- server messages -------------------------------------------------
 
     @rule(kind=st.sampled_from([*REQ_ID_KINDS, "reqPositions"]), rows=st.integers(0, 3))
@@ -241,6 +262,10 @@ class RequestSimulation(RuleBasedStateMachine):
     @property
     def ib(self):
         return self.tws.ib
+
+    @invariant()
+    def each_end_is_counted_once(self) -> None:
+        self.tws.assertEachEndCountedOnce()
 
     @invariant()
     def callers_in_expected_state(self) -> None:

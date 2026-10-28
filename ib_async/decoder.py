@@ -202,6 +202,7 @@ from .order import (
     OrderState,
     decimalOrInfinity,
 )
+from .runtime import Tally
 from .util import (
     UNSET_DOUBLE,
     UNSET_INTEGER,
@@ -439,9 +440,13 @@ def _resolveCoerceType(annotation: Annotation) -> Coerced | None:
 class Decoder(Generic[EmptyT]):
     """Decode IB messages and invoke corresponding wrapper methods."""
 
-    def __init__(self, wrapper: Wrapper[EmptyT], serverVersion: int):
+    def __init__(
+        self, wrapper: Wrapper[EmptyT], serverVersion: int, tally: Tally | None = None
+    ):
         self.wrapper = wrapper
         self.serverVersion = serverVersion
+        # Counts messages it cannot handle (ib_async.runtime).
+        self.tally = Tally() if tally is None else tally
         self.logger = logging.getLogger("ib_async.Decoder")
         # Resolve the protobuf message classes on first construction
         # so the heavy ``_pb`` imports don't fire at module-load time
@@ -569,6 +574,7 @@ class Decoder(Generic[EmptyT]):
 
         converters = [_CONV[t] for t in types]
         logger = self.logger
+        tally = self.tally
 
         def handler(fields):
             try:
@@ -578,17 +584,23 @@ class Decoder(Generic[EmptyT]):
                 ]
                 method(*args)
             except Exception:
+                tally.decodeFailures += 1
                 logger.exception("Error for %s with fields=%r", methodName, fields)
 
         return handler
 
     def interpret(self, fields):
         """Decode fields and invoke corresponding wrapper method."""
+        msgId: int | None = None
         try:
             msgId = int(fields[0])
             handler = self.handlers[msgId]
             handler(fields)
         except Exception:
+            if msgId is not None and msgId not in self.handlers:
+                self.tally.unknownMessages += 1
+            else:
+                self.tally.decodeFailures += 1
             self.logger.exception(f"Error handling fields: {fields}")
 
     def processProtoBuf(self, canonicalMsgId: int, payload: bytes) -> None:
@@ -621,6 +633,7 @@ class Decoder(Generic[EmptyT]):
         """
         entry = self._protoDispatch.get(canonicalMsgId)
         if entry is None:
+            self.tally.unknownMessages += 1
             self.logger.debug(
                 "protobuf msg %d, %d bytes (no handler)",
                 canonicalMsgId,
@@ -633,6 +646,7 @@ class Decoder(Generic[EmptyT]):
             proto.ParseFromString(payload)
             entry.handle(proto)
         except Exception as exc:
+            self.tally.decodeFailures += 1
             # ``ParseFromString`` failures leave reqId inaccessible because
             # the bytes never landed in a typed field, so the awaiter only
             # clears via the connection-loss path or a user-side timeout.

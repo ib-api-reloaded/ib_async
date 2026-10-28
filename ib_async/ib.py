@@ -93,6 +93,7 @@ from ib_async.order import (
     Trade,
 )
 from ib_async.ordertypes import LimitOrder, StopOrder
+from ib_async.runtime import RuntimeState
 from ib_async.ticker import Ticker
 from ib_async.wrapper import Wrapper
 
@@ -410,7 +411,7 @@ class IB(Generic[EmptyT]):
         self.wrapper: Wrapper[EmptyT] = (
             Wrapper(self) if defaults is None else Wrapper(self, defaults=defaults)
         )
-        self.client = Client(self.wrapper)
+        self.client = Client(self.wrapper, self.wrapper.tally)
         self.errorEvent += self._onError
         self.client.apiEnd += self.disconnectedEvent
         self._logger = logging.getLogger("ib_async.ib")
@@ -572,6 +573,24 @@ class IB(Generic[EmptyT]):
         """Is there an API connection to TWS or IB gateway?"""
         return self.client.isReady()
 
+    def runtimeState(self) -> RuntimeState:
+        """The client's state now, for metrics and debugging: the
+        connection, the current connection's traffic and pacing, the
+        requests waiting for an answer, the live subscriptions, and the
+        counters totalled since this IB was created (see
+        :mod:`ib_async.runtime`).
+
+        Every part is frozen and read in one step, so the parts agree.
+        Call it on the event loop's thread, as every IB method."""
+        return RuntimeState(
+            time=datetime.datetime.now(datetime.UTC),
+            connection=self.client.connectionState(),
+            transport=self.client.transportState(),
+            requests=self.wrapper.requests.state(),
+            subscriptions=self.wrapper.subscriptions.state(),
+            counters=self.wrapper.tally.counters(),
+        )
+
     def _onError(self, reqId, errorCode, errorString, contract):
         if errorCode in (1101, 1102):
             # 1101 - "Connectivity between IB and TWS has been restored -
@@ -688,7 +707,7 @@ class IB(Generic[EmptyT]):
             try:
                 send()
             except BaseException:
-                self.wrapper.requests.cancel(key, "not sent")
+                self.wrapper.requests.cancel(key, "not sent", sent=False)
                 raise
         return shared.future
 

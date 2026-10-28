@@ -47,6 +47,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from ib_async.runtime import RequestState, Tally
 from ib_async.util import getLoop
 
 _logger = logging.getLogger("ib_async.requests")
@@ -236,6 +237,10 @@ class RequestRegistry:
 
     # Clock used for the OWED_FOR deadlines, in seconds.
     clock: Callable[[], float] = time.monotonic
+    # The session's counters (ib_async.runtime), shared with the registry
+    # that replaces this one after a disconnect. Each request's end is
+    # counted once, where it ends.
+    tally: Tally = field(default_factory=Tally)
     _reqs: dict[RequestKey, Request] = field(default_factory=dict, init=False)
     # Per key, the answers still expected for abandoned requests. Ordered
     # by deadline, oldest first: an entry is always (re)inserted with the
@@ -270,6 +275,7 @@ class RequestRegistry:
             return 0
         if self.clock() > owed.until:
             del self._owed[key]
+            self.tally.answersForgotten += owed.count
             _logger.debug("%r: no longer waiting for %d owed answers", key, owed.count)
             return 0
         return owed.count
@@ -338,6 +344,7 @@ class RequestRegistry:
             args=args,
         )
         self._reqs[key] = req
+        self.tally.requestsOpened += 1
         # If the awaiter finishes the future (a timeout or a cancelled
         # task), remove the request. Otherwise it would stay registered
         # and keep collecting late data.
@@ -370,7 +377,7 @@ class RequestRegistry:
         try:
             yield req
         except BaseException:
-            self.cancel(key, "not sent")
+            self.cancel(key, "not sent", sent=False)
             raise
 
     def share(self, key: RequestKey, *, args: tuple = ()) -> Shared:
@@ -396,6 +403,8 @@ class RequestRegistry:
                 f"{key!r} is in flight with {req.args!r}; one with {args!r} "
                 "must wait for its answer"
             )
+        else:
+            self.tally.requestsJoined += 1
         shared = req
         mine: asyncio.Future = shared.future.get_loop().create_future()
 
@@ -427,6 +436,7 @@ class RequestRegistry:
             return
         del self._reqs[key]
         req.settled = True
+        self.tally.requestsAbandoned += 1
         now = self.clock()
         count = self._owing(key) + 1
         # Reinsert at the end with the latest deadline. This keeps entries
@@ -435,7 +445,7 @@ class RequestRegistry:
         self._owed[key] = _Owed(count, now + OWED_FOR)
         _logger.debug("%r: ended before its answer, which is owed", key)
         for expired in [k for k, o in self._owed.items() if o.until < now]:
-            del self._owed[expired]
+            self.tally.answersForgotten += self._owed.pop(expired).count
             _logger.debug("%r: no longer waiting for its owed answers", expired)
 
     def _ended(self, key: RequestKey) -> Request | None:
@@ -449,6 +459,7 @@ class RequestRegistry:
                 self._owed[key] = _Owed(owed - 1, self._owed[key].until)
             else:
                 del self._owed[key]
+            self.tally.answersDiscarded += 1
             _logger.debug("%r: an owed answer ended, settling nothing", key)
             return None
         return self._reqs.pop(key, None)
@@ -494,8 +505,17 @@ class RequestRegistry:
         container if no value is given. Idempotent. An end message for an
         abandoned request settles nothing."""
 
+        self._finish(key, value, refused=False)
+
+    def _finish(self, key: RequestKey, value: Any, *, refused: bool) -> None:
+        """Settle the request for ``key`` with ``value`` (or its container),
+        and count it as answered or refused."""
         req = self._ended(key)
         if req is not None:
+            if refused:
+                self.tally.requestsRefused += 1
+            else:
+                self.tally.requestsAnswered += 1
             req.settle(req.container if value is _USE_CONTAINER else value)
 
     def set_error(self, key: RequestKey, exc: BaseException) -> None:
@@ -503,6 +523,7 @@ class RequestRegistry:
 
         req = self._ended(key)
         if req is not None:
+            self.tally.requestsFailed += 1
             req.settle(exc=exc)
 
     def refuse(self, key: RequestKey, errorCode: int, errorString: str) -> None:
@@ -511,13 +532,13 @@ class RequestRegistry:
 
         req = self._reqs.get(key)
         if req is None or self._owing(key) or req.refusal is None:
-            self.set_result(key)
+            self._finish(key, _USE_CONTAINER, refused=True)
         else:
-            self.set_result(key, req.refusal(errorCode, errorString))
+            self._finish(key, req.refusal(errorCode, errorString), refused=True)
 
-    def cancel(self, key: RequestKey, reason: str = "") -> None:
+    def cancel(self, key: RequestKey, reason: str = "", *, sent: bool = True) -> None:
         """Cancel a request that IBKR will not answer, because it was
-        cancelled with IBKR or never sent.
+        cancelled with IBKR or, with ``sent=False``, never sent.
 
         The awaiter and all followers get :class:`asyncio.CancelledError`.
         Answers expected for earlier abandoned requests of the key are
@@ -528,6 +549,10 @@ class RequestRegistry:
             return
         req.settled = True
         req.withdrawn = True
+        if sent:
+            self.tally.requestsWithdrawn += 1
+        else:
+            self.tally.requestsNotSent += 1
         for future in (req.future, *req.followers):
             future.cancel(reason or repr(key))
 
@@ -546,9 +571,46 @@ class RequestRegistry:
         """
 
         for req in list(self._reqs.values()):
+            # A request whose caller already stopped waiting (its removal
+            # still pending on the loop) ended as abandoned.
+            if req.future.done():
+                self.tally.requestsAbandoned += 1
+            else:
+                self.tally.requestsDisconnected += 1
             failing = [f for f in (req.future, *req.followers) if not f.done()]
             req.settle(exc=exc)
             for future in failing:
                 future.exception()
         self._reqs.clear()
         self._owed.clear()
+
+    def state(self) -> RequestState:
+        """The requests waiting for an answer, by kind of key. Reading it
+        changes nothing: expired owed answers are left out, not dropped."""
+        reqIds = singletons = composites = whatIfs = callers = 0
+        for req in self._reqs.values():
+            if not req.live:
+                continue
+            key = req.key
+            if isinstance(key, ReqIdKey):
+                reqIds += 1
+            elif isinstance(key, SingletonKey):
+                singletons += 1
+            elif isinstance(key, CompositeKey):
+                composites += 1
+            elif isinstance(key, WhatIfKey):
+                whatIfs += 1
+            callers += len(req.followers)
+        now = self.clock()
+        owed = 0
+        for entry in self._owed.values():
+            if entry.until >= now:
+                owed += entry.count
+        return RequestState(
+            reqIdRequests=reqIds,
+            singletonRequests=singletons,
+            compositeRequests=composites,
+            whatIfRequests=whatIfs,
+            waitingCallers=callers,
+            owedAnswers=owed,
+        )

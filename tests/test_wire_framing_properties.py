@@ -110,8 +110,9 @@ def test_new_framing_is_independent_of_chunking(
         c._onSocketHasData(chunk)
     assert decoder.frames == [expected(f) for f in frames]
     assert c._data == b""
-    assert c._numMsgRecv == len(frames)
-    assert c._numBytesRecv == len(data)
+    transport = c.transportState()
+    assert transport.framesReceived == len(frames)
+    assert transport.bytesReceived == len(data)
 
 
 @given(
@@ -128,7 +129,7 @@ def test_old_framing_is_independent_of_chunking(
         c._onSocketHasData(chunk)
     assert decoder.frames == [expected(f) for f in frames]
     assert c._data == b""
-    assert c._numMsgRecv == len(frames)
+    assert c.transportState().framesReceived == len(frames)
 
 
 @given(frames=st.lists(st.one_of(binaryFrame, protoFrame), min_size=1, max_size=4))

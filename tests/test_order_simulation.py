@@ -297,6 +297,10 @@ class OrderSimulation(RuleBasedStateMachine):
     # -- invariants ------------------------------------------------------
 
     @invariant()
+    def each_end_is_counted_once(self) -> None:
+        self.tws.assertEachEndCountedOnce()
+
+    @invariant()
     def trades_in_expected_state(self) -> None:
         for t in self.tracked:
             trade = t.trade

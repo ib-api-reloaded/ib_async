@@ -186,6 +186,17 @@ class SimulatedTws:
         """The current wrapper. A disconnect resets its registries."""
         return self.ib.wrapper
 
+    def assertEachEndCountedOnce(self) -> None:
+        """Each request and subscription is either still registered or
+        counted, once, as ended (ib_async.runtime). Holds after every step,
+        disconnects included."""
+        counters = self.wrapper.tally.counters()
+        registered = len(self.wrapper.requests._reqs)
+        assert counters.requestsOpened == counters.requestsEnded + registered, counters
+        assert counters.subscriptionsAdded == counters.subscriptionsEnded + len(
+            self.wrapper.subscriptions
+        ), counters
+
     # -- client side -----------------------------------------------------
 
     def _reqId(self) -> int:

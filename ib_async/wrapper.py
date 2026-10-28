@@ -83,6 +83,7 @@ from ib_async.objects import (
     TradeLogEntry,
 )
 from ib_async.order import Order, OrderState, OrderStatus, Trade
+from ib_async.runtime import Tally
 from ib_async.ticker import HaltedStatus, Ticker
 from ib_async.util import (
     UNSET_DOUBLE,
@@ -456,6 +457,10 @@ class Wrapper(Generic[EmptyT]):
     # value used when a field has missing, empty, or not populated data
     defaults: IBDefaults[EmptyT] = field(default_factory=IBDefaults)
 
+    # The session's counters (ib_async.runtime). reset() keeps them: each
+    # new registry shares them, and the client counts into them too.
+    tally: Tally = field(default_factory=Tally, init=False, repr=False)
+
     def __post_init__(self):
         # extract values from defaults objects just to use locally
         self.defaultTimezone = self.defaults.timezone
@@ -484,8 +489,8 @@ class Wrapper(Generic[EmptyT]):
         self._wshMetaReqId = 0
         self._wshEventReqId = 0
         self._timeout = 0
-        self.requests = RequestRegistry()
-        self.subscriptions = SubscriptionRegistry(self)
+        self.requests = RequestRegistry(tally=self.tally)
+        self.subscriptions = SubscriptionRegistry(self, tally=self.tally)
         # Cache the bound method on the hot per-tick path so each tick
         # handler does ``self._get_ticker(reqId)`` (one C-level dict.get
         # via the bound-method's __self__) instead of
@@ -526,9 +531,11 @@ class Wrapper(Generic[EmptyT]):
 
         error = ConnectionError("Socket disconnect")
 
+        self.tally.disconnects += 1
         self.requests.fail_all(error)
         # Closing a snapshot subscription sets its own Ticker done. Pooled
         # Tickers, which streams share, are set done below.
+        self.tally.subscriptionsDisconnected += len(self.subscriptions)
         self.subscriptions.close_all(send_cancel=False)
 
         for ticker in self.subscriptions.pooled_tickers():
@@ -2176,6 +2183,7 @@ class Wrapper(Generic[EmptyT]):
             # invalid price for a new order must cancel it
             isWarning = False
 
+        self.tally.counted(errorCode, isWarning)
         msg = f"{'Warning' if isWarning else 'Error'} {errorCode}, reqId {reqId}: {errorString}"
 
         contract = self.contractForReqId(reqId)
@@ -2336,6 +2344,7 @@ class Wrapper(Generic[EmptyT]):
                 or (isinstance(sub, HistoricalBarsSub) and isRequest)
                 or errorCode in STREAM_ENDING_CODES
             ):
+                self.tally.subscriptionsRefused += 1
                 sub.close(send_cancel=False)
 
         self.ib.errorEvent.emit(reqId, errorCode, errorString, contract)

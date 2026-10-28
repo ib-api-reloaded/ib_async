@@ -225,6 +225,12 @@ class RegistryModel(RuleBasedStateMachine):
     # -- invariants ------------------------------------------------------
 
     @invariant()
+    def each_end_is_counted_once(self) -> None:
+        counters = self.reg.tally.counters()
+        registered = len(self.reg._reqs)
+        assert counters.requestsOpened == counters.requestsEnded + registered, counters
+
+    @invariant()
     def registry_matches_model(self) -> None:
         for key in KEYS:
             assert (key in self.reg) == (key in self.live), key

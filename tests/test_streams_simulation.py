@@ -288,6 +288,10 @@ class StreamSimulation(RuleBasedStateMachine):
     # -- invariants ------------------------------------------------------
 
     @invariant()
+    def each_end_is_counted_once(self) -> None:
+        self.tws.assertEachEndCountedOnce()
+
+    @invariant()
     def registry_holds_live_subscriptions(self) -> None:
         registry = self.tws.wrapper.subscriptions
         assert {sub.reqId for sub in registry} == {s.ask.reqId for s in self.live()}

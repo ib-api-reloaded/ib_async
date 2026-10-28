@@ -54,6 +54,12 @@ Objects
 
 .. autoclass:: ib_async.wrapper.RequestError
 
+Runtime state
+-------------
+
+.. automodule:: ib_async.runtime
+   :exclude-members: Tally
+
 Utilities
 ---------
 

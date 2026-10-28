@@ -176,6 +176,15 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``make examples-check`` lints, type-checks and structure-checks them in
   CI. The Jupyter notebooks stay in ``notebooks/`` for comparison and
   will be removed.
+* **``IB.runtimeState()``**, the client's state for metrics and debugging,
+  as frozen records (``ib_async.runtime``): the connection, the current
+  connection's traffic and request pacing, the requests waiting for an
+  answer and the live subscriptions by kind, and counters totalled since
+  the IB was created: connects and disconnects, frames and bytes, throttling,
+  undecodable and unknown messages, each request counted once by how it
+  ended (answered, refused, failed, abandoned, cancelled with IBKR, not
+  sent, ended by a disconnect), subscriptions, and errors and warnings by
+  code. Counting adds no work per market data tick.
 
 **Changed (breaking)**
 

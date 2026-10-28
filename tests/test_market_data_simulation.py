@@ -285,6 +285,10 @@ class MarketDataSimulation(RuleBasedStateMachine):
     # -- invariants ------------------------------------------------------
 
     @invariant()
+    def each_end_is_counted_once(self) -> None:
+        self.tws.assertEachEndCountedOnce()
+
+    @invariant()
     def registry_holds_live_streams(self) -> None:
         registry = self.tws.wrapper.subscriptions
         assert {sub.reqId for sub in registry} == {

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Generic, Protocol, TypeVar
 
 from ib_async.objects import EmptyT
+from ib_async.runtime import SubscriptionState, Tally
 from ib_async.ticker import Ticker
 
 if TYPE_CHECKING:
@@ -302,6 +303,9 @@ class SubscriptionRegistry(Generic[EmptyT]):
 
     # The owning Wrapper, for a Subscription.close to find the IB client.
     _wrapper: Wrapper[EmptyT] | None = field(default=None, repr=False)
+    # The session's counters (ib_async.runtime), shared with the registry
+    # that replaces this one after a disconnect.
+    tally: Tally = field(default_factory=Tally, repr=False)
     _by_reqid: dict[int, Subscription] = field(default_factory=dict, init=False)
     # Hot-path view; equal value identity to ``MktDataSub.ticker`` /
     # ``TickByTickSub.ticker`` / ``MktDepthSub.ticker`` for the same
@@ -342,7 +346,11 @@ class SubscriptionRegistry(Generic[EmptyT]):
         ``(identity, kind)`` pair (caller should idempotently dedupe via
         :meth:`find_market_data_for_contract` first).
         """
+        self._index(sub)
+        self.tally.subscriptionsAdded += 1
 
+    def _index(self, sub: Subscription) -> None:
+        """Enter ``sub`` in every index (see :meth:`add`)."""
         if sub.reqId in self._by_reqid:
             raise KeyError(f"reqId {sub.reqId} already registered")
 
@@ -393,6 +401,7 @@ class SubscriptionRegistry(Generic[EmptyT]):
             yield
         except BaseException:
             if sub is not None:
+                self.tally.subscriptionsNotSent += 1
                 sub.close(send_cancel=False)
                 key = self._pooledKey(sub)
                 if key is not None and key not in self._sentFor:
@@ -407,9 +416,10 @@ class SubscriptionRegistry(Generic[EmptyT]):
         Only streams use pooled Tickers; their contracts are hashable. A
         snapshot's Ticker is private, and its contract may be unqualified,
         which has no hash."""
-        if isinstance(sub, MktDataSub) and sub.snapshot:
-            return None
-        if not isinstance(sub, MktDataSub | TickByTickSub | MktDepthSub):
+        if isinstance(sub, MktDataSub):
+            if sub.snapshot:
+                return None
+        elif not isinstance(sub, TickByTickSub | MktDepthSub):
             return None
         key = hash(sub.contract)
         return key if self._tickers.get(key) is sub.ticker else None
@@ -421,7 +431,11 @@ class SubscriptionRegistry(Generic[EmptyT]):
 
     def _unregister(self, sub: Subscription) -> None:
         """Remove ``sub`` from every index. Called from :meth:`Subscription.close`."""
+        self._unindex(sub)
+        self.tally.subscriptionsEnded += 1
 
+    def _unindex(self, sub: Subscription) -> None:
+        """Remove ``sub`` from every index (see :meth:`_unregister`)."""
         self._by_reqid.pop(sub.reqId, None)
         self._ticker_by_reqid.pop(sub.reqId, None)
 
@@ -438,10 +452,10 @@ class SubscriptionRegistry(Generic[EmptyT]):
 
     def move(self, sub: Subscription, reqId: int) -> None:
         """Register ``sub`` under ``reqId`` instead (it was sent again
-        under it)."""
-        self._unregister(sub)
+        under it). The subscription goes on, so nothing is counted."""
+        self._unindex(sub)
         sub._movedTo(reqId)
-        self.add(sub)
+        self._index(sub)
 
     # ---- queries --------------------------------------------------------
 
@@ -635,6 +649,43 @@ class SubscriptionRegistry(Generic[EmptyT]):
 
         for sub in list(self._by_reqid.values()):
             sub.close(send_cancel=send_cancel)
+
+    def state(self) -> SubscriptionState:
+        """The live subscriptions, by kind."""
+        marketData = snapshots = tickByTick = depth = 0
+        realTimeBars = historicalBars = scanners = pnl = pnlSingle = 0
+        for sub in self._by_reqid.values():
+            if isinstance(sub, MktDataSub):
+                if sub.snapshot:
+                    snapshots += 1
+                else:
+                    marketData += 1
+            elif isinstance(sub, TickByTickSub):
+                tickByTick += 1
+            elif isinstance(sub, MktDepthSub):
+                depth += 1
+            elif isinstance(sub, RealTimeBarsSub):
+                realTimeBars += 1
+            elif isinstance(sub, HistoricalBarsSub):
+                historicalBars += 1
+            elif isinstance(sub, ScannerSub):
+                scanners += 1
+            elif isinstance(sub, PnLSub):
+                pnl += 1
+            elif isinstance(sub, PnLSingleSub):
+                pnlSingle += 1
+        return SubscriptionState(
+            marketData=marketData,
+            snapshots=snapshots,
+            tickByTick=tickByTick,
+            marketDepth=depth,
+            realTimeBars=realTimeBars,
+            historicalBars=historicalBars,
+            scanners=scanners,
+            pnl=pnl,
+            pnlSingle=pnlSingle,
+            pooledTickers=len(self._tickers),
+        )
 
     # ---- internals ------------------------------------------------------
 

@@ -47,6 +47,7 @@ from .contract import Contract, TagValue
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
 from .order import OrderCancel
+from .runtime import ConnectionPhase, ConnectionState, Tally, TransportState
 from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
 
 # A value written as one field of a binary request message.
@@ -104,6 +105,11 @@ def _formatField(field: WireField, makeEmpty: bool) -> str:
     if type(field) is list or type(field) is tuple:
         return "".join(f"{v.tag}={v.value};" for v in field)
     return str(field)
+
+
+# The name of each connection state, indexed by Client.DISCONNECTED,
+# Client.CONNECTING and Client.CONNECTED (0, 1, 2).
+_PHASES: tuple[ConnectionPhase, ...] = ("disconnected", "connecting", "connected")
 
 
 class Client:
@@ -181,9 +187,11 @@ class Client:
 
     DISCONNECTED, CONNECTING, CONNECTED = range(3)
 
-    def __init__(self, wrapper):
+    def __init__(self, wrapper, tally: Tally | None = None):
         self.wrapper = wrapper
-        self.decoder = Decoder(wrapper, 0)
+        # The session's counters (ib_async.runtime); IB passes its wrapper's.
+        self.tally = Tally() if tally is None else tally
+        self.decoder = Decoder(wrapper, 0, self.tally)
         self.apiStart = Event("apiStart")
         self.apiEnd = Event("apiEnd")
         self.apiError = Event("apiError")
@@ -222,8 +230,12 @@ class Client:
         self._reqIdSeq = 0
         self._accounts = []
         self._startTime = time.time()
-        self._numBytesRecv = 0
-        self._numMsgRecv = 0
+        # Traffic is counted once, in the session's tally. The current
+        # connection's is what the tally counts after these.
+        self._framesSentBefore = self.tally.framesSent
+        self._bytesSentBefore = self.tally.bytesSent
+        self._framesReceivedBefore = self.tally.framesReceived
+        self._bytesReceivedBefore = self.tally.bytesReceived
         self._isThrottling = False
         self._msgQ: deque[bytes] = deque()
         self._timeQ: deque[float] = deque()
@@ -300,9 +312,9 @@ class Client:
         return ConnectionStats(
             self._startTime,
             time.time() - self._startTime,
-            self._numBytesRecv,
+            self.tally.bytesReceived - self._bytesReceivedBefore,
             self.conn.numBytesSent,
-            self._numMsgRecv,
+            self.tally.framesReceived - self._framesReceivedBefore,
             self.conn.numMsgSent,
         )
 
@@ -368,6 +380,7 @@ class Client:
             self._logger.info(
                 f"Connecting to {host}:{port} with clientId {clientId}..."
             )
+            self.tally.connectAttempts += 1
             self.host = host
             self.port = int(port)
             self.clientId = int(clientId)
@@ -385,9 +398,11 @@ class Client:
                 )
             )
             self.conn.sendMsg(msg)
+            self._counted(msg)
             await asyncio.wait_for(self._apiStarting, timeout)
             self._logger.info("API connection ready")
         except BaseException as e:
+            self.tally.connectFailures += 1
             self.disconnect()
             msg = f"API connection failed: {e!r}"
             self._logger.error(msg)
@@ -471,14 +486,18 @@ class Client:
 
         while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
             msg = msgs.popleft()
-            self.conn.sendMsg(self._prefix(msg))
+            framed = self._prefix(msg)
+            self.conn.sendMsg(framed)
+            self._counted(framed)
             times.append(t)
             if self._logger.isEnabledFor(logging.DEBUG):
                 self._logger.debug(">>> %r", msg)
 
         if msgs:
+            self.tally.mostQueued = max(self.tally.mostQueued, len(msgs))
             if not self._isThrottling:
                 self._isThrottling = True
+                self.tally.throttleStarts += 1
                 self.throttleStart.emit()
                 self._logger.debug("Started to throttle requests")
             loop.call_at(times[0] + self.RequestsInterval, self.sendMsg, None)
@@ -491,13 +510,46 @@ class Client:
         # prefix a message with its length
         return struct.pack(">I", len(msg)) + msg
 
+    def _counted(self, frame: bytes) -> None:
+        """Count a frame written to the socket."""
+        self.tally.framesSent += 1
+        self.tally.bytesSent += len(frame)
+
+    def connectionState(self) -> ConnectionState:
+        """The connection, as :class:`ib_async.runtime.ConnectionState`."""
+        return ConnectionState(
+            phase=_PHASES[self.connState],
+            apiReady=self._apiReady,
+            host=self.host,
+            port=self.port,
+            clientId=self.clientId,
+            serverVersion=self._serverVersion or None,
+            accounts=tuple(self.wrapper.accounts),
+        )
+
+    def transportState(self) -> TransportState:
+        """The current connection's traffic and pacing, as
+        :class:`ib_async.runtime.TransportState`."""
+        tally = self.tally
+        return TransportState(
+            framesSent=tally.framesSent - self._framesSentBefore,
+            bytesSent=tally.bytesSent - self._bytesSentBefore,
+            framesReceived=tally.framesReceived - self._framesReceivedBefore,
+            bytesReceived=tally.bytesReceived - self._bytesReceivedBefore,
+            throttling=self._isThrottling,
+            queuedFrames=len(self._msgQ),
+            maxRequests=self.MaxRequests,
+            requestsInterval=float(self.RequestsInterval),
+        )
+
     def _onSocketHasData(self, data):
         debug = self._logger.isEnabledFor(logging.DEBUG)
         if self._tcpDataArrived:
             self._tcpDataArrived()
 
         self._data += data
-        self._numBytesRecv += len(data)
+        tally = self.tally
+        tally.bytesReceived += len(data)
 
         while True:
             if len(self._data) <= 4:
@@ -511,7 +563,7 @@ class Client:
 
             body = self._data[4:msgEnd]
             self._data = self._data[msgEnd:]
-            self._numMsgRecv += 1
+            tally.framesReceived += 1
 
             # Wire framing depends on server version and the +200 sentinel.
             # Pre-handshake and legacy (<201) servers use NUL-separated
@@ -592,6 +644,7 @@ class Client:
 
     def _startedApi(self) -> None:
         self._apiReady = True
+        self.tally.connects += 1
         if self._apiStarting is not None and not self._apiStarting.done():
             self._apiStarting.set_result(None)
         self.apiStart.emit()
