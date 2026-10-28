@@ -295,8 +295,28 @@ class RequestError(Exception):
 # informational nature; the wire path still emits ``errorEvent`` for any
 # subscriber that wants the raw stream. 1300 ("TWS socket port has been
 # reset") stays an error because the connection is actually torn down.
+# 10090 and 10091: part of the requested market data is not subscribed.
+# IBKR still sends the rest, and a snapshot still ends with
+# tickSnapshotEnd.
 _WARNING_CODES: Final[frozenset[int]] = frozenset(
-    {105, 110, 165, 321, 329, 399, 404, 434, 492, 1100, 1101, 1102, 10167, 10349}
+    {
+        105,
+        110,
+        165,
+        321,
+        329,
+        399,
+        404,
+        434,
+        492,
+        1100,
+        1101,
+        1102,
+        10090,
+        10091,
+        10167,
+        10349,
+    }
 )
 
 # Errors after which IBKR does not serve a stream (market data, tick by
@@ -311,9 +331,8 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
 #   10089 requires an additional market data subscription
 #   10186 not subscribed, and delayed data not enabled
 # Not here, because the stream goes on or IBKR does not say it ended: 102
-# (the live request with that id continues), 322, 10090 and 10091 (part of
-# the data not subscribed; the rest arrives), 10167 (delayed data shown),
-# 10197 (competing live session).
+# (the live request with that id continues), 322, 10197 (competing live
+# session), and the warnings above (10090, 10091, 10167).
 STREAM_ENDING_CODES: Final[frozenset[int]] = frozenset(
     {101, 200, 309, 316, 354, 10089, 10186}
 )

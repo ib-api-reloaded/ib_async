@@ -13,11 +13,13 @@ on leave it registered.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 
 import pytest
 
 import ib_async as ibi
+from ib_async.runtime import CodeCount
 from ib_async.wrapper import STREAM_ENDING_CODES
 from tests._session import Session, errorFrame, ready
 
@@ -47,6 +49,8 @@ ENDED = sorted(
 # Errors after which IBKR keeps serving the stream, or that do not say it
 # ended.
 CONTINUED = [10090, 10091, 10167, 10197, 322, 2104]
+# Notices that IBKR serves only part of the requested data.
+PARTLY_SERVED = [10090, 10091]
 
 
 def framesSent(session: Session) -> int:
@@ -86,6 +90,34 @@ def test_a_stream_ibkr_refuses_ends_and_can_be_requested_again(
         # The same pooled Ticker, with its data: a caller holding it gets
         # the new stream's ticks.
         assert again is live and live.last == 101.5
+
+
+@pytest.mark.parametrize("proto", [False, True])
+@pytest.mark.parametrize("code", PARTLY_SERVED)
+def test_a_snapshot_ibkr_serves_in_part_still_completes(code: int, proto: bool) -> None:
+    """IBKR sends what the account may see and says the rest is not
+    subscribed. That is a notice: the snapshot goes on and ends with
+    tickSnapshotEnd, as a full one does."""
+    session = Session()
+    ready(session)
+    tickers = asyncio.ensure_future(
+        session.ib.reqTickersAsync(STOCK), loop=session.loop
+    )
+    session.run()
+    reqId = reqIdOf(session)
+
+    session.receive(
+        errorFrame(reqId, code, "part of the data is not subscribed", proto)
+    )
+    assert not tickers.done()
+    assert len(session.ib.wrapper.subscriptions) == 1
+
+    session.ib.wrapper.tickSnapshotEnd(reqId)
+    session.run()
+    (ticker,) = tickers.result()
+    assert ticker.contract is STOCK
+    counters = session.ib.runtimeState().counters
+    assert counters.warnings == (CodeCount(code, 1),) and counters.errors == ()
 
 
 @pytest.mark.parametrize("proto", [False, True])

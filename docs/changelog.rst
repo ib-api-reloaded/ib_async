@@ -451,6 +451,12 @@ are fixed in v3.0:
   end the subscription, without a cancel; the Ticker keeps its data, and
   the next request is sent and updates the same Ticker. Errors after which
   the stream goes on (such as 10090, 10167 or 10197) leave it as it was.
+* **A snapshot IBKR served in part ended early.** 10090 and 10091 say that
+  part of the requested market data is not subscribed; IBKR still sends the
+  rest and ends the snapshot with ``tickSnapshotEnd``. They were handled as
+  errors, so ``reqTickersAsync`` returned at the notice, before the data,
+  and the snapshot's subscription closed. They are warnings now, as 10167
+  is.
 * **Empty values other than numbers and None broke the quote.** With an
   enum or string ``emptySize``, ``hasBidAsk``, ``midpoint`` and
   ``marketPrice`` raised ``TypeError``, as did a ``last`` tick while
