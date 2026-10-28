@@ -423,6 +423,14 @@ are fixed in v3.0:
   ``reqRealTimeBars``, ``reqPnL``, ``reqPnLSingle`` and
   ``reqScannerSubscription`` now remove the subscription when their send
   raises.
+* **A rejected request argument left the request open.** A request such
+  as ``reqContractDetailsAsync``, ``reqHistoricalDataAsync`` or
+  ``whatIfOrderAsync`` whose argument the encoder refused raised and sent
+  nothing, but stayed registered until the next disconnect; with
+  ``keepUpToDate=True`` its bars stayed in ``ib.realtimeBars()``. A refused
+  contract in ``reqTickersAsync`` left the snapshot subscriptions of every
+  contract registered. These requests are now cancelled when their send
+  raises, and ``reqTickersAsync`` removes its snapshot subscriptions.
 * **Empty values other than numbers and None broke the quote.** With an
   enum or string ``emptySize``, ``hasBidAsk``, ``midpoint`` and
   ``marketPrice`` raised ``TypeError``, as did a ``last`` tick while

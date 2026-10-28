@@ -7,8 +7,9 @@ method and each generated Contract and Order, the test checks that the
 method sends one frame, or raises ValueError or TypeError and sends
 nothing. If a frame went out before the exception, the server would hold a
 request that the caller believes was refused. A refused request also
-leaves no subscription registered: a stream left behind would hand the
-corrected call a Ticker that never updates.
+leaves no request and no subscription registered: a request left behind
+waits for an answer that never comes, and a stream left behind would hand
+the corrected call a Ticker that never updates.
 """
 
 from __future__ import annotations
@@ -299,6 +300,7 @@ def test_request_sends_one_frame_or_refuses_before_sending(
     else:
         assert sent == 0, (name, refusal)
         # Nothing was sent, so nothing waits for an answer.
+        assert len(session.ib.wrapper.requests) == 0, (name, refusal)
         assert len(session.ib.wrapper.subscriptions) == 0, (name, refusal)
 
 
@@ -373,6 +375,99 @@ def test_a_stream_the_encoder_rejects_leaves_no_subscription(name: str) -> None:
     refusal, sent = attempt(session, lambda: retry.corrected(session.ib))
     assert refusal is None and sent == 1, (name, refusal, sent)
     assert len(session.ib.wrapper.subscriptions) == 1, name
+
+
+LIMIT = ibi.LimitOrder("BUY", 1, 150.0)
+
+# Requests with an argument the encoder rejects. Generated contracts do not
+# reach most of these arguments.
+REJECTED_REQUESTS: dict[str, Callable[[ibi.IB], Started]] = {
+    "reqContractDetails": lambda ib: ib.reqContractDetailsAsync(OPTION_STR_STRIKE),
+    "reqHistoricalData endDateTime": lambda ib: ib.reqHistoricalDataAsync(
+        STOCK,
+        20261016,  # type: ignore[arg-type]
+        "1 D",
+        "1 min",
+        "TRADES",
+        True,
+    ),
+    "reqHistoricalData keepUpToDate": lambda ib: ib.reqHistoricalDataAsync(
+        OPTION_STR_STRIKE, "", "1 D", "1 min", "TRADES", True, keepUpToDate=True
+    ),
+    "reqHistoricalSchedule": lambda ib: ib.reqHistoricalScheduleAsync(
+        OPTION_STR_STRIKE, 5
+    ),
+    "reqHistoricalTicks startDateTime": lambda ib: ib.reqHistoricalTicksAsync(
+        STOCK,
+        20261016,  # type: ignore[arg-type]
+        "",
+        100,
+        "TRADES",
+        True,
+    ),
+    "reqHeadTimeStamp": lambda ib: ib.reqHeadTimeStampAsync(
+        OPTION_STR_STRIKE, "TRADES", True, 1
+    ),
+    "reqHistogramData": lambda ib: ib.reqHistogramDataAsync(
+        OPTION_STR_STRIKE, True, "1 day"
+    ),
+    "calculateImpliedVolatility": lambda ib: ib.calculateImpliedVolatilityAsync(
+        OPTION_STR_STRIKE, 1.0, 100.0
+    ),
+    "calculateOptionPrice": lambda ib: ib.calculateOptionPriceAsync(
+        OPTION_STR_STRIKE, 0.2, 100.0
+    ),
+    "whatIfOrder": lambda ib: ib.whatIfOrderAsync(OPTION_STR_STRIKE, LIMIT),
+    "reqExecutions": lambda ib: ib.reqExecutionsAsync(
+        ibi.ExecutionFilter(clientId="7")  # type: ignore[arg-type]
+    ),
+    "reqSecDefOptParams": lambda ib: ib.reqSecDefOptParamsAsync(
+        "AAPL",
+        "",
+        "STK",
+        "265598",  # type: ignore[arg-type]
+    ),
+    "reqHistoricalNews": lambda ib: ib.reqHistoricalNewsAsync(
+        "265598",  # type: ignore[arg-type]
+        "BRFG",
+        "",
+        "",
+        10,
+    ),
+    "reqPositionsMulti": lambda ib: ib.reqPositionsMultiAsync("DU1", 7),  # type: ignore[arg-type]
+    "reqAccountUpdatesMulti": lambda ib: ib.reqAccountUpdatesMultiAsync(
+        "DU1",
+        7,  # type: ignore[arg-type]
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(REJECTED_REQUESTS))
+def test_a_request_the_encoder_rejects_leaves_nothing_registered(name: str) -> None:
+    """Nothing was sent, so no answer comes. A request left registered
+    would wait for it until the next disconnect."""
+    session = Session()
+    ready(session)
+    refusal, sent = attempt(session, lambda: REJECTED_REQUESTS[name](session.ib))
+    assert refusal is not None and sent == 0, (name, refusal, sent)
+    assert len(session.ib.wrapper.requests) == 0, name
+    assert len(session.ib.wrapper.subscriptions) == 0, name
+
+
+def test_tickers_with_a_rejected_contract_end_like_a_failed_snapshot() -> None:
+    """The first snapshot is sent and the second is refused. The call
+    raises and leaves no subscription; the snapshot already sent ends when
+    IBKR answers it, as it does after any failed reqTickers."""
+    session = Session()
+    ready(session)
+    refusal, sent = attempt(
+        session, lambda: session.ib.reqTickersAsync(STOCK, OPTION_STR_STRIKE)
+    )
+    assert refusal is not None and sent == 1, (refusal, sent)
+    assert len(session.ib.wrapper.subscriptions) == 0
+    (answering,) = session.ib.wrapper.requests
+    session.ib.wrapper.tickSnapshotEnd(answering.reqId)
+    assert len(session.ib.wrapper.requests) == 0
 
 
 @pytest.mark.parametrize("name", sorted(FIXED_REQUESTS))

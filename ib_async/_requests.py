@@ -40,6 +40,7 @@ a separate flat ``reqId -> Ticker`` mapping.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Callable, Iterator
@@ -342,6 +343,35 @@ class RequestRegistry:
         # and keep collecting late data.
         future.add_done_callback(lambda _: self._abandoned(req))
         return req
+
+    @contextlib.contextmanager
+    def sending(
+        self,
+        key: RequestKey,
+        *,
+        container: Any = None,
+        contract: Any = None,
+        refusal: Callable[[int, str], Any] | None = None,
+        args: tuple = (),
+    ) -> Iterator[Request]:
+        """Open a request for ``key`` (see :meth:`open`) for the block that
+        sends it.
+
+        The block holds the wire ``client.req*`` call. If it raises (the
+        encoder refused an argument), nothing was sent and no answer
+        comes, so the request is cancelled and the exception propagates.
+        The caller never gets the future; left open, the request would
+        wait until the next disconnect. ``open`` runs before the block, so
+        a request already in flight is refused before anything is sent.
+        """
+        req = self.open(
+            key, container=container, contract=contract, refusal=refusal, args=args
+        )
+        try:
+            yield req
+        except BaseException:
+            self.cancel(key, "not sent")
+            raise
 
     def share(self, key: RequestKey, *, args: tuple = ()) -> Shared:
         """Join the request for ``key`` that concurrent callers share.

@@ -97,6 +97,43 @@ async def test_open_after_settle_creates_fresh_request():
     assert second is not first and not second.future.done()
 
 
+# --- opening for a send -----------------------------------------------------
+
+
+async def test_a_request_whose_send_raises_is_cancelled_and_owes_nothing():
+    """The encoder refused the request, so nothing was sent and no answer
+    comes: the request is gone, its future is cancelled, and no answer is
+    expected for its key."""
+    reg = RequestRegistry()
+    with pytest.raises(TypeError, match="rejected"), reg.sending(ReqIdKey(3)) as req:
+        raise TypeError("rejected")
+    assert req.future.cancelled()
+    assert ReqIdKey(3) not in reg and len(reg) == 0
+    # Let the future's done callbacks run.
+    await asyncio.sleep(0)
+    assert not reg.answering(ReqIdKey(3))
+
+
+async def test_a_request_whose_send_returns_stays_open():
+    reg = RequestRegistry()
+    with reg.sending(ReqIdKey(4), container="") as req:
+        pass
+    assert reg.get(ReqIdKey(4)) is req
+    assert not req.future.done() and req.container == ""
+
+
+async def test_a_request_already_in_flight_is_never_sent_twice():
+    """A duplicate is refused before the block runs, and the live request
+    it duplicates is left alone."""
+    reg = RequestRegistry()
+    live = reg.open(ReqIdKey(5))
+    sent: list[int] = []
+    with pytest.raises(RuntimeError), reg.sending(ReqIdKey(5)):
+        sent.append(5)
+    assert sent == []
+    assert reg.get(ReqIdKey(5)) is live and not live.future.done()
+
+
 # --- append -----------------------------------------------------------------
 
 
