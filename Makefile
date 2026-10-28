@@ -29,6 +29,17 @@ UV_RUN_ARGS ?=
 PYTEST := pytest -q -p no:cacheprovider --timeout=$(TEST_TIMEOUT) --timeout-method=thread
 # test-matrix: a subset of the configured Python versions, e.g. "3.13 3.15".
 PYTHONS ?=
+# Event loops for the test targets (tests/_loops.py). LOOP=isolated, the
+# default, gives each test a loop of its own. LOOP=shared runs every test
+# on one loop for the whole session, as an application runs, so what a
+# test leaves on the loop reaches the tests after it.
+LOOP ?= isolated
+LOOP_ARGS_isolated :=
+LOOP_ARGS_shared := -o asyncio_default_test_loop_scope=session -o asyncio_default_fixture_loop_scope=session
+ifeq ($(filter $(LOOP),isolated shared),)
+$(error LOOP is isolated or shared, not "$(LOOP)")
+endif
+LOOP_ARGS := $(LOOP_ARGS_$(LOOP))
 
 help:
 	@echo "Targets:"
@@ -54,6 +65,8 @@ help:
 	@echo "                own .venvs/py<version> environment and time-boxed; logs in"
 	@echo "                .venvs/logs/ (PYTHONS=\"3.13 3.15\" for a subset)"
 	@echo "  test-repeat     - the tests many times, to expose intermittent failures (TIMES, CONCURRENT)"
+	@echo "  LOOP=shared     - with any test target: every test on one event loop, as an"
+	@echo "                    application runs; the default LOOP=isolated gives each its own"
 	@echo "  examples-check  - lint, typecheck and structure-check examples/ (never connects)"
 	@echo "  ruff     - ruff check + ruff format --check"
 	@echo "  typecheck - mypy"
@@ -135,13 +148,13 @@ prettier:
 lint: ruff typecheck prettier
 
 test:
-	uv run --no-dev --group test $(UV_RUN_ARGS) $(PYTEST)
+	uv run --no-dev --group test $(UV_RUN_ARGS) $(PYTEST) $(LOOP_ARGS)
 
 # Run the tests once and report from pytest's results: each failure in full,
 # the slowest phases, and the test where a hang stopped. Logs go to
 # .venvs/logs/test/. PYTEST_ARGS selects tests, e.g. PYTEST_ARGS="tests/test_x.py -k y".
 test-report:
-	$(RELEASEKIT) test -- $(PYTEST_ARGS)
+	$(RELEASEKIT) test -- $(LOOP_ARGS) $(PYTEST_ARGS)
 
 # Run the property tests (tests/_property.py) with SCALE times as many
 # examples, on all cores (pytest-xdist), to explore far more state-machine
@@ -149,13 +162,13 @@ test-report:
 # in order and a hang shows which test it was in.
 SCALE ?= 20
 test-deep:
-	IB_ASYNC_PROPERTY_SCALE=$(SCALE) $(RELEASEKIT) test -- -n auto $(PYTEST_ARGS)
+	IB_ASYNC_PROPERTY_SCALE=$(SCALE) $(RELEASEKIT) test -- -n auto $(LOOP_ARGS) $(PYTEST_ARGS)
 
 test-matrix:
-	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v))
+	$(RELEASEKIT) matrix $(foreach v,$(PYTHONS),--python=$(v)) -- $(LOOP_ARGS)
 
 test-repeat:
-	$(RELEASEKIT) repeat $(if $(TIMES),--times $(TIMES)) $(if $(CONCURRENT),--concurrent $(CONCURRENT))
+	$(RELEASEKIT) repeat $(if $(TIMES),--times $(TIMES)) $(if $(CONCURRENT),--concurrent $(CONCURRENT)) -- $(LOOP_ARGS)
 
 # examples/: ruff, mypy on the programs, marimo's own checks and
 # scripts/check_marimo.py on the notebooks,

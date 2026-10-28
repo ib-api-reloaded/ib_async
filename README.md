@@ -659,8 +659,12 @@ so generate them once after syncing (and again after a TWS API bump):
 uv sync --group dev
 make protos        # fetch the pinned TWS API archive, generate ib_async/_pb/
 make test          # the suite on the default interpreter
-make test-matrix   # the suite on Python 3.11 - 3.14, each version in its own
-                   # environment and time-boxed; logs in .venvs/logs/
+make test-matrix   # the suite on each Python in [tool.releasekit.matrix],
+                   # each in its own environment and time-boxed; logs in
+                   # .venvs/logs/
+make test-matrix LOOP=shared  # every test on one event loop, as an
+                              # application runs (each test has its own
+                              # by default)
 ```
 
 ### Linting, Type Checking and Formatting

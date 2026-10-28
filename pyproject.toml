@@ -105,6 +105,10 @@ check_untyped_defs = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Each test runs on a loop of its own (tests/_loops.py); LOOP=shared with
+# a make test target runs them all on one loop, as an application does.
+asyncio_default_test_loop_scope = "function"
+asyncio_default_fixture_loop_scope = "function"
 
 
 [build-system]
