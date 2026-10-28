@@ -377,7 +377,7 @@ async def test_bars_cancelled_by_hand_are_cancelled_with_ibkr_once():
 async def test_a_bust_resend_is_logged_with_both_reqids(caplog):
     ib = connected()
     contract = ibi.Stock("X", "SMART", "USD")
-    asyncio.ensure_future(
+    task = asyncio.ensure_future(
         ib.reqHistoricalDataAsync(
             contract, "", "1 D", "1 hour", "TRADES", True, keepUpToDate=True
         )
@@ -386,3 +386,6 @@ async def test_a_bust_resend_is_logged_with_both_reqids(caplog):
     with caplog.at_level(logging.INFO, logger="ib_async.wrapper"):
         ib.wrapper.error(500, 10225, "Bust event occurred", "")
     assert "reqId 500 sent again as 501" in caplog.text
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
