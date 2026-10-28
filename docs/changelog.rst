@@ -414,6 +414,15 @@ are fixed in v3.0:
   disconnect is reported once, by ``disconnectedEvent``, and the requests
   it ends report nothing more. A caller still awaiting a request gets
   ``ConnectionError``.
+* **A rejected stream argument left a dead subscription.** When the
+  encoder refused an argument, such as ``reqMktData(contract, 233)`` for
+  ``"233"``, the call raised and sent nothing, but its subscription stayed
+  registered until the next disconnect. The corrected call then returned
+  that subscription's Ticker without sending a request, and the Ticker
+  never updated. ``reqMktData``, ``reqTickByTickData``, ``reqMktDepth``,
+  ``reqRealTimeBars``, ``reqPnL``, ``reqPnLSingle`` and
+  ``reqScannerSubscription`` now remove the subscription when their send
+  raises.
 * **Empty values other than numbers and None broke the quote.** With an
   enum or string ``emptySize``, ``hasBidAsk``, ``midpoint`` and
   ``marketPrice`` raised ``TypeError``, as did a ``last`` tick while

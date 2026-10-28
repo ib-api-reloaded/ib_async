@@ -1401,7 +1401,7 @@ class IB(Generic[EmptyT]):
 
         reqId = self.client.getReqId()
         pnl = PnL(account, modelCode)
-        self.wrapper.subscriptions.add(
+        with self.wrapper.subscriptions.sending(
             PnLSub(
                 reqId=reqId,
                 contract=Contract(),  # PnL is not contract-bound
@@ -1409,8 +1409,8 @@ class IB(Generic[EmptyT]):
                 account=account,
                 modelCode=modelCode,
             )
-        )
-        self.client.reqPnL(reqId, account, modelCode)
+        ):
+            self.client.reqPnL(reqId, account, modelCode)
         return pnl
 
     def cancelPnL(self, account: str, modelCode: str = "") -> None:
@@ -1451,7 +1451,7 @@ class IB(Generic[EmptyT]):
 
         reqId = self.client.getReqId()
         pnlSingle = PnLSingle(account, modelCode, conId)
-        self.wrapper.subscriptions.add(
+        with self.wrapper.subscriptions.sending(
             PnLSingleSub(
                 reqId=reqId,
                 contract=Contract(conId=conId),
@@ -1460,8 +1460,8 @@ class IB(Generic[EmptyT]):
                 modelCode=modelCode,
                 conId=conId,
             )
-        )
-        self.client.reqPnLSingle(reqId, account, modelCode, conId)
+        ):
+            self.client.reqPnLSingle(reqId, account, modelCode, conId)
         return pnlSingle
 
     def cancelPnLSingle(self, account: str, modelCode: str, conId: int):
@@ -1563,12 +1563,12 @@ class IB(Generic[EmptyT]):
         bars.whatToShow = whatToShow
         bars.useRTH = useRTH
         bars.realTimeBarsOptions = realTimeBarsOptions or []
-        self.wrapper.subscriptions.add(
+        with self.wrapper.subscriptions.sending(
             RealTimeBarsSub(reqId=reqId, contract=contract, bars=bars)
-        )
-        self.client.reqRealTimeBars(
-            reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
-        )
+        ):
+            self.client.reqRealTimeBars(
+                reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
+            )
         return bars
 
     def cancelRealTimeBars(self, bars: RealTimeBarList):
@@ -1931,7 +1931,7 @@ class IB(Generic[EmptyT]):
             ticker = self.wrapper.subscriptions.new_snapshot_ticker(contract)
         else:
             ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
-        self.wrapper.subscriptions.add(
+        with self.wrapper.subscriptions.sending(
             MktDataSub(
                 reqId=reqId,
                 contract=contract,
@@ -1939,15 +1939,15 @@ class IB(Generic[EmptyT]):
                 snapshot=snapshot,
                 genericTickList=genericTickList,
             )
-        )
-        self.client.reqMktData(
-            reqId,
-            contract,
-            genericTickList,
-            snapshot,
-            regulatorySnapshot,
-            mktDataOptions,
-        )
+        ):
+            self.client.reqMktData(
+                reqId,
+                contract,
+                genericTickList,
+                snapshot,
+                regulatorySnapshot,
+                mktDataOptions,
+            )
         return ticker
 
     def cancelMktData(self, contract: Contract) -> bool:
@@ -2002,17 +2002,17 @@ class IB(Generic[EmptyT]):
 
         reqId = self.client.getReqId()
         ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
-        self.wrapper.subscriptions.add(
+        with self.wrapper.subscriptions.sending(
             TickByTickSub(
                 reqId=reqId,
                 contract=contract,
                 ticker=ticker,
                 tickType=tickType,
             )
-        )
-        self.client.reqTickByTickData(
-            reqId, contract, tickType, numberOfTicks, ignoreSize
-        )
+        ):
+            self.client.reqTickByTickData(
+                reqId, contract, tickType, numberOfTicks, ignoreSize
+            )
         return ticker
 
     def cancelTickByTickData(self, contract: Contract, tickType: str) -> bool:
@@ -2094,16 +2094,18 @@ class IB(Generic[EmptyT]):
         # subscription BEFORE wiping the live shared Ticker's DOM
         # state so a failed registration does not leave the Ticker
         # half-cleared.
-        self.wrapper.subscriptions.add(
+        with self.wrapper.subscriptions.sending(
             MktDepthSub(
                 reqId=reqId,
                 contract=contract,
                 ticker=ticker,
                 isSmartDepth=isSmartDepth,
             )
-        )
-        ticker.dom.clear()
-        self.client.reqMktDepth(reqId, contract, numRows, isSmartDepth, mktDepthOptions)
+        ):
+            ticker.dom.clear()
+            self.client.reqMktDepth(
+                reqId, contract, numRows, isSmartDepth, mktDepthOptions
+            )
         return ticker
 
     def cancelMktDepth(self, contract: Contract, isSmartDepth: bool = False) -> None:
@@ -2204,15 +2206,15 @@ class IB(Generic[EmptyT]):
         dataList.scannerSubscriptionFilterOptions = (
             scannerSubscriptionFilterOptions or []
         )
-        self.wrapper.subscriptions.add(
+        with self.wrapper.subscriptions.sending(
             ScannerSub(reqId=reqId, contract=Contract(), dataList=dataList)
-        )
-        self.client.reqScannerSubscription(
-            reqId,
-            subscription,
-            scannerSubscriptionOptions,
-            scannerSubscriptionFilterOptions,
-        )
+        ):
+            self.client.reqScannerSubscription(
+                reqId,
+                subscription,
+                scannerSubscriptionOptions,
+                scannerSubscriptionFilterOptions,
+            )
         return dataList
 
     def cancelScannerSubscription(self, dataList: ScanDataList):

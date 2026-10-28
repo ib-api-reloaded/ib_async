@@ -15,6 +15,7 @@ Designed to be used only by :mod:`ib_async.wrapper`.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Generic, Protocol, TypeVar
@@ -363,6 +364,28 @@ class SubscriptionRegistry(Generic[EmptyT]):
             self._ticker_by_reqid[sub.reqId] = ticker
 
         sub._registry = self
+
+    @contextlib.contextmanager
+    def sending(self, sub: Subscription | None) -> Iterator[None]:
+        """Register ``sub`` for the block that sends its request.
+
+        The block holds the wire ``client.req*`` call. If it raises (the
+        encoder refused an argument), nothing was sent, so ``sub`` is
+        closed without a cancel and the exception propagates. Left
+        registered, a market-data subscription would make the corrected
+        call return a Ticker that never updates, since streams are
+        deduplicated by contract. ``add`` runs before the block, so a
+        duplicate is refused before anything is sent. ``None`` registers
+        nothing, for a request that has no subscription.
+        """
+        if sub is not None:
+            self.add(sub)
+        try:
+            yield
+        except BaseException:
+            if sub is not None:
+                sub.close(send_cancel=False)
+            raise
 
     def _cancelClient(self) -> Client | None:
         """The IB client a closing subscription sends its cancel with."""

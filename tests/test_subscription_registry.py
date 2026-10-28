@@ -249,6 +249,98 @@ def test_close_does_not_set_done_on_shared_ticker():
     assert ticker.updateEvent.done() is False
 
 
+# ---- registration for a send -----------------------------------------------
+
+
+def test_a_subscription_whose_send_raises_is_unregistered():
+    """The encoder refused the request, so nothing was sent: no index keeps
+    the subscription, no cancel goes out, and the shared Ticker stays live."""
+    reg, client = _registry_with_mock_client()
+    contract = _stock(1)
+    ticker = _ticker(contract)
+    sub = MktDataSub(reqId=80, contract=contract, ticker=ticker)
+
+    with pytest.raises(TypeError, match="rejected"), reg.sending(sub):
+        raise TypeError("rejected")
+
+    assert sub.closed is True
+    assert reg.get_sub(80) is None
+    assert reg.get_ticker(80) is None
+    assert reg.find_market_data(1, "mktData") is None
+    assert len(reg) == 0
+    client.cancelMktData.assert_not_called()
+    assert ticker.updateEvent.done() is False
+
+
+def test_a_pnl_subscription_whose_send_raises_is_unregistered():
+    reg, client = _registry_with_mock_client()
+    pnl = PnLSub(
+        reqId=81,
+        contract=ibi.Contract(),
+        pnl=PnL("DU1", ""),
+        account="DU1",
+        modelCode="",
+    )
+    single = PnLSingleSub(
+        reqId=82,
+        contract=_stock(9),
+        pnlSingle=PnLSingle("DU1", "", 9),
+        account="DU1",
+        modelCode="",
+        conId=9,
+    )
+
+    for sub in (pnl, single):
+        with pytest.raises(TypeError), reg.sending(sub):
+            raise TypeError("rejected")
+
+    assert reg.get_pnl("DU1", "") is None
+    assert reg.get_pnl_single("DU1", "", 9) is None
+    assert len(reg) == 0
+    client.cancelPnL.assert_not_called()
+    client.cancelPnLSingle.assert_not_called()
+
+
+def test_a_subscription_whose_send_returns_stays_registered():
+    reg, _ = _registry_with_mock_client()
+    sub = RealTimeBarsSub(reqId=83, contract=_stock(1), bars=RealTimeBarList())
+
+    with reg.sending(sub):
+        pass
+
+    assert reg.get_sub(83) is sub
+    assert sub.closed is False
+
+
+def test_sending_without_a_subscription_registers_nothing():
+    reg, _ = _registry_with_mock_client()
+
+    with reg.sending(None):
+        pass
+    with pytest.raises(TypeError), reg.sending(None):
+        raise TypeError("rejected")
+
+    assert len(reg) == 0
+
+
+def test_a_subscription_the_registry_refuses_is_never_sent():
+    """A duplicate is refused before the block runs, and the live
+    subscription it duplicates is left alone."""
+    reg, _ = _registry_with_mock_client()
+    contract = _stock(1)
+    live = MktDataSub(reqId=84, contract=contract, ticker=_ticker(contract))
+    reg.add(live)
+    sent: list[int] = []
+
+    duplicate = MktDataSub(reqId=85, contract=contract, ticker=live.ticker)
+    with pytest.raises(KeyError), reg.sending(duplicate):
+        sent.append(duplicate.reqId)
+
+    assert sent == []
+    assert reg.get_sub(84) is live
+    assert live.closed is False
+
+
 # ---- bag / spread contracts (conId == 0) -----------------------------------
 
 

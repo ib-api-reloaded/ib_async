@@ -6,13 +6,16 @@ version, so the protobuf converters encode every request. For each request
 method and each generated Contract and Order, the test checks that the
 method sends one frame, or raises ValueError or TypeError and sends
 nothing. If a frame went out before the exception, the server would hold a
-request that the caller believes was refused.
+request that the caller believes was refused. A refused request also
+leaves no subscription registered: a stream left behind would hand the
+corrected call a Ticker that never updates.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime
 
 import pytest
@@ -295,6 +298,81 @@ def test_request_sends_one_frame_or_refuses_before_sending(
         assert sent == 1, (name, sent)
     else:
         assert sent == 0, (name, refusal)
+        # Nothing was sent, so nothing waits for an answer.
+        assert len(session.ib.wrapper.subscriptions) == 0, (name, refusal)
+
+
+@dataclass(frozen=True, slots=True)
+class Retry:
+    """A call with an argument the encoder rejects, and the same call
+    corrected."""
+
+    rejected: Callable[[ibi.IB], Started]
+    corrected: Callable[[ibi.IB], Started]
+
+
+OPTION_STR_STRIKE = ibi.Option("AAPL", "20261218", "150", "C", "SMART")  # type: ignore[arg-type]
+OPTION = ibi.Option("AAPL", "20261218", 150, "C", "SMART")
+SCAN_STR_ROWS = ibi.ScannerSubscription(
+    instrument="STK",
+    locationCode="STK.US",
+    scanCode="TOP_PERC_GAIN",
+    numberOfRows="10",  # type: ignore[arg-type]
+)
+
+STREAM_RETRIES: dict[str, Retry] = {
+    "reqMktData": Retry(
+        lambda ib: ib.reqMktData(STOCK, 233),  # type: ignore[arg-type]
+        lambda ib: ib.reqMktData(STOCK, "233"),
+    ),
+    "reqMktData snapshot": Retry(
+        lambda ib: ib.reqMktData(OPTION_STR_STRIKE, snapshot=True),
+        lambda ib: ib.reqMktData(OPTION, snapshot=True),
+    ),
+    "reqTickByTickData": Retry(
+        lambda ib: ib.reqTickByTickData(STOCK, "Last", "0"),  # type: ignore[arg-type]
+        lambda ib: ib.reqTickByTickData(STOCK, "Last", 0),
+    ),
+    "reqMktDepth": Retry(
+        lambda ib: ib.reqMktDepth(STOCK, "5"),  # type: ignore[arg-type]
+        lambda ib: ib.reqMktDepth(STOCK, 5),
+    ),
+    "reqRealTimeBars": Retry(
+        lambda ib: ib.reqRealTimeBars(OPTION_STR_STRIKE, 5, "TRADES", True),
+        lambda ib: ib.reqRealTimeBars(OPTION, 5, "TRADES", True),
+    ),
+    "reqPnL": Retry(
+        lambda ib: ib.reqPnL("DU1", 7),  # type: ignore[arg-type]
+        lambda ib: ib.reqPnL("DU1", "7"),
+    ),
+    "reqPnLSingle": Retry(
+        lambda ib: ib.reqPnLSingle("DU1", "", "10"),  # type: ignore[arg-type]
+        lambda ib: ib.reqPnLSingle("DU1", "", 10),
+    ),
+    "reqScannerSubscription": Retry(
+        lambda ib: ib.reqScannerSubscription(SCAN_STR_ROWS),
+        lambda ib: ib.reqScannerSubscription(SCAN),
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(STREAM_RETRIES))
+def test_a_stream_the_encoder_rejects_leaves_no_subscription(name: str) -> None:
+    """The rejected call registers nothing, so the corrected call sends its
+    request. Streams are deduplicated by contract: a subscription left by
+    the rejected call would hand the corrected call a Ticker that never
+    updates, and send nothing."""
+    session = Session()
+    ready(session)
+    retry = STREAM_RETRIES[name]
+
+    refusal, sent = attempt(session, lambda: retry.rejected(session.ib))
+    assert refusal is not None and sent == 0, (name, refusal, sent)
+    assert len(session.ib.wrapper.subscriptions) == 0, name
+
+    refusal, sent = attempt(session, lambda: retry.corrected(session.ib))
+    assert refusal is None and sent == 1, (name, refusal, sent)
+    assert len(session.ib.wrapper.subscriptions) == 1, name
 
 
 @pytest.mark.parametrize("name", sorted(FIXED_REQUESTS))
