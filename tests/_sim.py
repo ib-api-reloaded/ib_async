@@ -542,6 +542,12 @@ class SimulatedTws:
         self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
         self.run()
 
+    def deactivate(self, placed: PlacedOrder) -> None:
+        """End the order with an Inactive status."""
+        placed.ended = "rejected"
+        self._orderStatus(placed, "Inactive")
+        self.run()
+
     def repeatFill(self, execId: str) -> None:
         """Send an execution and its commission report again."""
         placed, execution, report = self.executions[execId]

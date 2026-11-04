@@ -685,13 +685,6 @@ class Trade:
     # ``openOrder`` callback for this trade.
     serverOrder: Order | None = None
 
-    # True once a modification of an order TWS has acknowledged is sent, and
-    # it stays True. TWS does not confirm a modification: the status for an
-    # accepted one looks like a repeated status, which TWS often sends, and it
-    # carries no order terms. While True, an error that would reject a new
-    # order leaves this order live until TWS reports a status that ends it.
-    modifyUnconfirmed: bool = False
-
     # Same display policy as ``Order`` / ``OrderStatus`` — a Trade printed
     # on a log line shows its contract, its order, its status and its fills
     # on ONE line, and nothing that was never set.
@@ -710,6 +703,13 @@ class Trade:
     )
 
     def __post_init__(self):
+        # True once a modification of an order TWS has acknowledged is sent,
+        # and it stays True. TWS does not confirm a modification: the status
+        # for an accepted one looks like a repeated status, which TWS often
+        # sends, and it carries no order terms. While True, an error in
+        # ``wrapper._ENDS_UNMODIFIED_ORDER_CODES`` leaves this order live until
+        # TWS reports a status that ends it.
+        self.modifyUnconfirmed: bool = False
         self.statusEvent = Event("statusEvent")
         self.modifyEvent = Event("modifyEvent")
         self.fillEvent = Event("fillEvent")

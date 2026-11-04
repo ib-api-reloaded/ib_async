@@ -7,6 +7,7 @@ an application replace an order that is still live.
 
 from __future__ import annotations
 
+import dataclasses
 from decimal import Decimal
 
 import pytest
@@ -16,11 +17,11 @@ from ib_async import OrderStatus, Trade
 from ib_async.util import getLoop
 from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
 
-# Each ends a new order, and refuses a modification of a live one.
-REFUSED_WHILE_MODIFYING = [201, 439, 441, 442, 443]
+# Each ends an order that was not modified after TWS acknowledged it.
+ENDS_UNMODIFIED_ORDER = [104, 134, 201, 422, 439, 440, 441, 442, 443, 444, 10241, 10242]
 
-# IBKR's text for each says a modification failed.
-ONLY_REFUSE_MODIFICATIONS = [104, 105, 134, 329, 422, 440, 444, 2102, 10241, 10242]
+# Warnings for any order.
+ALWAYS_WARNINGS = [105, 329, 2102]
 
 
 class Scenario:
@@ -55,7 +56,7 @@ class Scenario:
         assert self.trade not in self.tws.ib.openTrades()
 
 
-@pytest.mark.parametrize("code", REFUSED_WHILE_MODIFYING)
+@pytest.mark.parametrize("code", ENDS_UNMODIFIED_ORDER)
 def test_refused_modification_leaves_the_order_working(code: int) -> None:
     scenario = Scenario()
     scenario.modify()
@@ -64,22 +65,21 @@ def test_refused_modification_leaves_the_order_working(code: int) -> None:
     assert scenario.trade.log[-1].errorCode == code
 
 
-@pytest.mark.parametrize("code", ONLY_REFUSE_MODIFICATIONS)
-def test_code_that_only_refuses_a_modification_never_cancels(code: int) -> None:
+@pytest.mark.parametrize("code", ALWAYS_WARNINGS)
+def test_warning_code_leaves_any_order_working(code: int) -> None:
     scenario = Scenario()
-    scenario.modify()
-    scenario.tws.refuseModification(scenario.placed, code)
+    scenario.tws.rejectOrder(scenario.placed, code)
     scenario.assertStillWorking()
 
 
-@pytest.mark.parametrize("code", REFUSED_WHILE_MODIFYING)
+@pytest.mark.parametrize("code", ENDS_UNMODIFIED_ORDER)
 def test_new_order_error_still_cancels(code: int) -> None:
     scenario = Scenario(acknowledged=False)
     scenario.tws.rejectOrder(scenario.placed, code)
     scenario.assertCancelled()
 
 
-@pytest.mark.parametrize("code", REFUSED_WHILE_MODIFYING)
+@pytest.mark.parametrize("code", ENDS_UNMODIFIED_ORDER)
 def test_error_on_an_unmodified_working_order_still_cancels(code: int) -> None:
     scenario = Scenario()
     scenario.tws.rejectOrder(scenario.placed, code)
@@ -94,7 +94,7 @@ def test_error_after_a_new_order_modified_before_its_acknowledgement_cancels() -
     scenario.assertCancelled()
 
 
-@pytest.mark.parametrize("code", REFUSED_WHILE_MODIFYING)
+@pytest.mark.parametrize("code", ENDS_UNMODIFIED_ORDER)
 def test_repeated_status_does_not_answer_a_modification(code: int) -> None:
     """TWS often repeats a status, and a status carries no order terms."""
     scenario = Scenario()
@@ -123,6 +123,42 @@ def test_error_after_a_modification_sent_before_the_acknowledgement_cancels() ->
     scenario.tws.acknowledge(scenario.placed)
     scenario.tws.rejectOrder(scenario.placed)
     scenario.assertCancelled()
+
+
+def test_held_order_that_goes_inactive_fires_its_cancelled_event() -> None:
+    """Without the hold, the error would have fired it."""
+    scenario = Scenario()
+    scenario.modify()
+    scenario.tws.rejectOrder(scenario.placed)
+    scenario.assertStillWorking()
+    scenario.tws.deactivate(scenario.placed)
+    assert scenario.trade.orderStatus.status == OrderStatus.Inactive
+    assert scenario.cancelled == [scenario.trade]
+
+
+def test_inactive_order_that_was_not_held_fires_no_cancelled_event() -> None:
+    scenario = Scenario()
+    scenario.tws.deactivate(scenario.placed)
+    assert scenario.trade.orderStatus.status == OrderStatus.Inactive
+    assert scenario.cancelled == []
+
+
+def test_held_error_keeps_the_advanced_reject() -> None:
+    scenario = Scenario()
+    scenario.modify()
+    scenario.tws.wrapper.error(
+        scenario.placed.orderId, 201, "Order rejected - reason:", '{"reject": 1}'
+    )
+    assert scenario.trade.advancedError == '{"reject": 1}'
+
+
+def test_modification_does_not_change_how_a_trade_prints_or_compares() -> None:
+    scenario = Scenario()
+    other = dataclasses.replace(scenario.trade)
+    scenario.modify()
+    assert scenario.trade.modifyUnconfirmed
+    assert "modifyUnconfirmed" not in repr(scenario.trade)
+    assert scenario.trade == other
 
 
 def test_order_canceled_during_a_modification_cancels() -> None:

@@ -351,14 +351,14 @@ are fixed in v3.0:
   refused modification as an error and sends no status, and the order
   keeps working on its old terms. The trade became ``Cancelled``, fired
   ``cancelledEvent`` and left ``openTrades()``, so an application could
-  place a replacement beside the live order. Errors 104, 134, 422, 440,
-  444, 10241 and 10242 are now warnings. Errors 201, 439, 441, 442 and 443
-  are warnings for an order modified after TWS acknowledged it
-  (``Trade.modifyUnconfirmed``), and otherwise end the order as before. TWS
-  does not confirm a modification, so this holds for the rest of the
-  order's life. The trade stays active as ``ValidationError`` until its
-  next status, and a status that ends the order still ends the trade.
-  (:issue:`243`, thanks to @nealeyoung)
+  place a replacement beside the live order. Errors 104, 134, 201, 422,
+  439, 440, 441, 442, 443, 444, 10241 and 10242 are now warnings for an
+  order modified after TWS acknowledged it (``Trade.modifyUnconfirmed``).
+  They end any other order as before. TWS does not confirm a modification,
+  so this holds for the rest of the order's life. The trade stays active
+  as ``ValidationError`` until its next status. A status that ends the
+  order still ends the trade, and ``Cancelled`` or ``Inactive`` then fires
+  ``cancelledEvent``. (:issue:`243`, thanks to @nealeyoung)
 * **A repeated commission report fired its events twice.** TWS repeats
   an execution and its commission report, for instance after a
   reconnect. The repeated execution was already ignored. The repeated

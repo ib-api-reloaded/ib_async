@@ -268,7 +268,6 @@ class RequestError(Exception):
 
 # An error that names an order is handled in one of three ways. IBKR's error
 # callback does not say what happened to the order, so these lists do.
-# Texts are from https://interactivebrokers.github.io/tws-api/message_codes.html
 #
 # 1. The order is still live, whatever it was doing (_WARNING_CODES).
 # 2. The code ends the order, unless the order was modified after TWS
@@ -276,9 +275,11 @@ class RequestError(Exception):
 # 3. Any other error ends the order, including 202 (Order cancelled).
 
 # Warnings are currently:
+# 105 - Order being modified does not match the original order. (?)
 # 110 - The price does not conform to the minimum price variation for this contract.
 # 165 - Historical market Data Service query message.
 # 321 - Server error when validating an API client request.
+# 329 - Order modify failed. Cannot change to the new order type.
 # 399 - Order message error
 # 404 -	Shares for this order are not immediately available for short sale. The order will be held while we attempt to locate the shares.
 # 434 -	The order size cannot be zero.
@@ -288,39 +289,36 @@ class RequestError(Exception):
 # Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
 # TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
 
-# IBKR's text for each of these says a change to an order failed, so the order
-# keeps working on its old terms. 104 means it already filled, and its Filled
-# status is what ends it.
-#   104   Can't modify a filled order.
-#   105   Order being modified does not match original order.
+# Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
+# 202 - Order cancelled - Reason:
+
+# Errors that end an order, except one modified after TWS acknowledged it
+# (``Trade.modifyUnconfirmed``). A refused modification leaves the order
+# working on its old terms and no status follows. TWS does not confirm a
+# modification, so a later error of this kind on a modified order also leaves
+# it live until TWS reports a status that ends it. Texts are from
+# https://interactivebrokers.github.io/tws-api/message_codes.html
+#
+# Reported on a modification:
+#   201   Order rejected - reason: (an invalid stop price; the order stayed
+#         live for the session)
+#   439   Order processing failed. Algorithm definition not found. (the order
+#         stayed live until cancelled)
+# IBKR's text says a change to an order failed:
+#   104   Can't modify a filled order. (its Filled status ends it)
 #   134   Modify order failed.
-#   329   Order modify failed. Cannot change to the new order type.
 #   422   The account and clearing attributes on this order may not be changed.
 #   440   Order modify failed. Algorithm cannot be modified.
 #   444   Volatility Combo order is not yet acknowledged. Cannot submit changes at this time.
-#   2102  Unable to modify this order as it is still being processed.
 #   10241 Order Quantity is expressed in monetary terms. Modification is not supported via API.
 #   10242 Fractional-sized order cannot be modified via API.
-_MODIFICATION_REFUSED_CODES: Final[frozenset[int]] = frozenset(
-    {104, 105, 134, 329, 422, 440, 444, 2102, 10241, 10242}
-)
-
-# These reject what was sent, which ends a new order. For a modification of an
-# order TWS has acknowledged, the order keeps working on its old terms and no
-# status follows, so ``Trade.modifyUnconfirmed`` decides. TWS does not confirm
-# a modification, so a later error of this kind on a modified order also
-# leaves it live until TWS reports a status that ends it.
-#   201 Order rejected - reason: (reported for a modification with an invalid
-#       stop price: the order stayed live for the session)
-#   439 Order processing failed. Algorithm definition not found. (reported for
-#       a modification: the order stayed live until cancelled)
-#   441 Algo attributes validation failed:
-#   442 Specified algorithm is not allowed for this order.
-#   443 Order processing failed. Unknown algo attribute.
-# 441 to 443 check the same fields as 439. No report of them on a modification
-# is known; they are listed for that reason alone.
+# These check the same fields as 439. No report of them on a modification is
+# known:
+#   441   Algo attributes validation failed:
+#   442   Specified algorithm is not allowed for this order.
+#   443   Order processing failed. Unknown algo attribute.
 _ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
-    {201, 439, 441, 442, 443}
+    {104, 134, 201, 422, 439, 440, 441, 442, 443, 444, 10241, 10242}
 )
 
 # Connection-state notifications (TWS "system messages" with reqId=-1):
@@ -337,22 +335,26 @@ _ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
 # 10090 and 10091: part of the requested market data is not subscribed.
 # IBKR still sends the rest, and a snapshot still ends with
 # tickSnapshotEnd.
-_WARNING_CODES: Final[frozenset[int]] = _MODIFICATION_REFUSED_CODES | {
-    110,
-    165,
-    321,
-    399,
-    404,
-    434,
-    492,
-    1100,
-    1101,
-    1102,
-    10090,
-    10091,
-    10167,
-    10349,
-}
+_WARNING_CODES: Final[frozenset[int]] = frozenset(
+    {
+        105,
+        110,
+        165,
+        321,
+        329,
+        399,
+        404,
+        434,
+        492,
+        1100,
+        1101,
+        1102,
+        10090,
+        10091,
+        10167,
+        10349,
+    }
+)
 
 # Errors after which IBKR does not serve a stream (market data, tick by
 # tick, depth, bars, scanner, PnL): the request has to change and be sent
@@ -1126,7 +1128,12 @@ class Wrapper(Generic[EmptyT]):
                 if status != oldStatus:
                     if status == OrderStatus.Filled:
                         trade.filledEvent.emit(trade)
-                    elif status == OrderStatus.Cancelled:
+                    elif status == OrderStatus.Cancelled or (
+                        # the event the held error would have fired
+                        status == OrderStatus.Inactive
+                        and oldStatus == OrderStatus.ValidationError
+                        and trade.modifyUnconfirmed
+                    ):
                         trade.cancelledEvent.emit(trade)
         else:
             self._logger.error(
@@ -2244,6 +2251,8 @@ class Wrapper(Generic[EmptyT]):
         ):
             # the order stays live until TWS reports a status that ends it
             isWarning = True
+            if advancedOrderRejectJson:
+                trade.advancedError = advancedOrderRejectJson
 
         self.tally.counted(errorCode, isWarning)
         msg = f"{'Warning' if isWarning else 'Error'} {errorCode}, reqId {reqId}: {errorString}"
