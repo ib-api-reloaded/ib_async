@@ -685,11 +685,12 @@ class Trade:
     # ``openOrder`` callback for this trade.
     serverOrder: Order | None = None
 
-    # True from a modification of an order TWS has acknowledged until the
-    # next order status with no new fill. While True, an error that would
-    # reject a new order means the modification failed and the order is still
-    # live. A refusal leaves this True, because no status follows it.
-    modifyPending: bool = False
+    # True once a modification of an order TWS has acknowledged is sent, and
+    # it stays True. TWS does not confirm a modification: the status for an
+    # accepted one looks like a repeated status, which TWS often sends, and it
+    # carries no order terms. While True, an error that would reject a new
+    # order leaves this order live until TWS reports a status that ends it.
+    modifyUnconfirmed: bool = False
 
     # Same display policy as ``Order`` / ``OrderStatus`` — a Trade printed
     # on a log line shows its contract, its order, its status and its fills

@@ -52,6 +52,10 @@ class Tracked:
     fills: list[Decimal] = field(default_factory=list)
     reports: int = 0  # commission reports delivered
     clientCancelled: bool = False
+    # A modification of an acknowledged order that TWS has neither accepted
+    # nor refused. The model keeps this itself, because the test checks the
+    # wrapper's own view of the order against it.
+    modifyUnanswered: bool = False
     # The status TWS last reported. None before the first report, and None
     # again after the client sends a cancel.
     serverStatus: str | None = None
@@ -167,6 +171,7 @@ class OrderSimulation(RuleBasedStateMachine):
         tracked.trade.order.lmtPrice = Decimal(price)
         self.ib.placeOrder(CONTRACT, tracked.trade.order)
         self.tws.run()
+        tracked.modifyUnanswered = tracked.placed.acknowledged
 
     @rule(data=st.data())
     def cancel(self, data: st.DataObject) -> None:
@@ -201,6 +206,7 @@ class OrderSimulation(RuleBasedStateMachine):
         tracked = self.pick(data, candidates)
         self.tws.acknowledge(tracked.placed)
         tracked.serverStatus = OrderStatus.Submitted
+        tracked.modifyUnanswered = False
 
     @rule(data=st.data(), portion=st.floats(0, 1), reportFirst=st.booleans())
     def tws_fills(self, data: st.DataObject, portion: float, reportFirst: bool) -> None:
@@ -242,7 +248,7 @@ class OrderSimulation(RuleBasedStateMachine):
     def tws_refuses_modification(self, data: st.DataObject, code: int) -> None:
         """TWS refuses an unanswered modification of an acknowledged order.
         The order keeps working and no status follows."""
-        candidates = [t for t in self.live() if t.trade.modifyPending]
+        candidates = [t for t in self.live() if t.modifyUnanswered]
         if not candidates:
             return
         tracked = self.pick(data, candidates)

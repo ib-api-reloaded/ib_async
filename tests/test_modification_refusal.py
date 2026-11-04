@@ -94,9 +94,31 @@ def test_error_after_a_new_order_modified_before_its_acknowledgement_cancels() -
     scenario.assertCancelled()
 
 
-def test_error_after_an_accepted_modification_cancels() -> None:
-    """TWS answered the modification, so a later error is about the order."""
+@pytest.mark.parametrize("code", REFUSED_WHILE_MODIFYING)
+def test_repeated_status_does_not_answer_a_modification(code: int) -> None:
+    """TWS often repeats a status, and a status carries no order terms."""
     scenario = Scenario()
+    scenario.modify()
+    scenario.tws.repeatStatus(scenario.placed)
+    scenario.tws.refuseModification(scenario.placed, code)
+    scenario.assertStillWorking()
+
+
+def test_error_after_an_accepted_modification_waits_for_the_status() -> None:
+    """The status for an accepted modification looks like a repeated one, so
+    the order stays live until TWS reports that it ended."""
+    scenario = Scenario()
+    scenario.modify()
+    scenario.tws.acknowledge(scenario.placed)
+    scenario.tws.rejectOrder(scenario.placed)
+    scenario.assertStillWorking()
+    scenario.tws.cancelOrder(scenario.placed)
+    scenario.assertCancelled()
+
+
+def test_error_after_a_modification_sent_before_the_acknowledgement_cancels() -> None:
+    """Only a modification of an acknowledged order can leave it working."""
+    scenario = Scenario(acknowledged=False)
     scenario.modify()
     scenario.tws.acknowledge(scenario.placed)
     scenario.tws.rejectOrder(scenario.placed)
@@ -162,4 +184,4 @@ def test_refused_modification_can_be_sent_again() -> None:
     scenario.tws.refuseModification(scenario.placed)
     scenario.assertStillWorking()
     scenario.tws.acknowledge(scenario.placed)
-    assert scenario.trade.modifyPending is False
+    assert scenario.trade.orderStatus.status == OrderStatus.Submitted

@@ -353,9 +353,11 @@ are fixed in v3.0:
   ``cancelledEvent`` and left ``openTrades()``, so an application could
   place a replacement beside the live order. Errors 104, 134, 422, 440,
   444, 10241 and 10242 are now warnings. Errors 201, 439, 441, 442 and 443
-  are warnings while a modification of an acknowledged order is unanswered
-  (``Trade.modifyPending``), and otherwise end the order as before. The
-  trade stays active as ``ValidationError`` until its next status.
+  are warnings for an order modified after TWS acknowledged it
+  (``Trade.modifyUnconfirmed``), and otherwise end the order as before. TWS
+  does not confirm a modification, so this holds for the rest of the
+  order's life. The trade stays active as ``ValidationError`` until its
+  next status, and a status that ends the order still ends the trade.
   (:issue:`243`, thanks to @nealeyoung)
 * **A repeated commission report fired its events twice.** TWS repeats
   an execution and its commission report, for instance after a

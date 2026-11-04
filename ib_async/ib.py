@@ -1205,7 +1205,7 @@ class IB(Generic[EmptyT]):
                 )
             logEntry = TradeLogEntry(now, trade.orderStatus.status, "Modify")
             trade.log.append(logEntry)
-            trade.modifyPending = trade.serverOrder is not None
+            trade.modifyUnconfirmed = trade.serverOrder is not None
             self._logger.info(f"placeOrder: Modify order {trade}")
             trade.modifyEvent.emit(trade)
             self.orderModifyEvent.emit(trade)

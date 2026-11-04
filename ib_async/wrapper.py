@@ -271,8 +271,8 @@ class RequestError(Exception):
 # Texts are from https://interactivebrokers.github.io/tws-api/message_codes.html
 #
 # 1. The order is still live, whatever it was doing (_WARNING_CODES).
-# 2. The code refuses a modification if one is unanswered, and otherwise ends
-#    the order (_ENDS_ORDER_UNLESS_MODIFYING_CODES).
+# 2. The code ends the order, unless the order was modified after TWS
+#    acknowledged it (_ENDS_UNMODIFIED_ORDER_CODES).
 # 3. Any other error ends the order, including 202 (Order cancelled).
 
 # Warnings are currently:
@@ -307,7 +307,9 @@ _MODIFICATION_REFUSED_CODES: Final[frozenset[int]] = frozenset(
 
 # These reject what was sent, which ends a new order. For a modification of an
 # order TWS has acknowledged, the order keeps working on its old terms and no
-# status follows, so ``Trade.modifyPending`` decides.
+# status follows, so ``Trade.modifyUnconfirmed`` decides. TWS does not confirm
+# a modification, so a later error of this kind on a modified order also
+# leaves it live until TWS reports a status that ends it.
 #   201 Order rejected - reason: (reported for a modification with an invalid
 #       stop price: the order stayed live for the session)
 #   439 Order processing failed. Algorithm definition not found. (reported for
@@ -317,7 +319,7 @@ _MODIFICATION_REFUSED_CODES: Final[frozenset[int]] = frozenset(
 #   443 Order processing failed. Unknown algo attribute.
 # 441 to 443 check the same fields as 439. No report of them on a modification
 # is known; they are listed for that reason alone.
-_ENDS_ORDER_UNLESS_MODIFYING_CODES: Final[frozenset[int]] = frozenset(
+_ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
     {201, 439, 441, 442, 443}
 )
 
@@ -1099,10 +1101,6 @@ class Wrapper(Generic[EmptyT]):
             }
             curr = dataclassAsDict(trade.orderStatus)
             isChanged = curr != {**curr, **new}
-            # A status with no new fill answers a modification. A partial
-            # fill's status can arrive before the answer.
-            if filled == trade.orderStatus.filled:
-                trade.modifyPending = False
 
             if isChanged:
                 # the trade's live status, changed in place
@@ -2240,11 +2238,11 @@ class Wrapper(Generic[EmptyT]):
             isWarning = False
 
         if (
-            errorCode in _ENDS_ORDER_UNLESS_MODIFYING_CODES
+            errorCode in _ENDS_UNMODIFIED_ORDER_CODES
             and trade
-            and trade.modifyPending
+            and trade.modifyUnconfirmed
         ):
-            # the modification failed, and the order is still live
+            # the order stays live until TWS reports a status that ends it
             isWarning = True
 
         self.tally.counted(errorCode, isWarning)
