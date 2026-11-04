@@ -266,12 +266,19 @@ class RequestError(Exception):
         self.message = message
 
 
+# An error that names an order is handled in one of three ways. IBKR's error
+# callback does not say what happened to the order, so these lists do.
+# Texts are from https://interactivebrokers.github.io/tws-api/message_codes.html
+#
+# 1. The order is still live, whatever it was doing (_WARNING_CODES).
+# 2. The code refuses a modification if one is unanswered, and otherwise ends
+#    the order (_ENDS_ORDER_UNLESS_MODIFYING_CODES).
+# 3. Any other error ends the order, including 202 (Order cancelled).
+
 # Warnings are currently:
-# 105 - Order being modified does not match the original order. (?)
 # 110 - The price does not conform to the minimum price variation for this contract.
 # 165 - Historical market Data Service query message.
 # 321 - Server error when validating an API client request.
-# 329 - Order modify failed. Cannot change to the new order type.
 # 399 - Order message error
 # 404 -	Shares for this order are not immediately available for short sale. The order will be held while we attempt to locate the shares.
 # 434 -	The order size cannot be zero.
@@ -281,8 +288,38 @@ class RequestError(Exception):
 # Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
 # TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
 
-# Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
-# 202 - Order cancelled - Reason:
+# IBKR's text for each of these says a change to an order failed, so the order
+# keeps working on its old terms. 104 means it already filled, and its Filled
+# status is what ends it.
+#   104   Can't modify a filled order.
+#   105   Order being modified does not match original order.
+#   134   Modify order failed.
+#   329   Order modify failed. Cannot change to the new order type.
+#   422   The account and clearing attributes on this order may not be changed.
+#   440   Order modify failed. Algorithm cannot be modified.
+#   444   Volatility Combo order is not yet acknowledged. Cannot submit changes at this time.
+#   2102  Unable to modify this order as it is still being processed.
+#   10241 Order Quantity is expressed in monetary terms. Modification is not supported via API.
+#   10242 Fractional-sized order cannot be modified via API.
+_MODIFICATION_REFUSED_CODES: Final[frozenset[int]] = frozenset(
+    {104, 105, 134, 329, 422, 440, 444, 2102, 10241, 10242}
+)
+
+# These reject what was sent, which ends a new order. For a modification of an
+# order TWS has acknowledged, the order keeps working on its old terms and no
+# status follows, so ``Trade.modifyPending`` decides.
+#   201 Order rejected - reason: (reported for a modification with an invalid
+#       stop price: the order stayed live for the session)
+#   439 Order processing failed. Algorithm definition not found. (reported for
+#       a modification: the order stayed live until cancelled)
+#   441 Algo attributes validation failed:
+#   442 Specified algorithm is not allowed for this order.
+#   443 Order processing failed. Unknown algo attribute.
+# 441 to 443 check the same fields as 439. No report of them on a modification
+# is known; they are listed for that reason alone.
+_ENDS_ORDER_UNLESS_MODIFYING_CODES: Final[frozenset[int]] = frozenset(
+    {201, 439, 441, 442, 443}
+)
 
 # Connection-state notifications (TWS "system messages" with reqId=-1):
 #   1100 - "Connectivity between IB and TWS has been lost."
@@ -298,26 +335,22 @@ class RequestError(Exception):
 # 10090 and 10091: part of the requested market data is not subscribed.
 # IBKR still sends the rest, and a snapshot still ends with
 # tickSnapshotEnd.
-_WARNING_CODES: Final[frozenset[int]] = frozenset(
-    {
-        105,
-        110,
-        165,
-        321,
-        329,
-        399,
-        404,
-        434,
-        492,
-        1100,
-        1101,
-        1102,
-        10090,
-        10091,
-        10167,
-        10349,
-    }
-)
+_WARNING_CODES: Final[frozenset[int]] = _MODIFICATION_REFUSED_CODES | {
+    110,
+    165,
+    321,
+    399,
+    404,
+    434,
+    492,
+    1100,
+    1101,
+    1102,
+    10090,
+    10091,
+    10167,
+    10349,
+}
 
 # Errors after which IBKR does not serve a stream (market data, tick by
 # tick, depth, bars, scanner, PnL): the request has to change and be sent
@@ -1066,6 +1099,10 @@ class Wrapper(Generic[EmptyT]):
             }
             curr = dataclassAsDict(trade.orderStatus)
             isChanged = curr != {**curr, **new}
+            # A status with no new fill answers a modification. A partial
+            # fill's status can arrive before the answer.
+            if filled == trade.orderStatus.filled:
+                trade.modifyPending = False
 
             if isChanged:
                 # the trade's live status, changed in place
@@ -2202,6 +2239,14 @@ class Wrapper(Generic[EmptyT]):
             # invalid price for a new order must cancel it
             isWarning = False
 
+        if (
+            errorCode in _ENDS_ORDER_UNLESS_MODIFYING_CODES
+            and trade
+            and trade.modifyPending
+        ):
+            # the modification failed, and the order is still live
+            isWarning = True
+
         self.tally.counted(errorCode, isWarning)
         msg = f"{'Warning' if isWarning else 'Error'} {errorCode}, reqId {reqId}: {errorString}"
 
@@ -2248,10 +2293,9 @@ class Wrapper(Generic[EmptyT]):
                 if advancedOrderRejectJson:
                     trade.advancedError = advancedOrderRejectJson
 
-                # Errors can mean two things:
-                #  - new order is REJECTED
-                #  - existing order is server-canceled (DAY orders, margin problems)
-                #  - modification to *existing* order just has an update error, but the order is STILL LIVE
+                # Errors here mean a new order is REJECTED or an existing order
+                # is server-canceled (DAY orders, margin problems). A refused
+                # modification of a live order took the warning branch above.
                 if not trade.isDone():
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)

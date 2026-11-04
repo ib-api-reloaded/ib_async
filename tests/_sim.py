@@ -113,6 +113,7 @@ class PlacedOrder:
     orderId: int
     contract: ibi.Contract
     order: ibi.Order  # a copy, as sent
+    previous: ibi.Order | None = None  # what a refused modification restores
     acknowledged: bool = False
     filled: Decimal = Decimal(0)
     # How the order ended at the server: "filled", "cancelled", "rejected"
@@ -231,6 +232,7 @@ class SimulatedTws:
         if placed is None:
             self.orders[orderId] = PlacedOrder(orderId, contract, copy)
         else:
+            placed.previous = placed.order
             placed.order = copy  # a modification
 
     def _orderCancelled(
@@ -529,6 +531,14 @@ class SimulatedTws:
     def rejectOrder(self, placed: PlacedOrder, code: int = 201) -> None:
         """Reject the order with error ``code``."""
         placed.ended = "rejected"
+        self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
+        self.run()
+
+    def refuseModification(self, placed: PlacedOrder, code: int = 201) -> None:
+        """Refuse the last modification with error ``code``. The order keeps
+        working as it was, and no status follows."""
+        assert placed.previous is not None
+        placed.order = placed.previous
         self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
         self.run()
 

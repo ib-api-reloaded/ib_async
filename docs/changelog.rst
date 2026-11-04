@@ -347,6 +347,16 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 These were broken on v2.x against modern TWS / Gateway versions and
 are fixed in v3.0:
 
+* **A refused modification marked a live order Cancelled.** TWS reports a
+  refused modification as an error and sends no status, and the order
+  keeps working on its old terms. The trade became ``Cancelled``, fired
+  ``cancelledEvent`` and left ``openTrades()``, so an application could
+  place a replacement beside the live order. Errors 104, 134, 422, 440,
+  444, 10241 and 10242 are now warnings. Errors 201, 439, 441, 442 and 443
+  are warnings while a modification of an acknowledged order is unanswered
+  (``Trade.modifyPending``), and otherwise end the order as before. The
+  trade stays active as ``ValidationError`` until its next status.
+  (:issue:`243`, thanks to @nealeyoung)
 * **A repeated commission report fired its events twice.** TWS repeats
   an execution and its commission report, for instance after a
   reconnect. The repeated execution was already ignored. The repeated

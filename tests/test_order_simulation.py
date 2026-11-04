@@ -2,8 +2,9 @@
 
 Hypothesis places single orders and bracket orders, modifies and cancels
 them, and cancels all orders at once. The simulated TWS acknowledges,
-fills, cancels and rejects orders, and repeats executions and statuses it
-has already sent. The socket drops and reconnects. These steps run in any
+fills, cancels and rejects orders, refuses modifications, and repeats
+executions and statuses it has already sent. The socket drops and
+reconnects. These steps run in any
 order. Fills are partial or full. The commission report arrives before or
 after the execution.
 
@@ -236,6 +237,17 @@ class OrderSimulation(RuleBasedStateMachine):
         tracked = self.pick(data, candidates)
         self.tws.rejectOrder(tracked.placed)
         tracked.ended = "rejected"
+
+    @rule(data=st.data(), code=st.sampled_from([201, 439, 440]))
+    def tws_refuses_modification(self, data: st.DataObject, code: int) -> None:
+        """TWS refuses an unanswered modification of an acknowledged order.
+        The order keeps working and no status follows."""
+        candidates = [t for t in self.live() if t.trade.modifyPending]
+        if not candidates:
+            return
+        tracked = self.pick(data, candidates)
+        self.tws.refuseModification(tracked.placed, code)
+        tracked.serverStatus = OrderStatus.ValidationError
 
     @rule(data=st.data())
     def tws_repeats_fill(self, data: st.DataObject) -> None:
