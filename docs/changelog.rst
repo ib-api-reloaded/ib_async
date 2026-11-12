@@ -358,7 +358,9 @@ are fixed in v3.0:
   so this holds for the rest of the order's life. The trade stays active
   as ``ValidationError`` until its next status. A status that ends the
   order still ends the trade, and ``Cancelled`` or ``Inactive`` then fires
-  ``cancelledEvent``. (:issue:`243`, thanks to @nealeyoung)
+  ``cancelledEvent``. Error 481 (Order size was reduced) is now a warning
+  for every order, because IBKR does not reject the order with it.
+  (:issue:`243`, thanks to @nealeyoung)
 * **A repeated commission report fired its events twice.** TWS repeats
   an execution and its commission report, for instance after a
   reconnect. The repeated execution was already ignored. The repeated

@@ -21,7 +21,7 @@ from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
 ENDS_UNMODIFIED_ORDER = [104, 134, 201, 422, 439, 440, 441, 442, 443, 444, 10241, 10242]
 
 # Warnings for any order.
-ALWAYS_WARNINGS = [105, 329, 2102]
+ALWAYS_WARNINGS = [105, 329, 481, 2102]
 
 
 class Scenario:
@@ -69,6 +69,13 @@ def test_refused_modification_leaves_the_order_working(code: int) -> None:
 def test_warning_code_leaves_any_order_working(code: int) -> None:
     scenario = Scenario()
     scenario.tws.rejectOrder(scenario.placed, code)
+    scenario.assertStillWorking()
+
+
+def test_reduced_size_leaves_a_new_order_working() -> None:
+    """IBKR support: 481 does not reject the order."""
+    scenario = Scenario(acknowledged=False)
+    scenario.tws.rejectOrder(scenario.placed, 481)
     scenario.assertStillWorking()
 
 

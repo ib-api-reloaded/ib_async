@@ -283,6 +283,9 @@ class RequestError(Exception):
 # 399 - Order message error
 # 404 -	Shares for this order are not immediately available for short sale. The order will be held while we attempt to locate the shares.
 # 434 -	The order size cannot be zero.
+# 481 - Order size was reduced. IBKR support says the order is not rejected; it
+#       can mean IBKR has no shares to borrow for a short sale
+#       (https://dimon.ca/dmitrys-tws-api-faq/).
 # 492 - ? not listed
 # 10167 ? not listed
 # 10349 - Warning about "Order TIF was set to DAY based on order preset" but does NOT cancel active order
@@ -345,6 +348,7 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
         399,
         404,
         434,
+        481,
         492,
         1100,
         1101,
