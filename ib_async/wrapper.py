@@ -462,6 +462,10 @@ class Wrapper(Generic[EmptyT]):
     _liveExecIds: set[str] = field(init=False)
     """Executions already emitted through the live event surface."""
 
+    _fillsAwaitingTrade: dict[int, list[str]] = field(init=False)
+    """Live executions that arrived before their order had a Trade, by
+    permId. The Trade takes them in, with their events, when it appears."""
+
     # commissionReport callbacks usually arrive AFTER their paired
     # execDetails, but mid-connection races (especially across cross-client
     # fills replayed at startup) can deliver the report first. Park the
@@ -538,6 +542,7 @@ class Wrapper(Generic[EmptyT]):
         self.permId2Trade = {}
         self.fills = {}
         self._liveExecIds = set()
+        self._fillsAwaitingTrade = {}
         self._pendingCommissionReports = OrderedDict()
         self.newsTicks = []
         self.msgId2NewsBulletin = {}
@@ -998,6 +1003,7 @@ class Wrapper(Generic[EmptyT]):
                 self.requests.append(SingletonKey("openOrders"), trade)
             else:
                 self.ib.openOrderEvent.emit(trade)
+            self._takeInEarlierFills(trade)
 
         # make sure that the client issues order ids larger than any
         # order id encountered (even from other clients) to avoid
@@ -1070,6 +1076,7 @@ class Wrapper(Generic[EmptyT]):
         # wave after completedOrdersEnd already fired), instead of the
         # KeyError the legacy direct-index access used to raise.
         self.requests.append(SingletonKey("completedOrders"), trade)
+        self._takeInEarlierFills(trade)
 
     def completedOrdersEnd(self):
         self.requests.set_result(SingletonKey("completedOrders"))
@@ -1210,9 +1217,42 @@ class Wrapper(Generic[EmptyT]):
                 if parkedReport is not None:
                     self.ib.commissionReportEvent.emit(trade, fill, parkedReport)
                     trade.commissionReportEvent.emit(trade, fill, parkedReport)
+        elif isLive and execId not in self._liveExecIds:
+            # No Trade yet: a fill can come before its order's openOrder,
+            # and a master client may not have seen another client's order.
+            # The Trade takes the fill in when it appears.
+            waiting = self._fillsAwaitingTrade.setdefault(execution.permId, [])
+            if execId not in waiting:
+                waiting.append(execId)
 
         if not isLive:
             self.requests.append(ReqIdKey(reqId), fill)
+
+    def _takeInEarlierFills(self, trade: Trade) -> None:
+        """Attach the live fills that arrived before ``trade`` existed, and
+        fire the events they could not fire then, once each: the
+        execution, and the commission report if it came too."""
+        for execId in self._fillsAwaitingTrade.pop(trade.order.permId, []):
+            fill = self.fills[execId]
+            if execId in self._liveExecIds or fill in trade.fills:
+                continue
+            trade.fills.append(fill)
+            execution = fill.execution
+            trade.log.append(
+                TradeLogEntry(
+                    fill.time,
+                    trade.orderStatus.status,
+                    f"Fill {execution.shares}@{execution.price}",
+                )
+            )
+            self._liveExecIds.add(execId)
+            self._logger.info("execDetails: %s", fill)
+            self.ib.execDetailsEvent.emit(trade, fill)
+            trade.fillEvent.emit(trade, fill)
+            report = fill.commissionReport
+            if report.execId == execId:
+                self.ib.commissionReportEvent.emit(trade, fill, report)
+                trade.commissionReportEvent.emit(trade, fill, report)
 
     def execDetailsEnd(self, reqId: int):
         self.requests.set_result(ReqIdKey(reqId))

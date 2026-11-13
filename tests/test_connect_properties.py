@@ -24,17 +24,22 @@ from tests._sim import Ask, SimulatedTws
 FLAGS = list(StartupFetch)
 
 
+def fetchesOpenOrders(fields: StartupFetch, readonly: bool) -> bool:
+    return not readonly and bool(fields & StartupFetch.ORDERS_OPEN)
+
+
 def expectedRequests(
     fields: StartupFetch, readonly: bool, accounts: list[str], account: str
 ) -> dict[str, int]:
-    """Return the requests connect sends before executions, as a count per
-    client method."""
+    """Return the requests connect sends first, as a count per client
+    method. Fetching open orders starts with TWS's config, which says
+    whether this is the master client."""
     chosen = account or (accounts[0] if len(accounts) == 1 else "")
     expected: dict[str, int] = {}
     if fields & StartupFetch.POSITIONS:
         expected["reqPositions"] = 1
-    if not readonly and fields & StartupFetch.ORDERS_OPEN:
-        expected["reqOpenOrders"] = 1
+    if fetchesOpenOrders(fields, readonly):
+        expected["reqConfig"] = 1
     if not readonly and fields & StartupFetch.ORDERS_COMPLETE:
         expected["reqCompletedOrders"] = 1
     if chosen and fields & StartupFetch.ACCOUNT_UPDATES:
@@ -56,10 +61,11 @@ def counts(asks: list[Ask]) -> dict[str, int]:
     readonly=st.booleans(),
     accounts=st.lists(st.sampled_from(["DU1", "DU2", "DU3"]), min_size=1, unique=True),
     chooseAccount=st.booleans(),
+    masterClientId=st.sampled_from([None, 7, 3]),
 )
 @examples()
 def test_connect_sends_startup_requests_for_settings(
-    flags, readonly, accounts, chooseAccount
+    flags, readonly, accounts, chooseAccount, masterClientId
 ):
     fields = StartupFetch(0)
     for flag in flags:
@@ -67,6 +73,7 @@ def test_connect_sends_startup_requests_for_settings(
     account = accounts[0] if chooseAccount else ""
     loop = getLoop()
     tws = SimulatedTws(loop)
+    tws.masterClientId = masterClientId
     tws.client.connectAsync = AsyncMock()
     tws.client.getAccounts.return_value = list(accounts)
     tws.client.serverVersion.return_value = 226
@@ -89,9 +96,19 @@ def test_connect_sends_startup_requests_for_settings(
     # immediately if there is no first batch.
     assert ("reqExecutions" in counts(tws.asks)) == (executions and not expected)
 
-    for ask in list(tws.asks):
-        if ask.open and ask.kind != "reqExecutions":
-            tws.answer(ask)
+    # The config's answer sends the open orders request, also in the first
+    # batch: every API client's for the master client, its own otherwise.
+    while asks := [a for a in tws.openAsks() if a.kind != "reqExecutions"]:
+        tws.answer(asks[0])
+    if fetchesOpenOrders(fields, readonly):
+        master = masterClientId == 7
+        fetched, notFetched = (
+            ("reqAllOpenOrders", "reqOpenOrders")
+            if master
+            else ("reqOpenOrders", "reqAllOpenOrders")
+        )
+        assert counts(tws.asks)[fetched] == 1
+        assert notFetched not in counts(tws.asks)
     if executions:
         assert counts(tws.asks).get("reqExecutions") == 1
         for ask in tws.openAsks("reqExecutions"):

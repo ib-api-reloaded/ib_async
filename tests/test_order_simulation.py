@@ -1,12 +1,12 @@
 """Stateful test of order handling against a simulated TWS.
 
 Hypothesis places single orders and bracket orders, modifies and cancels
-them, and cancels all orders at once. The simulated TWS acknowledges,
-fills, cancels and rejects orders, refuses modifications, and repeats
-executions and statuses it has already sent. The socket drops and
-reconnects. These steps run in any
-order. Fills are partial or full. The commission report arrives before or
-after the execution.
+them, and cancels all orders at once. Another API client places orders
+too, which this IB sees as the master client. The simulated TWS
+acknowledges, fills, cancels and rejects orders, refuses modifications,
+and repeats executions and statuses it has already sent. The socket drops
+and reconnects. These steps run in any order. Fills are partial or full.
+The commission report arrives before or after the execution.
 
 After each step the test checks that every trade's status, fills, log and
 events match the messages sent for it. At the end the server fills every
@@ -27,6 +27,8 @@ from ib_async import CommissionReport, Fill, OrderStatus, Trade
 from ib_async.util import getLoop
 from tests._property import machine
 from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
+
+OTHER_CLIENT = 3
 
 
 @dataclass(eq=False)
@@ -56,6 +58,8 @@ class Tracked:
     # nor refused. The model keeps this itself, because the test checks the
     # wrapper's own view of the order against it.
     modifyUnanswered: bool = False
+    # Placed by another API client; this IB, the master client, only sees it.
+    otherClient: bool = False
     # The status TWS last reported. None before the first report, and None
     # again after the client sends a cancel.
     serverStatus: str | None = None
@@ -106,6 +110,8 @@ class OrderSimulation(RuleBasedStateMachine):
         self.tws = SimulatedTws(self.loop)
         self.tracked: list[Tracked] = []
         self.epoch = 0
+        # The other client's order ids start where this client's do.
+        self.otherIds = iter(range(1000, 10**6))
 
     @property
     def ib(self) -> ibi.IB:
@@ -114,6 +120,10 @@ class OrderSimulation(RuleBasedStateMachine):
     def live(self) -> list[Tracked]:
         """Orders still working at the server on the current connection."""
         return [t for t in self.tracked if t.epoch == self.epoch and not t.ended]
+
+    def ownLive(self) -> list[Tracked]:
+        """Live orders this client placed, which it can modify or cancel."""
+        return [t for t in self.live() if not t.otherClient]
 
     def pick(self, data: st.DataObject, candidates: list[Tracked]) -> Tracked:
         return candidates[data.draw(st.integers(0, len(candidates) - 1))]
@@ -164,7 +174,7 @@ class OrderSimulation(RuleBasedStateMachine):
 
     @rule(data=st.data(), price=st.integers(40, 60))
     def modify(self, data: st.DataObject, price: int) -> None:
-        candidates = [t for t in self.live() if t.trade.order.orderType == "LMT"]
+        candidates = [t for t in self.ownLive() if t.trade.order.orderType == "LMT"]
         if not candidates or not self.tws.connected:
             return
         tracked = self.pick(data, candidates)
@@ -173,9 +183,79 @@ class OrderSimulation(RuleBasedStateMachine):
         self.tws.run()
         tracked.modifyUnanswered = tracked.placed.acknowledged
 
+    @rule(limit=st.booleans(), quantity=st.integers(1, 6))
+    def other_client_places(self, limit: bool, quantity: int) -> None:
+        """Another API client places an order, and TWS reports it to this IB,
+        the master client. Its order ids overlap this client's."""
+        if not self.tws.connected:
+            return
+        order = (
+            ibi.LimitOrder("SELL", quantity, 50.00)
+            if limit
+            else ibi.MarketOrder("SELL", quantity)
+        )
+        placed = self.tws.otherClientOrder(OTHER_CLIENT, next(self.otherIds), order)
+        self.tws.acknowledge(placed)
+        trade = self.ib.wrapper.trades[(OTHER_CLIENT, placed.orderId)]
+        assert trade.order.clientId == OTHER_CLIENT
+        self.tracked.append(
+            Tracked(
+                trade,
+                placed,
+                Decimal(quantity),
+                track(trade),
+                self.epoch,
+                otherClient=True,
+                serverStatus=OrderStatus.Submitted,
+            )
+        )
+
+    @rule(quantity=st.integers(2, 6), reportFirst=st.booleans())
+    def other_client_fills_before_its_open_order(
+        self, quantity: int, reportFirst: bool
+    ) -> None:
+        """Another client's order fills in part before this IB has its
+        openOrder. The Trade the openOrder builds takes the fill in and
+        fires its events once."""
+        if not self.tws.connected:
+            return
+        order = ibi.LimitOrder("SELL", quantity, 50.00)
+        placed = self.tws.otherClientOrder(OTHER_CLIENT, next(self.otherIds), order)
+        execId = self.tws.fill(placed, Decimal(1), reportFirst=reportFirst)
+        seen: list[tuple[str, str]] = []
+
+        def onExec(trade: Trade, fill: Fill) -> None:
+            seen.append(("execDetails", fill.execution.execId))
+
+        def onReport(trade: Trade, fill: Fill, report: CommissionReport) -> None:
+            seen.append(("commission", report.execId))
+
+        self.ib.execDetailsEvent += onExec
+        self.ib.commissionReportEvent += onReport
+        self.tws.acknowledge(placed)
+        self.ib.execDetailsEvent -= onExec
+        self.ib.commissionReportEvent -= onReport
+        assert seen == [("execDetails", execId), ("commission", execId)]
+        trade = self.ib.wrapper.trades[(OTHER_CLIENT, placed.orderId)]
+        counts = track(trade)
+        counts.fill = counts.commission = 1  # fired above, before tracking
+        self.tracked.append(
+            Tracked(
+                trade,
+                placed,
+                Decimal(quantity),
+                counts,
+                self.epoch,
+                fills=[Decimal(1)],
+                reports=1,
+                otherClient=True,
+                serverStatus=OrderStatus.Submitted,
+            )
+        )
+
     @rule(data=st.data())
     def cancel(self, data: st.DataObject) -> None:
-        candidates = [t for t in self.live() if not t.clientCancelled]
+        candidates = [t for t in self.ownLive() if not t.clientCancelled]
         if not candidates or not self.tws.connected:
             return
         tracked = self.pick(data, candidates)

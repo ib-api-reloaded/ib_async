@@ -7,6 +7,7 @@ import contextlib
 import copy
 import dataclasses
 import datetime
+import functools
 import logging
 import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
@@ -14,7 +15,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import Flag, auto
 from operator import attrgetter
-from typing import Any, Generic, Self, overload
+from typing import TYPE_CHECKING, Any, Generic, Self, overload
 
 from eventkit import Event
 
@@ -96,7 +97,10 @@ from ib_async.order import (
 from ib_async.ordertypes import LimitOrder, StopOrder
 from ib_async.runtime import RuntimeState
 from ib_async.ticker import Ticker
-from ib_async.wrapper import Wrapper
+from ib_async.wrapper import RequestError, Wrapper
+
+if TYPE_CHECKING:
+    from ib_async._pb.ConfigResponse_pb2 import ConfigResponse
 
 
 def _tagValueList(options: Sequence[TagValue]) -> list[TagValue]:
@@ -116,6 +120,9 @@ class StartupFetch(Flag):
 
 
 StartupFetchNONE = StartupFetch(0)
+
+# A request connect sends at startup, as the call that sends it.
+_StartupRequest = Callable[[], Awaitable[list[Position] | list[Trade] | None]]
 
 StartupFetchALL = (
     StartupFetch.POSITIONS
@@ -527,6 +534,11 @@ class IB(Generic[EmptyT]):
               for member details. There is also StartupFetchNONE and StartupFetchALL
               as shorthand. Individual flag field members can be added or removed
               to the ``fetchFields`` parameter as needed.
+
+        Open orders: connect reads the master client ID configured in TWS.
+        If ``clientId`` matches it, connect loads every API client's open
+        orders, since TWS also sends this client their updates. Otherwise
+        it loads only its own.
         """
         return self._run(
             self.connectAsync(
@@ -2694,36 +2706,62 @@ class IB(Generic[EmptyT]):
 
     # now entering the parallel async universe
 
+    async def _startupOpenOrdersAsync(self) -> list[Trade]:
+        """The open orders connect loads. If this client's ID is the master
+        client ID configured in TWS, every API client's, since TWS also
+        sends this client their updates. Otherwise only this client's: it
+        gets no updates for other clients' orders, so a Trade for one would
+        never change. A config TWS refuses counts as no match."""
+        try:
+            config = await self.reqConfigAsync()
+        except RequestError as error:
+            self._logger.warning("TWS refused its config: %s", error)
+            config = None
+        settings = config.api.settings if config is not None else None
+        master = (
+            settings is not None
+            and settings.HasField("masterClientId")
+            and settings.masterClientId == self.wrapper.clientId
+        )
+        if master:
+            return await self.reqAllOpenOrdersAsync()
+        return await self.reqOpenOrdersAsync()
+
     def _startupRequests(
         self,
         fetchFields: StartupFetch,
         readonly: bool,
         account: str,
         accounts: list[str],
-    ) -> dict[str, Awaitable[list[Position] | list[Trade] | None]]:
-        """Return the requests connect sends to sync state, by name.
+    ) -> dict[str, _StartupRequest]:
+        """Return the requests connect sends to sync state, by name, each
+        as the call that sends it. Nothing is sent here.
 
         Only requests selected by ``fetchFields`` are included."""
-        reqs: dict[str, Awaitable[list[Position] | list[Trade] | None]] = {}
+        reqs: dict[str, _StartupRequest] = {}
         if fetchFields & StartupFetch.POSITIONS:
-            reqs["positions"] = self.reqPositionsAsync()
+            reqs["positions"] = self.reqPositionsAsync
         if not readonly and fetchFields & StartupFetch.ORDERS_OPEN:
-            reqs["open orders"] = self.reqOpenOrdersAsync()
+            reqs["open orders"] = self._startupOpenOrdersAsync
         if (
             not readonly
             and self.client.serverVersion() >= 150
             and fetchFields & StartupFetch.ORDERS_COMPLETE
         ):
-            reqs["completed orders"] = self.reqCompletedOrdersAsync(False)
+            reqs["completed orders"] = functools.partial(
+                self.reqCompletedOrdersAsync, False
+            )
         if account and fetchFields & StartupFetch.ACCOUNT_UPDATES:
-            reqs["account updates"] = self.reqAccountUpdatesAsync(account)
+            reqs["account updates"] = functools.partial(
+                self.reqAccountUpdatesAsync, account
+            )
         if (
             len(accounts) <= self.MaxSyncedSubAccounts
             and fetchFields & StartupFetch.SUB_ACCOUNT_UPDATES
         ):
             for acc in accounts:
-                reqs[f"account updates for {acc}"] = self.reqAccountUpdatesMultiAsync(
-                    acc
+                reqs[f"account updates for {acc}"] = functools.partial(
+                    self.reqAccountUpdatesMultiAsync, acc
                 )
         return reqs
 
@@ -2756,7 +2794,7 @@ class IB(Generic[EmptyT]):
             reqs = self._startupRequests(fetchFields, readonly, account, accounts)
 
             # run initializing requests concurrently and log if any times out
-            tasks = [asyncio.wait_for(req, timeout) for req in reqs.values()]
+            tasks = [asyncio.wait_for(send(), timeout) for send in reqs.values()]
             errors = []
             resps = await asyncio.gather(*tasks, return_exceptions=True)
             for name, resp in zip(reqs, resps, strict=True):
@@ -3571,12 +3609,12 @@ class IB(Generic[EmptyT]):
         """Unsubscribe from TWS display-group event stream."""
         self.client.unsubscribeFromGroupEvents(reqId)
 
-    def reqConfigAsync(self) -> Awaitable:
+    def reqConfigAsync(self) -> Awaitable[ConfigResponse | None]:
         """Fetch the TWS / IB Gateway runtime config. Protobuf-only —
         server >= 219 (MIN_SERVER_VER_CONFIG). The future settles with
         the raw ``ConfigResponse`` proto carrying nested
         LockAndExitConfig / ApiConfig / MessageConfig / OrdersConfig
-        sub-messages."""
+        sub-messages, or None when TWS refuses the request."""
         with self._reqIdRequest() as opened:
             self.client.reqConfig(opened.reqId)
         return opened.future

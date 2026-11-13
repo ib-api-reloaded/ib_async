@@ -29,6 +29,9 @@ from typing import TypeVar
 from unittest.mock import MagicMock
 
 import ib_async as ibi
+from ib_async._pb.ApiConfig_pb2 import ApiConfig
+from ib_async._pb.ApiSettingsConfig_pb2 import ApiSettingsConfig
+from ib_async._pb.ConfigResponse_pb2 import ConfigResponse
 from ib_async.wrapper import Wrapper
 
 EXECUTED = dt.datetime(2026, 10, 14, 15, 30, tzinfo=dt.UTC)
@@ -70,6 +73,7 @@ REQUESTS: dict[str, bool] = {
     "reqOpenOrders": False,
     "reqAllOpenOrders": False,
     "reqCompletedOrders": False,
+    "reqConfig": True,
     "reqAccountUpdates": False,
     "reqAccountUpdatesMulti": True,
     "reqAccountSummary": True,
@@ -175,6 +179,13 @@ class SimulatedTws:
         self.cancels: list[tuple[str, int | None]] = []
         # Every order placed, by orderId. A modification replaces the copy.
         self.orders: dict[int, PlacedOrder] = {}
+        # Orders other API clients placed. TWS sends their messages only to
+        # the master client, so sending them makes this IB the master client.
+        self.otherOrders: list[PlacedOrder] = []
+        self._otherPermIds = iter(range(2_000_000, 10**7))
+        # The master client id set in TWS's API settings, as reqConfig
+        # reports it; None when unset.
+        self.masterClientId: int | None = None
         self._execIds = iter(range(1, 10**6))
         # Executions sent, keyed by execId, with the order and commission report.
         self.executions: dict[
@@ -234,6 +245,22 @@ class SimulatedTws:
         else:
             placed.previous = placed.order
             placed.order = copy  # a modification
+
+    def otherClientOrder(
+        self, clientId: int, orderId: int, order: ibi.Order
+    ) -> PlacedOrder:
+        """An order another API client placed. Nothing is sent until the
+        server reports it, as with ``acknowledge``."""
+        assert clientId != CLIENT_ID
+        copy = dataclasses.replace(
+            order, orderId=orderId, clientId=clientId, permId=next(self._otherPermIds)
+        )
+        placed = PlacedOrder(orderId, CONTRACT, copy)
+        self.otherOrders.append(placed)
+        return placed
+
+    def _allOrders(self) -> list[PlacedOrder]:
+        return [*self.orders.values(), *self.otherOrders]
 
     def _orderCancelled(
         self, orderId: int, orderCancel: ibi.OrderCancel | None = None
@@ -308,7 +335,24 @@ class SimulatedTws:
                 w.position("DU1", CONTRACT, Decimal(1), Decimal(10))
             w.positionEnd()
         elif ask.kind in ("reqOpenOrders", "reqAllOpenOrders"):
+            # reqOpenOrders answers this client's working orders,
+            # reqAllOpenOrders every API client's.
+            if ask.kind == "reqAllOpenOrders":
+                working = self._allOrders()
+            else:
+                working = list(self.orders.values())
+            for placed in working:
+                if placed.working:
+                    self.acknowledge(placed)
             w.openOrderEnd()
+        elif ask.kind == "reqConfig":
+            assert reqId is not None
+            settings = ApiSettingsConfig()
+            if self.masterClientId is not None:
+                settings.masterClientId = self.masterClientId
+            w.configResponseProtoBuf(
+                ConfigResponse(reqId=reqId, api=ApiConfig(settings=settings))
+            )
         elif ask.kind == "reqCompletedOrders":
             w.completedOrdersEnd()
         elif ask.kind == "reqAccountUpdates":
@@ -468,7 +512,7 @@ class SimulatedTws:
             placed.order.permId,
             0,
             Decimal(50) if placed.filled else None,
-            CLIENT_ID,
+            placed.order.clientId,
             "",
         )
 
@@ -502,7 +546,7 @@ class SimulatedTws:
             shares=shares,
             price=Decimal(50),
             permId=placed.order.permId,
-            clientId=CLIENT_ID,
+            clientId=placed.order.clientId,
             orderId=placed.orderId,
         )
         report = ibi.CommissionReport(execId=execId, commissionAndFees=Decimal(1))
@@ -564,7 +608,7 @@ class SimulatedTws:
     def globalCancel(self) -> list[PlacedOrder]:
         """Cancel every working order, as TWS does after reqGlobalCancel.
         Return the cancelled orders."""
-        cancelled = [p for p in self.orders.values() if p.working]
+        cancelled = [p for p in self._allOrders() if p.working]
         for placed in cancelled:
             self.cancelOrder(placed)
         return cancelled
@@ -683,7 +727,8 @@ class SimulatedTws:
 
         The wrapper fails every awaiting caller, closes every subscription
         and marks every live trade Disconnected. The server drops every
-        open ask and working order."""
+        open ask and this client's working orders. Other clients' orders
+        keep working: their own connections are up."""
         self.client.isConnected.return_value = False
         self.connected = False
         self.wrapper.connectionClosed()

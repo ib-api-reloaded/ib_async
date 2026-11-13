@@ -354,6 +354,16 @@ are fixed in v3.0:
   now the release segment as integers, ``(3, 0, 0)`` for each of those;
   ``__version__`` keeps the whole version. (:issue:`245`, thanks to
   @Lcstyle)
+* **The master client missed other clients' fills.** ib_async now reads
+  the master client ID configured in TWS. When the connecting client ID
+  matches it, connect loads every API client's open orders instead of
+  only its own, so fills of other clients' orders fire
+  ``execDetailsEvent`` and ``commissionReportEvent``, also after a
+  reconnect. Before, the master client had no Trade for orders other
+  clients already had working, and their fills reached ``ib.fills()``
+  with no event. A fill that arrives before its order's openOrder now
+  fires its events once the order appears. (:issue:`244`, thanks to
+  @Lcstyle)
 * **A refused modification marked a live order Cancelled.** TWS reports a
   refused modification as an error and sends no status, and the order
   keeps working on its old terms. The trade became ``Cancelled``, fired
