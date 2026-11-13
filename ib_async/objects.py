@@ -970,8 +970,9 @@ class IBDefaults(Generic[EmptyT]):
     0. ``emptyPrice`` and ``emptySize`` are what a Ticker, its tick log
     and its tick-by-tick log show instead. ``unset`` is the value of each
     numeric Ticker field before its first tick. ``timezone`` is the zone
-    of the times in tick and log records; orders and requests do not use
-    it.
+    every time ib_async reports is shown in: ticks, bars, executions, trade
+    logs and news. It is also the zone a time TWS sent without one is read
+    in, unless ``IB.TimezoneTWS`` is set.
 
     Each empty value can be any value the user reads as "no number": a
     number (the -1 and 0 IBKR sends, NaN), None, an enum member or any

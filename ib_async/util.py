@@ -8,6 +8,7 @@ import datetime as dt
 import logging
 import math
 import os
+import re
 import signal
 import sys
 import time
@@ -1223,6 +1224,11 @@ def splitIBLastTradeDate(value: str) -> list[str]:
     return value.split("-", 2)
 
 
+# A time ending in Z, the UTC marker, with or without a space before it. The
+# digit before it keeps a zone name such as NZ out.
+_UTC_SUFFIX = re.compile(r"(.*\d) ?Z")
+
+
 def parseIBDatetime(s: str, *, year: int | None = None) -> dt.date | dt.datetime:
     """Parse string in IB date or datetime format to datetime.
 
@@ -1230,8 +1236,15 @@ def parseIBDatetime(s: str, *, year: int | None = None) -> dt.date | dt.datetime
     (``MMdd HH:MM:SS <tz>``), which carries none of its own; such a value
     raises without it. :func:`parseIBShortDatetimes` recovers the year
     from a whole response instead.
+
+    A trailing ``Z`` after the time, with or without a space before it,
+    marks UTC: ``20260824-20:00:12Z``.
     """
-    if len(s) == 8:
+    if (utc := _UTC_SUFFIX.fullmatch(s)) is not None:
+        t = parseIBDatetime(utc.group(1), year=year)
+        if isinstance(t, dt.datetime) and t.tzinfo is None:
+            t = t.replace(tzinfo=dt.UTC)
+    elif len(s) == 8:
         # YYYYmmdd
         y = int(s[0:4])
         m = int(s[4:6])

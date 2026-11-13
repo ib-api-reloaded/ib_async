@@ -207,7 +207,6 @@ from .util import (
     UNSET_DOUBLE,
     UNSET_INTEGER,
     Dataclass,
-    ZoneInfo,
     parseIBDatetime,
     splitIBLastTradeDate,
 )
@@ -750,12 +749,12 @@ class Decoder(Generic[EmptyT]):
 
     def _protoExecutionDetails(self, proto: ExecutionDetailsProto) -> None:
         reqId, contract, execution = _converters.orders.createExecutionDetails(proto)
-        # Wire ``Execution.time`` is a string in IBKR's
-        # ``"YYYYmmdd HH:MM:SS [tz]"`` format. The converter leaves it
-        # raw on the domain object; we normalize here so the proto path
-        # produces the same datetime shape as the binary path. The tz
-        # source is decoder-instance state (``Wrapper.ib.TimezoneTWS``)
-        # so it can't live inside the pure converter.
+        # Wire ``Execution.time`` is a string in one of IBKR's date-time
+        # formats. The converter leaves it raw on the domain object; we
+        # normalize here so the proto path produces the same datetime shape
+        # as the binary path. The rule needs the IB's settings
+        # (``Wrapper._normalizeDatetime``), so it can't live inside the pure
+        # converter.
         if proto.HasField("execution") and proto.execution.HasField("time"):
             execution.time = self._normalizeExecutionTime(proto.execution.time)
         self.wrapper.execDetails(reqId, contract, execution)
@@ -797,7 +796,8 @@ class Decoder(Generic[EmptyT]):
 
     def _normalizeExecutionTime(self, timeStr: str) -> datetime:
         """Parse an IBKR execution-time wire string into a tz-aware
-        ``datetime`` in the wrapper's default timezone.
+        ``datetime`` in the wrapper's default timezone, by the rule in
+        ``Wrapper._normalizeDatetime``.
 
         Used by both the binary ``execDetails`` decoder and the protobuf
         ``_protoExecutionDetails`` handler so executions across both
@@ -814,11 +814,7 @@ class Decoder(Generic[EmptyT]):
             # 8-char "YYYYmmdd" wire value lacks a time-of-day; combine with
             # midnight so downstream tz operations have a usable datetime.
             time = datetime.combine(parsed, datetime.min.time())
-        if not time.tzinfo:
-            tz = self.wrapper.ib.TimezoneTWS
-            if tz:
-                time = time.replace(tzinfo=ZoneInfo(str(tz)))
-        return time.astimezone(self.wrapper.defaultTimezone)
+        return self.wrapper._normalizeDatetime(time)
 
     def _protoOrderBound(self, proto: OrderBoundProto) -> None:
         permId = proto.permId if proto.HasField("permId") else 0

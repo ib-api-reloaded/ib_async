@@ -640,8 +640,12 @@ class Wrapper(Generic[EmptyT]):
     def _normalizeDatetime(self, value: date_) -> date_: ...
 
     def _normalizeDatetime(self, value: datetime | date_) -> datetime | date_:
-        """Convert a datetime to the configured default time zone. A date
-        has no time zone, so it is returned unchanged."""
+        """A time TWS sent, shown in the default time zone.
+
+        The one rule for every time TWS sends. A time with a zone is that
+        instant. A time without one is a wall clock in TWS's own zone:
+        ``TimezoneTWS``, or the default time zone when that is unset. A date
+        has no time zone and is returned unchanged."""
         if not isinstance(value, datetime):
             return value
 
@@ -2134,7 +2138,9 @@ class Wrapper(Generic[EmptyT]):
                 "historicalNews: unreadable time %r for article %s", time, articleId
             )
             return
-        article = HistoricalNews(dt, providerCode, articleId, headline)
+        article = HistoricalNews(
+            self._normalizeDatetime(dt), providerCode, articleId, headline
+        )
         self.requests.append(ReqIdKey(reqId), article)
 
     def historicalNewsEnd(self, reqId, _hasMore: bool):

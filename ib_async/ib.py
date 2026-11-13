@@ -268,8 +268,12 @@ class IB(Generic[EmptyT]):
           * :data:`True`: Raise a :class:`.RequestError`.
         MaxSyncedSubAccounts (int): Do not use sub-account updates
           if the number of sub-accounts exceeds this number (50 by default).
-        TimezoneTWS (str): Specifies what timezone TWS (or gateway)
-          is using. The default is to assume local system timezone.
+        TimezoneTWS (str): The time zone TWS (or the gateway) is set to,
+          such as ``"US/Eastern"``. TWS sends some times without a zone, as
+          a wall clock in its own zone; they are read in this zone, or in
+          the default time zone (``IBDefaults.timezone``) when it is empty.
+          Times sent with a zone, or in the hyphenated UTC form, do not use
+          it. Every time is then shown in the default time zone.
 
     Events:
         * ``connectedEvent`` ():

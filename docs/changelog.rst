@@ -204,6 +204,19 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``PnLSingle``. ``None`` is the unset sentinel —
   ``Decimal('NaN')`` is never used (it is silently truthy in Python
   and corrupted downstream comparisons).
+* **One rule for every time TWS sends.** A time with a zone, or in the
+  hyphenated UTC form, is that instant. A time without a zone is a wall
+  clock in ``TimezoneTWS``, or in the default time zone
+  (``IBDefaults.timezone``) when ``TimezoneTWS`` is unset; the host's zone
+  no longer counts. Every result is shown in the default time zone. Bars
+  and head timestamps already worked this way. Execution times in the
+  zone-less ``YYYYmmdd  HH:MM:SS`` form were read in the host's zone and
+  now follow the rule. Historical news times were returned as parsed, in
+  the zone they named or naive; they are now shown in the default time
+  zone like every other time, and a zone-less one follows the rule. A
+  trailing ``Z`` after the time, with or without a space, marks UTC
+  (``20260824-20:00:12Z``); a time without it parses as before.
+  (:issue:`230`, :issue:`181`)
 * **``IBC`` needs ``twsVersion``**: it has no default, so ``IBC()``
   raises ``TypeError``; pass it first, ``IBC(1019)`` or ``IBC("10.19")``
   (see Fixed). IBC's start script could not run without it.
