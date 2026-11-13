@@ -347,6 +347,13 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 These were broken on v2.x against modern TWS / Gateway versions and
 are fixed in v3.0:
 
+* **Importing failed for a version with a label.** ``__version_info__``
+  called ``int()`` on every part of the installed version, so a
+  pre-release, post-release, dev or local version such as ``3.0.0rc1`` or
+  ``3.0.0+local.1`` raised ``ValueError`` at import. ``__version_info__`` is
+  now the release segment as integers, ``(3, 0, 0)`` for each of those;
+  ``__version__`` keeps the whole version. (:issue:`245`, thanks to
+  @Lcstyle)
 * **A refused modification marked a live order Cancelled.** TWS reports a
   refused modification as an error and sends no status, and the order
   keeps working on its old terms. The trade became ``Cancelled``, fired
