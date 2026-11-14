@@ -2,10 +2,13 @@ version = 1
 revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
-    "python_full_version >= '3.15'",
+    "python_full_version >= '3.15' and implementation_name != 'pypy'",
+    "python_full_version >= '3.15' and implementation_name == 'pypy'",
     "python_full_version == '3.12.*' and implementation_name == 'pypy'",
-    "(python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy') or (python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy')",
-    "python_full_version < '3.12'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy'",
+    "python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name == 'pypy'",
 ]
 
 [[package]]
@@ -398,7 +401,8 @@ name = "contourpy"
 version = "1.3.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12'",
+    "python_full_version < '3.12' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name == 'pypy'",
 ]
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
@@ -483,9 +487,11 @@ name = "contourpy"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15'",
+    "python_full_version >= '3.15' and implementation_name != 'pypy'",
+    "python_full_version >= '3.15' and implementation_name == 'pypy'",
     "python_full_version == '3.12.*' and implementation_name == 'pypy'",
-    "(python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy') or (python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy'",
+    "python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy'",
 ]
 dependencies = [
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" } },
@@ -577,7 +583,8 @@ name = "docutils"
 version = "0.21.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12'",
+    "python_full_version < '3.12' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name == 'pypy'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/ed/aefcc8cd0ba62a0560c3c18c33925362d46c6075480bfa4df87b28e169a9/docutils-0.21.2.tar.gz", hash = "sha256:3a6b18732edf182daa3cd12775bbb338cf5691468f91eeeb109deff6ebfa986f", size = 2204444, upload-time = "2024-04-23T18:57:18.24Z" }
 wheels = [
@@ -589,9 +596,11 @@ name = "docutils"
 version = "0.22.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15'",
+    "python_full_version >= '3.15' and implementation_name != 'pypy'",
+    "python_full_version >= '3.15' and implementation_name == 'pypy'",
     "python_full_version == '3.12.*' and implementation_name == 'pypy'",
-    "(python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy') or (python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy'",
+    "python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/b6/03bb70946330e88ffec97aefd3ea75ba575cb2e762061e0e62a213befee8/docutils-0.22.4.tar.gz", hash = "sha256:4db53b1fde9abecbb74d91230d32ab626d94f6badfc575d6db9194a49df29968", size = 2291750, upload-time = "2025-12-18T19:00:26.443Z" }
 wheels = [
@@ -810,7 +819,10 @@ name = "hypothesis"
 version = "6.155.7"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and implementation_name == 'pypy'",
     "python_full_version == '3.12.*' and implementation_name == 'pypy'",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy'",
+    "python_full_version < '3.12' and implementation_name == 'pypy'",
 ]
 dependencies = [
     { name = "sortedcontainers" },
@@ -825,9 +837,9 @@ name = "hypothesis"
 version = "6.170.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15'",
-    "(python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy') or (python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy')",
-    "python_full_version < '3.12'",
+    "python_full_version >= '3.15' and implementation_name != 'pypy'",
+    "python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name != 'pypy'",
 ]
 dependencies = [
     { name = "sortedcontainers" },
@@ -932,8 +944,8 @@ polars = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "hypothesis", version = "6.155.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'" },
-    { name = "hypothesis", version = "6.170.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'" },
+    { name = "hypothesis", version = "6.155.7", source = { registry = "https://pypi.org/simple" }, marker = "implementation_name == 'pypy'" },
+    { name = "hypothesis", version = "6.170.2", source = { registry = "https://pypi.org/simple" }, marker = "implementation_name != 'pypy'" },
     { name = "mypy", marker = "implementation_name != 'pypy'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and implementation_name != 'pypy'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' and implementation_name != 'pypy'" },
@@ -962,8 +974,8 @@ protos = [
     { name = "grpcio-tools" },
 ]
 test = [
-    { name = "hypothesis", version = "6.155.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'" },
-    { name = "hypothesis", version = "6.170.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'" },
+    { name = "hypothesis", version = "6.155.7", source = { registry = "https://pypi.org/simple" }, marker = "implementation_name == 'pypy'" },
+    { name = "hypothesis", version = "6.170.2", source = { registry = "https://pypi.org/simple" }, marker = "implementation_name != 'pypy'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and implementation_name != 'pypy'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' and implementation_name != 'pypy'" },
     { name = "polars", marker = "implementation_name != 'pypy'" },
@@ -986,8 +998,8 @@ provides-extras = ["polars"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "hypothesis", marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'", specifier = ">=6.156,<7" },
-    { name = "hypothesis", marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'", specifier = "==6.155.7" },
+    { name = "hypothesis", marker = "implementation_name != 'pypy'", specifier = ">=6.156,<7" },
+    { name = "hypothesis", marker = "implementation_name == 'pypy'", specifier = "==6.155.7" },
     { name = "mypy", marker = "implementation_name != 'pypy'", specifier = ">=1.11.0" },
     { name = "numpy", marker = "implementation_name != 'pypy'", specifier = ">=2.0,<3.0" },
     { name = "polars", marker = "implementation_name != 'pypy'", specifier = ">=2.0.0,<3.0.0" },
@@ -1011,8 +1023,8 @@ examples = [
 ]
 protos = [{ name = "grpcio-tools", specifier = ">=1.84.0,<2.0.0" }]
 test = [
-    { name = "hypothesis", marker = "python_full_version != '3.12.*' or implementation_name != 'pypy'", specifier = ">=6.156,<7" },
-    { name = "hypothesis", marker = "python_full_version == '3.12.*' and implementation_name == 'pypy'", specifier = "==6.155.7" },
+    { name = "hypothesis", marker = "implementation_name != 'pypy'", specifier = ">=6.156,<7" },
+    { name = "hypothesis", marker = "implementation_name == 'pypy'", specifier = "==6.155.7" },
     { name = "numpy", marker = "implementation_name != 'pypy'", specifier = ">=2.0,<3.0" },
     { name = "polars", marker = "implementation_name != 'pypy'", specifier = ">=2.0.0,<3.0.0" },
     { name = "pytest", specifier = ">=8.0" },
@@ -1867,7 +1879,8 @@ name = "numpy"
 version = "2.4.6"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12'",
+    "python_full_version < '3.12' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name == 'pypy'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d0/ad/fed0499ce6a338d2a03ebae59cd15093910c8875328855781952abf6c2fe/numpy-2.4.6.tar.gz", hash = "sha256:f3a3570c4a2a16746ac2c31a7c7c7b0c186b95ce902e33db6f28094ed7387dda", size = 20735807, upload-time = "2026-05-18T23:37:14.07Z" }
 wheels = [
@@ -1949,9 +1962,11 @@ name = "numpy"
 version = "2.5.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15'",
+    "python_full_version >= '3.15' and implementation_name != 'pypy'",
+    "python_full_version >= '3.15' and implementation_name == 'pypy'",
     "python_full_version == '3.12.*' and implementation_name == 'pypy'",
-    "(python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy') or (python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy'",
+    "python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz", hash = "sha256:9a94cf751c9ad8ebaa835bcd3d40dacf8534ad086b88c38029b65123c7999d2a", size = 20866315, upload-time = "2026-10-10T20:05:31.422Z" }
 wheels = [
@@ -2543,7 +2558,8 @@ name = "sphinx"
 version = "9.0.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12'",
+    "python_full_version < '3.12' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name == 'pypy'",
 ]
 dependencies = [
     { name = "alabaster" },
@@ -2574,9 +2590,11 @@ name = "sphinx"
 version = "9.1.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15'",
+    "python_full_version >= '3.15' and implementation_name != 'pypy'",
+    "python_full_version >= '3.15' and implementation_name == 'pypy'",
     "python_full_version == '3.12.*' and implementation_name == 'pypy'",
-    "(python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy') or (python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy'",
+    "python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy'",
 ]
 dependencies = [
     { name = "alabaster" },
@@ -2607,7 +2625,8 @@ name = "sphinx-autodoc-typehints"
 version = "3.6.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12'",
+    "python_full_version < '3.12' and implementation_name != 'pypy'",
+    "python_full_version < '3.12' and implementation_name == 'pypy'",
 ]
 dependencies = [
     { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi.org/simple" } },
@@ -2622,9 +2641,11 @@ name = "sphinx-autodoc-typehints"
 version = "3.17.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15'",
+    "python_full_version >= '3.15' and implementation_name != 'pypy'",
+    "python_full_version >= '3.15' and implementation_name == 'pypy'",
     "python_full_version == '3.12.*' and implementation_name == 'pypy'",
-    "(python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy') or (python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy')",
+    "python_full_version >= '3.13' and python_full_version < '3.15' and implementation_name == 'pypy'",
+    "python_full_version >= '3.12' and python_full_version < '3.15' and implementation_name != 'pypy'",
 ]
 dependencies = [
     { name = "sphinx", version = "9.1.0", source = { registry = "https://pypi.org/simple" } },
