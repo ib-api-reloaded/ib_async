@@ -708,7 +708,7 @@ def test_decoder_uses_named_constant_for_duration_gate():
     or ``159`` would lose the off-by-one safety the constant provides.
     """
 
-    decoder_src = pathlib.Path("ib_async/decoder.py").read_text()
+    decoder_src = pathlib.Path("ib_async/decoder.py").read_text(encoding="utf-8")
     # The constant import + usage at the openOrder gate.
     assert "MIN_SERVER_VER_DURATION" in decoder_src, (
         "decoder.py must import + use the named constant for the duration gate"

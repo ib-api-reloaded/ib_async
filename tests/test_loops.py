@@ -92,7 +92,7 @@ class Run:
 
 
 def run(tmp: Path, testScope: str, fixtureScope: str | None = None) -> Run:
-    (tmp / "test_inner.py").write_text(TESTS)
+    (tmp / "test_inner.py").write_text(TESTS, encoding="utf-8")
     command = [
         sys.executable,
         "-m",

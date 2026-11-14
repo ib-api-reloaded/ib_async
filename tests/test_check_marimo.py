@@ -58,7 +58,7 @@ def _(BARS_PARAMETER):
 
 def write(tmp_path: Path, source: str) -> Path:
     path = tmp_path / "notebook.py"
-    path.write_text(source)
+    path.write_text(source, encoding="utf-8")
     return path
 
 

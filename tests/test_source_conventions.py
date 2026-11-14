@@ -12,6 +12,13 @@ import ib_async
 
 PACKAGE = Path(__file__).resolve().parent.parent / "ib_async"
 MODULES = sorted(p for p in PACKAGE.rglob("*.py") if "_pb" not in p.parts)
+# Every Python file in the repository that is linted: the library, its
+# scripts, examples and tests.
+SOURCES = MODULES + sorted(
+    p
+    for folder in ("scripts", "examples", "tests")
+    for p in (PACKAGE.parent / folder).rglob("*.py")
+)
 
 
 @pytest.mark.parametrize(
@@ -20,7 +27,7 @@ MODULES = sorted(p for p in PACKAGE.rglob("*.py") if "_pb" not in p.parts)
 def test_no_class_writes_its_own_slots(path: Path) -> None:
     """A class with slots is ``@dataclass(slots=True)``, never one that
     lists ``__slots__`` by hand."""
-    tree = ast.parse(path.read_text(), str(path))
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
     manual = [
         f"{node.name} (line {node.lineno})"
         for node in ast.walk(tree)
@@ -46,7 +53,7 @@ def test_no_class_is_changed_after_its_body(path: Path) -> None:
     """A class has what its body defines: no code assigns or ``setattr``s
     an attribute of a class the module defines or of a ``cls``, nor a
     dunder of anything but ``self`` (such as a replaced ``__init__``)."""
-    tree = ast.parse(path.read_text(), str(path))
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
     classes = {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
     patched = []
     for node in ast.walk(tree):
@@ -98,7 +105,7 @@ def test_importing_a_module_sets_no_attribute_of_anything(path: Path) -> None:
     on whatever a name holds: a loop over classes (``for obj in ...:
     obj.dict = ...``) or a class imported from elsewhere is patched as
     surely as one the module defines."""
-    tree = ast.parse(path.read_text(), str(path))
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
     patched = []
     for node in _runsOnImport(tree):
         targets: list[ast.expr] = []
@@ -118,6 +125,37 @@ def test_importing_a_module_sets_no_attribute_of_anything(path: Path) -> None:
             if isinstance(target, ast.Attribute)
         ]
     assert not patched, f"attributes set on import: {', '.join(patched)}"
+
+
+@pytest.mark.parametrize(
+    "path", SOURCES, ids=lambda p: str(p.relative_to(PACKAGE.parent))
+)
+def test_text_files_are_read_and_written_as_utf8(path: Path) -> None:
+    """Every read_text, write_text and text-mode open names its encoding.
+    Without one, Python uses the locale's code page, which on Windows is
+    not UTF-8: a generated file with a non-ASCII character then fails to
+    import."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+    unnamed = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or any(
+            keyword.arg == "encoding" for keyword in node.keywords
+        ):
+            continue
+        func = node.func
+        textMethod = isinstance(func, ast.Attribute) and func.attr in (
+            "read_text",
+            "write_text",
+        )
+        mode = node.args[1] if len(node.args) > 1 else None
+        textOpen = (
+            isinstance(func, ast.Name)
+            and func.id == "open"
+            and not (isinstance(mode, ast.Constant) and "b" in str(mode.value))
+        )
+        if textMethod or textOpen:
+            unnamed.append(f"{ast.unparse(func)} (line {node.lineno})")
+    assert not unnamed, f"no encoding named: {', '.join(unnamed)}"
 
 
 def test_importing_ib_async_patches_no_class():

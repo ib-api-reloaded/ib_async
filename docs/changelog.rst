@@ -367,6 +367,11 @@ are fixed in v3.0:
   now the release segment as integers, ``(3, 0, 0)`` for each of those;
   ``__version__`` keeps the whole version. (:issue:`245`, thanks to
   @Lcstyle)
+* **Generated bindings failed to import on Windows.**
+  ``scripts/generate_protos.py`` wrote ``ib_async/_pb/__init__.py`` in
+  the locale's code page, which on Windows is not UTF-8, so the first
+  ``import ib_async`` raised ``SyntaxError``. The scripts now read and
+  write every text file as UTF-8. (:issue:`246`, thanks to @yahiaaktham)
 * **The master client missed other clients' fills.** ib_async now reads
   the master client ID configured in TWS. When the connecting client ID
   matches it, connect loads every API client's open orders instead of

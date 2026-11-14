@@ -83,7 +83,7 @@ def test_logToFile_writes_only_ib_async_records(tmp_path):
     third.info("third-party-record")
     handler.flush()
 
-    contents = path.read_text()
+    contents = path.read_text(encoding="utf-8")
     assert "ib-async-record" in contents
     assert "third-party-record" not in contents
 
@@ -109,7 +109,7 @@ def test_logToFile_honours_custom_format(tmp_path):
     logging.getLogger("ib_async.sub").info("hello")
     handler.flush()
 
-    assert "CUSTOMFMT hello" in path.read_text()
+    assert "CUSTOMFMT hello" in path.read_text(encoding="utf-8")
 
 
 # ---- logToConsole ---------------------------------------------------------

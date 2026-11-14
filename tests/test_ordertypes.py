@@ -517,7 +517,7 @@ def test_modified_order_refuses_a_quantity_below_filled():
 
 def test_generated_docs_have_no_empty_cells_or_trailing_space():
     page = Path(__file__).parent.parent / "docs" / "ordertypes.rst"
-    lines = page.read_text().splitlines()
+    lines = page.read_text(encoding="utf-8").splitlines()
     for number, line in enumerate(lines, 1):
         assert line == line.rstrip(), f"trailing whitespace on line {number}"
         assert line.strip() not in ("-", "* -"), f"empty table cell on line {number}"

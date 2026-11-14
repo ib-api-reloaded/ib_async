@@ -4872,7 +4872,7 @@ def test_every_ib_async_method_has_docstring():
     surface contract.
     """
 
-    src = pathlib.Path(inspect.getsourcefile(ib_async.IB)).read_text()
+    src = pathlib.Path(inspect.getsourcefile(ib_async.IB)).read_text(encoding="utf-8")
     tree = ast.parse(src)
     missing: list[str] = []
     for node in ast.walk(tree):

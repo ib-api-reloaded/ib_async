@@ -79,7 +79,7 @@ def _isSetup(statement: ast.With) -> bool:
 
 def problems(path: Path) -> list[str]:
     """Every problem found in the notebook at ``path``, as messages."""
-    module = ast.parse(path.read_text(), filename=str(path))
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     setup: set[str] = set()
     cells: list[Cell] = []
     for statement in module.body:

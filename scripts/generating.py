@@ -46,12 +46,12 @@ def main(
     args = parser.parse_args(argv)
     stale = []
     for path, text in outputs().items():
-        current = path.read_text() if path.exists() else None
+        current = path.read_text(encoding="utf-8") if path.exists() else None
         if current == text:
             continue
         stale.append(path.relative_to(ROOT))
         if not args.check:
-            path.write_text(text)
+            path.write_text(text, encoding="utf-8")
     if args.check and stale:
         print("out of date: " + ", ".join(map(str, stale)))
         print(f"run: uv run python scripts/{script}")

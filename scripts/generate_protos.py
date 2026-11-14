@@ -85,7 +85,7 @@ def _cache_is_valid(meta: TwsapiMeta) -> bool:
         return False
     if not meta.version_file.is_file():
         return False
-    raw = meta.version_file.read_text().strip()
+    raw = meta.version_file.read_text(encoding="utf-8").strip()
     return raw == f"API_Version={meta.dotted_version}"
 
 
@@ -153,22 +153,23 @@ _IMPORT_RE = re.compile(r"^import (\w+_pb2)( as \w+)?$", re.MULTILINE)
 
 def _rewrite_imports() -> None:
     for py in OUTPUT_DIR.glob("*_pb2.py"):
-        text = py.read_text()
+        text = py.read_text(encoding="utf-8")
         new_text = _IMPORT_RE.sub(r"from . import \1\2", text)
         if new_text != text:
-            py.write_text(new_text)
+            py.write_text(new_text, encoding="utf-8")
     for pyi in OUTPUT_DIR.glob("*_pb2.pyi"):
-        text = pyi.read_text()
+        text = pyi.read_text(encoding="utf-8")
         new_text = _IMPORT_RE.sub(r"from . import \1\2", text)
         if new_text != text:
-            pyi.write_text(new_text)
+            pyi.write_text(new_text, encoding="utf-8")
 
 
 def _write_package_markers() -> None:
     (OUTPUT_DIR / "__init__.py").write_text(
-        '"""Generated protobuf bindings — do not edit by hand."""\n'
+        '"""Generated protobuf bindings — do not edit by hand."""\n',
+        encoding="utf-8",
     )
-    (OUTPUT_DIR / "py.typed").write_text("")
+    (OUTPUT_DIR / "py.typed").write_text("", encoding="utf-8")
 
 
 def main() -> None:

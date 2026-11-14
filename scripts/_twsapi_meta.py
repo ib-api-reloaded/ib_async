@@ -72,7 +72,7 @@ def save(meta: TwsapiMeta, pyproject: Path | None = None) -> None:
     rest of ``pyproject.toml`` survive a bump untouched.
     """
     pyproject = pyproject or PYPROJECT
-    text = pyproject.read_text()
+    text = pyproject.read_text(encoding="utf-8")
     start = text.index(_SECTION)
     end = text.find("\n[", start + len(_SECTION))
     end = len(text) if end == -1 else end
@@ -88,4 +88,4 @@ def save(meta: TwsapiMeta, pyproject: Path | None = None) -> None:
         if count != 1:
             raise ValueError(f"expected one {key!r} key in {_SECTION}, found {count}")
 
-    pyproject.write_text(text[:start] + section + text[end:])
+    pyproject.write_text(text[:start] + section + text[end:], encoding="utf-8")

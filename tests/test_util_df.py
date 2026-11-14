@@ -133,7 +133,8 @@ def test_flexreport_rows(tmp_path):
         "<FlexQueryResponse><FlexStatements><FlexStatement>"
         '<Trade symbol="SPY" quantity="10" tradePrice="450.5"/>'
         '<Trade symbol="QQQ" quantity="5" tradePrice="380"/>'
-        "</FlexStatement></FlexStatements></FlexQueryResponse>"
+        "</FlexStatement></FlexStatements></FlexQueryResponse>",
+        encoding="utf-8",
     )
     frame = FlexReport(path=path).df("Trade")
     assert frame.columns == ["symbol", "quantity", "tradePrice"]

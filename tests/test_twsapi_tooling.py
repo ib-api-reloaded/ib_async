@@ -70,7 +70,7 @@ def tooling(tmp_path, monkeypatch):
     twsapi = _load("twsapi")
     meta_module = sys.modules["_twsapi_meta"]
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text(PYPROJECT_SNIPPET)
+    pyproject.write_text(PYPROJECT_SNIPPET, encoding="utf-8")
     monkeypatch.setattr(meta_module, "PYPROJECT", pyproject)
     return twsapi, meta_module, pyproject
 
@@ -171,7 +171,7 @@ def test_save_rewrites_only_the_pin(tooling):
 
     meta_module.save(meta_module.TwsapiMeta(version="1051.01", archive_sha256="new"))
 
-    assert pyproject.read_text() == PYPROJECT_SNIPPET.replace(
+    assert pyproject.read_text(encoding="utf-8") == PYPROJECT_SNIPPET.replace(
         'version = "1046.01"', 'version = "1051.01"'
     ).replace('archive_sha256 = "old"', 'archive_sha256 = "new"')
     assert meta_module.load().version == "1051.01"
@@ -202,7 +202,7 @@ def test_bump_refuses_an_unpinnable_archive_and_keeps_the_old_pin(tooling, tmp_p
 
     assert twsapi.main(["bump", "1051.01", "--from", str(source)]) == 1
 
-    assert pyproject.read_text() == PYPROJECT_SNIPPET
+    assert pyproject.read_text(encoding="utf-8") == PYPROJECT_SNIPPET
     assert meta_module.load().version == "1046.01"
 
 
