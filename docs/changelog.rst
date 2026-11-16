@@ -719,6 +719,15 @@ are fixed in v3.0:
 
 **Internal**
 
+* **A git install generates the protobuf bindings.** ``ib_async/_pb/``
+  is not committed, so a build straight from a git checkout
+  (``pip install git+https://...``) used to produce a package whose
+  ``IB()`` raised ``ModuleNotFoundError: ib_async._pb``. A Hatch build
+  hook (``hatch_build.py``) now runs ``scripts/generate_protos.py`` when
+  a non-editable build has no ``_pb``, with the ``protos`` dependency
+  group as its build requirement. Release builds, which already carry
+  ``_pb``, and editable installs are unchanged.
+
 * **Pinned TWS API version, single source of truth.** The version
   + SHA256 of IBKR's TWS API archive live in ``pyproject.toml``
   under ``[tool.ib_async.twsapi]``. ``scripts/generate_protos.py``

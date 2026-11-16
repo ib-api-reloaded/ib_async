@@ -49,6 +49,14 @@ The protobuf bindings are generated, not committed. Run `make protos`
 again after pulling a change that updates the TWS API version pinned in
 `pyproject.toml`.
 
+You can also install a commit straight from git, without a clone. The
+build generates the bindings itself, so it needs network access to fetch
+the pinned TWS API archive:
+
+```bash
+uv add "ib_async @ git+https://github.com/ib-api-reloaded/ib_async@<commit>"
+```
+
 ## Introduction
 
 `ib_async` is a Python library that provides a clean, modern interface to Interactive Brokers' Trader Workstation (TWS) and IB Gateway. It handles the complexities of the [IBKR API](https://ibkrcampus.com/ibkr-api-page/twsapi-doc/) so you can focus on building trading applications, research tools, and market data analysis.

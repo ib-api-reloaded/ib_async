@@ -142,6 +142,10 @@ artifacts = [
     "ib_async/_pb/py.typed",
 ]
 
+# A build without ``_pb`` (a git install) generates it first: see
+# ``hatch_build.py``. The hook does nothing when ``_pb`` is present.
+[tool.hatch.build.hooks.custom]
+
 # Poetry's masonry backend auto-selected the package matching the
 # project name. Name it explicitly so wheel contents never depend on
 # backend auto-discovery.
@@ -154,7 +158,7 @@ packages = ["ib_async"]
 # sdist contents explicitly to keep the published archive identical
 # in scope to what poetry-core produced.
 [tool.hatch.build.targets.sdist]
-include = ["/ib_async", "/README.md", "/LICENSE", "/pyproject.toml"]
+include = ["/ib_async", "/README.md", "/LICENSE", "/pyproject.toml", "/hatch_build.py"]
 
 [tool.ruff]
 target-version = "py311"
