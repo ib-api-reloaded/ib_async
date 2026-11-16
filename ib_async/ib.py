@@ -37,7 +37,6 @@ from ib_async._subscriptions import (
     PnLSub,
     RealTimeBarsSub,
     ScannerSub,
-    Subscription,
     TickByTickSub,
 )
 from ib_async.client import Client
@@ -96,6 +95,7 @@ from ib_async.order import (
 )
 from ib_async.ordertypes import LimitOrder, StopOrder
 from ib_async.runtime import RuntimeState
+from ib_async.streams import Stream
 from ib_async.ticker import Ticker
 from ib_async.wrapper import RequestError, Wrapper
 
@@ -341,11 +341,13 @@ class IB(Generic[EmptyT]):
         * ``newsBulletinEvent`` (bulletin: :class:`.NewsBulletin`):
           Emit a new news bulletin.
 
-        * ``rerouteMktDataReqEvent`` (reqId: int, conId: int, exchange: str):
-          Emits when IBKR reroutes a market data request to another contract.
+        * ``rerouteMktDataReqEvent`` (stream: :class:`.Stream`, conId: int,
+          exchange: str):
+          Emits when IBKR reroutes a market data stream to another contract.
 
-        * ``rerouteMktDepthReqEvent`` (reqId: int, conId: int, exchange: str):
-          Emits when IBKR reroutes a market depth request to another contract.
+        * ``rerouteMktDepthReqEvent`` (stream: :class:`.Stream`, conId: int,
+          exchange: str):
+          Emits when IBKR reroutes a market depth stream to another contract.
 
         * ``scannerDataEvent`` (data: :class:`.ScanDataList`):
           Emit data from a scanner subscription.
@@ -363,6 +365,13 @@ class IB(Generic[EmptyT]):
           https://interactivebrokers.github.io/tws-api/message_codes.html)
           together with the contract the error applies to (or None if no
           contract applies).
+
+        * ``streamErrorEvent`` (stream: :class:`.Stream`, errorCode: int,
+          errorString: str, ended: bool):
+          Emits, after ``errorEvent``, for an error or warning about a live
+          stream: the stream as it was when the error arrived, and whether
+          ib_async ended the stream because of it. One contract can carry
+          several streams, which the contract alone does not tell apart.
 
         * ``timeoutEvent`` (idlePeriod: float):
           Is emitted if no data is received for longer than the timeout period
@@ -405,6 +414,7 @@ class IB(Generic[EmptyT]):
         "wshMetaEvent",
         "wshEvent",
         "errorEvent",
+        "streamErrorEvent",
         "timeoutEvent",
         "requestTimeoutEvent",
     )
@@ -468,6 +478,7 @@ class IB(Generic[EmptyT]):
         self.wshMetaEvent = Event("wshMetaEvent")
         self.wshEvent = Event("wshEvent")
         self.errorEvent = Event("errorEvent")
+        self.streamErrorEvent = Event("streamErrorEvent")
         self.timeoutEvent = Event("timeoutEvent")
         self.requestTimeoutEvent = Event("requestTimeoutEvent")
 
@@ -965,18 +976,6 @@ class IB(Generic[EmptyT]):
             and (not conId or sub.conId == conId)
         ]
 
-    def subscriptionForReqId(self, reqId: int) -> Subscription | None:
-        """Return the live :class:`Subscription` owning ``reqId``, or ``None``.
-
-        The reqId space is shared by orders and by every data request, so an
-        API error carrying a reqId is ambiguous on its own. This is the
-        public answer to "is this id one of my live data streams?" —
-        :meth:`tradeForOrderId` answers the order half. Together they let a
-        caller classify an ``errorEvent`` correctly instead of guessing from
-        the numeric value.
-        """
-        return self.wrapper.subscriptions.get_sub(reqId)
-
     def tradeForOrderId(self, orderId: int) -> Trade | None:
         """Return this client's :class:`Trade` for ``orderId``, or ``None``.
 
@@ -1051,14 +1050,30 @@ class IB(Generic[EmptyT]):
         )
         return result
 
-    def subscriptions(self) -> list[Subscription]:
-        """List of every live :class:`Subscription` (market data,
-        tick-by-tick, market depth, realtime / historical bars,
-        scanner, PnL). Replaces the pre-refactor ``IB.subscribers()``
-        accessor; iteration is over the
-        :class:`~ib_async._subscriptions.SubscriptionRegistry`.
-        """
-        return list(self.wrapper.subscriptions)
+    def streams(self, contract: Contract | None = None) -> dict[int, Stream]:
+        """Every live stream (market data, snapshots, tick-by-tick, market
+        depth, real-time and kept-up-to-date bars, scanners, PnL), keyed by
+        the reqId IBKR knows it by. Each is its own
+        :mod:`ib_async.streams` type.
+
+        With ``contract``, only the streams on that instrument, matched as
+        market data is: by conId, a bag by its legs, an unqualified
+        contract by its fields. Any Contract object for the instrument
+        finds them, such as ``ticker.contract`` or a fresh one."""
+        return self.wrapper.subscriptions.streams(contract)
+
+    def stream(self, reqId: int) -> Stream | None:
+        """The live :class:`.Stream` IBKR knows by ``reqId``, or None.
+
+        For code that handles raw wrapper callbacks, which carry only a
+        reqId, and for matching TWS's API log. Orders share the id space:
+        :meth:`tradeForOrderId` answers for an order. A stream sent again under a
+        new reqId (after a bust event) is found under the new one, so look
+        it up rather than keeping the reqId. An error that ends a stream
+        removes it before ``errorEvent`` fires: ``streamErrorEvent`` carries
+        the stream instead."""
+        sub = self.wrapper.subscriptions.get_sub(reqId)
+        return None if sub is None else sub.stream()
 
     def newsTicks(self) -> list[NewsTick]:
         """

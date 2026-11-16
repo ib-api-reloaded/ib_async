@@ -119,6 +119,20 @@ from .runtime import (
     SubscriptionState,
     TransportState,
 )
+from .streams import (
+    ContractStream,
+    HistoricalBarsStream,
+    MarketDataStream,
+    MarketDepthStream,
+    PnLSingleStream,
+    PnLStream,
+    RealTimeBarsStream,
+    ScannerStream,
+    SnapshotStream,
+    Stream,
+    TickByTickStream,
+    TickerStream,
+)
 from .ticker import HaltedStatus, Ticker
 from .version import __version__, __version_info__
 from .wrapper import RequestError, Wrapper
@@ -204,6 +218,18 @@ __all__ = [
     "ScannerSubscription",
     "SmartComponent",
     "SoftDollarTier",
+    "Stream",
+    "ContractStream",
+    "TickerStream",
+    "MarketDataStream",
+    "SnapshotStream",
+    "TickByTickStream",
+    "MarketDepthStream",
+    "RealTimeBarsStream",
+    "HistoricalBarsStream",
+    "ScannerStream",
+    "PnLStream",
+    "PnLSingleStream",
     "TickAttrib",
     "TickAttribBidAsk",
     "TickAttribLast",

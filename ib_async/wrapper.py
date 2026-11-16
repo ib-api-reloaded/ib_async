@@ -84,6 +84,7 @@ from ib_async.objects import (
 )
 from ib_async.order import Order, OrderState, OrderStatus, Trade
 from ib_async.runtime import Tally
+from ib_async.streams import Stream
 from ib_async.ticker import HaltedStatus, Ticker
 from ib_async.util import (
     UNSET_DOUBLE,
@@ -2178,10 +2179,21 @@ class Wrapper(Generic[EmptyT]):
         self.requests.set_result(SingletonKey("currentTimeInMillis"), timeInMillis)
 
     def rerouteMktDataReq(self, reqId: int, conId: int, exchange: str):
-        self.ib.rerouteMktDataReqEvent.emit(reqId, conId, exchange)
+        if (stream := self._streamFor(reqId, "rerouteMktDataReq")) is not None:
+            self.ib.rerouteMktDataReqEvent.emit(stream, conId, exchange)
 
     def rerouteMktDepthReq(self, reqId: int, conId: int, exchange: str):
-        self.ib.rerouteMktDepthReqEvent.emit(reqId, conId, exchange)
+        if (stream := self._streamFor(reqId, "rerouteMktDepthReq")) is not None:
+            self.ib.rerouteMktDepthReqEvent.emit(stream, conId, exchange)
+
+    def _streamFor(self, reqId: int, callback: str) -> Stream | None:
+        """The live stream ``reqId`` names, or None (logged) for a stream
+        that already ended."""
+        sub = self.subscriptions.get_sub(reqId)
+        if sub is None:
+            self._logger.warning("%s: no live stream for reqId %s", callback, reqId)
+            return None
+        return sub.stream()
 
     def tickEFP(
         self,
@@ -2278,6 +2290,10 @@ class Wrapper(Generic[EmptyT]):
             # the rest of the function only acts on live orders.
             if trade and trade.isDone():
                 trade = None
+        # The stream this error is about, as it is now: an error below may
+        # end it, and streamErrorEvent still names it.
+        streamSub = self.subscriptions.get_sub(reqId) if reqId != -1 else None
+        stream = None if streamSub is None else streamSub.stream()
         isRequest = inflightRequest is not None
 
         isWarning = errorCode in _WARNING_CODES or 2100 <= errorCode < 2200
@@ -2467,7 +2483,11 @@ class Wrapper(Generic[EmptyT]):
                 self.tally.subscriptionsRefused += 1
                 sub.close(send_cancel=False)
 
+        # Read before errorEvent: a handler there may cancel the stream.
+        ended = streamSub is not None and streamSub.closed
         self.ib.errorEvent.emit(reqId, errorCode, errorString, contract)
+        if stream is not None:
+            self.ib.streamErrorEvent.emit(stream, errorCode, errorString, ended)
 
     def _refilled(
         self, bars: BarDataList, refill: asyncio.Future[BarDataList | None]

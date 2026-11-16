@@ -54,6 +54,11 @@ Objects
 
 .. autoclass:: ib_async.wrapper.RequestError
 
+Streams
+-------
+
+.. automodule:: ib_async.streams
+
 Runtime state
 -------------
 

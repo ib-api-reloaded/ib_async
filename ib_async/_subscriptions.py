@@ -22,6 +22,19 @@ from typing import TYPE_CHECKING, ClassVar, Generic, Protocol, TypeVar
 
 from ib_async.objects import EmptyT
 from ib_async.runtime import SubscriptionState, Tally
+from ib_async.streams import (
+    ContractStream,
+    HistoricalBarsStream,
+    MarketDataStream,
+    MarketDepthStream,
+    PnLSingleStream,
+    PnLStream,
+    RealTimeBarsStream,
+    ScannerStream,
+    SnapshotStream,
+    Stream,
+    TickByTickStream,
+)
 from ib_async.ticker import Ticker
 
 if TYPE_CHECKING:
@@ -135,6 +148,11 @@ class Subscription:
         (a bars list) keep it in step."""
         self.reqId = reqId
 
+    def stream(self) -> Stream:
+        """This subscription as its public :mod:`ib_async.streams` type.
+        Every concrete subscription builds its own."""
+        raise NotImplementedError(type(self).__name__)
+
 
 # ---- market-data family -----------------------------------------------------
 
@@ -155,6 +173,11 @@ class MktDataSub(Subscription, Generic[EmptyT]):
     ticker: Ticker[EmptyT] = None  # type: ignore[assignment]
     snapshot: bool = False
     genericTickList: str = ""
+
+    def stream(self) -> MarketDataStream[EmptyT] | SnapshotStream[EmptyT]:
+        if self.snapshot:
+            return SnapshotStream(self.reqId, self.contract, self.ticker)
+        return MarketDataStream(self.reqId, self.contract, self.ticker)
 
     def _send_cancel(self, client: Client) -> None:
         # Snapshots auto-complete on the IB side; cancelling them is a
@@ -181,6 +204,9 @@ class TickByTickSub(Subscription, Generic[EmptyT]):
     ticker: Ticker[EmptyT] = None  # type: ignore[assignment]
     tickType: str = ""
 
+    def stream(self) -> TickByTickStream[EmptyT]:
+        return TickByTickStream(self.reqId, self.contract, self.ticker, self.tickType)
+
     def _send_cancel(self, client: Client) -> None:
         client.cancelTickByTickData(self.reqId)
 
@@ -194,6 +220,9 @@ class MktDepthSub(Subscription, Generic[EmptyT]):
     ticker: Ticker[EmptyT] = None  # type: ignore[assignment]
     isSmartDepth: bool = False
 
+    def stream(self) -> MarketDepthStream[EmptyT]:
+        return MarketDepthStream(self.reqId, self.contract, self.ticker)
+
     def _send_cancel(self, client: Client) -> None:
         client.cancelMktDepth(self.reqId, self.isSmartDepth)
 
@@ -206,6 +235,9 @@ class RealTimeBarsSub(Subscription):
     """``IB.reqRealTimeBars``."""
 
     bars: RealTimeBarList = None  # type: ignore[assignment]
+
+    def stream(self) -> RealTimeBarsStream:
+        return RealTimeBarsStream(self.reqId, self.contract, self.bars)
 
     def _send_cancel(self, client: Client) -> None:
         client.cancelRealTimeBars(self.reqId)
@@ -226,6 +258,9 @@ class HistoricalBarsSub(Subscription):
 
     bars: BarDataList = None  # type: ignore[assignment]
 
+    def stream(self) -> HistoricalBarsStream:
+        return HistoricalBarsStream(self.reqId, self.contract, self.bars)
+
     def _send_cancel(self, client: Client) -> None:
         client.cancelHistoricalData(self.reqId)
 
@@ -244,6 +279,9 @@ class ScannerSub(Subscription):
     """``IB.reqScannerSubscription``."""
 
     dataList: ScanDataList = None  # type: ignore[assignment]
+
+    def stream(self) -> ScannerStream:
+        return ScannerStream(self.reqId, self.dataList)
 
     def _send_cancel(self, client: Client) -> None:
         client.cancelScannerSubscription(self.reqId)
@@ -264,6 +302,9 @@ class PnLSub(Subscription):
     account: str = ""
     modelCode: str = ""
 
+    def stream(self) -> PnLStream:
+        return PnLStream(self.reqId, self.account, self.modelCode, self.pnl)
+
     def _send_cancel(self, client: Client) -> None:
         client.cancelPnL(self.reqId)
 
@@ -276,6 +317,11 @@ class PnLSingleSub(Subscription):
     account: str = ""
     modelCode: str = ""
     conId: int = 0
+
+    def stream(self) -> PnLSingleStream:
+        return PnLSingleStream(
+            self.reqId, self.contract, self.account, self.modelCode, self.pnlSingle
+        )
 
     def _send_cancel(self, client: Client) -> None:
         client.cancelPnLSingle(self.reqId)
@@ -468,6 +514,30 @@ class SubscriptionRegistry(Generic[EmptyT]):
         """Hot-path lookup: one ``dict.get`` to find the ticker for a tick reqId."""
 
         return self._ticker_by_reqid.get(reqId)
+
+    def streams(self, contract: Contract | None = None) -> dict[int, Stream]:
+        """Every registered subscription as its :class:`Stream`, by reqId;
+        with ``contract``, the streams on that instrument only (see
+        :meth:`_same_instrument`)."""
+        found: dict[int, Stream] = {}
+        for reqId, sub in self._by_reqid.items():
+            stream = sub.stream()
+            if contract is None or (
+                isinstance(stream, ContractStream)
+                and self._same_instrument(contract, stream.contract)
+            ):
+                found[reqId] = stream
+        return found
+
+    @classmethod
+    def _same_instrument(cls, contract: Contract, other: Contract) -> bool:
+        """Whether ``other`` is the instrument ``contract`` is, by the
+        identity market data is indexed by (conId; a bag's legs), or by
+        equal fields when ``contract`` has none (unqualified)."""
+        identity = cls._market_data_identity(contract)
+        if identity is None:
+            return other == contract
+        return cls._market_data_identity(other) == identity
 
     # ---- ticker pool ----------------------------------------------------
 

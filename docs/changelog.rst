@@ -55,6 +55,25 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   * ``IB.cancelHistoricalTicks`` (protobuf-only, server >= 215; settles awaiter)
   * ``IB.reqConfigAsync``, ``IB.updateConfigAsync`` (protobuf-only, server >= 219)
 
+* **Streams.** Every live stream is a read-only ``Stream`` of its own type
+  in ``ib_async.streams``, with its ``reqId`` and exactly the data it has:
+  ``MarketDataStream``, ``SnapshotStream``, ``TickByTickStream`` and
+  ``MarketDepthStream`` (``TickerStream``\ s, with ``contract`` and
+  ``ticker``), ``RealTimeBarsStream`` and ``HistoricalBarsStream`` (with
+  ``bars``), ``ScannerStream``, ``PnLStream`` and ``PnLSingleStream``
+  (with ``account`` and ``modelCode``). ``ContractStream`` groups the ones
+  on an instrument. ``IB.streams()`` maps each live reqId to its Stream,
+  ``IB.streams(contract)`` those on one instrument (by conId, a bag by its
+  legs, so any Contract object for it works), and ``IB.stream(reqId)``
+  finds one; they replace ``Wrapper.reqId2Ticker``
+  and ``ticker2ReqId`` from v2.x, and the unreleased
+  ``IB.subscriptions()`` and ``IB.subscriptionForReqId()``.
+  ``IB.streamErrorEvent(stream, errorCode, errorString, ended)`` fires
+  after ``errorEvent`` for an error about a live stream, with the stream
+  as it was and whether ib_async ended it, so a handler can tell apart
+  the streams on one contract. ``rerouteMktDataReqEvent`` and
+  ``rerouteMktDepthReqEvent`` carry ``(stream, conId, exchange)``.
+  (:issue:`247`, thanks to @wentbackward)
 * **``IB.connect`` and ``connectAsync`` are annotated ``-> Self``**, so
   ``ib = IB().connect(...)`` type-checks. (:issue:`215`, thanks to
   @jchaffraix)
@@ -790,12 +809,14 @@ no behavioural change to the public API.
 
 **Changed**
 
-* **Internal architecture refactor (no public API change)**: ten
+* **Internal architecture refactor**: ten
   parallel mutable dicts on ``Wrapper`` (``_futures``, ``_results``,
   ``_reqId2Contract``, ``reqId2Ticker``, ``ticker2ReqId``,
   ``reqId2Subscriber``, ``reqId2PnL``, ``reqId2PnlSingle``,
   ``pnlKey2ReqId``, ``pnlSingleKey2ReqId``) replaced with two typed
-  registries plus eight self-managing ``Subscription`` types:
+  registries plus eight self-managing ``Subscription`` types. The public
+  ``reqId2Ticker`` and ``ticker2ReqId`` went with them; in 3.0,
+  ``IB.streams()`` and ``IB.stream(reqId)`` replace them:
 
   * ``RequestRegistry`` owns every in-flight one-shot / singleton
     request. Discriminated key types (``ReqIdKey``,
