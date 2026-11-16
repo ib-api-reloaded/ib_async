@@ -55,6 +55,12 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   * ``IB.cancelHistoricalTicks`` (protobuf-only, server >= 215; settles awaiter)
   * ``IB.reqConfigAsync``, ``IB.updateConfigAsync`` (protobuf-only, server >= 219)
 
+* **``IB.marketDataReqId(contract_or_ticker, kind)``** returns the request
+  id of a live ``reqMktData``, ``reqMktDepth`` or ``reqTickByTickData``
+  stream, or ``None``. It matches raw wrapper callbacks, which carry only
+  a ``reqId``, to their subscription, and replaces lookups in the
+  internal ``Wrapper.ticker2ReqId``, which the registry refactor removed.
+
 * **``IB.connect`` and ``connectAsync`` are annotated ``-> Self``**, so
   ``ib = IB().connect(...)`` type-checks. (:issue:`215`, thanks to
   @jchaffraix)

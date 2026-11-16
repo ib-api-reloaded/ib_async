@@ -136,6 +136,17 @@ StartupFetchALL = (
 # The options of each underlying type reqOptionStrikes takes.
 _OPTION_SEC_TYPES: Mapping[str, str] = {"STK": "OPT", "FUT": "FOP", "CONTFUT": "FOP"}
 
+# The streaming subscription kinds marketDataReqId looks up: reqMktData,
+# reqMktDepth, and the four reqTickByTickData tick types.
+_MARKET_DATA_KINDS: tuple[str, ...] = (
+    "mktData",
+    "mktDepth",
+    "Last",
+    "AllLast",
+    "BidAsk",
+    "MidPoint",
+)
+
 
 @dataclass(slots=True, frozen=True)
 class _OptionListing:
@@ -1032,6 +1043,50 @@ class IB(Generic[EmptyT]):
     def tickers(self) -> list[Ticker[EmptyT]]:
         """Get a list of all tickers."""
         return self.wrapper.subscriptions.pooled_tickers()
+
+    def marketDataReqId(
+        self, contract: Contract | Ticker[EmptyT], kind: str = "mktData"
+    ) -> int | None:
+        """
+        Get the request id of a live streaming subscription, or ``None``
+        if there is none.
+
+        Use it to match the raw wrapper callbacks (``tickByTick*``,
+        ``updateMktDepth*``, ``tickPrice`` and so on), which carry only a
+        ``reqId``, to the subscription they belong to. The id changes if
+        the subscription is resent, so look it up again rather than
+        keeping it.
+
+        Snapshots (``reqMktData(..., snapshot=True)`` and
+        :meth:`.reqTickers`) are not streams and have no id here.
+
+        Args:
+            contract: The contract the subscription was made for, or its
+                :class:`.Ticker`.
+            kind: ``'mktData'`` (:meth:`.reqMktData`), ``'mktDepth'``
+                (:meth:`.reqMktDepth`), or a tick-by-tick type
+                (:meth:`.reqTickByTickData`): ``'Last'``, ``'AllLast'``,
+                ``'BidAsk'`` or ``'MidPoint'``.
+        """
+        if kind not in _MARKET_DATA_KINDS:
+            raise ValueError(
+                f"kind is one of {', '.join(map(repr, _MARKET_DATA_KINDS))}, "
+                f"not {kind!r}"
+            )
+        ticker = None
+        if isinstance(contract, Ticker):
+            ticker = contract
+            if ticker.contract is None:
+                return None
+            contract = ticker.contract
+        sub = self.wrapper.subscriptions.find_market_data_for_contract(contract, kind)
+        if sub is None:
+            return None
+        # A snapshot's Ticker shares its contract with the stream's but
+        # is not the stream's Ticker.
+        if ticker is not None and getattr(sub, "ticker", None) is not ticker:
+            return None
+        return sub.reqId
 
     def pendingTickers(self) -> list[Ticker[EmptyT]]:
         """Get a list of all tickers that have pending ticks or domTicks."""
