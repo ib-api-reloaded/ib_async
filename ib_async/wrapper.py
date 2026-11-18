@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import re
 import time
 from collections import OrderedDict, defaultdict
 from contextlib import suppress
@@ -388,6 +389,42 @@ STREAM_ENDING_CODES: Final[frozenset[int]] = frozenset(
 # bounding worst-case memory at roughly one CommissionReport instance
 # per slot.
 _MAX_PENDING_COMMISSION_REPORTS: Final[int] = 1024
+
+# IBKR's dividend tickString ('past12,next12,yyyymmdd,amount') can embed
+# thousands separators in any numeric field: a next-12-months total of
+# 1,089.45 arrives as ',1,089.45,20261116,2.199' — five comma fields,
+# which the naive 4-way split unpacks misaligned (raising ValueError, or
+# worse, recombining fields into an invented number). One full-string
+# pattern anchors the 8-digit date, accepts either numeric form in every
+# field, and refuses everything else.
+_dividend_tick_field: Final[str] = (
+    r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|"
+)
+_dividend_tick: Final[re.Pattern[str]] = re.compile(
+    rf"({_dividend_tick_field}),({_dividend_tick_field})"
+    rf",(\d{{8}}|),({_dividend_tick_field})"
+)
+
+
+def _parse_dividend_tick(value: str) -> Dividends | None:
+    """Parse a type-59 dividend tickString, tolerating the thousands
+    separators IBKR embeds in the numeric fields. Returns None when the
+    value does not match the anchored shape — the caller logs it as
+    malformed, never guessing a value."""
+    m = _dividend_tick.fullmatch(value)
+    if m is None:
+        return None
+    past12, next12, next_date, next_amount = m.groups()
+
+    def _num(s: str) -> float | None:
+        return float(s.replace(",", "")) if s else None
+
+    return Dividends(
+        _num(past12),
+        _num(next12),
+        parseIBDatetime(next_date) if next_date else None,
+        _num(next_amount),
+    )
 
 
 # Order fields that TWS may legitimately update at runtime via openOrder
@@ -1843,14 +1880,13 @@ class Wrapper(Generic[EmptyT]):
             elif tickType == 59:
                 # Dividend tick:
                 # https://interactivebrokers.github.io/tws-api/tick_types.html#ib_dividends
-                # example value: '0.83,0.92,20130219,0.23'
-                past12, next12, nextDate, nextAmount = value.split(",")
-                ticker.dividends = Dividends(
-                    float(past12) if past12 else None,
-                    float(next12) if next12 else None,
-                    parseIBDatetime(nextDate) if nextDate else None,
-                    float(nextAmount) if nextAmount else None,
-                )
+                # example value: '0.83,0.92,20130219,0.23' — but the
+                # numeric fields may embed thousands separators (see
+                # _parse_dividend_tick).
+                parsed = _parse_dividend_tick(value)
+                if parsed is None:
+                    raise ValueError(f"unparseable dividend tick: {value!r}")
+                ticker.dividends = parsed
             else:
                 self._logger.error(
                     f"tickString with tickType {tickType}: unhandled value: {value!r}"

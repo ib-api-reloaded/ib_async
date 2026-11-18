@@ -768,6 +768,10 @@ are fixed in v3.0:
   path.
 * ``safe_decimal(str | Decimal | None) → Decimal | None`` is the
   single source of truth for IBKR UNSET-sentinel rejection.
+* The type-59 dividend tick parser anchors the 8-digit date and
+  tolerates the thousands separators IBKR embeds in any numeric field
+  (a live ``',1,089.45,20261116,2.199'`` unpacks five comma fields),
+  refusing shapes it cannot parse instead of mis-unpacking them.
 * Comprehensive owned-test suite covering the protobuf seam,
   Decimal coercion, request / subscription lifecycles, dataclass
   invariants, cross-version decoder gating, and wire-frame
