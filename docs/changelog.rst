@@ -379,6 +379,12 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 These were broken on v2.x against modern TWS / Gateway versions and
 are fixed in v3.0:
 
+* **Dividends of 1,000 or more were lost.** IBKR's dividend tick separates
+  its fields with commas and also groups a number's thousands with them,
+  so ``',1,089.45,20261116,2.199'`` split into five fields, was logged as
+  malformed, and left ``Ticker.dividends`` unchanged. Each field is now
+  read by its shape, anchored on the 8-digit date. (:issue:`249`, thanks to
+  @PhilipReschke)
 * **Importing failed for a version with a label.** ``__version_info__``
   called ``int()`` on every part of the installed version, so a
   pre-release, post-release, dev or local version such as ``3.0.0rc1`` or

@@ -79,6 +79,24 @@ sizes = st.one_of(st.just(0.0), st.floats(1, 10000).map(lambda s: float(int(s)))
 # IBKR sends -1 for a missing price, so the strategy generates it often.
 pricesOrEmpty = st.one_of(st.just(-1.0), prices)
 
+
+def presented(amount: float, grouped: bool) -> tuple[float, str]:
+    """An amount and its text as IBKR presents it: 1089.45 as
+    '1,089.45', with the comma that also separates the dividend tick's
+    fields, or ungrouped."""
+    return amount, f"{amount:,}" if grouped else str(amount)
+
+
+# Dividend amounts reach 1,000 and more, as in yen or won.
+dividendAmounts = st.one_of(
+    st.none(),
+    st.builds(
+        presented,
+        st.floats(0.01, 1_000_000).map(lambda a: round(a, 3)),
+        st.booleans(),
+    ),
+)
+
 QUOTE_FIELDS = (
     "bid", "bidSize", "ask", "askSize", "last", "lastSize",
     "prevBid", "prevBidSize", "prevAsk", "prevAskSize", "prevLast", "prevLastSize",
@@ -322,28 +340,42 @@ class TickProcessing(RuleBasedStateMachine):
         self.touched = True
 
     @rule(
-        past=st.one_of(st.none(), prices),
-        upcoming=st.one_of(st.none(), prices),
+        past=dividendAmounts,
+        upcoming=dividendAmounts,
         day=st.one_of(st.none(), st.dates(date(2020, 1, 1), date(2035, 12, 31))),
-        amount=st.one_of(st.none(), prices),
+        amount=dividendAmounts,
     )
-    def dividends_tick(self, past, upcoming, day, amount) -> None:
+    def dividends_tick(
+        self,
+        past: tuple[float, str] | None,
+        upcoming: tuple[float, str] | None,
+        day: date | None,
+        amount: tuple[float, str] | None,
+    ) -> None:
+        """Send 'past12,next12,yyyymmdd,amount', with amounts as IBKR
+        presents them."""
         text = ",".join(
-            "" if v is None else v
-            for v in (
-                None if past is None else str(past),
-                None if upcoming is None else str(upcoming),
-                None if day is None else day.strftime("%Y%m%d"),
-                None if amount is None else str(amount),
+            (
+                "" if past is None else past[1],
+                "" if upcoming is None else upcoming[1],
+                "" if day is None else day.strftime("%Y%m%d"),
+                "" if amount is None else amount[1],
             )
         )
         self.wrapper.tickString(self.reqId, 59, text)
-        self.model["dividends"] = ibi.Dividends(past, upcoming, day, amount)
+        self.model["dividends"] = ibi.Dividends(
+            None if past is None else past[0],
+            None if upcoming is None else upcoming[0],
+            day,
+            None if amount is None else amount[0],
+        )
         self.touched = True
 
     @rule(
         tickType=st.sampled_from([45, 48, 59, 77, 88]),
-        value=st.sampled_from(["", "abc", "1;2", "1,2", "x;y;z;1;2;3"]),
+        value=st.sampled_from(
+            ["", "abc", "1;2", "1,2", "x;y;z;1;2;3", "0.83,0.92,2013021,0.23"]
+        ),
     )
     def malformed_string_tick(self, tickType: int, value: str) -> None:
         """An unparseable string is logged and does not change the ticker."""

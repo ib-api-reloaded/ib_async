@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import re
 import time
 from collections import OrderedDict, defaultdict
 from contextlib import suppress
@@ -246,6 +247,33 @@ RT_VOLUME_TICK_MAP: Final[TickDict] = {
     48: "rtVolume",
     77: "rtTradeVolume",
 }
+
+# The dividend tick (59) is 'past12,next12,yyyymmdd,amount'. IBKR uses
+# commas both between the fields and within a number of 1,000 or more:
+# ',1,089.45,20261116,2.199' is no past total, 1089.45 over the next 12
+# months, and 2.199 on 2026-11-16. Each field is read by its shape, the
+# date by its 8 digits, so a grouped number cannot shift the fields.
+_DIVIDEND_AMOUNT: Final[str] = r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|)"
+_DIVIDEND_TICK: Final[re.Pattern[str]] = re.compile(
+    rf"{_DIVIDEND_AMOUNT},{_DIVIDEND_AMOUNT},(\d{{8}}|),{_DIVIDEND_AMOUNT}"
+)
+
+
+def _parseDividends(value: str) -> Dividends:
+    """The dividend tick's value; ValueError for any other shape."""
+    if (match := _DIVIDEND_TICK.fullmatch(value)) is None:
+        raise ValueError(f"not a dividend tick: {value!r}")
+    past12, next12, nextDate, nextAmount = match.groups()
+    return Dividends(
+        _dividendAmount(past12),
+        _dividendAmount(next12),
+        parseIBDatetime(nextDate) if nextDate else None,
+        _dividendAmount(nextAmount),
+    )
+
+
+def _dividendAmount(text: str) -> float | None:
+    return float(text.replace(",", "")) if text else None
 
 
 class RequestError(Exception):
@@ -1841,16 +1869,8 @@ class Wrapper(Generic[EmptyT]):
                     )
                     ticker.ticks.append(tick)
             elif tickType == 59:
-                # Dividend tick:
                 # https://interactivebrokers.github.io/tws-api/tick_types.html#ib_dividends
-                # example value: '0.83,0.92,20130219,0.23'
-                past12, next12, nextDate, nextAmount = value.split(",")
-                ticker.dividends = Dividends(
-                    float(past12) if past12 else None,
-                    float(next12) if next12 else None,
-                    parseIBDatetime(nextDate) if nextDate else None,
-                    float(nextAmount) if nextAmount else None,
-                )
+                ticker.dividends = _parseDividends(value)
             else:
                 self._logger.error(
                     f"tickString with tickType {tickType}: unhandled value: {value!r}"
