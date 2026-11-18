@@ -74,6 +74,14 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   the streams on one contract. ``rerouteMktDataReqEvent`` and
   ``rerouteMktDepthReqEvent`` carry ``(stream, conId, exchange)``.
   (:issue:`247`, thanks to @wentbackward)
+* **``IB.qualifyContractDetails``** (and ``qualifyContractDetailsAsync``)
+  qualifies contracts in place, as ``qualifyContracts`` does, and returns
+  the ``ContractDetails`` each was qualified from, whose ``contract`` is
+  the given contract; None for an unknown or ambiguous one. One request per
+  contract gives both, and both methods pick the details by one rule.
+  ``qualifyContracts`` is annotated and documented as returning one entry
+  per contract, None where qualifying failed. (:issue:`250`, thanks to
+  @PhilipReschke)
 * **``IB.connect`` and ``connectAsync`` are annotated ``-> Self``**, so
   ``ib = IB().connect(...)`` type-checks. (:issue:`215`, thanks to
   @jchaffraix)

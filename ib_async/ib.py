@@ -156,6 +156,47 @@ def _qualifyInPlace(contract: Contract, qualified: Contract) -> None:
         setattr(contract, f.name, getattr(qualified, f.name))
 
 
+@dataclass(slots=True, frozen=True)
+class _Qualification:
+    """IBKR's contract details for one contract to qualify, and the ones
+    that could be it."""
+
+    replies: list[ContractDetails]
+    candidates: list[ContractDetails]
+
+    @classmethod
+    def of(cls, requested: Contract, replies: list[ContractDetails]) -> _Qualification:
+        """Every reply is a candidate, except that of several replies only
+        those of the requested secType are: IBKR answers a FOP request
+        with EC and FOP contracts."""
+        if len(replies) > 1 and requested.secType:
+            candidates = [
+                d
+                for d in replies
+                if d.contract is not None and d.contract.secType == requested.secType
+            ]
+        else:
+            candidates = list(replies)
+        return cls(replies, candidates)
+
+    @property
+    def winner(self) -> ContractDetails | None:
+        """The only candidate; None for none or several."""
+        return self.candidates[0] if len(self.candidates) == 1 else None
+
+    def fill(self, contract: Contract) -> None:
+        """Fill in ``contract`` from the winner, which then holds it as its
+        contract. A request for SMART keeps SMART: a reply's own exchange
+        would narrow it."""
+        winner = self.winner
+        assert winner is not None and winner.contract is not None  # noqa: S101 - narrows for the type checker
+        smart = contract.exchange == "SMART"
+        _qualifyInPlace(contract, winner.contract)
+        if smart:
+            contract.exchange = "SMART"
+        winner.contract = contract
+
+
 def _refusedAsEmptySchedule(_code: int, _text: str) -> HistoricalSchedule:
     """What reqHistoricalSchedule answers when IBKR refuses it, as on its
     timeout."""
@@ -1103,12 +1144,15 @@ class IB(Generic[EmptyT]):
             self.reqTickersAsync(*contracts, regulatorySnapshot=regulatorySnapshot)
         )
 
-    def qualifyContracts(self, *contracts: Contract) -> list[Contract]:
+    def qualifyContracts(self, *contracts: Contract) -> list[Contract | None]:
         """
         Fully qualify the given contracts in-place. This will fill in
         the missing fields in the contract, especially the conId.
 
-        Returns a list of contracts that have been successfully qualified.
+        Returns one entry per contract, in order: the contract itself,
+        filled in, or None when IBKR knows no such contract or several.
+        Of several replies, only those of the contract's secType count,
+        if it has one. A contract asked for on SMART keeps SMART.
 
         This method is blocking.
 
@@ -1116,6 +1160,25 @@ class IB(Generic[EmptyT]):
             contracts: Contracts to qualify.
         """
         return self._run(self.qualifyContractsAsync(*contracts))
+
+    def qualifyContractDetails(
+        self, *contracts: Contract
+    ) -> list[ContractDetails | None]:
+        """
+        Qualify the given contracts in place, as :meth:`qualifyContracts`
+        does, and return the details each was qualified from, in one
+        request per contract.
+
+        Returns one entry per contract, in order: its ContractDetails,
+        whose ``contract`` is the given contract, filled in; or None when
+        IBKR knows no such contract or several.
+
+        This method is blocking.
+
+        Args:
+            contracts: Contracts to qualify.
+        """
+        return self._run(self.qualifyContractDetailsAsync(*contracts))
 
     def bracketOrder(
         self,
@@ -2865,64 +2928,45 @@ class IB(Generic[EmptyT]):
               cannot be qualified (bad values, ambiguous), the return value for the contract
               position in the result is None.
         """
-        detailsLists = await asyncio.gather(
+        result: list[Contract | list[Contract | None] | None] = []
+        qualifications = await self._qualifyAsync(contracts)
+        for contract, q in zip(contracts, qualifications, strict=True):
+            if q.winner is not None:
+                result.append(contract)
+            elif q.replies and returnAll:
+                result.append([d.contract for d in q.candidates])
+            else:
+                result.append(None)
+        return result
+
+    async def qualifyContractDetailsAsync(
+        self, *contracts: Contract
+    ) -> list[ContractDetails | None]:
+        """Async sibling of :meth:`qualifyContractDetails`."""
+        return [q.winner for q in await self._qualifyAsync(contracts)]
+
+    async def _qualifyAsync(
+        self, contracts: Sequence[Contract]
+    ) -> list[_Qualification]:
+        """Ask IBKR for each contract's details and fill in each contract
+        that has exactly one candidate; log the unknown and ambiguous."""
+        repliesLists = await asyncio.gather(
             *[self.reqContractDetailsAsync(c) for c in contracts]
         )
-
-        result: list[Contract | list[Contract | None] | None] = []
-        for contract, detailsList in zip(contracts, detailsLists, strict=True):
-            if not detailsList:
+        qualifications: list[_Qualification] = []
+        for contract, replies in zip(contracts, repliesLists, strict=True):
+            q = _Qualification.of(contract, replies)
+            if q.winner is not None:
+                q.fill(contract)
+            elif not replies:
                 self._logger.warning(f"Unknown contract: {contract}")
-                result.append(None)
-            elif len(detailsList) > 1:
-                # BUG FIX:
-                #  - IBKR is returning EC _and_ FOP contracts for only FOP requests,
-                #    which is clearly incorrect, so now if an input request has `secType`
-                #    defined, we only return matching `secType` contracts.
-                possibles: list[Contract | None]
-                if contract.secType:
-                    matching = [
-                        c
-                        for details in detailsList
-                        if (c := details.contract) is not None
-                        and c.secType == contract.secType
-                    ]
-
-                    # if our match instrument type filter resolved to only _one_ matching
-                    # contract, then we found a single usable result to add.
-                    if len(matching) == 1:
-                        c = matching[0]
-                        if contract.exchange == "SMART":
-                            # Allow contracts to become more generic if SMART requested as input
-                            c.exchange = contract.exchange
-
-                        _qualifyInPlace(contract, c)
-                        result.append(contract)
-                        continue
-                    possibles = list(matching)
-                else:
-                    # else, return all matches if no specific secType requested
-                    possibles = [details.contract for details in detailsList]
-
+            else:
+                possibles = [d.contract for d in q.candidates]
                 self._logger.warning(
                     f"Ambiguous contract: {contract}, possibles are {possibles}"
                 )
-
-                if returnAll:
-                    result.append(possibles)
-                else:
-                    result.append(None)
-            else:
-                c = detailsList[0].contract
-                assert c  # noqa: S101 - narrows for the type checker
-                if contract.exchange == "SMART":
-                    # overwriting 'SMART' exchange can create invalid contract
-                    c.exchange = contract.exchange
-
-                _qualifyInPlace(contract, c)
-                result.append(contract)
-
-        return result
+            qualifications.append(q)
+        return qualifications
 
     async def reqTickersAsync(
         self, *contracts: Contract, regulatorySnapshot: bool = False

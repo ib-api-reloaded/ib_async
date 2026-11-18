@@ -37,6 +37,7 @@ Answer = (
     | list[ibi.HistoricalTick]
     | list[ibi.ContractDetails]
     | list[ibi.Contract | list[ibi.Contract | None] | None]
+    | list[ibi.ContractDetails | None]
     | ibi.OptionComputation
     | ibi.HistoricalSchedule
     | ibi.OrderState
@@ -86,6 +87,7 @@ REQUESTS: dict[str, Request] = {
     ),
     "reqContractDetails": lambda ib, c, o: ib.reqContractDetailsAsync(c),
     "qualifyContracts": lambda ib, c, o: ib.qualifyContractsAsync(c),
+    "qualifyContractDetails": lambda ib, c, o: ib.qualifyContractDetailsAsync(c),
     "calculateImpliedVolatility": lambda ib, c, o: ib.calculateImpliedVolatilityAsync(
         c, 1.0, 100.0
     ),
