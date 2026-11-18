@@ -766,6 +766,13 @@ are fixed in v3.0:
 * Hot-path tick / depth records use ``__slots__``.
 * ``processProtoBuf`` caches resolved bound methods on the dispatch
   path.
+* ``qualifyDetails`` exposes the qualification rule for one request —
+  which reply wins, the secType disambiguation, the SMART rewrite and
+  the in-place fill — returning the winning ``ContractDetails``, so a
+  caller that needs the winning details does not restate it;
+  ``qualifyContractsAsync`` delegates to the same function, and a
+  reply carrying no contract is treated as unknown instead of
+  asserted.
 * ``safe_decimal(str | Decimal | None) → Decimal | None`` is the
   single source of truth for IBKR UNSET-sentinel rejection.
 * Comprehensive owned-test suite covering the protobuf seam,

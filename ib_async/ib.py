@@ -156,6 +156,47 @@ def _qualifyInPlace(contract: Contract, qualified: Contract) -> None:
         setattr(contract, f.name, getattr(qualified, f.name))
 
 
+# The qualify rule as a public seam: a caller that needs the winning
+# ContractDetails — not just the filled-in contract — does not restate it.
+# qualifyContractsAsync delegates here; keep both in sync.
+def qualifyDetails(
+    requested: Contract, details: Sequence[ContractDetails]
+) -> ContractDetails | None:
+    """ib_async's qualify rule for ONE request, applied in place.
+
+    Returns the winning reply, or None when the answer is unknown or
+    ambiguous; ``requested`` is filled with every field of the winning
+    contract, exactly as qualifyContractsAsync fills it. Several replies are
+    disambiguated by the requested secType (IBKR answers EC and FOP contracts
+    to a FOP request) and accepted only when exactly one matches. A request
+    for SMART keeps SMART: a reply's home exchange must not narrow an
+    explicitly composite request. A reply that carries no contract is treated
+    as unknown rather than asserted, so one malformed answer cannot lose a
+    caller's whole qualification request.
+    """
+    if not details:
+        return None
+    if len(details) > 1:
+        if not requested.secType:
+            return None
+        matching = [
+            d
+            for d in details
+            if d.contract is not None and d.contract.secType == requested.secType
+        ]
+        if len(matching) != 1:
+            return None
+        pick = matching[0]
+    else:
+        pick = details[0]
+    if pick.contract is None:
+        return None
+    if requested.exchange == "SMART":
+        pick.contract.exchange = "SMART"
+    _qualifyInPlace(requested, pick.contract)
+    return pick
+
+
 def _refusedAsEmptySchedule(_code: int, _text: str) -> HistoricalSchedule:
     """What reqHistoricalSchedule answers when IBKR refuses it, as on its
     timeout."""
@@ -2871,9 +2912,12 @@ class IB(Generic[EmptyT]):
 
         result: list[Contract | list[Contract | None] | None] = []
         for contract, detailsList in zip(contracts, detailsLists, strict=True):
+            pick = qualifyDetails(contract, detailsList)
+            if pick is not None:
+                result.append(contract)
+                continue
             if not detailsList:
                 self._logger.warning(f"Unknown contract: {contract}")
-                result.append(None)
             elif len(detailsList) > 1:
                 # BUG FIX:
                 #  - IBKR is returning EC _and_ FOP contracts for only FOP requests,
@@ -2881,25 +2925,12 @@ class IB(Generic[EmptyT]):
                 #    defined, we only return matching `secType` contracts.
                 possibles: list[Contract | None]
                 if contract.secType:
-                    matching = [
+                    possibles = [
                         c
                         for details in detailsList
                         if (c := details.contract) is not None
                         and c.secType == contract.secType
                     ]
-
-                    # if our match instrument type filter resolved to only _one_ matching
-                    # contract, then we found a single usable result to add.
-                    if len(matching) == 1:
-                        c = matching[0]
-                        if contract.exchange == "SMART":
-                            # Allow contracts to become more generic if SMART requested as input
-                            c.exchange = contract.exchange
-
-                        _qualifyInPlace(contract, c)
-                        result.append(contract)
-                        continue
-                    possibles = list(matching)
                 else:
                     # else, return all matches if no specific secType requested
                     possibles = [details.contract for details in detailsList]
@@ -2910,17 +2941,10 @@ class IB(Generic[EmptyT]):
 
                 if returnAll:
                     result.append(possibles)
-                else:
-                    result.append(None)
+                    continue
             else:
-                c = detailsList[0].contract
-                assert c  # noqa: S101 - narrows for the type checker
-                if contract.exchange == "SMART":
-                    # overwriting 'SMART' exchange can create invalid contract
-                    c.exchange = contract.exchange
-
-                _qualifyInPlace(contract, c)
-                result.append(contract)
+                self._logger.warning(f"Unknown contract: {contract}")
+            result.append(None)
 
         return result
 
