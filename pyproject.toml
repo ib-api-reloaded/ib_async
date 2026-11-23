@@ -29,7 +29,7 @@ keywords = ["ibapi", "tws", "asyncio", "jupyter", "interactive", "brokers", "asy
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-aeventkit = "^2.1.0"
+aeventkit = ">=2.1.0,<4"
 # aeventkit = { path = "../eventkit", develop = true }
 nest_asyncio = "*"
 tzdata = "^2025.2"
