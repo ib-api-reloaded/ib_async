@@ -254,11 +254,14 @@ class RequestRegistry:
         return req is not None and req.live
 
     def __len__(self) -> int:
-        return sum(1 for _ in self)
+        return len(self._live())
 
     def __iter__(self) -> Iterator[Request]:
         """The live requests."""
-        return (req for req in list(self._reqs.values()) if req.live)
+        return iter(self._live())
+
+    def _live(self) -> list[Request]:
+        return [req for req in self._reqs.values() if req.live]
 
     def answering(self, key: RequestKey) -> bool:
         """Return True if messages for ``key`` belong to a request.

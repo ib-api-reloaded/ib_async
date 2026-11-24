@@ -57,21 +57,23 @@ WireField = Contract | float | int | str | bool | Decimal | Sequence[TagValue] |
 def _formatContract(c: Contract) -> str:
     """Format a contract as its fields in IBKR's order, separated by NUL."""
     return "\0".join(
-        str(f)
-        for f in (
-            c.conId,
-            c.symbol,
-            c.secType,
-            c.lastTradeDateOrContractMonth,
-            c.strike,
-            c.right,
-            c.multiplier,
-            c.exchange,
-            c.primaryExchange,
-            c.currency,
-            c.localSymbol,
-            c.tradingClass,
-        )
+        [
+            str(f)
+            for f in (
+                c.conId,
+                c.symbol,
+                c.secType,
+                c.lastTradeDateOrContractMonth,
+                c.strike,
+                c.right,
+                c.multiplier,
+                c.exchange,
+                c.primaryExchange,
+                c.currency,
+                c.localSymbol,
+                c.tradingClass,
+            )
+        ]
     )
 
 
@@ -103,7 +105,7 @@ def _formatField(field: WireField, makeEmpty: bool) -> str:
     if field is None:
         return ""
     if type(field) is list or type(field) is tuple:
-        return "".join(f"{v.tag}={v.value};" for v in field)
+        return "".join([f"{v.tag}={v.value};" for v in field])
     return str(field)
 
 

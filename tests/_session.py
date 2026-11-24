@@ -80,7 +80,7 @@ def handshake(version: int) -> bytes:
 
 
 def binaryFrame(msgId: int, *fields: str) -> bytes:
-    body = struct.pack(">I", msgId) + "".join(f + "\0" for f in fields).encode()
+    body = struct.pack(">I", msgId) + "".join([f + "\0" for f in fields]).encode()
     return frame(body)
 
 

@@ -454,7 +454,7 @@ class OrderSimulation(RuleBasedStateMachine):
         self.trades_in_expected_state()
         self.fills_match_and_are_delivered_once()
         self.ib_views_match_trades()
-        assert all(t.trade.isDone() or t.trade.isUncertain() for t in self.tracked)
+        assert all([t.trade.isDone() or t.trade.isUncertain() for t in self.tracked])
         assert self.ib.openTrades() == []
 
     def tws_acknowledges_one(self, tracked: Tracked) -> None:

@@ -19,7 +19,7 @@ def _versionInfo(version: str) -> tuple[int, ...]:
     match = _RELEASE.match(version)
     if match is None:
         raise ValueError(f"not a version: {version!r}")
-    return tuple(int(part) for part in match.group().split("."))
+    return tuple([int(part) for part in match.group().split(".")])
 
 
 __version__ = version("ib_async")

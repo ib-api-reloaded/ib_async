@@ -45,7 +45,8 @@ def test_unmapped_tick_types_are_skipped(caplog):
         ib.wrapper.priceSizeTick(5, 9999, 1.0, 1, ibi.TickAttrib())
         ib.wrapper.tickSize(5, 9999, 1)
         ib.wrapper.tickGeneric(5, 9999, 1.0)
-    assert sum("unmapped tickType 9999" in r.getMessage() for r in caplog.records) == 3
+    unmapped = [r for r in caplog.records if "unmapped tickType 9999" in r.getMessage()]
+    assert len(unmapped) == 3
 
 
 def test_modifying_a_finished_order_is_sent_with_a_warning(caplog):

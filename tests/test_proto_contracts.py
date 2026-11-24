@@ -423,7 +423,7 @@ def test_create_contract_details_populates_sec_id_and_ineligibility_lists():
     assert len(details.secIdList) == 2
     by_tag = {tv.tag: tv.value for tv in details.secIdList}
     assert by_tag == {"ISIN": "US0378331005", "CUSIP": "037833100"}
-    assert all(isinstance(tv, TagValue) for tv in details.secIdList)
+    assert all([isinstance(tv, TagValue) for tv in details.secIdList])
     assert len(details.ineligibilityReasonList) == 1
     assert isinstance(details.ineligibilityReasonList[0], IneligibilityReason)
     assert details.ineligibilityReasonList[0].id_ == "REASON_1"

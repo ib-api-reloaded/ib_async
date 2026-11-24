@@ -870,7 +870,8 @@ def _scalar(
     """The scalar type an Order field annotated ``hint`` holds (Decimal,
     float, int, bool or str), if any."""
     kinds = get_args(hint) or (hint,)
-    return next((t for t in (Decimal, float, int, bool, str) if t in kinds), None)
+    held = [t for t in (Decimal, float, int, bool, str) if t in kinds]
+    return held[0] if held else None
 
 
 # The scalar type each scalar Order field holds, by field; resolved here,
@@ -885,5 +886,5 @@ ORDER_FIELD_TYPES: Mapping[str, OrderScalar] = MappingProxyType(
 )
 # The Decimal fields, which Order.__post_init__ coerces.
 _DECIMAL_FIELDS: tuple[str, ...] = tuple(
-    name for name, scalar in ORDER_FIELD_TYPES.items() if scalar is Decimal
+    [name for name, scalar in ORDER_FIELD_TYPES.items() if scalar is Decimal]
 )

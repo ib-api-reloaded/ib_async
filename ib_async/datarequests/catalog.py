@@ -38,12 +38,12 @@ class Family:
 
     def __post_init__(self) -> None:
         # A second member of the same value would be a silent enum alias.
-        checkUnique(f"{self.name} member names", (m.name for m in self.members))
-        checkUnique(f"{self.name} member values", (m.value for m in self.members))
+        checkUnique(f"{self.name} member names", [m.name for m in self.members])
+        checkUnique(f"{self.name} member values", [m.value for m in self.members])
 
     @property
     def values(self) -> tuple[str, ...]:
-        return tuple(member.value for member in self.members)
+        return tuple([member.value for member in self.members])
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +67,7 @@ class Parameter:
 
 def _named(*values: str) -> tuple[Member, ...]:
     """Members named as their values."""
-    return tuple(Member(value, value) for value in values)
+    return tuple([Member(value, value) for value in values])
 
 
 WHAT_TO_SHOW = Family(
@@ -144,7 +144,7 @@ PARAMETERS: tuple[Parameter, ...] = (
         "SCHEDULE, answered with a schedule rather than bars, is "
         "reqHistoricalSchedule's.",
         family=WHAT_TO_SHOW,
-        values=tuple(v for v in WHAT_TO_SHOW.values if v != "SCHEDULE"),
+        values=tuple([v for v in WHAT_TO_SHOW.values if v != "SCHEDULE"]),
     ),
     Parameter(
         name="RealTimeBarsData",
@@ -170,5 +170,5 @@ PARAMETERS: tuple[Parameter, ...] = (
 # Every family and parameter is one name of the generated module.
 checkUnique(
     "family and parameter names",
-    [*(f.name for f in FAMILIES), *(p.name for p in PARAMETERS)],
+    [f.name for f in FAMILIES] + [p.name for p in PARAMETERS],
 )

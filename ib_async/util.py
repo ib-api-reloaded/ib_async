@@ -106,7 +106,7 @@ Event to emit global exceptions.
 
 def checkUnique(what: str, names: Iterable[str]) -> None:
     """Refuse a name given twice among ``names`` (``what`` they are)."""
-    twice = sorted(name for name, count in Counter(names).items() if count > 1)
+    twice = sorted([name for name, count in Counter(names).items() if count > 1])
     if twice:
         raise ValueError(f"{what} given twice: {', '.join(twice)}")
 
@@ -172,7 +172,7 @@ def df(objs: Iterable[Record], labels: Sequence[str] | None = None) -> pl.DataFr
             _series(pl, name, values)
             for name, values in zip(
                 columns,
-                (list(column) for column in zip(*data, strict=True)),
+                [list(column) for column in zip(*data, strict=True)],
                 strict=True,
             )
         ]
@@ -233,8 +233,8 @@ def _table(objs: Iterable[Record]) -> tuple[list[str], list[tuple[FieldValue, ..
     else:
         records = [vars(o) for o in rows]
     # every key of every record, in first-seen order; a missing one is null
-    columns = list(dict.fromkeys(key for record in records for key in record))
-    return columns, [tuple(record.get(c) for c in columns) for record in records]
+    columns = list(dict.fromkeys([key for record in records for key in record]))
+    return columns, [tuple([record.get(c) for c in columns]) for record in records]
 
 
 # Values polars stores in a column of their own type; anything else
@@ -334,7 +334,7 @@ def dataclassAsTuple(obj: Dataclass) -> tuple[FieldValue, ...]:
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
 
-    return tuple(getattr(obj, field.name) for field in fields(obj))
+    return tuple([getattr(obj, field.name) for field in fields(obj)])
 
 
 def dataclassNonDefaults(obj: Dataclass) -> dict[str, FieldValue]:
@@ -473,9 +473,10 @@ def dataclassDisplayFields(obj: Dataclass) -> dict[str, FieldValue]:
     if not is_dataclass(obj):
         raise TypeError(f"Object {obj} is not a dataclass")
 
+    values = [(field, getattr(obj, field.name)) for field in fields(obj)]
     return {
         field.name: value
-        for field, value in ((field, getattr(obj, field.name)) for field in fields(obj))
+        for field, value in values
         if _carriesDisplayInformation(field.name, value, field.default)
     }
 
@@ -499,7 +500,7 @@ def dataclassDisplayValue(value: FieldValue) -> str:
 def dataclassDisplayPairs(attrs: dict[str, FieldValue]) -> str:
     """Render display fields as the ``name=value, name=value`` repr body."""
 
-    return ", ".join(f"{k}={dataclassDisplayValue(v)}" for k, v in attrs.items())
+    return ", ".join([f"{k}={dataclassDisplayValue(v)}" for k, v in attrs.items()])
 
 
 def dataclassRepr(obj: Dataclass) -> str:
@@ -523,7 +524,7 @@ def isnamedtupleinstance(x):
     if not isinstance(f, tuple):
         return False
 
-    return all(isinstance(n, str) for n in f)
+    return all([isinstance(n, str) for n in f])
 
 
 # The values that :func:`tree` returns. JSON can hold all of them.
@@ -633,7 +634,7 @@ def barplot(
     ax.grid(True)
     fig.set_size_inches(10, 6)
     for n, row in enumerate(ohlcTups):
-        open_, high, low, close = (_plottedPrice(v, n) for v in row)
+        open_, high, low, close = [_plottedPrice(v, n) for v in row]
         if close >= open_:
             color = upColor
             bodyHi, bodyLo = close, open_
@@ -1210,6 +1211,9 @@ def parseIBShortDatetimes(
     return out
 
 
+_WHITESPACE = re.compile(r"\s")
+
+
 def splitIBLastTradeDate(value: str) -> list[str]:
     """A contract's ``lastTradeDateOrContractMonth`` wire value as
     ``[date, time, zone]``, as many as it has.
@@ -1219,7 +1223,7 @@ def splitIBLastTradeDate(value: str) -> list[str]:
     hyphenated form (``20260619-15:00:00``, optionally ``-zone``) splits on
     ``-``.
     """
-    if any(c.isspace() for c in value):
+    if _WHITESPACE.search(value):
         return value.split(None, 2)
     return value.split("-", 2)
 

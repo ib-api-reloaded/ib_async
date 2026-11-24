@@ -134,7 +134,7 @@ def test_extract_keeps_only_what_the_build_uses(tooling, tmp_path):
 
     twsapi.archive.extract(_archive(), dest)
 
-    kept = sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*.*"))
+    kept = sorted([p.relative_to(dest).as_posix() for p in dest.rglob("*.*")])
     assert kept == [
         "IBJts/API_VersionNum.txt",
         "IBJts/source/proto/Order.proto",

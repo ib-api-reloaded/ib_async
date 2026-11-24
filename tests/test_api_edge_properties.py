@@ -58,7 +58,7 @@ def test_option_strike_searches_accept_documented_months(
     underlying = ibi.Contract(
         secType=secType, symbol=symbol, exchange=exchange, currency="USD"
     )
-    wellFormed = all(m.isdigit() and len(m) in (6, 8) for m in monthList)
+    wellFormed = all([m.isdigit() and len(m) in (6, 8) for m in monthList])
     expectedOk = (
         secType in ("STK", "FUT", "CONTFUT")
         and symbol
@@ -75,11 +75,9 @@ def test_option_strike_searches_accept_documented_months(
     assert [s.lastTradeDateOrContractMonth for s in searches] == list(
         dict.fromkeys(monthList)
     )
-    assert all(s.secType == ("OPT" if secType == "STK" else "FOP") for s in searches)
-    assert all(
-        s.exchange == ("SMART" if secType == "STK" else exchange) for s in searches
-    )
-    assert all(s.symbol == symbol and s.conId == 0 for s in searches)
+    assert {s.secType for s in searches} == {"OPT" if secType == "STK" else "FOP"}
+    assert {s.exchange for s in searches} == {"SMART" if secType == "STK" else exchange}
+    assert {(s.symbol, s.conId) for s in searches} == {(symbol, 0)}
 
 
 OPTIONS = [name for name in _SWITCHES if name not in ("twsVersion", "gateway")]

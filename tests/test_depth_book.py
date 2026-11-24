@@ -104,7 +104,8 @@ def test_out_of_range_rows_are_logged_at_debug(caplog):
 
 def test_set_rows_replaces_one_side_from_any_iterable():
     book = _book(3, 2)
-    book.setRows(BID, (DOMLevel(price, 1.0, "") for price in (5, 4, 1)))
+    bids = (DOMLevel(p, 1.0, "") for p in (5, 4, 1))  # generator: any iterable
+    book.setRows(BID, bids)
     book.setRows(ASK, [DOMLevel(6, 1.0, "")])
     assert _prices(book.bids) == [5, 4, 1]
     assert _prices(book.asks) == [6]

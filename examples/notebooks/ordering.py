@@ -351,7 +351,7 @@ def _():
 @app.cell
 def _(ib):
     _commissions = [fill.commissionReport.commissionAndFees for fill in ib.fills()]
-    sum((c for c in _commissions if c is not None), Decimal(0))
+    sum([c for c in _commissions if c is not None], Decimal(0))
     return
 
 

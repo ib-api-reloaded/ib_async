@@ -238,6 +238,8 @@ ignore = [
   "E402", # Module level import not at top of file
   "SIM102", # collapsible-if: nested ifs often read clearer
   "SIM110", # reimplemented-builtin: explicit loops often read clearer
+  "C419", # all() takes a list comprehension like every other consumer; only
+  # any() takes a generator (tests/test_source_conventions.py checks both)
 ]
 
 [tool.ruff.lint.isort]

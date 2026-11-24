@@ -236,7 +236,7 @@ def test_unknown_canonical_msg_id_logs_and_drops(caplog):
     with caplog.at_level(logging.DEBUG, logger="ib_async.Decoder"):
         ib.client.decoder.processProtoBuf(9999, b"\x08\x01")
     # Connection survives, no exception.
-    assert any("no handler" in rec.message for rec in caplog.records)
+    assert "protobuf msg 9999, 2 bytes (no handler)" in caplog.text
 
 
 def test_malformed_payload_logs_and_drops(caplog):
@@ -245,4 +245,4 @@ def test_malformed_payload_logs_and_drops(caplog):
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         ib.client.decoder.processProtoBuf(3, b"\xff\xff\xff\xff\xff\xff\xff\xff")
     # Connection survives, exception is logged but not propagated.
-    assert any("Error decoding" in rec.message for rec in caplog.records)
+    assert "Error decoding protobuf msg 3 (" in caplog.text

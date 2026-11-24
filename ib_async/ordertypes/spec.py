@@ -386,7 +386,7 @@ def checkTagParams(owner: str, params: tuple[Param, ...], field: str) -> None:
     stray = [p.name for p in params if not p.tag or p.field != field]
     if stray:
         raise ValueError(f"{owner}: not tag values of {field}: {', '.join(stray)}")
-    checkUnique(f"{owner} tags", (p.tag for p in params))
+    checkUnique(f"{owner} tags", [p.tag for p in params])
 
 
 @dataclass(frozen=True, slots=True)
@@ -418,7 +418,7 @@ class OrderTypeSpec:
         )
         if core:
             raise ValueError(f"{self.className}: build sets {', '.join(core)}")
-        checkUnique(f"{self.className} parameters", (p.name for p in self.params))
+        checkUnique(f"{self.className} parameters", [p.name for p in self.params])
         checkUnique(
             f"{self.className} fields",
             [p.field for p in self.params if not p.tag]
@@ -439,7 +439,7 @@ class OrderTypeSpec:
 
     @property
     def requiredFields(self) -> frozenset[str]:
-        return frozenset(p.field for p in self.params if p.required)
+        return frozenset([p.field for p in self.params if p.required])
 
 
 @dataclass(frozen=True, slots=True)
@@ -635,20 +635,20 @@ def build(
         if overlap:
             raise OrderTypeError(
                 f"{m.title} cannot also set "
-                + "; ".join(f"{field} ({setBy[field]})" for field in overlap)
+                + "; ".join([f"{field} ({setBy[field]})" for field in overlap])
             )
         setBy |= dict.fromkeys(m.orderFields, f"{m.title} sets it")
     clash = sorted(set(extra) & set(setBy))
     if clash:
         raise OrderTypeError(
             f"{owner} cannot also take "
-            + "; ".join(f"{field} ({setBy[field]})" for field in clash)
+            + "; ".join([f"{field} ({setBy[field]})" for field in clash])
         )
     given = coerced(owner, spec.params, values)
     required(owner, spec.params, given)
     params = {p.name: p for p in spec.params}
     for group in spec.exactlyOne:
-        if sum(params[name].given(given[name]) for name in group) != 1:
+        if sum([params[name].given(given[name]) for name in group]) != 1:
             raise OrderTypeError(f"{owner} needs exactly one of {', '.join(group)}")
     built = {
         "orderType": spec.orderType,

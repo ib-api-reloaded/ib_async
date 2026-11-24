@@ -350,7 +350,7 @@ class RequestSimulation(RuleBasedStateMachine):
                 self._answered(ask)
         self.tws.run()
         self.callers_in_expected_state()
-        assert all(s.task.done() for s in self.started)
+        assert all([s.task.done() for s in self.started])
         requests = self.tws.wrapper.requests
         assert len(requests) == 0
         for ask in self.tws.asks:

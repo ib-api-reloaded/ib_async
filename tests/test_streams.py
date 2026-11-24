@@ -78,7 +78,7 @@ def test_the_bases_group_what_kinds_share() -> None:
     tws.ib.reqRealTimeBars(CONTRACT, 5, "TRADES", False)
     tws.run()
     streams = tws.ib.streams().values()
-    assert all(isinstance(s, ContractStream) for s in streams)
+    assert all([isinstance(s, ContractStream) for s in streams])
     tickers = [s for s in streams if isinstance(s, TickerStream)]
     assert len(tickers) == 3 and len({id(s.ticker) for s in tickers}) == 1
 

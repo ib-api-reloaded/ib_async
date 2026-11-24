@@ -78,12 +78,12 @@ class Tally:
 
 # The Tally fields that are plain counts, copied as they are.
 _COUNTS = tuple(
-    f.name for f in dataclasses.fields(Tally) if f.name not in ("errors", "warnings")
+    [f.name for f in dataclasses.fields(Tally) if f.name not in ("errors", "warnings")]
 )
 
 
 def _codeCounts(counts: dict[int, int]) -> tuple[CodeCount, ...]:
-    return tuple(CodeCount(code, counts[code]) for code in sorted(counts))
+    return tuple([CodeCount(code, counts[code]) for code in sorted(counts)])
 
 
 @dataclass(frozen=True, slots=True)

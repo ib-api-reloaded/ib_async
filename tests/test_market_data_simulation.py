@@ -372,7 +372,7 @@ class MarketDataSimulation(RuleBasedStateMachine):
         cancels = self.tws.cancels
         assert len(cancels) == len(set(cancels)), cancels
         snapshotReqIds = {s.ask.reqId for s in self.streams if s.kind == SNAPSHOT}
-        assert not any(reqId in snapshotReqIds for _, reqId in cancels)
+        assert not snapshotReqIds & {reqId for _, reqId in cancels}
 
     @invariant()
     def ended_tickers_are_done(self) -> None:

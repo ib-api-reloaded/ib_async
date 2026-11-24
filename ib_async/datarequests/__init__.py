@@ -25,7 +25,7 @@ from .generated import DurationUnit
 from .generated import __all__ as _generated
 
 _DURATION = re.compile(
-    rf"[1-9][0-9]* ({'|'.join(unit.value for unit in DurationUnit)})"
+    rf"[1-9][0-9]* ({'|'.join([unit.value for unit in DurationUnit])})"
 )
 
 
@@ -35,7 +35,9 @@ def checkDuration(durationStr: str) -> str:
     ``'30 D'``. Raises ValueError otherwise, saying what IBKR expects,
     instead of IBKR refusing the request later."""
     if not _DURATION.fullmatch(durationStr):
-        units = ", ".join(f"{unit.value} {unit.name.lower()}" for unit in DurationUnit)
+        units = ", ".join(
+            [f"{unit.value} {unit.name.lower()}" for unit in DurationUnit]
+        )
         raise ValueError(
             f"durationStr is a positive whole number, a space and a unit "
             f"({units}), such as '30 D' or '1 Y'; not {durationStr!r}"

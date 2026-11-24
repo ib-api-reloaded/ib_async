@@ -269,7 +269,7 @@ def test_orderStatus_unknown_orderId_logs_and_does_not_raise(caplog):
             clientId=0,
             whyHeld="",
         )
-    assert any("No order found" in rec.message for rec in caplog.records)
+    assert "No order found" in caplog.text
 
 
 def test_orderStatus_lastFillPrice_reflects_most_recent_not_aggregate():
@@ -681,8 +681,8 @@ def test_oca_group_ids_round_trip_on_each_order():
         ibi.LimitOrder("BUY", 1, 98),
     ]
     out = ib.oneCancelsAll(orders, "OCA-X", 2)
-    assert all(o.ocaGroup == "OCA-X" for o in out)
-    assert all(o.ocaType == 2 for o in out)
+    assert [o.ocaGroup for o in out] == ["OCA-X"] * 3
+    assert [o.ocaType for o in out] == [2] * 3
     assert out is orders
 
 
@@ -742,15 +742,17 @@ def test_fills_aggregate_invariants_match_orderStatus_after_lifecycle():
     assert trade.orderStatus.status == "Filled"
     assert trade.filled() == Decimal(50)
     assert trade.remaining() == Decimal(0)
-    assert all(
-        f.commissionReport.commissionAndFees == Decimal("0.5") for f in trade.fills
-    )
+    assert [f.commissionReport.commissionAndFees for f in trade.fills] == [
+        Decimal("0.5")
+    ] * len(fills)
     # All fills carry the same permId — the wire's link from the
     # execution back to the order. Here we asserted on
     # ``trade.orderStatus.permId`` (set on the orderStatus callback)
     # rather than ``trade.order.permId`` because this lifecycle did
     # not include an ``openOrder`` callback to mutate the latter.
-    assert all(f.execution.permId == trade.orderStatus.permId for f in trade.fills)
+    assert [f.execution.permId for f in trade.fills] == [
+        trade.orderStatus.permId
+    ] * len(fills)
 
 
 def test_a_bag_fill_keeps_the_legs_of_its_order():

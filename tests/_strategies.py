@@ -39,9 +39,12 @@ def orderField(
 
 
 SCALAR_FIELDS = sorted(
-    name
-    for name in ORDER_FIELD_TYPES
-    if name not in NOT_ON_THE_WIRE and name in Order_pb2.Order.DESCRIPTOR.fields_by_name
+    [
+        name
+        for name in ORDER_FIELD_TYPES
+        if name not in NOT_ON_THE_WIRE
+        and name in Order_pb2.Order.DESCRIPTOR.fields_by_name
+    ]
 )
 
 

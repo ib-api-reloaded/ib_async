@@ -263,7 +263,7 @@ class RegistryModel(RuleBasedStateMachine):
         self.registry_matches_model()
         self.callers_match_model()
         assert len(self.reg) == 0 and not self.reg._owed
-        assert all(caller.future.done() for caller in self.callers)
+        assert all([caller.future.done() for caller in self.callers])
 
 
 TestRegistryModel = RegistryModel.TestCase

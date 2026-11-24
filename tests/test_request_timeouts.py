@@ -190,5 +190,5 @@ def test_startup_requests_that_time_out_are_reported_by_name(
     clock.advance(2.1)
     assert connecting.result() is session.ib
     assert [request.name for request in timedOut] == [*startup, "executions"]
-    assert all(request.timeout == 2 for request in timedOut)
+    assert {request.timeout for request in timedOut} == {2}
     assert session.ib.runtimeState().counters.requestsTimedOut == len(timedOut)

@@ -204,7 +204,7 @@ def bar(
 ) -> RealTimeBar:
     """The bar expected at ``seconds``; prices as the Decimals they read as."""
     open_, high, low, close = (
-        (Decimal(p) for p in ohlc) if ohlc else (None, None, None, None)
+        [Decimal(p) for p in ohlc] if ohlc else [None, None, None, None]
     )
     return RealTimeBar(
         _at(seconds), open_, high, low, close, Decimal(volume), wap, count

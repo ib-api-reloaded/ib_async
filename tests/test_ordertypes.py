@@ -609,7 +609,7 @@ def test_the_catalog_refers_only_to_what_exists():
     for algo in ordertypes.ALGOS:
         assert set(algo.orderTypes) <= set(codes), algo.className
         assert {c.field for c in algo.conditions} <= set(fields), algo.className
-        assert all(p.field == "algoParams" for p in algo.params), algo.className
+        assert all([p.field == "algoParams" for p in algo.params]), algo.className
     assert set(ordertypes.spec.ADJUSTABLE) <= set(codes)
     assert set(ordertypes.SERVER_FILLED) <= set(fields)
 

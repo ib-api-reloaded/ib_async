@@ -127,9 +127,9 @@ def _():
 
 @app.cell
 def _(chains):
-    chain = next(
+    [chain] = [
         _c for _c in chains if _c.tradingClass == "SPX" and _c.exchange == "SMART"
-    )
+    ]
     chain
     return (chain,)
 
@@ -227,7 +227,7 @@ def _():
 async def _(ib):
     _details = await ib.reqContractDetailsAsync(Future("ES", exchange="CME"))
     es = min(
-        (_d.contract for _d in _details if _d.contract),
+        [_d.contract for _d in _details if _d.contract],
         key=lambda _c: _c.lastTradeDateOrContractMonth,
     )
     es
@@ -265,11 +265,11 @@ async def _(es, esStrikes, ib):
     ib.reqMarketDataType(4)  # delayed frozen, as for SPX above
     [_ticker] = await ib.reqTickersAsync(es)
     _price = _ticker.marketPrice() or _ticker.close
-    esChain = next(
+    esChain = [
         _c
         for _c in esStrikes
         if _c.underlyingConId == es.conId and _c.tradingClass == "ES"
-    )
+    ][0]
     esNearest = sorted(esChain.strikes, key=lambda _s: abs(_s - _price))[:5]
     esChain.expiration, sorted(esNearest)
     return esChain, esNearest

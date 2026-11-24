@@ -93,7 +93,7 @@ def test_a_connection_is_described_and_its_traffic_counted() -> None:
     assert connection.accounts == ("DU1",)
     transport = state.transport
     assert transport.framesSent == len(session.conn.sent)
-    assert transport.bytesSent == sum(len(f) for f in session.conn.sent)
+    assert transport.bytesSent == sum([len(f) for f in session.conn.sent])
     # The handshake, nextValidId and managedAccounts.
     assert transport.framesReceived == 3
     c = state.counters
@@ -193,9 +193,9 @@ def test_each_subscription_is_counted_by_kind_and_by_how_it_ends() -> None:
     )
     assert tickByTick is ib.ticker(STOCK)
 
-    reqId = next(
+    [reqId] = [
         sub.reqId for sub in ib.wrapper.subscriptions if isinstance(sub, TickByTickSub)
-    )
+    ]
     session.receive(errorFrame(reqId, 354, "not subscribed", True))
     ib.cancelMktDepth(STOCK)
     c = ib.runtimeState().counters

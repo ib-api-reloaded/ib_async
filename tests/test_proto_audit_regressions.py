@@ -384,7 +384,7 @@ def test_process_proto_buf_unknown_msg_id_emits_debug_log(caplog):
     ib = ibi.IB()
     with caplog.at_level(logging.DEBUG, logger="ib_async.Decoder"):
         ib.client.decoder.processProtoBuf(999, b"abc")
-    assert any("999" in rec.message for rec in caplog.records)
+    assert "protobuf msg 999, 3 bytes (no handler)" in caplog.text
 
 
 def test_process_proto_buf_malformed_bytes_does_not_raise():
@@ -405,7 +405,7 @@ def test_process_proto_buf_malformed_bytes_logs_exception(caplog):
     ib = ibi.IB()
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         ib.client.decoder.processProtoBuf(5, b"\xff\xff\xff\xff\xff\xff\xff\xff")
-    assert any("5" in rec.message for rec in caplog.records)
+    assert "Error decoding protobuf msg 5 (" in caplog.text
 
 
 def test_proto_tick_by_tick_empty_oneof_is_dropped():
@@ -4970,7 +4970,7 @@ def test_interpret_truncated_binary_frame_does_not_raise(caplog):
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         ib.client.decoder.interpret(["47", "1", "42", "38"])
     # The exception path was taken — the log carries the failing field list.
-    assert any("47" in rec.message for rec in caplog.records)
+    assert "fields=['47', '1', '42', '38']" in caplog.text
 
 
 def test_interpret_oversized_binary_frame_absorbs_silently():
@@ -5034,7 +5034,7 @@ def test_interpret_wrong_type_binary_field_caught(caplog):
                 "2.50",
             ]
         )
-    assert any("tickEFP" in rec.message for rec in caplog.records)
+    assert "Error for tickEFP with fields=" in caplog.text
 
 
 def test_interpret_unknown_binary_msg_id_does_not_raise(caplog):
@@ -5045,7 +5045,7 @@ def test_interpret_unknown_binary_msg_id_does_not_raise(caplog):
     ib = ibi.IB()
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         ib.client.decoder.interpret(["9999", "1", "stuff"])
-    assert any("9999" in rec.message for rec in caplog.records)
+    assert "Error handling fields: ['9999', '1', 'stuff']" in caplog.text
 
 
 def test_interpret_non_numeric_msg_id_does_not_raise(caplog):
@@ -5056,7 +5056,7 @@ def test_interpret_non_numeric_msg_id_does_not_raise(caplog):
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         ib.client.decoder.interpret(["NOT_A_NUMBER", "1", "x"])
     # Logged as expected, connection survives.
-    assert any("NOT_A_NUMBER" in rec.message for rec in caplog.records)
+    assert "Error handling fields: ['NOT_A_NUMBER', '1', 'x']" in caplog.text
 
 
 def test_interpret_empty_fields_list_does_not_raise(caplog):
@@ -5110,10 +5110,7 @@ def test_process_proto_buf_empty_payload_logs_no_error(caplog):
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         ib.client.decoder.processProtoBuf(4, b"")
     # Empty payload parses cleanly: no decoder-level error log.
-    assert not any(
-        rec.levelno >= logging.ERROR and "Error decoding" in rec.message
-        for rec in caplog.records
-    )
+    assert "Error decoding" not in caplog.text
 
 
 def test_process_proto_buf_oversized_payload_round_trips():
@@ -5136,7 +5133,7 @@ def test_process_proto_buf_oversized_payload_round_trips():
 
     ib.client.decoder.processProtoBuf(4, junk)
     # The handler still got called with the recognised fields.
-    assert any(call[0] == 7 and call[1] == 200 for call in captured)
+    assert [call[:2] for call in captured] == [(7, 200)]
 
 
 def test_process_proto_buf_binary_frame_routed_as_proto_logs(caplog):
@@ -5148,7 +5145,7 @@ def test_process_proto_buf_binary_frame_routed_as_proto_logs(caplog):
     binary_frame = b"4\x001\x002\x00200\x00message\x00"
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         ib.client.decoder.processProtoBuf(4, binary_frame)
-    assert any("Error decoding" in rec.message for rec in caplog.records)
+    assert "Error decoding protobuf msg 4 (" in caplog.text
 
 
 def test_process_proto_buf_malformed_does_not_wedge_other_msgids():

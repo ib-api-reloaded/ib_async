@@ -150,7 +150,7 @@ def _loopHygiene(request: pytest.FixtureRequest) -> Iterator[None]:
             pytest.fail(
                 f"the test left {len(left)} task(s) pending on the shared loop, "
                 "where they run on into later tests:\n"
-                + "\n".join(repr(task) for task in left),
+                + "\n".join([repr(task) for task in left]),
                 pytrace=False,
             )
 

@@ -65,7 +65,7 @@ def paramType(param: Param) -> str:
         base = f"Sequence[{QUANTITY}]"
     elif param.tag:
         base = (
-            "Literal[" + ", ".join(repr(v) for v in param.allowed) + "]"
+            "Literal[" + ", ".join([repr(v) for v in param.allowed]) + "]"
             if param.allowed
             else KIND_TYPES[param.kind]
         )
@@ -122,12 +122,12 @@ def typeFacts(spec: OrderTypeSpec, mark: Mark) -> list[str]:
     if spec.definingFields:
         facts.append(
             "Sets "
-            + ", ".join(mark(f"{k}={v!r}") for k, v in spec.definingFields.items())
+            + ", ".join([mark(f"{k}={v!r}") for k, v in spec.definingFields.items()])
         )
     if spec.exactlyOne:
         facts.append(
             "Exactly one of "
-            + "; ".join(", ".join(mark(n) for n in g) for g in spec.exactlyOne)
+            + "; ".join([", ".join([mark(n) for n in g]) for g in spec.exactlyOne])
         )
     if spec.products:
         facts.append(f"Products: {', '.join(spec.products)}")
@@ -175,7 +175,7 @@ def docstringOf(parts: list[str]) -> str:
     """The docstring of ``parts`` (paragraphs; one with a line break is
     kept as is), indented for a function body."""
     body = "\n\n".join(
-        "\n".join(textwrap.wrap(p, 76)) if "\n" not in p else p for p in parts
+        ["\n".join(textwrap.wrap(p, 76)) if "\n" not in p else p for p in parts]
     )
     return textwrap.indent(f'"""\n{body}\n"""', "    ").lstrip()
 
@@ -185,7 +185,7 @@ def docstring(spec: OrderTypeSpec) -> str:
     if spec.usage:
         parts.append(spec.usage)
     facts = [*typeFacts(spec, plain), f"Stability: {spec.stability}"]
-    parts.append(" ".join(f"{fact}." for fact in facts))
+    parts.append(" ".join([f"{fact}." for fact in facts]))
     if spec.params:
         parts.append(argsBlock(spec.params))
     parts.append(f"Example::\n\n    {spec.className}({spec.example})")
@@ -193,7 +193,7 @@ def docstring(spec: OrderTypeSpec) -> str:
 
 
 def functionSource(spec: OrderTypeSpec) -> str:
-    values = ", ".join(f'"{p.name}": {p.name}' for p in spec.params)
+    values = ", ".join([f'"{p.name}": {p.name}' for p in spec.params])
     return f'''
 
 def {spec.className}(
@@ -218,14 +218,14 @@ def algoName(spec: AlgoSpec) -> str:
 def condition(field: str, allowed: tuple[object, ...], mark: Mark) -> str:
     if len(allowed) == 1:
         return mark(f"{field}={allowed[0]!r}")
-    return f"{mark(field)} one of " + ", ".join(mark(repr(v)) for v in allowed)
+    return f"{mark(field)} one of " + ", ".join([mark(repr(v)) for v in allowed])
 
 
 def algoDocstring(spec: AlgoSpec) -> str:
     parts = [f"{algoName(spec)}: {spec.summary}"]
     if spec.usage:
         parts.append(spec.usage)
-    parts.append(" ".join(f"{fact}." for fact in algoFacts(spec, plain)))
+    parts.append(" ".join([f"{fact}." for fact in algoFacts(spec, plain)]))
     if spec.params:
         parts.append(argsBlock(spec.params))
     parts.append(f"Example::\n\n    {algoExample(spec)}")
@@ -233,7 +233,7 @@ def algoDocstring(spec: AlgoSpec) -> str:
 
 
 def algoSource(spec: AlgoSpec) -> str:
-    values = ", ".join(f'"{p.name}": {p.name}' for p in spec.params)
+    values = ", ".join([f'"{p.name}": {p.name}' for p in spec.params])
     params = "\n".join(parameters(spec.params))
     return f'''
 
@@ -246,7 +246,7 @@ def {spec.className}(
 
 
 def routingSource() -> str:
-    values = ", ".join(f'"{p.name}": {p.name}' for p in COMBO_ROUTING)
+    values = ", ".join([f'"{p.name}": {p.name}' for p in COMBO_ROUTING])
     params = "\n".join(parameters(COMBO_ROUTING))
     doc = docstringOf(
         [
@@ -270,7 +270,7 @@ def ComboRouting(
 
 def module() -> str:
     names = sorted(
-        [*(s.className for s in CATALOG), *(a.className for a in ALGOS), "ComboRouting"]
+        [s.className for s in CATALOG] + [a.className for a in ALGOS] + ["ComboRouting"]
     )
     header = (
         '''"""The order type and algo constructors, generated from ``catalog.py``
@@ -294,13 +294,13 @@ from .spec import Adjustment, Algo, Routing, build, buildAlgo, buildRouting
 
 __all__ = [
 '''
-        + "".join(f'    "{name}",\n' for name in names)
+        + "".join([f'    "{name}",\n' for name in names])
         + "]\n"
     )
     return generating.formatted(
         header
-        + "".join(functionSource(spec) for spec in CATALOG)
-        + "".join(algoSource(spec) for spec in ALGOS)
+        + "".join([functionSource(spec) for spec in CATALOG])
+        + "".join([algoSource(spec) for spec in ALGOS])
         + routingSource(),
         MODULE,
     )
@@ -351,7 +351,7 @@ def docs() -> str:
     for tier, about in TIERS.items():
         title = f"{str(tier).capitalize()} order types"
         lines += [title, "-" * len(title), "", about, ""]
-        for spec in (s for s in CATALOG if s.stability == tier):
+        for spec in [s for s in CATALOG if s.stability == tier]:
             heading = f"{spec.title} (``{spec.orderType}``)"
             lines += [heading, "^" * len(heading), "", spec.summary, ""]
             if spec.usage:
@@ -380,7 +380,7 @@ def docs() -> str:
                     ]
                 lines.append("")
             facts = typeFacts(spec, literal)
-            lines += [*(f"- {fact}" for fact in facts), ""] if facts else []
+            lines += [f"- {fact}" for fact in facts] + [""] if facts else []
     lines += comboDocs()
     lines += optionsDocs()
     lines += attachedDocs()
@@ -468,7 +468,7 @@ def optionsDocs() -> list[str]:
         if option.usage:
             lines += [option.usage, ""]
         lines += [".. code-block:: python", "", f"    {option.example}", ""]
-        facts = ["Fields: " + ", ".join(f"``{f}``" for f in option.fields)]
+        facts = ["Fields: " + ", ".join([f"``{f}``" for f in option.fields])]
         if option.products:
             facts.append(f"Products: {', '.join(option.products)}")
         facts.append(f"Stability: {option.stability}")
@@ -519,7 +519,7 @@ def coverageDocs() -> list[str]:
     def codeCell(code: str) -> str:
         """The code, with its other spellings when it has any."""
         spellings = IBKR_ORDER_TYPES[code]
-        others = f" ({', '.join(f'``{s}``' for s in spellings)})" if spellings else ""
+        others = f" ({', '.join([f'``{s}``' for s in spellings])})" if spellings else ""
         return f"``{code}``{others}"
 
     def table(header: str, rows: dict[str, str]) -> list[str]:
@@ -547,7 +547,7 @@ def coverageDocs() -> list[str]:
         *table(
             "Order types",
             {
-                code: ", ".join(f"``{name}``" for name in built[code])
+                code: ", ".join([f"``{name}``" for name in built[code]])
                 for code in IBKR_ORDER_TYPES
                 if code in built
             },

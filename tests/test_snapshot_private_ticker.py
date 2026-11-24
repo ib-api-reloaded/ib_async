@@ -170,8 +170,8 @@ def test_repeated_failed_snapshots_do_not_accumulate():
 
     for _ in range(5):
         ib.reqMktData(contract, snapshot=True)
-        # Each registered sub is the most recent reqId.
-        reqId = next(iter(s.reqId for s in ib.wrapper.subscriptions))
+        # The registry holds only the snapshot just requested.
+        [reqId] = [s.reqId for s in ib.wrapper.subscriptions]
         ib.wrapper.error(reqId, 354, "not subscribed", "")
 
     assert list(ib.wrapper.subscriptions) == []

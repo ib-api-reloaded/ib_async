@@ -54,7 +54,7 @@ def _returned(function: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[str, ..
         return ()
     value = last.value
     elements = value.elts if isinstance(value, ast.Tuple) else [value]
-    return tuple(e.id for e in elements if isinstance(e, ast.Name))
+    return tuple([e.id for e in elements if isinstance(e, ast.Name)])
 
 
 def _setupNames(statement: ast.With) -> set[str]:
@@ -63,7 +63,7 @@ def _setupNames(statement: ast.With) -> set[str]:
     for node in ast.walk(statement):
         if isinstance(node, ast.Import | ast.ImportFrom):
             names.update(
-                (alias.asname or alias.name).split(".")[0] for alias in node.names
+                [(alias.asname or alias.name).split(".")[0] for alias in node.names]
             )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
             names.add(node.id)
@@ -97,7 +97,7 @@ def problems(path: Path) -> list[str]:
         elif not isinstance(statement, ast.ClassDef) and any(
             _isApp(d, "cell") for d in statement.decorator_list
         ):
-            parameters = tuple(a.arg for a in statement.args.args)
+            parameters = tuple([a.arg for a in statement.args.args])
             cells.append(Cell(statement.lineno, parameters, _returned(statement)))
 
     found: list[str] = []

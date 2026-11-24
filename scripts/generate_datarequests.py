@@ -25,7 +25,7 @@ MODULE = generating.ROOT / "ib_async" / "datarequests" / "generated.py"
 
 
 def enumSource(family: Family) -> str:
-    members = "".join(f"    {m.name} = {m.value!r}\n" for m in family.members)
+    members = "".join([f"    {m.name} = {m.value!r}\n" for m in family.members])
     return f'\n\nclass {family.name}(StrEnum):\n    """{family.doc}"""\n\n{members}'
 
 
@@ -49,12 +49,12 @@ def module() -> str:
         "generated from\n``catalog.py`` by ``scripts/generate_datarequests.py``. "
         'Do not edit: change\nthe catalog and regenerate."""\n\n'
         "from __future__ import annotations\n\nfrom enum import StrEnum\nfrom typing import Literal\n\n"
-        "__all__ = [" + ", ".join(repr(n) for n in sorted(names)) + "]\n"
+        "__all__ = [" + ", ".join([repr(n) for n in sorted(names)]) + "]\n"
     )
     source = (
         header
-        + "".join(enumSource(f) for f in FAMILIES)
-        + "".join(aliasSource(p) for p in PARAMETERS)
+        + "".join([enumSource(f) for f in FAMILIES])
+        + "".join([aliasSource(p) for p in PARAMETERS])
     )
     return generating.formatted(source, MODULE)
 

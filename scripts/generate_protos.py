@@ -132,7 +132,7 @@ def _run_protoc(source_dir: Path) -> None:
     # script run without it.
     from grpc_tools import protoc  # noqa: PLC0415
 
-    proto_files = sorted(str(p) for p in source_dir.glob("*.proto"))
+    proto_files = sorted([str(p) for p in source_dir.glob("*.proto")])
     args = [
         "protoc",
         f"--proto_path={source_dir}",

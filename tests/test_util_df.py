@@ -95,7 +95,7 @@ def test_no_objects_gives_an_empty_frame():
 
 
 def test_generator_input():
-    assert util.df(b for b in bars()).height == 2
+    assert util.df(b for b in bars()).height == 2  # generator: one-shot input
 
 
 def test_namedtuples():

@@ -418,7 +418,7 @@ async def test_owed_answers_no_longer_waited_for_are_dropped():
     for reqId in range(3):
         reg.open(ReqIdKey(reqId)).future.cancel()
     await asyncio.sleep(0)
-    assert all(reg.answering(ReqIdKey(reqId)) for reqId in range(3))
+    assert all([reg.answering(ReqIdKey(reqId)) for reqId in range(3)])
     now[0] = OWED_FOR + 1
     reg.open(ReqIdKey(3)).future.cancel()
     await asyncio.sleep(0)

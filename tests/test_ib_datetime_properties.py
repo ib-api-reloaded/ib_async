@@ -116,7 +116,7 @@ def test_short_datetimes_get_years_in_order(start, steps):
     for step in steps:
         times.append(times[-1] + dt.timedelta(seconds=step))
     short = [t.strftime("%m%d %H:%M:%S UTC") for t in times]
-    assert all(util.isIBShortDatetime(s) for s in short)
+    assert all([util.isIBShortDatetime(s) for s in short])
     placed = util.parseIBShortDatetimes(short, start=start)
     assert placed == times
     placedFromEnd = util.parseIBShortDatetimes(short, end=times[-1])

@@ -143,7 +143,7 @@ def real(value: TickerValue, *empties: TickerValue) -> TypeGuard[float]:
     if isinstance(value, bool) or not isinstance(value, float | int):
         return False
     return math.isfinite(value) and all(
-        value is not empty and value != empty for empty in empties
+        [value is not empty and value != empty for empty in empties]
     )
 
 

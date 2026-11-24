@@ -1008,9 +1008,9 @@ ALGOS: tuple[AlgoSpec, ...] = (
 # Each constructor and each strategy once, or a later one would shadow it.
 checkUnique(
     "order type and algo classes",
-    [*(s.className for s in CATALOG), *(a.className for a in ALGOS)],
+    [s.className for s in CATALOG] + [a.className for a in ALGOS],
 )
-checkUnique("algo strategies", (spec.strategy for spec in ALGOS))
+checkUnique("algo strategies", [spec.strategy for spec in ALGOS])
 # The algos by constructor name, and by strategy (to name an order's algo).
 ALGO_SPECS: dict[str, AlgoSpec] = {spec.className: spec for spec in ALGOS}
 ALGO_BY_STRATEGY: dict[str, AlgoSpec] = {spec.strategy: spec for spec in ALGOS}

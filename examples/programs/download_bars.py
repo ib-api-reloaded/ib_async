@@ -121,7 +121,7 @@ async def downloadBars(
             bars[0].date,
             bars[-1].date,
         )
-        byDate.update((bar.date, bar) for bar in bars)
+        byDate.update({bar.date: bar for bar in bars})
         end = bars[0].date
         if number < chunks:
             await asyncio.sleep(pause)

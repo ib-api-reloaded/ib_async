@@ -66,9 +66,9 @@ def encode(frame: Frame, version: int) -> bytes:
     if isinstance(rest, bytes):
         body = struct.pack(">I", PROTOBUF_MSG_ID + msgId) + rest
     elif version >= 201:
-        body = struct.pack(">I", msgId) + "".join(f + "\0" for f in rest).encode()
+        body = struct.pack(">I", msgId) + "".join([f + "\0" for f in rest]).encode()
     else:
-        body = "".join(f + "\0" for f in [str(msgId), *rest]).encode()
+        body = "".join([f + "\0" for f in [str(msgId), *rest]]).encode()
     return struct.pack(">I", len(body)) + body
 
 
@@ -105,7 +105,7 @@ def test_new_framing_is_independent_of_chunking(
     frames: list[Frame], cuts: list[int]
 ) -> None:
     c, decoder = client(NEW_FRAMING)
-    data = b"".join(encode(f, NEW_FRAMING) for f in frames)
+    data = b"".join([encode(f, NEW_FRAMING) for f in frames])
     for chunk in chunks(data, cuts):
         c._onSocketHasData(chunk)
     assert decoder.frames == [expected(f) for f in frames]
@@ -124,7 +124,7 @@ def test_old_framing_is_independent_of_chunking(
     frames: list[Frame], cuts: list[int]
 ) -> None:
     c, decoder = client(OLD_FRAMING)
-    data = b"".join(encode(f, OLD_FRAMING) for f in frames)
+    data = b"".join([encode(f, OLD_FRAMING) for f in frames])
     for chunk in chunks(data, cuts):
         c._onSocketHasData(chunk)
     assert decoder.frames == [expected(f) for f in frames]
@@ -138,7 +138,7 @@ def test_partial_frame_is_kept_until_complete(frames: list[Frame]) -> None:
     """The client keeps the bytes of an incomplete frame and does not decode
     it until the rest arrives."""
     c, decoder = client(NEW_FRAMING)
-    data = b"".join(encode(f, NEW_FRAMING) for f in frames)
+    data = b"".join([encode(f, NEW_FRAMING) for f in frames])
     head, tail = data[: len(data) - 1], data[len(data) - 1 :]
     c._onSocketHasData(head)
     assert len(decoder.frames) == len(frames) - 1

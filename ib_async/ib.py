@@ -224,7 +224,9 @@ def _optionSearches(underlying: Contract, months: Sequence[str]) -> list[Contrac
         raise ValueError(
             "reqOptionStrikes needs at least one month, YYYYMM or YYYYMMDD"
         )
-    if not all(isinstance(m, str) and m.isdigit() and len(m) in (6, 8) for m in months):
+    if not all(
+        [isinstance(m, str) and m.isdigit() and len(m) in (6, 8) for m in months]
+    ):
         raise ValueError(f"months are YYYYMM or YYYYMMDD strings, not {months!r}")
     if secType == "FOP" and not underlying.exchange:
         raise ValueError("a future's options need the future's exchange, such as CME")
@@ -1098,8 +1100,10 @@ class IB(Generic[EmptyT]):
             sub.bars for sub in self.wrapper.subscriptions.subs_of_type(RealTimeBarsSub)
         ]
         result.extend(
-            sub.bars
-            for sub in self.wrapper.subscriptions.subs_of_type(HistoricalBarsSub)
+            [
+                sub.bars
+                for sub in self.wrapper.subscriptions.subs_of_type(HistoricalBarsSub)
+            ]
         )
         return result
 

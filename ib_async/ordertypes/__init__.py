@@ -72,9 +72,9 @@ def specsOf(order: Order) -> list[OrderTypeSpec]:
         [
             spec
             for spec in _sameKind(order)
-            if all(isSet(f, getattr(order, f)) for f in spec.requiredFields)
+            if all([isSet(f, getattr(order, f)) for f in spec.requiredFields])
             and all(
-                _takes(p, getattr(order, p.field)) for p in spec.params if p.required
+                [_takes(p, getattr(order, p.field)) for p in spec.params if p.required]
             )
         ]
     )
@@ -110,7 +110,7 @@ def _sameKind(order: Order) -> list[OrderTypeSpec]:
         spec
         for spec in CATALOG
         if spec.orderType == baseOrderType(order)
-        and all(getattr(order, d.field) == d.value for d in spec.defining)
+        and all([getattr(order, d.field) == d.value for d in spec.defining])
     ]
 
 

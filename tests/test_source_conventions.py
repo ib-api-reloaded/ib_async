@@ -11,14 +11,18 @@ import pytest
 import ib_async
 
 PACKAGE = Path(__file__).resolve().parent.parent / "ib_async"
-MODULES = sorted(p for p in PACKAGE.rglob("*.py") if "_pb" not in p.parts)
+MODULES = sorted([p for p in PACKAGE.rglob("*.py") if "_pb" not in p.parts])
 # Every Python file in the repository that is linted: the library, its
 # scripts, examples and tests.
 SOURCES = MODULES + sorted(
-    p
-    for folder in ("scripts", "examples", "tests")
-    for p in (PACKAGE.parent / folder).rglob("*.py")
+    [
+        p
+        for folder in ("scripts", "examples", "tests")
+        for p in (PACKAGE.parent / folder).rglob("*.py")
+    ]
 )
+# The comment that keeps a generator expression, with the reason after it.
+GENERATOR_REASON = "# generator:"
 
 
 @pytest.mark.parametrize(
@@ -156,6 +160,42 @@ def test_text_files_are_read_and_written_as_utf8(path: Path) -> None:
         if textMethod or textOpen:
             unnamed.append(f"{ast.unparse(func)} (line {node.lineno})")
     assert not unnamed, f"no encoding named: {', '.join(unnamed)}"
+
+
+@pytest.mark.parametrize(
+    "path", SOURCES, ids=lambda p: str(p.relative_to(PACKAGE.parent))
+)
+def test_finite_data_is_built_with_list_comprehensions(path: Path) -> None:
+    """A comprehension that is evaluated whole is a list comprehension, also
+    inside ``all``, ``join``, ``tuple`` and the like. ``any`` takes a
+    generator, since it stops at the first true item. Any other generator
+    expression consumes an unbounded stream, and its line says why with a
+    ``# generator:`` comment."""
+    source = path.read_text(encoding="utf-8")
+    lines = source.splitlines()
+    tree = ast.parse(source, str(path))
+    anyArgs = {
+        id(node.args[0]): node.args[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "any"
+        and len(node.args) == 1
+    }
+    listInAny = [
+        f"line {arg.lineno}"
+        for arg in anyArgs.values()
+        if isinstance(arg, ast.ListComp)
+    ]
+    unexplained = [
+        f"line {node.lineno}"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.GeneratorExp)
+        and id(node) not in anyArgs
+        and GENERATOR_REASON not in lines[node.lineno - 1]
+    ]
+    assert not listInAny, f"any() over a list comprehension: {', '.join(listInAny)}"
+    assert not unexplained, f"generator expressions: {', '.join(unexplained)}"
 
 
 def test_importing_ib_async_patches_no_class():

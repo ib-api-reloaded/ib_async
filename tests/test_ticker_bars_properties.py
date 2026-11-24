@@ -63,8 +63,8 @@ def priced(stream):
 def barOf(time: datetime, group) -> RealTimeBar:
     """The reference bar for a group of priced ticks."""
     ps = [p for _, p, _ in group]
-    volume = sum((z for _, _, z in group), Decimal(0))
-    wap = sum((p * z for _, p, z in group), Decimal(0)) / volume if volume else None
+    volume = sum([z for _, _, z in group], Decimal(0))
+    wap = sum([p * z for _, p, z in group], Decimal(0)) / volume if volume else None
     return RealTimeBar(time, ps[0], max(ps), min(ps), ps[-1], volume, wap, len(group))
 
 
@@ -99,7 +99,7 @@ def test_tick_bars_group_by_count(stream, count, maxBars):
     kept = emitted if maxBars is None else emitted[-maxBars:]
     inProgress = groups[-1:] if groups and len(groups[-1]) < count else []
     assert len(tickBars.bars) == len(kept) + len(inProgress)
-    assert all(a is b for a, b in zip(tickBars.bars, kept, strict=False))
+    assert all([a is b for a, b in zip(tickBars.bars, kept, strict=False)])
     for bar in emitted:
         assert isinstance(bar, RealTimeBar) and bar.count == count
 
@@ -115,7 +115,7 @@ def test_volume_bar_completes_at_volume(stream, volume):
     groups: list[list] = [[]]
     for tick in priced(stream):
         groups[-1].append(tick)
-        if sum((z for _, _, z in groups[-1]), Decimal(0)) >= volume:
+        if sum([z for _, _, z in groups[-1]], Decimal(0)) >= volume:
             groups.append([])
     complete = groups[:-1]
     assert len(emitted) == len(complete)
