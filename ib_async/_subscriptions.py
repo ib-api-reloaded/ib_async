@@ -163,9 +163,8 @@ class MktDataSub(Subscription, Generic[EmptyT]):
 
     A streaming subscription's :class:`Ticker` is shared per contract by
     mktData, tickByTick and mktDepth, so it is *not* set done on close:
-    other subscriptions on the same contract may still be active. A
-    snapshot has its own Ticker, which is set done when the snapshot ends
-    because nothing will update it again.
+    other subscriptions on the same contract may still be active. Snapshots
+    and independently owned streams each have a private Ticker.
     """
 
     KIND: ClassVar[str | None] = "mktData"
@@ -173,6 +172,11 @@ class MktDataSub(Subscription, Generic[EmptyT]):
     ticker: Ticker[EmptyT] = None  # type: ignore[assignment]
     snapshot: bool = False
     genericTickList: str = ""
+    independent: bool = False
+
+    @property
+    def privateTicker(self) -> bool:
+        return self.snapshot or self.independent
 
     def stream(self) -> MarketDataStream[EmptyT] | SnapshotStream[EmptyT]:
         if self.snapshot:
@@ -186,7 +190,7 @@ class MktDataSub(Subscription, Generic[EmptyT]):
             client.cancelMktData(self.reqId)
 
     def _set_done(self) -> None:
-        if self.snapshot and self.ticker is not None:
+        if self.privateTicker and self.ticker is not None:
             self.ticker.updateEvent.set_done()
 
 
@@ -463,7 +467,7 @@ class SubscriptionRegistry(Generic[EmptyT]):
         snapshot's Ticker is private, and its contract may be unqualified,
         which has no hash."""
         if isinstance(sub, MktDataSub):
-            if sub.snapshot:
+            if sub.privateTicker:
                 return None
         elif not isinstance(sub, TickByTickSub | MktDepthSub):
             return None
@@ -560,27 +564,9 @@ class SubscriptionRegistry(Generic[EmptyT]):
             self._tickers[key] = ticker
         return ticker
 
-    def new_snapshot_ticker(self, contract: Contract) -> Ticker[EmptyT]:
-        """Allocate a fresh, *unpooled* :class:`Ticker` for a one-shot snapshot.
-
-        Unlike :meth:`get_or_create_ticker`, the returned Ticker is **not**
-        stored in the per-contract pool. A snapshot is a point-in-time read
-        whose lifecycle ends at ``tickSnapshotEnd``; giving it a private
-        Ticker means it:
-
-          * starts clean — it can never hand back scalar prices left over
-            from a *prior* snapshot of the same contract, and
-          * is isolated — it can never blank, nor be blanked by, a
-            concurrent streaming / tick-by-tick / market-depth consumer that
-            shares the contract's pooled Ticker.
-
-        The snapshot Ticker is reachable only through the ``reqId`` index
-        (``_ticker_by_reqid``) while its subscription is live, so tick
-        dispatch still routes the snapshot's ticks to it. It drops out of
-        every registry index when that subscription closes (on
-        ``tickSnapshotEnd`` or teardown); thereafter only the caller holds
-        it.
-        """
+    def new_private_ticker(self, contract: Contract) -> Ticker[EmptyT]:
+        """An empty Ticker for a snapshot or an independent stream. Only
+        ticks for its request ID update it; it never enters the contract pool."""
 
         # Hard runtime check — mirrors :meth:`get_or_create_ticker`; an
         # ``assert`` would vanish under ``python -O``.
@@ -767,9 +753,8 @@ class SubscriptionRegistry(Generic[EmptyT]):
         ``by_market_data_key`` (the ``(identity, kind)`` dedup index) but
         still places it in ``by_reqid`` and ``ticker_by_reqid``. That is
         the right behaviour for non-market-data subscriptions and for a
-        snapshot :class:`MktDataSub` — concurrent snapshots for the same
-        contract are legitimate (each call is its own one-shot), so they
-        must not dedup against each other.
+        snapshot or independently owned :class:`MktDataSub` — each call
+        has its own wire request, even on the same contract.
 
         Whether the *contract* is indexable at all (qualified, or a bag
         with a stable synthetic identity) is decided separately by
@@ -784,7 +769,7 @@ class SubscriptionRegistry(Generic[EmptyT]):
         if isinstance(sub, TickByTickSub):
             return sub.tickType or None
         if isinstance(sub, MktDataSub):
-            return None if sub.snapshot else "mktData"
+            return None if sub.privateTicker else "mktData"
         if isinstance(sub, MktDepthSub):
             return type(sub).KIND
         return None

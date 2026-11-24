@@ -8,7 +8,7 @@ read ``ticker.last`` / ``ticker.marketPrice()`` in the window before
 snapshot of the same contract — silently stale data.
 
 The fix gives every snapshot a private, unpooled Ticker
-(:meth:`SubscriptionRegistry.new_snapshot_ticker`):
+(:meth:`SubscriptionRegistry.new_private_ticker`):
 
   * it starts clean, so a racing read sees the unset sentinel
     (``Ticker.isUnset`` — ``None`` or the configured ``IBDefaults.unset``)

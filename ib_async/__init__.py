@@ -35,7 +35,13 @@ from .datarequests import checkDuration
 from .datarequests.generated import *  # noqa: F403  (data request value types)
 from .depth import DepthBook, DepthOperation
 from .flexreport import FlexError, FlexReport
-from .ib import IB, StartupFetch, StartupFetchALL, StartupFetchNONE
+from .ib import (
+    IB,
+    MarketDataSubscription,
+    StartupFetch,
+    StartupFetchALL,
+    StartupFetchNONE,
+)
 from .ibcontroller import IBC, Watchdog
 from .objects import (
     AccountValue,
@@ -175,6 +181,7 @@ __all__ = [
     "FlexError",
     "FlexReport",
     "IB",
+    "MarketDataSubscription",
     "IBDefaults",
     "OrderStateNumeric",
     "IBC",

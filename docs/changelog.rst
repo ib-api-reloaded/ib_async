@@ -35,6 +35,10 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 
 **Added**
 
+* ``IB.reqMktDataSubscription(contract)`` requests a separate streaming
+  ticker on the same connection. Close the returned handle to cancel
+  just that request. Ordinary ``reqMktData`` still shares its ticker.
+
 * **Protobuf wire protocol** alongside the legacy binary path. The
   client emits protobuf for messages whose gate the negotiated TWS /
   IB Gateway server version supports; falls back to binary below the

@@ -61,15 +61,15 @@ class ContractStream(Stream):
 @dataclass(frozen=True, slots=True)
 class TickerStream(ContractStream, Generic[EmptyT]):
     """A stream that fills a Ticker: market data, a snapshot, tick-by-tick
-    or market depth. A streaming Ticker is shared by the instrument's
-    streams; a snapshot has its own."""
+    or market depth. Ordinary streams share a Ticker per instrument;
+    snapshots and independently owned streams have their own."""
 
     ticker: Ticker[EmptyT] = field(compare=False, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
 class MarketDataStream(TickerStream[EmptyT]):
-    """``IB.reqMktData``."""
+    """``IB.reqMktData`` or ``IB.reqMktDataSubscription``."""
 
 
 @dataclass(frozen=True, slots=True)

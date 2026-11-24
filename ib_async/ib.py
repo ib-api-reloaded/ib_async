@@ -110,6 +110,27 @@ def _tagValueList(options: Sequence[TagValue]) -> list[TagValue]:
     return list(options)
 
 
+@dataclass(frozen=True, slots=True, eq=False, repr=False)
+class MarketDataSubscription(Generic[EmptyT]):
+    """A streaming quote owned by the caller of :meth:`IB.reqMktDataSubscription`."""
+
+    _sub: MktDataSub[EmptyT]
+
+    @property
+    def ticker(self) -> Ticker[EmptyT]:
+        """The ticker updated only by this request."""
+        return self._sub.ticker
+
+    @property
+    def closed(self) -> bool:
+        """Whether the stream has ended, including on disconnect or refusal."""
+        return self._sub.closed
+
+    def close(self) -> None:
+        """Stop only this request. Closing an ended stream does nothing."""
+        self._sub.close()
+
+
 class StartupFetch(Flag):
     POSITIONS = auto()
     ORDERS_OPEN = auto()
@@ -1070,7 +1091,7 @@ class IB(Generic[EmptyT]):
         return self.wrapper.subscriptions.ticker_for_contract(contract)
 
     def tickers(self) -> list[Ticker[EmptyT]]:
-        """Get a list of all tickers."""
+        """Get the shared tickers; private snapshots and owned streams are excluded."""
         return self.wrapper.subscriptions.pooled_tickers()
 
     def pendingTickers(self) -> list[Ticker[EmptyT]]:
@@ -2031,7 +2052,7 @@ class IB(Generic[EmptyT]):
         Snapshot vs. streaming Ticker identity:
             For ``snapshot=False`` the returned Ticker is the shared,
             per-contract pooled Ticker (the same object returned by
-            :meth:`ticker` and fed by every live stream on the contract).
+            :meth:`ticker` and fed by shared streams on the contract).
             For ``snapshot=True`` the returned Ticker is a *private*,
             point-in-time object that is not added to that pool: it starts
             empty and is filled only with this snapshot's ticks, so a read
@@ -2046,7 +2067,7 @@ class IB(Generic[EmptyT]):
             sending a new request, even if ``genericTickList`` or
             ``mktDataOptions`` differ. To change them, call
             :meth:`cancelMktData` for the contract first, then subscribe
-            again.
+            again. To request a separate stream, use :meth:`reqMktDataSubscription`.
         """
         mktDataOptions = _tagValueList(mktDataOptions)
         # Idempotent re-subscribe: a second call for the same qualified
@@ -2065,24 +2086,68 @@ class IB(Generic[EmptyT]):
         if existing is not None:
             return existing.ticker  # type: ignore[attr-defined]
 
+        return self._startMktData(
+            contract, genericTickList, snapshot, regulatorySnapshot, mktDataOptions
+        ).ticker
+
+    def reqMktDataSubscription(
+        self,
+        contract: Contract,
+        genericTickList: str = "",
+        mktDataOptions: Sequence[TagValue] = (),
+    ) -> MarketDataSubscription[EmptyT]:
+        """Subscribe to streaming quotes independently of any other request.
+
+        Each call sends a separate market-data request, subject to IBKR's
+        subscription limits. It sends the contract
+        as supplied, including BAG leg order. Its ticker starts empty,
+        with marketDataType 0 (unknown) until IBKR reports the mode.
+        Call the handle's :meth:`~MarketDataSubscription.close` to cancel;
+        :meth:`cancelMktData` applies only to a shared stream.
+
+        As for ordinary streaming :meth:`reqMktData`, qualify the contract
+        first unless it is a BAG.
+        """
+        if not contract.isHashable():
+            raise ValueError(
+                "Streaming market data requires a qualified contract or BAG"
+            )
+        sub = self._startMktData(
+            contract,
+            genericTickList,
+            False,
+            False,
+            _tagValueList(mktDataOptions),
+            independent=True,
+        )
+        return MarketDataSubscription(sub)
+
+    def _startMktData(
+        self,
+        contract: Contract,
+        genericTickList: str,
+        snapshot: bool,
+        regulatorySnapshot: bool,
+        mktDataOptions: list[TagValue],
+        *,
+        independent: bool = False,
+    ) -> MktDataSub[EmptyT]:
         reqId = self.client.getReqId()
-        # A snapshot gets a private, unpooled Ticker so a racing read can
-        # never observe scalar prices carried over from a prior snapshot of
-        # the same contract. Streaming reuses the pooled Ticker so a single
-        # object reflects every live tick stream.
-        if snapshot:
-            ticker = self.wrapper.subscriptions.new_snapshot_ticker(contract)
+        if snapshot or independent:
+            ticker = self.wrapper.subscriptions.new_private_ticker(contract)
+            if independent:
+                ticker.marketDataType = 0
         else:
             ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
-        with self.wrapper.subscriptions.sending(
-            MktDataSub(
-                reqId=reqId,
-                contract=contract,
-                ticker=ticker,
-                snapshot=snapshot,
-                genericTickList=genericTickList,
-            )
-        ):
+        sub = MktDataSub(
+            reqId=reqId,
+            contract=contract,
+            ticker=ticker,
+            snapshot=snapshot,
+            genericTickList=genericTickList,
+            independent=independent,
+        )
+        with self.wrapper.subscriptions.sending(sub):
             self.client.reqMktData(
                 reqId,
                 contract,
@@ -2091,11 +2156,11 @@ class IB(Generic[EmptyT]):
                 regulatorySnapshot,
                 mktDataOptions,
             )
-        return ticker
+        return sub
 
     def cancelMktData(self, contract: Contract) -> bool:
         """
-        Unsubscribe from realtime streaming tick data.
+        Unsubscribe the shared market-data stream for this contract.
 
         Args:
             contract: The contract of a previously subscribed ticker to unsubscribe.
@@ -2990,9 +3055,7 @@ class IB(Generic[EmptyT]):
         tickers: list[Ticker[EmptyT]] = []
         try:
             for contract in contracts:
-                # Private, unpooled Ticker per snapshot — see
-                # SubscriptionRegistry.new_snapshot_ticker.
-                ticker = self.wrapper.subscriptions.new_snapshot_ticker(contract)
+                ticker = self.wrapper.subscriptions.new_private_ticker(contract)
                 with self._reqIdRequest(contract=contract) as opened:
                     sub = MktDataSub(
                         reqId=opened.reqId,

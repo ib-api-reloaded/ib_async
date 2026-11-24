@@ -39,6 +39,9 @@ def noneIB() -> None:
 def enumIB() -> None:
     ib = ibi.IB(ibi.IBDefaults(emptyPrice=Missing.PRICE, emptySize=Missing.SIZE))
     assert_type(ib, ibi.IB[Missing])
+    owned = ib.reqMktDataSubscription(ibi.Stock("A", "SMART", "USD", conId=123))
+    assert_type(owned, ibi.MarketDataSubscription[Missing])
+    assert_type(owned.ticker, ibi.Ticker[Missing])
     ticker = ib.reqMktData(ibi.Stock("A", "SMART", "USD"))
     assert_type(ticker.bid, float | Missing | None)
     assert_type(ticker.ticks[0].size, float | Missing)

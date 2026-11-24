@@ -13,7 +13,9 @@ Two correctness properties to verify:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
+
+import pytest
 
 import ib_async as ibi
 from ib_async._subscriptions import MktDataSub
@@ -190,6 +192,90 @@ def _bag(conId: int, firstLeg: int) -> Bag:
             ComboLeg(conId=firstLeg + 1, ratio=1, action="SELL", exchange="NYMEX"),
         ],
     )
+
+
+def test_independent_streams_send_both_leg_orders_and_route_only_their_ticks():
+    ib = _wired_ib()
+    forward, reverse = _bag(0, 111), _bag(0, 111)
+    reverse.comboLegs.reverse()
+    shared = ib.reqMktData(forward)
+    ib.wrapper.priceSizeTick(100, 1, 18.5, 5)
+    ib.wrapper.priceSizeTick(100, 2, 19.5, 3)
+    first = ib.reqMktDataSubscription(forward)
+    options = (ibi.TagValue("key", "value"),)
+    second = ib.reqMktDataSubscription(reverse, "233", options)
+
+    requests = ib.client.reqMktData.call_args_list
+    assert [r.args[0] for r in requests] == [100, 101, 102]
+    assert [
+        [(leg.conId, leg.action) for leg in r.args[1].comboLegs] for r in requests
+    ] == [
+        [(111, "BUY"), (112, "SELL")],
+        [(111, "BUY"), (112, "SELL")],
+        [(112, "SELL"), (111, "BUY")],
+    ]
+    assert requests[-1].args[2:] == ("233", False, False, list(options))
+    for handle in (first, second):
+        assert handle.ticker.isUnset(handle.ticker.bid)
+        assert handle.ticker.isUnset(handle.ticker.ask)
+        assert handle.ticker.marketDataType == 0
+    assert ib.reqMktData(reverse) is shared
+    assert ib.client.reqMktData.call_count == 3
+
+    ib.wrapper.marketDataType(102, 3)
+    ib.wrapper.priceSizeTick(101, 1, 20.5, 2)
+    ib.wrapper.priceSizeTick(102, 1, 21.5, 2)
+    assert (shared.bid, first.ticker.bid, second.ticker.bid) == (18.5, 20.5, 21.5)
+    assert (first.ticker.marketDataType, second.ticker.marketDataType) == (0, 3)
+
+    first.close()
+    first.close()
+    assert first.closed and first.ticker.updateEvent.done()
+    ib.client.cancelMktData.assert_called_once_with(101)
+    assert ib.cancelMktData(reverse)
+    assert not ib.cancelMktData(forward)  # only the owned stream remains
+    ib.wrapper.priceSizeTick(101, 1, 99, 3)  # a late tick for the closed ID
+    ib.wrapper.priceSizeTick(102, 1, 22.5, 3)
+    assert not second.closed
+    assert (first.ticker.bid, second.ticker.bid) == (20.5, 22.5)
+    second.close()
+    assert ib.client.cancelMktData.call_args_list == [call(101), call(100), call(102)]
+
+
+def test_independent_send_failure_leaves_shared_stream_intact():
+    ib = _wired_ib()
+    contract = _stock(456)
+    shared = ib.reqMktData(contract)
+    ib.client.reqMktData.side_effect = ValueError("encoder refused request")
+    with pytest.raises(ValueError, match="encoder refused"):
+        ib.reqMktDataSubscription(contract)
+    assert set(ib.streams()) == {100}
+    assert ib.reqMktData(contract) is shared
+    ib.client.cancelMktData.assert_not_called()
+
+
+def test_disconnected_handle_cannot_cancel_a_reused_request_id():
+    ib = _wired_ib()
+    contract = _stock(456)
+    before = ib.reqMktDataSubscription(contract)
+    ib.wrapper.connectionClosed()
+    assert before.closed and before.ticker.updateEvent.done()
+    ib.client.getReqId.side_effect = [100]
+    after = ib.reqMktDataSubscription(contract)
+    before.close()
+    ib.client.cancelMktData.assert_not_called()
+    assert not after.closed
+    assert ib.stream(100).ticker is after.ticker
+    after.close()
+    ib.client.cancelMktData.assert_called_once_with(100)
+
+
+def test_independent_stream_rejects_unqualified_stock_without_sending():
+    ib = _wired_ib()
+    with pytest.raises(ValueError):
+        ib.reqMktDataSubscription(_stock(0))
+    ib.client.reqMktData.assert_not_called()
+    assert not ib.streams()
 
 
 def test_distinct_bags_sharing_a_conid_are_distinct_subscriptions():
