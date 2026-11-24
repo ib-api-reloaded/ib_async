@@ -491,6 +491,10 @@ class Wrapper(Generic[EmptyT]):
     _liveExecIds: set[str] = field(init=False)
     """Executions already emitted through the live event surface."""
 
+    _attachedExecIds: set[str] = field(init=False)
+    """Executions whose Fill is in their Trade's ``fills``. An execution
+    belongs to one order, so this answers for its Trade."""
+
     _fillsAwaitingTrade: dict[int, list[str]] = field(init=False)
     """Live executions that arrived before their order had a Trade, by
     permId. The Trade takes them in, with their events, when it appears."""
@@ -571,6 +575,7 @@ class Wrapper(Generic[EmptyT]):
         self.permId2Trade = {}
         self.fills = {}
         self._liveExecIds = set()
+        self._attachedExecIds = set()
         self._fillsAwaitingTrade = {}
         self._pendingCommissionReports = OrderedDict()
         self.newsTicks = []
@@ -1217,10 +1222,8 @@ class Wrapper(Generic[EmptyT]):
             fill = self.fills[execId]
 
         if trade:
-            already_attached = any(
-                existing.execution.execId == execId for existing in trade.fills
-            )
-            if not already_attached:
+            if execId not in self._attachedExecIds:
+                self._attachedExecIds.add(execId)
                 trade.fills.append(fill)
                 logEntry = TradeLogEntry(
                     time,
@@ -1258,9 +1261,10 @@ class Wrapper(Generic[EmptyT]):
         fire the events they could not fire then, once each: the
         execution, and the commission report if it came too."""
         for execId in self._fillsAwaitingTrade.pop(trade.order.permId, []):
-            fill = self.fills[execId]
-            if execId in self._liveExecIds or fill in trade.fills:
+            if execId in self._liveExecIds or execId in self._attachedExecIds:
                 continue
+            fill = self.fills[execId]
+            self._attachedExecIds.add(execId)
             trade.fills.append(fill)
             execution = fill.execution
             trade.log.append(
