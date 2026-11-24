@@ -290,18 +290,17 @@ def test_a_pooled_ticker_no_stream_was_sent_for_leaves_the_pool():
     assert reg.ticker_for_contract(contract) is None
 
 
-def test_a_pooled_ticker_a_stream_was_sent_for_stays_in_the_pool():
-    """A Ticker that served a stream keeps its place, and its identity for
-    a caller holding it, when a later send for it raises."""
+def test_a_failed_send_leaves_a_ticker_a_live_stream_feeds():
+    """A send that raises for a Ticker a live stream feeds leaves it in
+    the pool, live and with its data."""
     ib = ibi.IB()
     ib.client = MagicMock()
     reg = ib.wrapper.subscriptions
     contract = _stock(1)
     ticker = reg.get_or_create_ticker(contract)
-    served = MktDataSub(reqId=87, contract=contract, ticker=ticker)
-    with reg.sending(served):
+    with reg.sending(MktDataSub(reqId=87, contract=contract, ticker=ticker)):
         pass
-    served.close()
+    ticker.bid = 99.5
 
     with (
         pytest.raises(TypeError),
@@ -312,6 +311,7 @@ def test_a_pooled_ticker_a_stream_was_sent_for_stays_in_the_pool():
         raise TypeError("rejected")
 
     assert reg.pooled_tickers() == [ticker]
+    assert not ticker.updateEvent.done() and ticker.bid == 99.5
 
 
 def test_a_pnl_subscription_whose_send_raises_is_unregistered():

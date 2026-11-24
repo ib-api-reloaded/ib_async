@@ -109,11 +109,10 @@ def test_double_reqMktDepth_returns_same_ticker():
     assert isinstance(sub, MktDepthSub)
 
 
-def test_cancelMktDepth_closes_via_registry_and_clears_dom():
+def test_cancelMktDepth_closes_via_registry_and_ends_its_only_ticker():
     ib = _wired_ib()
     contract = _stock(22)
     ticker = ib.reqMktDepth(contract, isSmartDepth=True)
-    # Seed the book so we can verify the cancel-time clearing.
     ticker.dom.apply(1, 0, 0, 100.0, 1.0)
     ticker.dom.apply(0, 0, 0, 101.0, 1.0)
 
@@ -123,12 +122,27 @@ def test_cancelMktDepth_closes_via_registry_and_clears_dom():
     (_called_reqId, called_smart), _ = ib.client.cancelMktDepth.call_args
     assert called_smart is True
     assert ib.wrapper.subscriptions.find_market_data(22, "mktDepth") is None
-    # DOM state cleared on cancel.
+    # Depth was the Ticker's only stream: the Ticker ends with its last
+    # book, and the next depth request starts an empty one.
+    assert ticker.updateEvent.done()
+    assert [level.price for level in ticker.domBids] == [100.0]
+    assert ib.ticker(contract) is None
+    again = ib.reqMktDepth(contract, isSmartDepth=True)
+    assert again is not ticker and not again.dom
+
+
+def test_cancelMktDepth_clears_the_book_of_a_ticker_market_data_feeds():
+    ib = _wired_ib()
+    contract = _stock(23)
+    ticker = ib.reqMktData(contract)
+    ib.reqMktDepth(contract)
+    ticker.dom.apply(1, 0, 0, 100.0, 1.0)
+
+    ib.cancelMktDepth(contract)
+
+    assert not ticker.updateEvent.done()
     assert not ticker.dom
-    assert ticker.domBids == ()
-    assert ticker.domAsks == ()
-    assert ticker.domBidsDict == {}
-    assert ticker.domAsksDict == {}
+    assert ticker.domBids == () and ticker.domBidsDict == {}
 
 
 def test_mktdata_and_mktdepth_can_coexist_on_same_contract():

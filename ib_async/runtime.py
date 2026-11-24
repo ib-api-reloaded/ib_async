@@ -228,7 +228,7 @@ class SubscriptionState:
     scanners: int
     pnl: int
     pnlSingle: int
-    #: Tickers in the per-contract pool (IB.tickers()).
+    #: Live Tickers, those a stream feeds (IB.tickers()).
     pooledTickers: int
 
 

@@ -11,7 +11,10 @@ drops the socket.
 After each step the test checks that:
 
 - the subscription registry holds exactly the live streams;
-- all streams on the same contract share one pooled Ticker;
+- the live streams on a contract share one pooled Ticker, which ends
+  (leaves the pool, its updateEvent done) with the last of them, and the
+  next stream starts a new, empty one;
+- a live Ticker holds no field that only an ended stream filled;
 - a tick updates its ticker only while its stream is live;
 - each stream is cancelled with IBKR at most once, and a snapshot never.
 """
@@ -93,8 +96,12 @@ class MarketDataSimulation(RuleBasedStateMachine):
         self.loop = getLoop()
         self.tws = SimulatedTws(self.loop)
         self.streams: list[Stream] = []
-        # The pooled ticker for each contract identity on this connection.
+        # The live pooled ticker for each contract identity: one while a
+        # stream feeds it.
         self.pool: dict[int, Ticker] = {}
+        # Every pooled ticker ever handed out, so a new one is never an
+        # ended one.
+        self.everPooled: list[Ticker] = []
         self.epoch = 0
 
     @property
@@ -122,6 +129,24 @@ class MarketDataSimulation(RuleBasedStateMachine):
 
     def pick(self, data: st.DataObject, candidates: list[Stream]) -> Stream:
         return candidates[data.draw(st.integers(0, len(candidates) - 1))]
+
+    def feeding(self, key: int) -> list[Stream]:
+        """The live streams that feed the pooled ticker of ``key``."""
+        return [
+            s
+            for s in self.liveStreams()
+            if s.kind != SNAPSHOT and identity(s.contract) == key
+        ]
+
+    def end(self, stream: Stream) -> None:
+        """``stream`` ended. The last stream on a pooled ticker ends it."""
+        stream.live = False
+        if stream.kind == SNAPSHOT:
+            return
+        key = identity(stream.contract)
+        assert key is not None
+        if not self.feeding(key):
+            del self.pool[key]
 
     # -- client operations -----------------------------------------------
 
@@ -153,7 +178,17 @@ class MarketDataSimulation(RuleBasedStateMachine):
         else:
             key = identity(contract)
             assert key is not None
-            assert ticker is self.pool.setdefault(key, ticker)
+            if key in self.pool:
+                # Another live stream feeds the contract's ticker.
+                assert ticker is self.pool[key]
+            else:
+                # A new, empty ticker: never one that ended.
+                assert ticker not in self.everPooled  # Tickers compare by identity
+                assert not ticker.updateEvent.done()
+                assert ticker.isUnset(ticker.last) and ticker.isUnset(ticker.bid)
+                assert not ticker.dom
+                self.pool[key] = ticker
+                self.everPooled.append(ticker)
         self.streams.append(Stream(kind, contract, ask, ticker, self.epoch))
 
     def _subscribe(self, kind: str, contract: ibi.Contract) -> Ticker:
@@ -186,7 +221,7 @@ class MarketDataSimulation(RuleBasedStateMachine):
         assert found == (stream is not None), (kind, contract)
         assert len(self.tws.cancels) == before + (1 if found else 0)
         if stream is not None:
-            stream.live = False
+            self.end(stream)
 
     # -- server messages -------------------------------------------------
 
@@ -235,7 +270,7 @@ class MarketDataSimulation(RuleBasedStateMachine):
         assert isinstance(stream, Stream)
         before = len(self.tws.cancels)
         self.tws.snapshotEnd(stream.ask)
-        stream.live = False
+        self.end(stream)
         assert len(self.tws.cancels) == before  # a snapshot is never cancelled
 
     @rule(data=st.data())
@@ -265,7 +300,7 @@ class MarketDataSimulation(RuleBasedStateMachine):
         assert isinstance(stream, Stream)
         before = len(self.tws.cancels)
         self.tws.refuseStream(stream.ask)
-        stream.live = False
+        self.end(stream)
         assert len(self.tws.cancels) == before
 
     @rule()
@@ -305,15 +340,32 @@ class MarketDataSimulation(RuleBasedStateMachine):
                     assert found.reqId == expected.ask.reqId
 
     @invariant()
-    def one_pooled_ticker_per_contract(self) -> None:
-        for key, ticker in self.pool.items():
-            contracts = [c for c in CONTRACTS if identity(c) == key]
-            for contract in contracts:
-                assert self.ib.ticker(contract) is ticker
+    def the_pool_holds_the_live_tickers(self) -> None:
+        for contract in CONTRACTS:
+            key = identity(contract)
+            if key is not None:
+                assert self.ib.ticker(contract) is self.pool.get(key), contract
         assert set(map(id, self.ib.tickers())) == set(map(id, self.pool.values()))
+        for key in self.pool:
+            assert self.feeding(key), key
         for s in self.streams:
             if s.kind == SNAPSHOT:
                 assert s.ticker not in self.ib.tickers()
+
+    @invariant()
+    def a_live_ticker_holds_only_live_streams_fields(self) -> None:
+        """A field only an ended stream filled is cleared: the last trade
+        without market data or a Last/AllLast stream, the quote without
+        market data or a BidAsk stream, the book without depth."""
+        for key, ticker in self.pool.items():
+            kinds = {s.kind for s in self.feeding(key)}
+            if not kinds & {"mktData", "Last", "AllLast"}:
+                assert ticker.isUnset(ticker.last), kinds
+            if not kinds & {"mktData", "BidAsk"}:
+                assert ticker.isUnset(ticker.bid), kinds
+                assert ticker.isUnset(ticker.ask), kinds
+            if "mktDepth" not in kinds:
+                assert not ticker.dom, kinds
 
     @invariant()
     def streams_cancelled_at_most_once_snapshots_never(self) -> None:
@@ -328,12 +380,13 @@ class MarketDataSimulation(RuleBasedStateMachine):
 
         A snapshot has its own Ticker. Its updateEvent is done once the
         snapshot ends or the socket drops. A pooled Ticker's updateEvent is
-        done once its connection drops."""
+        done once its last stream ends, as when the socket drops."""
         for s in self.streams:
             if s.kind == SNAPSHOT:
                 assert s.ticker.updateEvent.done() == (not s.live), s.kind
-            elif s.epoch < self.epoch:
-                assert s.ticker.updateEvent.done(), s.kind
+            else:
+                pooled = s.ticker in self.pool.values()
+                assert s.ticker.updateEvent.done() == (not pooled), s.kind
 
     def teardown(self) -> None:
         """Cancel every stream, end every snapshot, and check that the

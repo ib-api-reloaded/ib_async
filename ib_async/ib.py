@@ -1060,9 +1060,21 @@ class IB(Generic[EmptyT]):
 
     def ticker(self, contract: Contract) -> Ticker[EmptyT] | None:
         """
-        Get ticker of the given contract. It must have been requested before
-        with reqMktData with the same contract object. The ticker may not be
-        ready yet if called directly after :meth:`.reqMktData`.
+        The live Ticker of the instrument, or None if no stream feeds it.
+
+        The streams on one instrument (:meth:`reqMktData`,
+        :meth:`reqTickByTickData`, :meth:`reqMktDepth`) share a Ticker
+        while any of them runs. When one ends and others go on, the
+        fields only it filled are cleared. When the last ends (a cancel,
+        an error that ends it, a disconnect), the Ticker ends: its
+        ``updateEvent`` is done, it keeps its last values for whoever
+        holds it, and the next stream for the instrument gets a new
+        Ticker. Snapshots have Tickers of their own and are not found
+        here.
+
+        Any qualified Contract for the instrument finds it (by conId; a bag
+        by its legs in their order). The Ticker may not be ready yet if
+        called directly after :meth:`.reqMktData`.
 
         Args:
             contract: Contract to get ticker for.
@@ -1070,7 +1082,7 @@ class IB(Generic[EmptyT]):
         return self.wrapper.subscriptions.ticker_for_contract(contract)
 
     def tickers(self) -> list[Ticker[EmptyT]]:
-        """Get a list of all tickers."""
+        """The live Tickers: those a stream feeds (see :meth:`ticker`)."""
         return self.wrapper.subscriptions.pooled_tickers()
 
     def pendingTickers(self) -> list[Ticker[EmptyT]]:
@@ -2029,16 +2041,19 @@ class IB(Generic[EmptyT]):
             mktDataOptions: Unknown
 
         Snapshot vs. streaming Ticker identity:
-            For ``snapshot=False`` the returned Ticker is the shared,
-            per-contract pooled Ticker (the same object returned by
-            :meth:`ticker` and fed by every live stream on the contract).
+            For ``snapshot=False`` the returned Ticker is the one the
+            contract's live streams share (the same object returned by
+            :meth:`ticker` while a stream runs). It ends with the last of
+            them: its ``updateEvent`` is done and it keeps its last values,
+            and a later request gets a new, empty Ticker (see
+            :meth:`ticker`).
             For ``snapshot=True`` the returned Ticker is a *private*,
-            point-in-time object that is not added to that pool: it starts
+            point-in-time object that streams do not share: it starts
             empty and is filled only with this snapshot's ticks, so a read
             immediately after the call sees ``None`` rather than a value
             left over from a prior snapshot. (If a streaming subscription
-            is already live on the contract, that fresh pooled Ticker is
-            returned instead and no new request is issued.)
+            is already live on the contract, its live Ticker is returned
+            instead and no new request is issued.)
 
         Calling again for a subscribed contract:
             While a streaming subscription for the contract is live,
@@ -2046,7 +2061,8 @@ class IB(Generic[EmptyT]):
             sending a new request, even if ``genericTickList`` or
             ``mktDataOptions`` differ. To change them, call
             :meth:`cancelMktData` for the contract first, then subscribe
-            again.
+            again, which returns a new Ticker unless another stream keeps
+            the old one live.
         """
         mktDataOptions = _tagValueList(mktDataOptions)
         # Idempotent re-subscribe: a second call for the same qualified
@@ -2057,8 +2073,8 @@ class IB(Generic[EmptyT]):
         # unqualified one does not have; only a snapshot, with a Ticker of
         # its own, takes an unqualified contract.
         # This also covers ``snapshot=True`` while a stream is live: the
-        # stream keeps the pooled Ticker fresh, so reusing it is safe and
-        # avoids a redundant snapshot request.
+        # stream keeps its Ticker fresh, so reusing it is safe and avoids a
+        # redundant snapshot request.
         existing = self.wrapper.subscriptions.find_market_data_for_contract(
             contract, "mktData"
         )
@@ -2068,8 +2084,8 @@ class IB(Generic[EmptyT]):
         reqId = self.client.getReqId()
         # A snapshot gets a private, unpooled Ticker so a racing read can
         # never observe scalar prices carried over from a prior snapshot of
-        # the same contract. Streaming reuses the pooled Ticker so a single
-        # object reflects every live tick stream.
+        # the same contract. A stream joins the Ticker the contract's live
+        # streams share, or starts a new one if none is live.
         if snapshot:
             ticker = self.wrapper.subscriptions.new_snapshot_ticker(contract)
         else:
@@ -2096,6 +2112,10 @@ class IB(Generic[EmptyT]):
     def cancelMktData(self, contract: Contract) -> bool:
         """
         Unsubscribe from realtime streaming tick data.
+
+        If other streams (tick-by-tick, depth) go on feeding the contract's
+        Ticker, the fields only market data filled are cleared; if this
+        was the last, the Ticker ends (see :meth:`ticker`).
 
         Args:
             contract: The contract of a previously subscribed ticker to unsubscribe.
@@ -2160,7 +2180,8 @@ class IB(Generic[EmptyT]):
 
     def cancelTickByTickData(self, contract: Contract, tickType: str) -> bool:
         """
-        Unsubscribe from tick-by-tick data
+        Unsubscribe from tick-by-tick data. If this was the last stream on
+        the contract's Ticker, the Ticker ends (see :meth:`ticker`).
 
         Args:
             contract: The contract of a previously subscribed ticker to unsubscribe.
@@ -2230,13 +2251,10 @@ class IB(Generic[EmptyT]):
             return existing.ticker  # type: ignore[attr-defined]
 
         reqId = self.client.getReqId()
+        # The book starts empty: a new Ticker has none, and a Ticker that
+        # other streams kept had its book cleared when its last depth
+        # stream ended.
         ticker = self.wrapper.subscriptions.get_or_create_ticker(contract)
-        # Order matters: ``add`` may raise (e.g. if a concurrent caller
-        # somehow registered the same ``(identity, "mktDepth")`` between
-        # the dedup check above and this point). Register the
-        # subscription BEFORE wiping the live shared Ticker's DOM
-        # state so a failed registration does not leave the Ticker
-        # half-cleared.
         with self.wrapper.subscriptions.sending(
             MktDepthSub(
                 reqId=reqId,
@@ -2245,7 +2263,6 @@ class IB(Generic[EmptyT]):
                 isSmartDepth=isSmartDepth,
             )
         ):
-            ticker.dom.clear()
             self.client.reqMktDepth(
                 reqId, contract, numRows, isSmartDepth, mktDepthOptions
             )
@@ -2255,9 +2272,12 @@ class IB(Generic[EmptyT]):
         """
         Unsubscribe from market depth data.
 
+        If other streams go on feeding the contract's Ticker, its book is
+        cleared; if this was the last, the Ticker ends (see :meth:`ticker`).
+
         Args:
-            contract: The exact contract object that was used to
-                subscribe with.
+            contract: The contract subscribed to, or any Contract for the
+                same instrument.
         """
         sub = self.wrapper.subscriptions.find_market_data_for_contract(
             contract, "mktDepth"
@@ -2265,11 +2285,7 @@ class IB(Generic[EmptyT]):
         if sub is None:
             self._logger.error(f"cancelMktDepth: No subscription for {contract}")
             return
-        ticker = sub.ticker  # type: ignore[attr-defined]
         sub.close()  # sends cancelMktDepth(reqId, isSmartDepth)
-        # Clear DOM state on the live Ticker — it is no longer being
-        # updated, so leftover levels would be stale.
-        ticker.dom.clear()
 
     def reqHistogramData(
         self, contract: Contract, useRTH: bool, period: str
@@ -2974,11 +2990,11 @@ class IB(Generic[EmptyT]):
         """Async sibling of :meth:`reqTickers`.
 
         Each returned Ticker is a *private*, point-in-time snapshot object,
-        not the shared per-contract pooled Ticker: it is filled only with
+        not the Ticker a contract's streams share: it is filled only with
         this call's snapshot ticks, so it never carries scalar prices left
         over from a prior snapshot of the same contract, and it is frozen
         once the snapshot completes. Use ``reqMktData(snapshot=False)`` /
-        :meth:`ticker` for the shared, continuously-updated pooled Ticker.
+        :meth:`ticker` for the live, continuously-updated Ticker.
         """
         # Each contract gets its own snapshot subscription. Snapshot
         # MktDataSubs are registered by reqId only — they are

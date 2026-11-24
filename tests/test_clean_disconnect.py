@@ -16,6 +16,7 @@ import ib_async as ibi
 from ib_async._requests import ReqIdKey, SingletonKey
 from ib_async._subscriptions import (
     MktDataSub,
+    MktDepthSub,
     PnLSub,
     RealTimeBarsSub,
     ScannerSub,
@@ -123,10 +124,15 @@ def test_disconnect_closes_pnl_subscription():
 
 
 def test_disconnect_sets_done_on_pooled_ticker_update_events():
-    """Tickers are pooled per-contract; disconnect must wake every one."""
+    """Closing every stream on disconnect ends every streamed Ticker, so
+    each one's awaiters wake."""
     ib = ibi.IB()
     contract = _stock(1)
     ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
+    ib.wrapper.subscriptions.add(MktDataSub(reqId=30, contract=contract, ticker=ticker))
+    ib.wrapper.subscriptions.add(
+        MktDepthSub(reqId=31, contract=contract, ticker=ticker)
+    )
 
     ib.wrapper.connectionClosed()
 

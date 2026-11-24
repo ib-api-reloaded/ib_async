@@ -96,7 +96,9 @@ def _():
     Forex quotes have no trades, so `last` stays `None`. For a price use
     `midpoint()`, the average of bid and ask, or `marketPrice()`, which is
     the last price when it lies within the bid and ask and the midpoint
-    otherwise. Here as the subscription above left the ticker:
+    otherwise. The cancel ended the ticker, which keeps the values its
+    stream left (`ib.ticker(eurusd)` is now `None`, and a new request gets
+    a new ticker):
     """)
     return
 

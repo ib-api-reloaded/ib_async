@@ -86,6 +86,12 @@ class Ticker(Generic[EmptyT]):
     is the type of the empty values that are not numbers.
     ``defaults.isPrice`` and ``defaults.isSize`` tell a number from them.
 
+    A streamed Ticker is live while a stream feeds it; the streams on one
+    contract share it. When one stream ends while others go on, the
+    fields only it filled are cleared. When the last ends, the Ticker
+    ends: ``updateEvent`` is done, the last values stay, and the next
+    stream for the contract gets a new Ticker (see :meth:`.IB.ticker`).
+
     Events:
         * ``updateEvent`` (ticker: :class:`.Ticker`)
     """
@@ -366,6 +372,20 @@ class Ticker(Generic[EmptyT]):
         return f"{clsName}({dataclassDisplayPairs(attrs)})"
 
     __str__ = __repr__
+
+    def _clearFields(self, names: frozenset[str]) -> None:
+        """Reset the fields ``names`` to their values on a new Ticker,
+        emptying the book in place. The stream that filled them ended
+        while others go on filling this Ticker, so they would otherwise
+        look live."""
+        if not names:
+            return
+        fresh = Ticker(contract=self.contract, defaults=self.defaults)
+        for name in names:
+            if name == "dom":
+                self.dom.clear()
+            else:
+                setattr(self, name, getattr(fresh, name))
 
     def isUnset(self, value: float | EmptyT | None) -> bool:
         """Whether ``value`` is None or the ``unset`` value of ``defaults``

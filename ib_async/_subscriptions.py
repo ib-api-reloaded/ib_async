@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, ClassVar, Generic, Protocol, TypeVar
 
 from ib_async.objects import EmptyT
@@ -139,8 +139,15 @@ class Subscription:
         woken by :meth:`close` do not block forever past disconnect.
 
         Default: no-op. Subclasses that own a unique subscriber object
-        (bars list, scanner data list) override.
+        (bars list, scanner data list, a snapshot's Ticker) override. A
+        streamed Ticker is shared, and the registry ends it with its last
+        stream.
         """
+
+    def _tickerFields(self) -> frozenset[str]:
+        """The lasting Ticker fields this stream fills (see
+        ``_MARKET_DATA_FIELDS``). Default: none."""
+        return frozenset()
 
     def _movedTo(self, reqId: int) -> None:
         """Take ``reqId`` as this subscription's own (it was sent again
@@ -156,16 +163,59 @@ class Subscription:
 
 # ---- market-data family -----------------------------------------------------
 
+# The lasting Ticker fields each kind of stream fills. When a stream ends
+# while others go on filling its Ticker, the registry clears the fields no
+# remaining stream fills (see SubscriptionRegistry._unregister). Market
+# data fills every field but the Ticker's identity and settings, the
+# update times every stream advances, and what tick-by-tick and depth
+# fill alone. Tick-by-tick Last and AllLast fill the last trade, BidAsk the
+# quote, MidPoint nothing that lasts. Depth fills the book.
+_MARKET_DATA_FIELDS: frozenset[str] = frozenset(
+    [f.name for f in fields(Ticker)]
+) - frozenset(
+    [
+        "contract",
+        "time",
+        "timestamp",
+        "tickByTicks",
+        "dom",
+        "domTicks",
+        "defaults",
+        "created",
+        "updateEvent",
+    ]
+)
+_LAST_FIELDS: frozenset[str] = frozenset(
+    ["last", "lastSize", "prevLast", "prevLastSize"]
+)
+_BID_ASK_FIELDS: frozenset[str] = frozenset(
+    [
+        "bid",
+        "bidSize",
+        "ask",
+        "askSize",
+        "prevBid",
+        "prevBidSize",
+        "prevAsk",
+        "prevAskSize",
+    ]
+)
+_TICK_BY_TICK_FIELDS: dict[str, frozenset[str]] = {
+    "Last": _LAST_FIELDS,
+    "AllLast": _LAST_FIELDS,
+    "BidAsk": _BID_ASK_FIELDS,
+}
+_DEPTH_FIELDS: frozenset[str] = frozenset(["dom"])
+
 
 @dataclass
 class MktDataSub(Subscription, Generic[EmptyT]):
     """``IB.reqMktData`` — streaming top-of-book + generic ticks.
 
     A streaming subscription's :class:`Ticker` is shared per contract by
-    mktData, tickByTick and mktDepth, so it is *not* set done on close:
-    other subscriptions on the same contract may still be active. A
-    snapshot has its own Ticker, which is set done when the snapshot ends
-    because nothing will update it again.
+    mktData, tickByTick and mktDepth; the registry ends it with its last
+    stream. A snapshot has its own Ticker, which is set done when the
+    snapshot ends because nothing will update it again.
     """
 
     KIND: ClassVar[str | None] = "mktData"
@@ -189,6 +239,9 @@ class MktDataSub(Subscription, Generic[EmptyT]):
         if self.snapshot and self.ticker is not None:
             self.ticker.updateEvent.set_done()
 
+    def _tickerFields(self) -> frozenset[str]:
+        return _MARKET_DATA_FIELDS
+
 
 @dataclass
 class TickByTickSub(Subscription, Generic[EmptyT]):
@@ -210,6 +263,9 @@ class TickByTickSub(Subscription, Generic[EmptyT]):
     def _send_cancel(self, client: Client) -> None:
         client.cancelTickByTickData(self.reqId)
 
+    def _tickerFields(self) -> frozenset[str]:
+        return _TICK_BY_TICK_FIELDS.get(self.tickType, frozenset())
+
 
 @dataclass
 class MktDepthSub(Subscription, Generic[EmptyT]):
@@ -225,6 +281,9 @@ class MktDepthSub(Subscription, Generic[EmptyT]):
 
     def _send_cancel(self, client: Client) -> None:
         client.cancelMktDepth(self.reqId, self.isSmartDepth)
+
+    def _tickerFields(self) -> frozenset[str]:
+        return _DEPTH_FIELDS
 
 
 # ---- bar / scanner family ---------------------------------------------------
@@ -359,15 +418,13 @@ class SubscriptionRegistry(Generic[EmptyT]):
     _ticker_by_reqid: dict[int, Ticker[EmptyT]] = field(
         default_factory=dict, init=False
     )
-    # Per-contract Ticker pool. The same Ticker is shared across all
-    # market-data shapes (mktData / tickByTick / mktDepth / snapshot)
-    # for a given contract so a single Ticker reflects every live
-    # tick stream. Keyed by ``hash(contract)``, as the market-data index.
+    # Per-contract Ticker pool. The streams on a contract (mktData,
+    # tickByTick, mktDepth) share one Ticker, which is in the pool while
+    # a stream feeds it (see _unregister). Keyed by ``hash(contract)``,
+    # as the market-data index.
     _tickers: dict[int, Ticker[EmptyT]] = field(default_factory=dict, init=False)
-    # Keys of pooled Tickers some stream's request was sent for (see
-    # sending). A pooled Ticker no request was ever sent for is dropped
-    # from the pool when its send raises.
-    _sentFor: set[int] = field(default_factory=set, init=False)
+    # Pool key -> the registered streams that feed that Ticker.
+    _feeders: dict[int, list[Subscription]] = field(default_factory=dict, init=False)
     # (identity, kind) -> Subscription, where identity is the
     # contract's hash (see _market_data_identity) and kind is the
     # IB-level market-data type ("mktData", "Last", "AllLast",
@@ -420,6 +477,8 @@ class SubscriptionRegistry(Generic[EmptyT]):
         ticker = getattr(sub, "ticker", None)
         if ticker is not None:
             self._ticker_by_reqid[sub.reqId] = ticker
+        if (key := self._poolKey(sub)) is not None:
+            self._feeders.setdefault(key, []).append(sub)
 
         sub._registry = self
 
@@ -434,12 +493,9 @@ class SubscriptionRegistry(Generic[EmptyT]):
         call return a Ticker that never updates, since streams are
         deduplicated by contract. ``add`` runs before the block, so a
         duplicate is refused before anything is sent. ``None`` registers
-        nothing, for a request that has no subscription.
-
-        A pooled Ticker created for this call, that no request was ever
-        sent for, leaves the pool too, so ``IB.tickers()`` does not list a
-        contract never subscribed. One that served a stream stays, with
-        its data and its identity for a caller holding it.
+        nothing, for a request that has no subscription. Closing ``sub``
+        ends a pooled Ticker created for this call, as any last stream
+        does.
         """
         if sub is not None:
             self.add(sub)
@@ -449,23 +505,21 @@ class SubscriptionRegistry(Generic[EmptyT]):
             if sub is not None:
                 self.tally.subscriptionsNotSent += 1
                 sub.close(send_cancel=False)
-                key = self._pooledKey(sub)
-                if key is not None and key not in self._sentFor:
-                    del self._tickers[key]
             raise
-        if sub is not None and (key := self._pooledKey(sub)) is not None:
-            self._sentFor.add(key)
 
-    def _pooledKey(self, sub: Subscription) -> int | None:
-        """The pool key of ``sub``'s Ticker, or None if it is not pooled.
+    def _poolKey(self, sub: Subscription) -> int | None:
+        """The pool key of the Ticker ``sub`` feeds, or None if it feeds
+        no pooled Ticker.
 
-        Only streams use pooled Tickers; their contracts are hashable. A
+        Only streams feed pooled Tickers; their contracts are hashable. A
         snapshot's Ticker is private, and its contract may be unqualified,
         which has no hash."""
         if isinstance(sub, MktDataSub):
             if sub.snapshot:
                 return None
         elif not isinstance(sub, TickByTickSub | MktDepthSub):
+            return None
+        if not sub.contract.isHashable():
             return None
         key = hash(sub.contract)
         return key if self._tickers.get(key) is sub.ticker else None
@@ -476,12 +530,35 @@ class SubscriptionRegistry(Generic[EmptyT]):
         return self._wrapper.ib.client if self._wrapper is not None else None
 
     def _unregister(self, sub: Subscription) -> None:
-        """Remove ``sub`` from every index. Called from :meth:`Subscription.close`."""
+        """Remove ``sub`` from every index. Called from :meth:`Subscription.close`.
+
+        A pooled Ticker shows only live streams. If other streams still
+        feed ``sub``'s Ticker, the fields ``sub`` filled that none of them
+        fills are cleared. If ``sub`` was the last, the Ticker ends: it
+        leaves the pool, keeps its last values for whoever holds it, and
+        its updateEvent is set done. The next stream for the contract gets
+        a new Ticker."""
+        key = self._poolKey(sub)
         self._unindex(sub)
         self.tally.subscriptionsEnded += 1
+        if key is None:
+            return
+        ticker = self._tickers[key]
+        if others := self._feeders.get(key):
+            stillFilled = frozenset[str]().union(*[o._tickerFields() for o in others])
+            ticker._clearFields(sub._tickerFields() - stillFilled)
+        else:
+            del self._tickers[key]
+            ticker.updateEvent.set_done()
 
     def _unindex(self, sub: Subscription) -> None:
         """Remove ``sub`` from every index (see :meth:`_unregister`)."""
+        if (key := self._poolKey(sub)) is not None and key in self._feeders:
+            remaining = [f for f in self._feeders[key] if f is not sub]
+            if remaining:
+                self._feeders[key] = remaining
+            else:
+                del self._feeders[key]
         self._by_reqid.pop(sub.reqId, None)
         self._ticker_by_reqid.pop(sub.reqId, None)
 

@@ -607,19 +607,16 @@ class Wrapper(Generic[EmptyT]):
         2. Close every live :class:`Subscription` with
            ``send_cancel=False`` (the socket is gone). Each Subscription
            sets done on its per-subscriber ``updateEvent`` — bars,
-           scanner data lists — so consumers awaiting more updates
+           scanner data lists, a snapshot's Ticker — and the last stream
+           on a shared Ticker ends it, so consumers awaiting more updates
            wake up.
-        3. Set done on the pooled ``Ticker.updateEvent`` for every
-           Ticker we know about. Tickers are shared across mktData /
-           tickByTick / mktDepth subscriptions and are therefore not
-           owned by any individual Subscription.
-        4. For every still-live trade, emit a final ``Disconnected``
+        3. For every still-live trade, emit a final ``Disconnected``
            transition + audit log entry, then set done on every
            per-trade event. Trades that were already in a done state
            keep their terminal status; we only set done on their events.
-        5. Emit ``globalErrorEvent`` so any module-wide observer is
+        4. Emit ``globalErrorEvent`` so any module-wide observer is
            notified.
-        6. ``reset()`` wipes wrapper state. The watchdog reconnects and
+        5. ``reset()`` wipes wrapper state. The watchdog reconnects and
            re-syncs from the server.
         """
 
@@ -627,13 +624,8 @@ class Wrapper(Generic[EmptyT]):
 
         self.tally.disconnects += 1
         self.requests.fail_all(error)
-        # Closing a snapshot subscription sets its own Ticker done. Pooled
-        # Tickers, which streams share, are set done below.
         self.tally.subscriptionsDisconnected += len(self.subscriptions)
         self.subscriptions.close_all(send_cancel=False)
-
-        for ticker in self.subscriptions.pooled_tickers():
-            ticker.updateEvent.set_done()
 
         now = datetime.now(self.defaultTimezone)
         # Snapshot the trades dict because ``trade.statusEvent.emit`` and

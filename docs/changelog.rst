@@ -244,6 +244,20 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   trailing ``Z`` after the time, with or without a space, marks UTC
   (``20260824-20:00:12Z``); a time without it parses as before.
   (:issue:`230`, :issue:`181`)
+* **A Ticker ends with its streams.** The streams on a contract still
+  share one ``Ticker`` while any of them runs. When one ends while others
+  go on, the fields only it filled are cleared (market data the quote and
+  generic fields, tick-by-tick ``Last`` / ``AllLast`` the last trade,
+  ``BidAsk`` the quote, depth the book). When the last ends, by cancel,
+  an error that ends it or a disconnect, the Ticker's ``updateEvent`` is
+  done, it keeps its last values for whoever holds it, and
+  ``IB.ticker()`` returns None; ``IB.tickers()`` lists only live Tickers.
+  The next stream for the contract starts a new, empty Ticker. Before, a
+  cancelled Ticker stayed in the pool looking live and the next request
+  handed it back with its old prices, which stayed when IBKR sent no new
+  ones; the pool also grew with every contract ever streamed.
+  ``cancelMktDepth`` keeps the book of a Ticker it ends.
+  (:issue:`253`)
 * **``IBC`` needs ``twsVersion``**: it has no default, so ``IBC()``
   raises ``TypeError``; pass it first, ``IBC(1019)`` or ``IBC("10.19")``
   (see Fixed). IBC's start script could not run without it.

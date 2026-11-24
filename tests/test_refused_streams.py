@@ -6,9 +6,9 @@ refused stream left registered hands the next request for it the dead
 subscription's Ticker and sends nothing, so the Ticker never updates.
 IBKR documents which errors end a request
 (https://interactivebrokers.github.io/tws-api/message_codes.html): for
-those the subscription is closed without a cancel, the Ticker keeps its
-data, and the next request is sent. Errors after which the stream goes
-on leave it registered.
+those the subscription is closed without a cancel, its Ticker ends with
+its data, and the next request is sent, with a new Ticker. Errors after
+which the stream goes on leave it registered.
 """
 
 from __future__ import annotations
@@ -87,9 +87,11 @@ def test_a_stream_ibkr_refuses_ends_and_can_be_requested_again(
     again = STREAMS[name](session.ib)
     assert framesSent(session) == sent + 1
     if isinstance(live, ibi.Ticker):
-        # The same pooled Ticker, with its data: a caller holding it gets
-        # the new stream's ticks.
-        assert again is live and live.last == 101.5
+        # The refused stream's Ticker ended with its data; the new stream
+        # has a new, empty Ticker.
+        assert isinstance(again, ibi.Ticker) and again is not live
+        assert live.updateEvent.done() and live.last == 101.5
+        assert again.isUnset(again.last)
 
 
 @pytest.mark.parametrize("proto", [False, True])
