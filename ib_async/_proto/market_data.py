@@ -157,10 +157,11 @@ class TickOptionComputationArgs:
 
 @dataclass(slots=True, frozen=True)
 class MarketDataTypeArgs:
-    """``Wrapper.marketDataType(reqId, marketDataType)`` args."""
+    """``Wrapper.marketDataType(reqId, marketDataType)`` args. The type is
+    None when the message does not carry one."""
 
     reqId: int
-    marketDataType: int
+    marketDataType: int | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -483,7 +484,7 @@ def createMarketDataTypeArgs(
 ) -> MarketDataTypeArgs:
     """``Wrapper.marketDataType(reqId, marketDataType)`` args."""
     reqId = proto.reqId if proto.HasField("reqId") else 0
-    marketDataType = proto.marketDataType if proto.HasField("marketDataType") else 0
+    marketDataType = proto.marketDataType if proto.HasField("marketDataType") else None
     return MarketDataTypeArgs(reqId=reqId, marketDataType=marketDataType)
 
 

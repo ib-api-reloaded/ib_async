@@ -132,7 +132,15 @@ def test_market_data_type_proto_updates_ticker():
     ticker = _seedTicker(ib, 7)
     proto = MarketDataType_pb2.MarketDataType(reqId=7, marketDataType=3)
     ib.client.decoder.processProtoBuf(58, proto.SerializeToString())
-    assert ticker.marketDataType == 3
+    assert ticker.marketDataType is ibi.MarketDataType.DELAYED
+
+
+def test_market_data_type_proto_without_a_type_reports_nothing():
+    ib = _ibAtVersion(207)
+    ticker = _seedTicker(ib, 7)
+    proto = MarketDataType_pb2.MarketDataType(reqId=7)
+    ib.client.decoder.processProtoBuf(58, proto.SerializeToString())
+    assert ticker.marketDataType is None
 
 
 def test_reroute_mkt_data_req_proto_does_not_raise():

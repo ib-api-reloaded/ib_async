@@ -133,7 +133,7 @@ from .streams import (
     TickByTickStream,
     TickerStream,
 )
-from .ticker import HaltedStatus, Ticker
+from .ticker import HaltedStatus, MarketDataType, Ticker
 from .version import __version__, __version_info__
 from .wrapper import RequestError, Wrapper
 
@@ -259,6 +259,7 @@ __all__ = [
     "DepthOperation",
     "Ticker",
     "HaltedStatus",
+    "MarketDataType",
     "__version__",
     "__version_info__",
     "RequestError",

@@ -86,7 +86,7 @@ from ib_async.objects import (
 from ib_async.order import Order, OrderState, OrderStatus, Trade
 from ib_async.runtime import Tally
 from ib_async.streams import Stream
-from ib_async.ticker import HaltedStatus, Ticker
+from ib_async.ticker import HaltedStatus, MarketDataType, Ticker
 from ib_async.util import (
     UNSET_DOUBLE,
     UNSET_INTEGER,
@@ -1363,10 +1363,20 @@ class Wrapper(Generic[EmptyT]):
             CompositeKey("marketRule", (marketRuleId,)), priceIncrements
         )
 
-    def marketDataType(self, reqId: int, marketDataId: int):
+    def marketDataType(self, reqId: int, marketDataId: int | None):
+        """IBKR reports the type of market data it serves ``reqId`` with.
+        A message without a type reports nothing."""
         ticker = self._get_ticker(reqId)
-        if ticker:
-            ticker.marketDataType = marketDataId
+        if ticker is None or marketDataId is None:
+            return
+        try:
+            ticker.marketDataType = MarketDataType(marketDataId)
+        except ValueError:
+            self._logger.warning(
+                "unknown market data type %s for reqId %s", marketDataId, reqId
+            )
+            return
+        self.pendingTickers.add(ticker)
 
     def realtimeBar(
         self,

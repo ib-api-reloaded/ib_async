@@ -344,7 +344,7 @@ def test_tick_by_tick_mid_point_dispatch():
 def test_market_data_type_empty():
     args = createMarketDataTypeArgs(MarketDataType_pb2.MarketDataType())
     assert args.reqId == 0
-    assert args.marketDataType == 0
+    assert args.marketDataType is None
 
 
 def test_market_data_type_round_trip():

@@ -258,6 +258,16 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ones; the pool also grew with every contract ever streamed.
   ``cancelMktDepth`` keeps the book of a Ticker it ends.
   (:issue:`253`)
+* **``Ticker.marketDataType`` is the type IBKR reported, or None.** It
+  was ``1`` (live) on every new Ticker before IBKR reported anything, so
+  a stream served delayed, or not yet confirmed, read as live. It is now
+  ``None`` until IBKR's MarketDataType message for the stream arrives,
+  then a ``MarketDataType`` (``LIVE``, ``FROZEN``, ``DELAYED``,
+  ``DELAYED_FROZEN``, equal to IBKR's 1 to 4), and the report fires
+  ``updateEvent``. A new market data stream starts unknown, also on a
+  Ticker a depth stream kept live. A message without a type, or with
+  one outside IBKR's four, changes nothing. (:issue:`255`, thanks to
+  @giorgi1324)
 * **``IBC`` needs ``twsVersion``**: it has no default, so ``IBC()``
   raises ``TypeError``; pass it first, ``IBC(1019)`` or ``IBC("10.19")``
   (see Fixed). IBC's start script could not run without it.

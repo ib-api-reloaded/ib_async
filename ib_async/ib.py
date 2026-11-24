@@ -1943,10 +1943,11 @@ class IB(Generic[EmptyT]):
 
     def reqMarketDataType(self, marketDataType: int):
         """
-        Set the market data type used for :meth:`.reqMktData`.
+        Set the market data type used for :meth:`.reqMktData`. The type
+        IBKR then serves each stream with is ``Ticker.marketDataType``.
 
         Args:
-            marketDataType: One of:
+            marketDataType: A :class:`.MarketDataType`, or its number:
 
                 * 1 = Live
                 * 2 = Frozen

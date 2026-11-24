@@ -51,6 +51,23 @@ class HaltedStatus(IntEnum):
     VOLATILITY = 2
 
 
+class MarketDataType(IntEnum):
+    """The type of market data IBKR serves a request with, as it reports
+    it. :meth:`.IB.reqMarketDataType` sets the type asked for.
+
+    * ``LIVE``: streamed in real time; needs a market data subscription.
+    * ``FROZEN``: the last data recorded at the market's close.
+    * ``DELAYED``: free data, 15 to 20 minutes delayed.
+    * ``DELAYED_FROZEN``: delayed data as it stood at the close, for an
+      account without market data subscriptions.
+    """
+
+    LIVE = 1
+    FROZEN = 2
+    DELAYED = 3
+    DELAYED_FROZEN = 4
+
+
 def _new_news_deque() -> deque[NewsTick]:
     return deque(maxlen=_NEWS_MAXLEN)
 
@@ -101,7 +118,9 @@ class Ticker(Generic[EmptyT]):
     contract: Contract | None = None
     time: datetime | None = None
     timestamp: float | None = None
-    marketDataType: int = 1
+    # The type IBKR reported for the market data stream, or None until it
+    # reports one: prices can arrive first.
+    marketDataType: MarketDataType | None = None
     minTick: float | EmptyT | None = None
     bid: float | EmptyT | None = None
     bidSize: float | EmptyT | None = None
