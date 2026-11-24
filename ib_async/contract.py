@@ -147,10 +147,11 @@ class Contract:
         return Contract.create(**util.dataclassAsDict(c))
 
     def isHashable(self) -> bool:
-        """Whether this contract can be hashed: a bag always (by its legs,
-        whatever its conId: IBKR gives many different spreads one combo
-        conId, such as 28812380, and a bag of the user's own often has 0),
-        any other contract once qualified (by its conId)."""
+        """Whether this contract can be hashed: a bag always (by its legs
+        in their order, whatever its conId: IBKR gives many different
+        spreads one combo conId, such as 28812380, and a bag of the user's
+        own often has 0), any other contract once qualified (by its
+        conId)."""
         return self.secType == "BAG" or bool(self.conId)
 
     def __eq__(self, other):
@@ -159,6 +160,9 @@ class Contract:
         # against the front contract it shares its conId with: those compare
         # every field. (Equal contracts hash alike; a bag of the user's own
         # and IBKR's copy of it hash alike by their legs, but differ in conId.)
+        # A bag's legs are compared, and hashed, in the order given: IBKR
+        # quotes a spread by its legs as listed and may quote one order and
+        # not another, and an order's leg prices pair with them by position.
         if not isinstance(other, Contract):
             return False
         kinds = (self.secType, other.secType)
@@ -169,15 +173,8 @@ class Contract:
 
     def __hash__(self) -> int:
         if self.secType == "BAG":
-            return hash(
-                tuple(
-                    [
-                        util.dataclassAsTuple(b)
-                        for b in sorted(self.comboLegs, key=lambda x: x.conId)
-                    ]
-                    + [self.symbol, self.exchange]
-                )
-            )
+            legs = tuple([util.dataclassAsTuple(leg) for leg in self.comboLegs])
+            return hash((legs, self.symbol, self.exchange))
 
         if not self.isHashable():
             raise ValueError(

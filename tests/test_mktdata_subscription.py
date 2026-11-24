@@ -216,6 +216,55 @@ def test_bags_compare_by_legs_not_by_a_shared_conid():
     assert hash(first) == hash(_bag(28812380, 1000))
 
 
+# A gold calendar spread: buy December, sell February. IBKR quoted it with
+# February listed first and not with December first (#253).
+DEC = ComboLeg(conId=1001, ratio=1, action="BUY", exchange="COMEX")
+FEB = ComboLeg(conId=1002, ratio=1, action="SELL", exchange="COMEX")
+
+
+def _gold(*legs: ComboLeg) -> Bag:
+    return Bag(symbol="GC", exchange="COMEX", currency="USD", comboLegs=list(legs))
+
+
+def test_each_leg_order_of_a_spread_is_its_own_stream():
+    """IBKR quotes a spread by its legs in the order given, so each order is
+    its own request: sent as given, with its own Ticker, cancelled alone."""
+    ib = _wired_ib()
+    decTicker = ib.reqMktData(_gold(DEC, FEB))
+    febTicker = ib.reqMktData(_gold(FEB, DEC))
+    assert decTicker is not febTicker
+    sent = [c.args[1].comboLegs for c in ib.client.reqMktData.call_args_list]
+    assert sent == [[DEC, FEB], [FEB, DEC]]
+    assert febTicker.contract is not None
+    assert febTicker.contract.comboLegs == [FEB, DEC]
+    assert ib.ticker(_gold(FEB, DEC)) is febTicker
+    assert ib.reqMktData(_gold(FEB, DEC)) is febTicker
+    assert ib.client.reqMktData.call_count == 2
+
+    ib.wrapper.priceSizeTick(101, 1, 18.5, 5)
+    assert febTicker.bid == 18.5 and decTicker.isUnset(decTicker.bid)
+
+    assert ib.cancelMktData(_gold(FEB, DEC))
+    ib.client.cancelMktData.assert_called_once_with(101)
+    subs = ib.wrapper.subscriptions
+    assert subs.find_market_data_for_contract(_gold(DEC, FEB), "mktData")
+    assert set(ib.streams(_gold(DEC, FEB))) == {100}
+
+
+def test_another_leg_order_after_a_cancel_starts_with_an_empty_ticker():
+    ib = _wired_ib()
+    decTicker = ib.reqMktData(_gold(DEC, FEB))
+    ib.wrapper.priceSizeTick(100, 1, 18.5, 5)
+    ib.wrapper.priceSizeTick(100, 2, 19.5, 3)
+    assert ib.cancelMktData(_gold(DEC, FEB))
+
+    febTicker = ib.reqMktData(_gold(FEB, DEC))
+
+    assert febTicker is not decTicker
+    assert febTicker.isUnset(febTicker.bid) and febTicker.isUnset(febTicker.ask)
+    assert ib.client.reqMktData.call_args.args[1].comboLegs == [FEB, DEC]
+
+
 def _spread(*conIds: int) -> Contract:
     return Contract(
         secType="BAG",

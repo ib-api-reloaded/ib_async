@@ -482,6 +482,15 @@ are fixed in v3.0:
   identified by their legs, as they hash, and ``Contract.__eq__`` no
   longer counts two bags equal for their shared combo conId: it compares
   them on every field. (:issue:`236`)
+* **A spread's legs in another order got the first order's ticker.** IBKR
+  quotes a spread by its legs as listed, and may quote one order of the
+  same legs and not another. A bag hashed by its legs sorted by conId, so
+  ``reqMktData`` for the legs in another order sent nothing and returned
+  the first order's ticker, and after a cancel it returned that ticker
+  again with its old bid and ask. A bag now hashes by its legs in the
+  order given, as it already compared: each order is its own request, sent
+  as given, with its own ``Ticker``, cancelled alone. (:issue:`253`,
+  :issue:`254`, thanks to @giorgi1324)
 * **A continuous future shared its front future's market data.** A
   CONTFUT has its front contract's conId; market data was indexed by
   that conId, so ``reqMktData`` for the future after the CONTFUT returned

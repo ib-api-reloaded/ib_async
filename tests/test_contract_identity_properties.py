@@ -107,6 +107,24 @@ def test_contract_identity_by_sec_type(contract, other, conId):
         assert hash(twin) == -hash(contract)
 
 
+@given(data=st.data())
+@examples()
+def test_a_bag_is_its_legs_in_the_order_given(data: st.DataObject) -> None:
+    """IBKR quotes a spread by its legs as listed, and pairs an order's leg
+    prices with them by position, so a bag with its legs in another order
+    is another contract, with its own market data."""
+    bag = data.draw(contracts().filter(lambda c: c.secType == "BAG"))
+    reordered = dataclasses.replace(
+        bag, comboLegs=list(data.draw(st.permutations(bag.comboLegs)))
+    )
+    if reordered.comboLegs == bag.comboLegs:
+        assert reordered == bag
+        assert identity(reordered) == identity(bag)
+    else:
+        assert reordered != bag
+        assert identity(reordered) != identity(bag)
+
+
 @given(contract=contracts())
 @examples()
 def test_market_data_identity_exists_only_for_hashable_contracts(contract):

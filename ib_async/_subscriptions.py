@@ -801,8 +801,10 @@ class SubscriptionRegistry(Generic[EmptyT]):
           * Bags/spreads → ``hash(contract)``, the synthetic comboLeg hash
             from :meth:`Contract.__hash__`, whatever their conId: a bag's
             conId is often 0, and IBKR gives many different spreads one
-            combo conId, so only the legs tell spreads apart. Each distinct
-            spread gets its own entry, deduped on re-subscribe and
+            combo conId, so only the legs tell spreads apart. The legs count
+            in the order given, as IBKR quotes them, so the same legs listed
+            in another order are another request with its own Ticker. Each
+            distinct spread gets its own entry, deduped on re-subscribe and
             cancellable by contract. (Like the per-contract Ticker pool,
             also keyed by ``hash(contract)``, this carries a vanishingly
             small chance of colliding with a qualified contract's
