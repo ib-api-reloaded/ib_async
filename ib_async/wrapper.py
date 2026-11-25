@@ -432,6 +432,22 @@ def _accepted(trade: Trade) -> bool:
     return trade.serverOrder is not None or bool(trade.orderStatus.permId)
 
 
+def _sameExecution(earlier: Fill, fill: Fill) -> bool:
+    """Whether ``fill`` repeats ``earlier``'s execution, as IBKR describes a
+    correction ("all parameters identical except for the execID"): same
+    order, contract, account, side, shares and cumulative quantity. Two
+    real executions of one order differ in cumulative quantity. Combo legs
+    differ in contract, and allocations differ in account."""
+    a, b = earlier.execution, fill.execution
+    return (
+        bool(a.permId)
+        and a.cumQty is not None
+        and (a.permId, a.acctNumber, a.side, a.shares, a.cumQty)
+        == (b.permId, b.acctNumber, b.side, b.shares, b.cumQty)
+        and earlier.contract.conId == fill.contract.conId
+    )
+
+
 # Connection-state notifications (TWS "system messages" with reqId=-1):
 #   1100 - "Connectivity between IB and TWS has been lost."
 #   1101 - "Connectivity between IB and TWS has been restored - data lost."
@@ -577,6 +593,10 @@ class Wrapper(Generic[EmptyT]):
     """Executions whose Fill is in their Trade's ``fills``. An execution
     belongs to one order, so this answers for its Trade."""
 
+    _fillsByExecIdBase: dict[str, list[Fill]] = field(init=False)
+    """The fills for each execId up to its final period, to notice a
+    correction (see ``_noteCorrection``)."""
+
     _fillsAwaitingTrade: dict[int, list[str]] = field(init=False)
     """Live executions that arrived before their order had a Trade, by
     permId. The Trade takes them in, with their events, when it appears."""
@@ -658,6 +678,7 @@ class Wrapper(Generic[EmptyT]):
         self.fills = {}
         self._liveExecIds = set()
         self._attachedExecIds = set()
+        self._fillsByExecIdBase = {}
         self._fillsAwaitingTrade = {}
         self._pendingCommissionReports = OrderedDict()
         self.newsTicks = []
@@ -1265,6 +1286,30 @@ class Wrapper(Generic[EmptyT]):
                 clientId,
             )
 
+    def _noteCorrection(self, fill: Fill) -> None:
+        """Log a new execution that looks like IBKR's correction of an
+        earlier one. IBKR documents a correction as the same execution sent
+        again with an execId that differs only in the digits after the
+        final period. Its exact grammar and what follows it (commissions, a
+        changed price) are not documented, so the fill is kept as received
+        and counts in Trade.filled(); orderStatus.filled is TWS's own
+        total."""
+        base, _, revision = fill.execution.execId.rpartition(".")
+        if not base or not revision.isdigit():
+            return
+        # Combo legs and allocations can share a base, so each keeps a list.
+        siblings = self._fillsByExecIdBase.setdefault(base, [])
+        repeated = [e.execution.execId for e in siblings if _sameExecution(e, fill)]
+        siblings.append(fill)
+        if repeated:
+            self._logger.warning(
+                "Execution %s looks like a correction of %s (same execution, "
+                "execId differs after the final period). Both count in "
+                "Trade.filled(); orderStatus.filled is TWS's total.",
+                fill.execution.execId,
+                ", ".join(repeated),
+            )
+
     def execDetails(self, reqId: int, contract: Contract, execution: Execution):
         """
         This wrapper handles both live fills and responses to
@@ -1300,6 +1345,7 @@ class Wrapper(Generic[EmptyT]):
         fill = Fill(contract, execution, parkedReport or CommissionReport(), time)
         if execId not in self.fills:
             self.fills[execId] = fill
+            self._noteCorrection(fill)
         else:
             fill = self.fills[execId]
 

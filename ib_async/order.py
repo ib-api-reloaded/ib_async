@@ -746,6 +746,11 @@ class Trade:
         share quantity yet — never ``None``, since "the trade has
         zero shares filled so far" is a definite answer that user
         code can do arithmetic on.
+
+        Every execution of the order counts (for a combo, those of the bag
+        itself), including one IBKR sends as a correction of an earlier one
+        (an execId differing only after the final period; ib_async logs a
+        warning for it). ``orderStatus.filled`` is TWS's own total.
         """
         fills = self.fills
         if self.contract.secType == "BAG":

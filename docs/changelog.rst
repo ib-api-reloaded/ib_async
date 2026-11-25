@@ -74,6 +74,14 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   the streams on one contract. ``rerouteMktDataReqEvent`` and
   ``rerouteMktDepthReqEvent`` carry ``(stream, conId, exchange)``.
   (:issue:`247`, thanks to @wentbackward)
+* **A likely execution correction is logged.** IBKR documents a
+  correction as the same execution sent again with an execId that differs
+  only after the final period. ib_async keeps every execution as received,
+  so ``Trade.filled()`` counts both, and now logs a warning naming both
+  execIds when a new execution repeats an earlier one of the same order
+  (same contract, account, side, shares and cumulative quantity).
+  ``orderStatus.filled`` is TWS's own total. What a correction replaces is
+  not documented well enough to apply it. (:issue:`257`)
 * **``IB.qualifyContractDetails``** (and ``qualifyContractDetailsAsync``)
   qualifies contracts in place, as ``qualifyContracts`` does, and returns
   the ``ContractDetails`` each was qualified from, whose ``contract`` is
