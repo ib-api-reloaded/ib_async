@@ -551,8 +551,11 @@ class SimulatedTws:
         Sends the execution, the new order status, and the commission
         report. With ``reportFirst`` the commission report is sent before
         the execution, as happens in a replay race."""
+        # IBKR's execIds have four segments, and a correction differs only
+        # in the digits after the final period. The simulator numbers
+        # executions in the second segment.
         self._lastExecNumber += 1
-        execId = f"{placed.orderId}.{self._lastExecNumber}"
+        execId = f"0000e9b5.{self._lastExecNumber:08x}.01.01"
         execution = ibi.Execution(
             execId=execId,
             time=EXECUTED,
@@ -561,6 +564,7 @@ class SimulatedTws:
             permId=placed.order.permId,
             clientId=placed.order.clientId,
             orderId=placed.orderId,
+            cumQty=placed.filled + shares,
         )
         report = ibi.CommissionReport(execId=execId, commissionAndFees=Decimal(1))
         self.executions[execId] = (placed, execution, report)
@@ -617,6 +621,23 @@ class SimulatedTws:
         placed.ended = "rejected"
         self._orderStatus(placed, "Inactive")
         self.run()
+
+    def correctFill(self, execId: str) -> str:
+        """Send IBKR's documented correction of execution ``execId``: the
+        same execution with an execId that differs only in the digits
+        after the final period. The simulator also sends a commission
+        report for it, which IBKR does not document. No status follows.
+        Return the correction's execId."""
+        placed, execution, report = self.executions[execId]
+        base, _, revision = execId.rpartition(".")
+        correctionId = f"{base}.{int(revision) + 1:02d}"
+        correction = dataclasses.replace(execution, execId=correctionId)
+        correctionReport = dataclasses.replace(report, execId=correctionId)
+        self.executions[correctionId] = (placed, correction, correctionReport)
+        self.wrapper.execDetails(-1, placed.contract, correction)
+        self.wrapper.commissionReport(correctionReport)
+        self.run()
+        return correctionId
 
     def repeatFill(self, execId: str) -> None:
         """Send an execution and its commission report again."""

@@ -51,7 +51,7 @@ class Order:
     def execution(self, shares: Decimal) -> None:
         """An execution with no orderStatus after it; IBKR does not
         guarantee a status for every change."""
-        execId = f"{self.placed.orderId}.only.{len(self.trade.fills)}"
+        execId = f"0000e9b5.{self.placed.orderId:04x}{len(self.trade.fills):04x}.01.01"
         execution = ibi.Execution(
             execId=execId,
             time=EXECUTED,
