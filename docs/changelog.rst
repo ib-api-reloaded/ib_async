@@ -422,6 +422,21 @@ are fixed in v3.0:
   ``trade.log``, and fires ``statusEvent``; TWS's next status says
   where the order stands. (:issue:`256`, thanks to
   @lucafranco1994pot-cloud)
+* **A request refused with 321 never ended.** 321 ("Server error when
+  validating an API client request") was a warning so that a refused
+  modification leaves the live order working, but a what-if order, a
+  snapshot (``reqTickers``) or a data request IBKR refuses with it got
+  nothing more, and waited forever. IBKR sends it, for example, for a
+  what-if order for an incomplete contract, an unknown model name, and
+  any order while the API is in Read-Only mode; such a new order stayed
+  in ``openTrades()``. 321 now ends an in-flight request
+  (``RequestError`` with ``RaiseRequestErrors``). 321 and 110 end a new
+  order TWS has not accepted, also after a notice such as 10349 made it
+  ValidationError. TWS has accepted an order once it has sent the order
+  back or reported a status for it; such an order stays live, also
+  while TWS reports it PendingSubmit, since the refusal was of a
+  modification or a cancel. (:issue:`258`, thanks
+  to @lucafranco1994pot-cloud)
 * **Dividends of 1,000 or more were lost.** IBKR's dividend tick separates
   its fields with commas and also groups a number's thousands with them,
   so ``',1,089.45,20261116,2.199'`` split into five fields, was logged as

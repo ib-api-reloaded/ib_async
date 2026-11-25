@@ -298,7 +298,8 @@ class RequestError(Exception):
 # An error that names an order is handled in one of four ways. IBKR's error
 # callback does not say what happened to the order, so these lists do.
 #
-# 1. The order is still live, whatever it was doing (_WARNING_CODES).
+# 1. The order is still live, whatever it was doing (_WARNING_CODES), except
+#    that _REFUSED_REQUEST_CODES end a new order TWS has not accepted.
 # 2. The code ends the order, unless the order was modified after TWS
 #    acknowledged it (_ENDS_UNMODIFIED_ORDER_CODES).
 # 3. A refused cancel leaves the order as it was (_REFUSED_CANCEL_CODES).
@@ -319,8 +320,6 @@ class RequestError(Exception):
 # 492 - ? not listed
 # 10167 ? not listed
 # 10349 - Warning about "Order TIF was set to DAY based on order preset" but does NOT cancel active order
-# Note: error 321 means error validing, but if the message is the result of a MODIFY, the order _is still live_ and we must not delete it.
-# TODO: investigate if error 321 happens on _new_ order placement with incorrect parameters too, then we should probably delete the order.
 
 # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
 # 202 - Order cancelled - Reason:
@@ -365,6 +364,27 @@ _ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
 #   10148 OrderId <OrderId> that needs to be cancelled can not be cancelled,
 #         state:
 _REFUSED_CANCEL_CODES: Final[frozenset[int]] = frozenset({136, 137, 161, 10148})
+
+# Warnings that refuse the request they name. IBKR sends nothing more for
+# it, so they end an in-flight request (a what-if order or a data request)
+# and a new order TWS has not accepted. An accepted order stays live: the
+# refusal was of a modification or a cancel.
+#   110   The price does not conform to the minimum price variation for
+#         this contract.
+#   321   Server error when validating an API client request. Sent, for
+#         example, for any order while the API is in Read-Only mode, a
+#         what-if order for an incomplete contract, or an unknown model
+#         name.
+_REFUSED_REQUEST_CODES: Final[frozenset[int]] = frozenset({110, 321})
+
+
+def _accepted(trade: Trade) -> bool:
+    """Whether TWS has accepted the order: it has sent the order back
+    (``serverOrder``) or reported a status, which carries the ``permId``
+    TWS assigned. A warning before either, such as 10349, does not
+    count."""
+    return trade.serverOrder is not None or bool(trade.orderStatus.permId)
+
 
 # Connection-state notifications (TWS "system messages" with reqId=-1):
 #   1100 - "Connectivity between IB and TWS has been lost."
@@ -2337,16 +2357,12 @@ class Wrapper(Generic[EmptyT]):
 
         isWarning = errorCode in _WARNING_CODES or 2100 <= errorCode < 2200
 
-        if errorCode == 110 and isRequest:
-            # whatIf request failed
-            isWarning = False
-
-        if (
-            errorCode == 110
-            and trade
-            and trade.orderStatus.status == OrderStatus.PendingSubmit
+        if errorCode in _REFUSED_REQUEST_CODES and (
+            isRequest
+            or self.requests.owedReqIdKey(reqId) is not None
+            or (trade is not None and not _accepted(trade))
         ):
-            # invalid price for a new order must cancel it
+            # IBKR refused a request, or a new order it has not accepted
             isWarning = False
 
         if (
