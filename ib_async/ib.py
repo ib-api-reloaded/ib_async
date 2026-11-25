@@ -305,10 +305,25 @@ class IB(Generic[EmptyT]):
           blocking request to finish before raising ``asyncio.TimeoutError``.
           The default value of 0 will wait indefinitely.
           Note: This timeout is not used for the ``*Async`` methods.
+          A request on a request id ends when IBKR answers or refuses it.
+          The following requests have no request id, so no error can end
+          them: :meth:`reqCurrentTime`, :meth:`reqAccountUpdates`,
+          :meth:`reqOpenOrders`, :meth:`reqAllOpenOrders`,
+          :meth:`reqCompletedOrders`, :meth:`reqPositions`,
+          :meth:`reqMktDepthExchanges`, :meth:`reqScannerParameters`,
+          :meth:`reqNewsProviders`, :meth:`reqCurrentTimeInMillisAsync`
+          and :meth:`reqFamilyCodesAsync`. If IBKR never answers, the wait
+          ends only at this timeout, at a timeout around the ``*Async``
+          call, or at a disconnect. The last two have no blocking form, so
+          only a timeout around the call bounds them. At connect, the
+          connect ``timeout`` bounds the ones connect sends, unless it is
+          0 or None. :meth:`reqMarketRule` and :meth:`requestFA` have no
+          request id either, and time out on their own.
         RaiseRequestErrors (bool):
           Specifies the behaviour when certain API requests fail:
 
-          * :data:`False`: Silently return an empty result;
+          * :data:`False`: Silently return the request's empty result: an
+            empty list, or None for a request that answers one object;
           * :data:`True`: Raise a :class:`.RequestError`.
         MaxSyncedSubAccounts (int): Do not use sub-account updates
           if the number of sub-accounts exceeds this number (50 by default).
