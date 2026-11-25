@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import math
+import operator
 import sys
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, tzinfo
 from datetime import date as date_
@@ -681,8 +683,25 @@ class EfpData:
     dividendsToLastTradeDate: float
 
 
+def _computed(
+    x: float | None, y: float | None, op: Callable[[float, float], float]
+) -> float | None:
+    """``op(x, y)``, or None when IBKR did not compute ``x`` or ``y``."""
+    return None if x is None or y is None else op(x, y)
+
+
 @dataclass(slots=True, frozen=True)
 class OptionComputation:
+    """Volatility, prices and greeks from one option computation tick.
+
+    A value IBKR did not compute is None. ``a + b`` and ``a - b`` combine
+    two legs field by field (``longGreeks - shortGreeks`` for a spread),
+    and ``a * n`` scales each field. A result field is None when a leg's
+    field is None, so an unknown leg never reads as zero. The result takes
+    ``undPrice`` from the left operand and does not carry ``pvDividend``
+    or ``tickAttrib``.
+    """
+
     tickAttrib: int
     impliedVol: float | None = None
     delta: float | None = None
@@ -696,45 +715,38 @@ class OptionComputation:
     def __add__(self, other: OptionComputation) -> OptionComputation:
         if not isinstance(other, self.__class__):
             raise TypeError(f"Cannot add {type(self)} and {type(other)}")
-
-        return self.__class__(
-            tickAttrib=0,
-            impliedVol=(self.impliedVol or 0) + (other.impliedVol or 0),
-            delta=(self.delta or 0) + (other.delta or 0),
-            optPrice=(self.optPrice or 0) + (other.optPrice or 0),
-            gamma=(self.gamma or 0) + (other.gamma or 0),
-            vega=(self.vega or 0) + (other.vega or 0),
-            theta=(self.theta or 0) + (other.theta or 0),
-            undPrice=self.undPrice,
-        )
+        return self._legs(other, operator.add)
 
     def __sub__(self, other: OptionComputation) -> OptionComputation:
         if not isinstance(other, self.__class__):
             raise TypeError(f"Cannot subtract {type(self)} and {type(other)}")
+        return self._legs(other, operator.sub)
 
+    def _legs(
+        self, other: OptionComputation, op: Callable[[float, float], float]
+    ) -> OptionComputation:
         return self.__class__(
             tickAttrib=0,
-            impliedVol=(self.impliedVol or 0) - (other.impliedVol or 0),
-            delta=(self.delta or 0) - (other.delta or 0),
-            optPrice=(self.optPrice or 0) - (other.optPrice or 0),
-            gamma=(self.gamma or 0) - (other.gamma or 0),
-            vega=(self.vega or 0) - (other.vega or 0),
-            theta=(self.theta or 0) - (other.theta or 0),
+            impliedVol=_computed(self.impliedVol, other.impliedVol, op),
+            delta=_computed(self.delta, other.delta, op),
+            optPrice=_computed(self.optPrice, other.optPrice, op),
+            gamma=_computed(self.gamma, other.gamma, op),
+            vega=_computed(self.vega, other.vega, op),
+            theta=_computed(self.theta, other.theta, op),
             undPrice=self.undPrice,
         )
 
     def __mul__(self, other: float) -> OptionComputation:
         if not isinstance(other, int | float):
             raise TypeError(f"Cannot multiply {type(self)} and {type(other)}")
-
         return self.__class__(
             tickAttrib=0,
-            impliedVol=(self.impliedVol or 0) * other,
-            delta=(self.delta or 0) * other,
-            optPrice=(self.optPrice or 0) * other,
-            gamma=(self.gamma or 0) * other,
-            vega=(self.vega or 0) * other,
-            theta=(self.theta or 0) * other,
+            impliedVol=_computed(self.impliedVol, other, operator.mul),
+            delta=_computed(self.delta, other, operator.mul),
+            optPrice=_computed(self.optPrice, other, operator.mul),
+            gamma=_computed(self.gamma, other, operator.mul),
+            vega=_computed(self.vega, other, operator.mul),
+            theta=_computed(self.theta, other, operator.mul),
             undPrice=self.undPrice,
         )
 

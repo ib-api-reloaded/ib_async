@@ -258,6 +258,15 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ones; the pool also grew with every contract ever streamed.
   ``cancelMktDepth`` keeps the book of a Ticker it ends.
   (:issue:`253`)
+* **``OptionComputation`` arithmetic keeps unknown values unknown.**
+  ``+``, ``-`` and ``*`` (spread greeks such as ``longGreeks -
+  shortGreeks``) treated a volatility, price or greek IBKR did not compute
+  as ``0``, so a spread with an unknown leg looked complete and two
+  unknown legs looked delta neutral. A result field is now ``None`` when
+  either leg's field is ``None``; computed legs combine as before. Code
+  that uses a result field in arithmetic or a comparison without checking
+  it now raises ``TypeError`` where it got a wrong number. (:issue:`260`,
+  thanks to @lucafranco1994pot-cloud)
 * **``Ticker.marketDataType`` is the type IBKR reported, or None.** It
   was ``1`` (live) on every new Ticker before IBKR reported anything, so
   a stream served delayed, or not yet confirmed, read as live. It is now
