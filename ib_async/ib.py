@@ -101,6 +101,7 @@ from ib_async.wrapper import RequestError, Wrapper
 
 if TYPE_CHECKING:
     from ib_async._pb.ConfigResponse_pb2 import ConfigResponse
+    from ib_async._pb.UpdateConfigResponse_pb2 import UpdateConfigResponse
 
 
 def _tagValueList(options: Sequence[TagValue]) -> list[TagValue]:
@@ -3699,7 +3700,7 @@ class IB(Generic[EmptyT]):
         the raw ``ConfigResponse`` proto carrying nested
         LockAndExitConfig / ApiConfig / MessageConfig / OrdersConfig
         sub-messages, or None when TWS refuses the request."""
-        with self._reqIdRequest() as opened:
+        with self._reqIdRequest(refusal=refusedAsNone) as opened:
             self.client.reqConfig(opened.reqId)
         return opened.future
 
@@ -3711,12 +3712,12 @@ class IB(Generic[EmptyT]):
         orders=None,
         acceptedWarnings=None,
         resetAPIOrderSequence: bool = False,
-    ) -> Awaitable:
+    ) -> Awaitable[UpdateConfigResponse | None]:
         """Push a TWS / IB Gateway config update. Protobuf-only —
         server >= 221 (MIN_SERVER_VER_UPDATE_CONFIG). The future settles
         with the raw ``UpdateConfigResponse`` proto carrying status +
-        changed-fields list."""
-        with self._reqIdRequest() as opened:
+        changed-fields list, or None when TWS refuses the request."""
+        with self._reqIdRequest(refusal=refusedAsNone) as opened:
             self.client.updateConfig(
                 opened.reqId,
                 lockAndExit=lockAndExit,
