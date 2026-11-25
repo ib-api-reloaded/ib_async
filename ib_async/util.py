@@ -294,7 +294,10 @@ def _columnKind(values: list[FieldValue]) -> type | str | None:
         return _NUMBER if largestInt <= _FLOAT_EXACT_INT else None
     if len(kinds) > 1 or len(zones) > 1 or whole + fraction > _POLARS_DECIMAL_DIGITS:
         return None
-    return next(iter(kinds), _NUMBER)
+    if not kinds:
+        return _NUMBER
+    [kind] = kinds
+    return kind
 
 
 def _series(polars: ModuleType, name: str, values: list[FieldValue]) -> pl.Series:

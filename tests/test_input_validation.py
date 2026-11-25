@@ -26,8 +26,10 @@ def test_bracket_order_action_must_be_buy_or_sell():
 
 @pytest.mark.parametrize("step", [0, -1])
 def test_time_range_step_must_be_positive(step):
+    # Take one item only: with a step of 0 an unchecked range never ends.
     with pytest.raises(ValueError, match="positive"):
-        next(util.timeRange("10:00:00", "11:00:00", step))
+        for _ in util.timeRange("10:00:00", "11:00:00", step):
+            break
 
 
 def test_format_si_rejects_out_of_range_values():

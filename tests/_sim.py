@@ -170,7 +170,7 @@ class SimulatedTws:
         self.ib = ibi.IB() if defaults is None else ibi.IB(defaults)
         self.client = MagicMock()
         self.client.isConnected.return_value = True
-        self._reqIds = iter(range(1000, 10**6))
+        self._lastReqId = 999
         self.client.getReqId.side_effect = self._reqId
         for name, hasReqId in REQUESTS.items():
             getattr(self.client, name).side_effect = functools.partial(
@@ -192,11 +192,11 @@ class SimulatedTws:
         # Orders other API clients placed. TWS sends their messages only to
         # the master client, so sending them makes this IB the master client.
         self.otherOrders: list[PlacedOrder] = []
-        self._otherPermIds = iter(range(2_000_000, 10**7))
+        self._lastOtherPermId = 1_999_999
         # The master client id set in TWS's API settings, as reqConfig
         # reports it; None when unset.
         self.masterClientId: int | None = None
-        self._execIds = iter(range(1, 10**6))
+        self._lastExecNumber = 0
         # Executions sent, keyed by execId, with the order and commission report.
         self.executions: dict[
             str, tuple[PlacedOrder, ibi.Execution, ibi.CommissionReport]
@@ -224,7 +224,8 @@ class SimulatedTws:
     def _reqId(self) -> int:
         if not self.connected:
             raise ConnectionError("Not connected")  # same as Client.getReqId
-        return next(self._reqIds)
+        self._lastReqId += 1
+        return self._lastReqId
 
     def _asked(self, name: str, hasReqId: bool, *args: ClientArg) -> None:
         if not self.connected:
@@ -262,8 +263,9 @@ class SimulatedTws:
         """An order another API client placed. Nothing is sent until the
         server reports it, as with ``acknowledge``."""
         assert clientId != CLIENT_ID
+        self._lastOtherPermId += 1
         copy = dataclasses.replace(
-            order, orderId=orderId, clientId=clientId, permId=next(self._otherPermIds)
+            order, orderId=orderId, clientId=clientId, permId=self._lastOtherPermId
         )
         placed = PlacedOrder(orderId, CONTRACT, copy)
         self.otherOrders.append(placed)
@@ -549,7 +551,8 @@ class SimulatedTws:
         Sends the execution, the new order status, and the commission
         report. With ``reportFirst`` the commission report is sent before
         the execution, as happens in a replay race."""
-        execId = f"{placed.orderId}.{next(self._execIds)}"
+        self._lastExecNumber += 1
+        execId = f"{placed.orderId}.{self._lastExecNumber}"
         execution = ibi.Execution(
             execId=execId,
             time=EXECUTED,

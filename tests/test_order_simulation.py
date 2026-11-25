@@ -112,7 +112,11 @@ class OrderSimulation(RuleBasedStateMachine):
         self.tracked: list[Tracked] = []
         self.epoch = 0
         # The other client's order ids start where this client's do.
-        self.otherIds = iter(range(1000, 10**6))
+        self.lastOtherId = 999
+
+    def newOtherId(self) -> int:
+        self.lastOtherId += 1
+        return self.lastOtherId
 
     @property
     def ib(self) -> ibi.IB:
@@ -195,7 +199,7 @@ class OrderSimulation(RuleBasedStateMachine):
             if limit
             else ibi.MarketOrder("SELL", quantity)
         )
-        placed = self.tws.otherClientOrder(OTHER_CLIENT, next(self.otherIds), order)
+        placed = self.tws.otherClientOrder(OTHER_CLIENT, self.newOtherId(), order)
         self.tws.acknowledge(placed)
         trade = self.ib.wrapper.trades[(OTHER_CLIENT, placed.orderId)]
         assert trade.order.clientId == OTHER_CLIENT
@@ -221,7 +225,7 @@ class OrderSimulation(RuleBasedStateMachine):
         if not self.tws.connected:
             return
         order = ibi.LimitOrder("SELL", quantity, 50.00)
-        placed = self.tws.otherClientOrder(OTHER_CLIENT, next(self.otherIds), order)
+        placed = self.tws.otherClientOrder(OTHER_CLIENT, self.newOtherId(), order)
         execId = self.tws.fill(placed, Decimal(1), reportFirst=reportFirst)
         seen: list[tuple[str, str]] = []
 

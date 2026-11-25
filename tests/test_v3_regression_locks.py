@@ -831,8 +831,7 @@ def test_background_tasks_strongly_references_reconnect_resync():
         )
 
         # A single resync task landed in the set.
-        assert len(ib._backgroundTasks) == 1
-        task = next(iter(ib._backgroundTasks))
+        [task] = ib._backgroundTasks
         assert isinstance(task, asyncio.Task)
 
         # The done-callback removes the task once it settles, so after

@@ -13,13 +13,14 @@ import ib_async
 PACKAGE = Path(__file__).resolve().parent.parent / "ib_async"
 MODULES = sorted([p for p in PACKAGE.rglob("*.py") if "_pb" not in p.parts])
 # Every Python file in the repository that is linted: the library, its
-# scripts, examples and tests.
+# scripts, examples, tests and the docs configuration.
 SOURCES = MODULES + sorted(
     [
         p
         for folder in ("scripts", "examples", "tests")
         for p in (PACKAGE.parent / folder).rglob("*.py")
     ]
+    + [PACKAGE.parent / "docs" / "conf.py"]
 )
 # The comment that keeps a generator expression, with the reason after it.
 GENERATOR_REASON = "# generator:"
@@ -196,6 +197,24 @@ def test_finite_data_is_built_with_list_comprehensions(path: Path) -> None:
     ]
     assert not listInAny, f"any() over a list comprehension: {', '.join(listInAny)}"
     assert not unexplained, f"generator expressions: {', '.join(unexplained)}"
+
+
+@pytest.mark.parametrize(
+    "path", SOURCES, ids=lambda p: str(p.relative_to(PACKAGE.parent))
+)
+def test_no_call_to_next(path: Path) -> None:
+    """Nothing calls ``next()``. Code says what it takes instead: an
+    unpacking such as ``[only] = items``, a counter, or a loop that stops
+    after one item."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+    calls = [
+        f"line {node.lineno}"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "next"
+    ]
+    assert not calls, f"next() calls: {', '.join(calls)}"
 
 
 def test_importing_ib_async_patches_no_class():
