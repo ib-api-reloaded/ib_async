@@ -25,6 +25,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 import ib_async as ibi
 from ib_async import CommissionReport, Fill, OrderStatus, Trade
 from ib_async.util import getLoop
+from ib_async.wrapper import _REFUSED_CANCEL_CODES
 from tests._property import machine
 from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
 
@@ -323,6 +324,21 @@ class OrderSimulation(RuleBasedStateMachine):
         tracked = self.pick(data, candidates)
         self.tws.rejectOrder(tracked.placed)
         tracked.ended = "rejected"
+
+    @rule(data=st.data(), code=st.sampled_from(sorted(_REFUSED_CANCEL_CODES)))
+    def tws_refuses_cancel(self, data: st.DataObject, code: int) -> None:
+        """TWS refuses a cancel this client sent. The order is unchanged,
+        working or already ended, and no status follows, so the model does
+        not change."""
+        candidates = [
+            t
+            for t in self.tracked
+            if t.clientCancelled and t.epoch == self.epoch and not t.otherClient
+        ]
+        if not candidates or not self.tws.connected:
+            return
+        tracked = self.pick(data, candidates)
+        self.tws.refuseCancel(tracked.placed, code)
 
     @rule(data=st.data(), code=st.sampled_from([201, 439, 440]))
     def tws_refuses_modification(self, data: st.DataObject, code: int) -> None:

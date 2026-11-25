@@ -38,6 +38,16 @@ EXECUTED = dt.datetime(2026, 10, 14, 15, 30, tzinfo=dt.UTC)
 CONTRACT = ibi.Stock("SIM", "SMART", "USD", conId=1)
 CLIENT_ID = 7
 
+# IBKR's texts for the error codes that refuse a cancel.
+REFUSED_CANCEL_TEXTS: dict[int, str] = {
+    136: "This order cannot be cancelled.",
+    137: "VWAP orders can only be cancelled up to three minutes before the start time.",
+    161: "Cancel attempted when order is not in a cancellable state. "
+    "Order permId = {permId}",
+    10148: "OrderId {orderId} that needs to be cancelled can not be cancelled, "
+    "state: {state}.",
+}
+
 T = TypeVar("T")
 
 # The empty values (IBDefaults) the tests use that are not numbers.
@@ -576,6 +586,19 @@ class SimulatedTws:
         """Reject the order with error ``code``."""
         placed.ended = "rejected"
         self.wrapper.error(placed.orderId, code, "Order rejected - reason:", "")
+        self.run()
+
+    def refuseCancel(self, placed: PlacedOrder, code: int = 10148) -> None:
+        """Refuse the client's cancel with error ``code``. The order is
+        unchanged at the server (still working, or already ended), and no
+        status follows."""
+        assert placed.cancelRequested
+        text = REFUSED_CANCEL_TEXTS[code].format(
+            orderId=placed.orderId,
+            permId=placed.order.permId,
+            state=placed.lastStatus,
+        )
+        self.wrapper.error(placed.orderId, code, text, "")
         self.run()
 
     def refuseModification(self, placed: PlacedOrder, code: int = 201) -> None:

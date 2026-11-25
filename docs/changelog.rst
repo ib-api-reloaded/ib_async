@@ -411,6 +411,17 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 These were broken on v2.x against modern TWS / Gateway versions and
 are fixed in v3.0:
 
+* **A refused cancel marked the order Cancelled.** IBKR refuses a cancel
+  with 136, 137, 161 or 10148 when the order cannot be cancelled: it has
+  filled, a cancel is already pending, or it is not in a cancellable state.
+  ib_async ended the trade as Cancelled and fired ``cancelledEvent``, so a
+  fill racing the cancel fired both ``cancelledEvent`` and ``filledEvent``,
+  and an order still working left ``openTrades()``. A refused cancel now
+  leaves the trade's status unchanged (PendingCancel if TWS has not
+  reported since the cancel), logs the refusal with its code in
+  ``trade.log``, and fires ``statusEvent``; TWS's next status says
+  where the order stands. (:issue:`256`, thanks to
+  @lucafranco1994pot-cloud)
 * **Dividends of 1,000 or more were lost.** IBKR's dividend tick separates
   its fields with commas and also groups a number's thousands with them,
   so ``',1,089.45,20261116,2.199'`` split into five fields, was logged as

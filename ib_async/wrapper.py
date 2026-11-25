@@ -295,13 +295,14 @@ class RequestError(Exception):
         self.message = message
 
 
-# An error that names an order is handled in one of three ways. IBKR's error
+# An error that names an order is handled in one of four ways. IBKR's error
 # callback does not say what happened to the order, so these lists do.
 #
 # 1. The order is still live, whatever it was doing (_WARNING_CODES).
 # 2. The code ends the order, unless the order was modified after TWS
 #    acknowledged it (_ENDS_UNMODIFIED_ORDER_CODES).
-# 3. Any other error ends the order, including 202 (Order cancelled).
+# 3. A refused cancel leaves the order as it was (_REFUSED_CANCEL_CODES).
+# 4. Any other error ends the order, including 202 (Order cancelled).
 
 # Warnings are currently:
 # 105 - Order being modified does not match the original order. (?)
@@ -352,6 +353,18 @@ class RequestError(Exception):
 _ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
     {104, 134, 201, 422, 439, 440, 441, 442, 443, 444, 10241, 10242}
 )
+
+# Errors that refuse a cancel request. The order is unchanged: it keeps
+# working, or it has already ended and its status reports how. IBKR's
+# PendingCancel likewise means an execution may still arrive. Texts are from
+# https://interactivebrokers.github.io/tws-api/message_codes.html
+#   136   This order cannot be cancelled.
+#   137   VWAP orders can only be cancelled up to three minutes before the
+#         start time.
+#   161   Cancel attempted when order is not in a cancellable state.
+#   10148 OrderId <OrderId> that needs to be cancelled can not be cancelled,
+#         state:
+_REFUSED_CANCEL_CODES: Final[frozenset[int]] = frozenset({136, 137, 161, 10148})
 
 # Connection-state notifications (TWS "system messages" with reqId=-1):
 #   1100 - "Connectivity between IB and TWS has been lost."
@@ -2392,10 +2405,22 @@ class Wrapper(Generic[EmptyT]):
                 if advancedOrderRejectJson:
                     trade.advancedError = advancedOrderRejectJson
 
-                # Errors here mean a new order is REJECTED or an existing order
-                # is server-canceled (DAY orders, margin problems). A refused
+                # A refused cancel leaves the order as it was. Any other error
+                # here means a new order is REJECTED or an existing order is
+                # server-canceled (DAY orders, margin problems). A refused
                 # modification of a live order took the warning branch above.
-                if not trade.isDone():
+                if errorCode in _REFUSED_CANCEL_CODES:
+                    # The cancel failed. The status stays as it was, which is
+                    # the local PendingCancel if TWS has not reported since
+                    # the cancel. TWS's next status says where the order
+                    # stands.
+                    logEntry = TradeLogEntry(
+                        self.lastTime, trade.orderStatus.status, msg, errorCode
+                    )
+                    trade.log.append(logEntry)
+                    self.ib.orderStatusEvent.emit(trade)
+                    trade.statusEvent.emit(trade)
+                elif not trade.isDone():
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg, errorCode)
                     trade.log.append(logEntry)
