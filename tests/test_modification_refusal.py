@@ -18,10 +18,16 @@ from ib_async.util import getLoop
 from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
 
 # Each ends an order that was not modified after TWS acknowledged it.
-ENDS_UNMODIFIED_ORDER = [104, 134, 201, 422, 439, 440, 441, 442, 443, 444, 10241, 10242]
+ENDS_UNMODIFIED_ORDER = [
+    104, 109, 134, 160, 163, 201, 355, 382, 383, 388, 403, 422,
+    439, 440, 441, 442, 443, 444, 10240, 10241, 10242,
+]  # fmt: skip
 
 # Warnings for any order.
 ALWAYS_WARNINGS = [105, 329, 481, 2102]
+
+# Notices, not refusals, by IBKR's text.
+NOTICES = [131, 10018, 10233]
 
 
 class Scenario:
@@ -70,6 +76,17 @@ def test_warning_code_leaves_any_order_working(code: int) -> None:
     scenario = Scenario()
     scenario.tws.rejectOrder(scenario.placed, code)
     scenario.assertStillWorking()
+
+
+@pytest.mark.parametrize("acknowledged", [False, True])
+@pytest.mark.parametrize("code", NOTICES)
+def test_notice_leaves_the_order_working(code: int, acknowledged: bool) -> None:
+    scenario = Scenario(acknowledged=acknowledged)
+    scenario.tws.rejectOrder(scenario.placed, code)
+    scenario.assertStillWorking()
+    scenario.tws.acknowledge(scenario.placed)
+    assert scenario.trade.orderStatus.status == OrderStatus.Submitted
+    assert scenario.cancelled == []
 
 
 def test_reduced_size_leaves_a_new_order_working() -> None:

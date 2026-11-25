@@ -437,6 +437,18 @@ are fixed in v3.0:
   while TWS reports it PendingSubmit, since the refusal was of a
   modification or a cancel. (:issue:`258`, thanks
   to @lucafranco1994pot-cloud)
+* **Order notices and refused modifications cancelled live orders.** Three
+  notices ended the order as Cancelled: 131, whose text says the
+  sweep-to-fill flag and display size "will be ignored"; 10018, "Orders
+  use EV warning."; and 10233, "Defaults were inherited from CASH preset
+  during the creation of this order." They are now warnings. Nine
+  validation errors of the order's terms (109, 160, 163, 355, 382, 383,
+  388, 403, 10240, such as 163 for a price beyond the percentage
+  constraint of the precautionary settings) ended a modified order. TWS
+  checks a modification's terms as it does a new order's, and a refused
+  modification leaves the order working on its old terms. They now end a
+  new order and hold a modified one until TWS reports a status, as 201
+  and 134 do. (:issue:`259`, thanks to @lucafranco1994pot-cloud)
 * **Dividends of 1,000 or more were lost.** IBKR's dividend tick separates
   its fields with commas and also groups a number's thousands with them,
   so ``',1,089.45,20261116,2.199'`` split into five fields, was logged as

@@ -313,13 +313,20 @@ class RequestError(Exception):
 # 329 - Order modify failed. Cannot change to the new order type.
 # 399 - Order message error
 # 404 -	Shares for this order are not immediately available for short sale. The order will be held while we attempt to locate the shares.
-# 434 -	The order size cannot be zero.
+# 434 -	The order size cannot be zero. (Kept as a warning; why is not
+#       recorded. 160, with the same meaning, ends a new order.)
 # 481 - Order size was reduced. IBKR support says the order is not rejected; it
 #       can mean IBKR has no shares to borrow for a short sale
 #       (https://dimon.ca/dmitrys-tws-api-faq/).
 # 492 - ? not listed
 # 10167 ? not listed
 # 10349 - Warning about "Order TIF was set to DAY based on order preset" but does NOT cancel active order
+# Notices, not refusals, by IBKR's text:
+# 131 - The sweep-to-fill flag and display size are only valid for US stocks
+#       routed through SMART, and will be ignored.
+# 10018 - Orders use EV warning.
+# 10233 - Defaults were inherited from CASH preset during the creation of this
+#         order.
 
 # Previously this was included as a Warning condition, but 202 is literally "Order Canceled" error status, so now it is an order-delete error:
 # 202 - Order cancelled - Reason:
@@ -349,8 +356,47 @@ class RequestError(Exception):
 #   441   Algo attributes validation failed:
 #   442   Specified algorithm is not allowed for this order.
 #   443   Order processing failed. Unknown algo attribute.
+# Validation of the order's terms. No report of them on a modification is
+# known; TWS checks a modification's terms as it does a new order's (109,
+# 163, 382 and 383 check the precautionary order settings, unless the
+# account bypasses them for API orders):
+#   109   Price is out of the range defined by the Percentage setting at
+#         order defaults frame. The order will not be transmitted.
+#   160   The size value cannot be zero.
+#   163   The price specified would violate the percentage constraint
+#         specified in the default order settings.
+#   355   Order size does not conform to market rule.
+#   382   The price specified violates the number of ticks constraint
+#         specified in the default order settings.
+#   383   The size specified violates the size constraint specified in the
+#         default order settings.
+#   388   Order size is smaller than the minimum requirement.
+#   403   Invalid stop price.
+#   10240 You must enter a valid Price Cap.
 _ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
-    {104, 134, 201, 422, 439, 440, 441, 442, 443, 444, 10241, 10242}
+    {
+        104,
+        109,
+        134,
+        160,
+        163,
+        201,
+        355,
+        382,
+        383,
+        388,
+        403,
+        422,
+        439,
+        440,
+        441,
+        442,
+        443,
+        444,
+        10240,
+        10241,
+        10242,
+    }
 )
 
 # Errors that refuse a cancel request. The order is unchanged: it keeps
@@ -404,6 +450,7 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
     {
         105,
         110,
+        131,
         165,
         321,
         329,
@@ -415,9 +462,11 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
         1100,
         1101,
         1102,
+        10018,
         10090,
         10091,
         10167,
+        10233,
         10349,
     }
 )

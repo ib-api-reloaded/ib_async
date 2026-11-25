@@ -121,6 +121,23 @@ def test_whatIf_refusal_answers_a_refused_OrderState():
     assert WhatIfKey(555) not in ib.wrapper.requests
 
 
+@pytest.mark.parametrize("code", [131, 10018, 10233])
+def test_a_notice_does_not_refuse_a_whatIf(code: int):
+    """A notice says the order goes ahead, so the preview's answer still
+    settles it."""
+    ib = _wired_ib()
+    future = ib.whatIfOrderAsync(
+        ibi.Stock("ABC", "SMART", "USD", conId=1), ibi.MarketOrder("BUY", 100)
+    )
+
+    ib.wrapper.error(
+        reqId=555, errorCode=code, errorString="notice", advancedOrderRejectJson=""
+    )
+
+    assert not future.done()
+    assert WhatIfKey(555) in ib.wrapper.requests
+
+
 def test_answered_whatIf_is_not_refused():
     assert not OrderState(initMarginChange="1234.5").whatIfRefused
 
