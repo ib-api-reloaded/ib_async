@@ -28,23 +28,26 @@ SCAN = ibi.ScannerSubscription(
     instrument="STK", locationCode="STK.US", scanCode="TOP_PERC_GAIN"
 )
 
-Live = ibi.Ticker | ibi.RealTimeBarList | ibi.PnLSingle | ibi.ScanDataList
+Live = ibi.Ticker | ibi.RealTimeBarList | ibi.PnL | ibi.PnLSingle | ibi.ScanDataList
 
 STREAMS: dict[str, Callable[[ibi.IB], Live]] = {
     "reqMktData": lambda ib: ib.reqMktData(STOCK),
     "reqTickByTickData": lambda ib: ib.reqTickByTickData(STOCK, "Last"),
     "reqMktDepth": lambda ib: ib.reqMktDepth(STOCK),
     "reqRealTimeBars": lambda ib: ib.reqRealTimeBars(STOCK, 5, "TRADES", True),
+    "reqPnL": lambda ib: ib.reqPnL("DU1", "M"),
     "reqPnLSingle": lambda ib: ib.reqPnLSingle("DU1", "", 265598),
     "reqScannerSubscription": lambda ib: ib.reqScannerSubscription(SCAN),
 }
 
 # Each stream with "no security definition", market data with every code
-# that ends it, and depth with its own.
+# that ends it, depth with its own, and PnL refused for an unknown model
+# name (321, "Model name 'M' is incorrect").
 ENDED = sorted(
     {(name, 200) for name in STREAMS}
     | {("reqMktData", code) for code in STREAM_ENDING_CODES}
     | {("reqMktDepth", 309), ("reqMktDepth", 316)}
+    | {("reqPnL", 321), ("reqPnLSingle", 321)}
 )
 # Errors after which IBKR keeps serving the stream, or that do not say it
 # ended.
@@ -92,6 +95,24 @@ def test_a_stream_ibkr_refuses_ends_and_can_be_requested_again(
         assert isinstance(again, ibi.Ticker) and again is not live
         assert live.updateEvent.done() and live.last == 101.5
         assert again.isUnset(again.last)
+
+
+@pytest.mark.parametrize("proto", [False, True])
+def test_a_stream_refused_with_321_is_an_error_that_ends_it(proto: bool) -> None:
+    """321 is a warning for an accepted order and an error for a stream."""
+    session, _, _ = started("reqPnL", proto)
+    seen: list[tuple[int, bool]] = []
+    session.ib.streamErrorEvent += lambda stream, code, text, ended: seen.append(
+        (code, ended)
+    )
+    session.receive(
+        errorFrame(reqIdOf(session), 321, "Model name 'M' is incorrect", proto)
+    )
+
+    assert seen == [(321, True)]
+    counters = session.ib.runtimeState().counters
+    assert counters.errors == (CodeCount(321, 1),) and counters.warnings == ()
+    assert counters.subscriptionsRefused == 1
 
 
 @pytest.mark.parametrize("proto", [False, True])

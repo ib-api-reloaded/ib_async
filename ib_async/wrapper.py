@@ -495,6 +495,9 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
 #   200   no security definition for the request
 #   309   max number of market depth requests reached
 #   316   market depth HALTED, re-subscribe
+#   321   server error when validating an API client request (such as
+#         "Model name '' is incorrect" for reqPnL); a warning for an
+#         accepted order, an error for a stream
 #   354   not subscribed to the requested market data
 #   10089 requires an additional market data subscription
 #   10186 not subscribed, and delayed data not enabled
@@ -502,7 +505,7 @@ _WARNING_CODES: Final[frozenset[int]] = frozenset(
 # (the live request with that id continues), 322, 10197 (competing live
 # session), and the warnings above (10090, 10091, 10167).
 STREAM_ENDING_CODES: Final[frozenset[int]] = frozenset(
-    {101, 200, 309, 316, 354, 10089, 10186}
+    {101, 200, 309, 316, 321, 354, 10089, 10186}
 )
 
 
@@ -2458,6 +2461,10 @@ class Wrapper(Generic[EmptyT]):
             or (trade is not None and not _accepted(trade))
         ):
             # IBKR refused a request, or a new order it has not accepted
+            isWarning = False
+
+        if streamSub is not None and errorCode in STREAM_ENDING_CODES:
+            # IBKR refused the stream, also with 321, a warning for an order
             isWarning = False
 
         if (

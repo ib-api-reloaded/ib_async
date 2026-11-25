@@ -459,6 +459,12 @@ are fixed in v3.0:
   while TWS reports it PendingSubmit, since the refusal was of a
   modification or a cancel. (:issue:`258`, thanks
   to @lucafranco1994pot-cloud)
+* **A stream refused with 321 stayed registered.** IBKR refuses, for
+  example, ``reqPnL`` for an unknown model name with 321 ("Model name ''
+  is incorrect") and sends nothing more for it, but the subscription stayed
+  registered, so the corrected request was deduplicated onto it and
+  never updated. 321 now ends the stream it names, as the other
+  stream-ending codes do.
 * **Order notices and refused modifications cancelled live orders.** Three
   notices ended the order as Cancelled: 131, whose text says the
   sweep-to-fill flag and display size "will be ignored"; 10018, "Orders
