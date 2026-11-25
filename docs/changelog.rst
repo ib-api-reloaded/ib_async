@@ -266,6 +266,11 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ones; the pool also grew with every contract ever streamed.
   ``cancelMktDepth`` keeps the book of a Ticker it ends.
   (:issue:`253`)
+* **``Trade.isActive()`` is True while a cancel is pending.**
+  ``OrderStatus.ActiveStates`` (orders that can still execute) now
+  includes ``PendingCancel``: IBKR says an execution may still arrive while
+  a cancel is pending, and its own clients count it as active.
+  ``isWorking()`` and ``isDone()`` are unchanged.
 * **``OptionComputation`` arithmetic keeps unknown values unknown.**
   ``+``, ``-`` and ``*`` (spread greeks such as ``longGreeks -
   shortGreeks``) treated a volatility, price or greek IBKR did not compute

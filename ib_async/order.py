@@ -397,13 +397,15 @@ class OrderStatus:
     # broker-reported Inactive, which is a terminal rejection.
     UncertainStates: ClassVar[frozenset[str]] = frozenset(["Disconnected"])
 
-    # order is capable of executing at sometime in the future
+    # order is capable of executing at sometime in the future, including
+    # while a cancel is pending (IBKR: an execution may still arrive)
     ActiveStates: ClassVar[frozenset[str]] = frozenset(
         [
             "PendingSubmit",
             "ApiPending",
             "PreSubmitted",
             "Submitted",
+            "PendingCancel",
             "ValidationError",
             "ApiUpdate",
         ]

@@ -174,3 +174,15 @@ def test_a_cancel_tws_confirms_ends_once() -> None:
 
     assert o.trade.orderStatus.status == OrderStatus.Cancelled
     assert o.events == ["cancelled"]
+
+
+def test_a_pending_cancel_is_active_until_tws_ends_it() -> None:
+    """IBKR: an execution may still arrive while a cancel is pending, so
+    the order can still execute."""
+    o = Order()
+    o.cancel()
+
+    assert o.trade.orderStatus.status == OrderStatus.PendingCancel
+    assert o.trade.isActive() and not o.trade.isDone()
+    o.tws.cancelOrder(o.placed)
+    assert not o.trade.isActive() and o.trade.isDone()

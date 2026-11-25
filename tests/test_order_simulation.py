@@ -428,6 +428,8 @@ class OrderSimulation(RuleBasedStateMachine):
             )
             assert trade.isDone() == (t.ended in ("filled", "cancelled", "rejected"))
             assert trade.isUncertain() == (t.ended == "disconnected")
+            # A pending cancel is active: an execution can still arrive.
+            assert trade.isActive() == (not trade.isDone() and not trade.isUncertain())
             assert trade.log, trade
             assert trade.log[-1].status == trade.orderStatus.status, trade.log[-1]
 
