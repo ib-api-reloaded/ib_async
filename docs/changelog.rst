@@ -14,6 +14,9 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 
 **The most likely-to-hit changes**
 
+* ib_async connects only to TWS / IB Gateway 10.51 or later (server
+  version 226), the oldest IBKR accepts API connections from. An older
+  gateway is refused at connect, with an error naming both versions.
 * Financial numeric fields are now ``Decimal | None`` (was ``float``).
 * ``commission`` is now ``commissionAndFees`` on ``CommissionReport``
   and ``OrderState``. The legacy attribute keeps working with a

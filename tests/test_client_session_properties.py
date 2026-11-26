@@ -2,8 +2,8 @@
 
 The tests replace the socket with a recording connection and pass the
 server's frames to the client's data handler. The handshake property
-covers every server version from MIN_SERVER_VER_PROTOBUF to
-MAX_CLIENT_VER. It sends nextValidId and managedAccounts in either order,
+runs at server version 226, the only one the client accepts. It sends
+nextValidId and managedAccounts in either order,
 each as a binary frame or a protobuf message, and then connects a second
 session after a disconnect. The disconnect tests close the socket from
 the peer side and disconnect from the client side in each connection
@@ -20,7 +20,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from ib_async._server_versions import MAX_CLIENT_VER, MIN_SERVER_VER_PROTOBUF
+from ib_async._server_versions import MAX_CLIENT_VER
 from ib_async.client import Client
 from tests._property import examples
 from tests._session import (
@@ -37,7 +37,6 @@ accountLists = st.lists(st.sampled_from(["DU1", "DU2", "DU3"]), min_size=1, uniq
 
 
 @given(
-    version=st.integers(MIN_SERVER_VER_PROTOBUF, MAX_CLIENT_VER),
     idFirst=st.booleans(),
     protoId=st.booleans(),
     protoAccounts=st.booleans(),
@@ -48,7 +47,6 @@ accountLists = st.lists(st.sampled_from(["DU1", "DU2", "DU3"]), min_size=1, uniq
 )
 @examples()
 def test_api_starts_after_next_valid_id_and_managed_accounts(
-    version,
     idFirst,
     protoId,
     protoAccounts,
@@ -63,9 +61,9 @@ def test_api_starts_after_next_valid_id_and_managed_accounts(
     assert client.connState == Client.CONNECTING
     assert len(session.conn.sent) == 1  # the version banner
 
-    session.receive(handshake(version))
+    session.receive(handshake(MAX_CLIENT_VER))
     assert client.isConnected() and not client.isReady()
-    assert client.serverVersion() == version == client.decoder.serverVersion
+    assert client.serverVersion() == MAX_CLIENT_VER == client.decoder.serverVersion
     assert len(session.conn.sent) == 2  # startApi went out
     assert session.started == 0 and not task.done()
 
@@ -96,7 +94,7 @@ def test_api_starts_after_next_valid_id_and_managed_accounts(
     assert session.ended == 1 and not client.isReady()
     task = session.connect(clientId=7)
     session.receive(
-        handshake(version),
+        handshake(MAX_CLIENT_VER),
         managedAccountsFrame(secondAccounts, protoAccounts),
         nextValidIdFrame(secondOrderId, protoId),
     )
@@ -137,16 +135,15 @@ CLIENT_ID_IN_USE = (
 )
 
 
-@given(
-    version=st.integers(MIN_SERVER_VER_PROTOBUF, MAX_CLIENT_VER), proto=st.booleans()
-)
-@examples()
-def test_client_id_in_use_fails_connect_with_the_server_error(version, proto):
+@pytest.mark.parametrize("proto", [False, True])
+def test_client_id_in_use_fails_connect_with_the_server_error(proto):
     # TWS answers startApi with error 326 and closes the socket. connect
     # has no timeout here, so only the close can end it.
     session = Session()
     task = session.connect(clientId=3)
-    session.receive(handshake(version), errorFrame(-1, 326, CLIENT_ID_IN_USE, proto))
+    session.receive(
+        handshake(MAX_CLIENT_VER), errorFrame(-1, 326, CLIENT_ID_IN_USE, proto)
+    )
     assert not task.done()
     session.client._onSocketDisconnected("")
     session.run()
@@ -221,7 +218,10 @@ def test_server_too_old_fails_connect():
     session.receive(handshake(Client.MinClientVersion - 1))
     error = task.exception()
     assert isinstance(error, ConnectionError)
-    assert str(error) == "TWS/gateway version must be >= 972"
+    assert str(error) == (
+        "TWS / IB Gateway server version 225 is older than 226 (TWS API 10.51), "
+        "the oldest ib_async supports"
+    )
     assert session.conn.closed >= 1
 
 

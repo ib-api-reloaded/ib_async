@@ -52,7 +52,7 @@ def _sentBanner() -> bytes:
     return banner
 
 
-def test_banner_advertises_ibkr_10_51_server_version():
-    body = b"v157..226"
+def test_banner_asks_for_ibkr_10_51_server_version():
+    body = b"v226..226"
 
     assert _sentBanner() == b"API\0" + struct.pack(">I", len(body)) + body

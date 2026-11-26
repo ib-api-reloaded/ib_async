@@ -10,13 +10,13 @@ version built for that. After December it is the only supported version.
 Until then, 2.1.0 and the `next` branch are transitional and get no new
 features. All performance, feature and usability work goes into 3.0.
 
-|                     | 2.1.0                             | `next`                     | `next-protobuf`                    |
-| ------------------- | --------------------------------- | -------------------------- | ---------------------------------- |
-| What it is          | Released on PyPI in December 2025 | 2.x fixes made after 2.1.0 | ib_async 3.0                       |
-| Wire protocol       | IBKR's text protocol              | IBKR's text protocol       | IBKR's protobuf protocol           |
-| API server version  | Up to 178                         | Up to 178                  | Up to 226 (TWS / IB Gateway 10.51) |
-| Python              | 3.10+                             | 3.11+                      | 3.11 to 3.15, PyPy 3.11 and 3.12   |
-| After December 2026 | Legacy, unsupported               | Legacy, unsupported        | Supported                          |
+|                     | 2.1.0                             | `next`                     | `next-protobuf`                       |
+| ------------------- | --------------------------------- | -------------------------- | ------------------------------------- |
+| What it is          | Released on PyPI in December 2025 | 2.x fixes made after 2.1.0 | ib_async 3.0                          |
+| Wire protocol       | IBKR's text protocol              | IBKR's text protocol       | IBKR's protobuf protocol              |
+| API server version  | Up to 178                         | Up to 178                  | 226 (TWS / IB Gateway 10.51 or later) |
+| Python              | 3.10+                             | 3.11+                      | 3.11 to 3.15, PyPy 3.11 and 3.12      |
+| After December 2026 | Legacy, unsupported               | Legacy, unsupported        | Supported                             |
 
 Three version numbers are involved, and they are often confused:
 

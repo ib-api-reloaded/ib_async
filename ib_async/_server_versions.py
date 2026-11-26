@@ -188,9 +188,10 @@ MIN_SERVER_VER_ODD_LOT_BID_ASK_QUOTES: Final = 225
 UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM: Final = 226
 
 # --- Client-side handshake bounds
-# MIN_CLIENT_VER below 100 used the pre-enhanced-handshake path (no length
-# prefix on the wire). We don't support that ancient framing.
-MIN_CLIENT_VER: Final = 100
+# The oldest server version this client accepts: TWS / IB Gateway 10.51,
+# the minimum IBKR accepts connections from. Every message has a protobuf
+# form there, so the client sends and reads protobuf only.
+MIN_CLIENT_VER: Final = UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM
 # MAX_CLIENT_VER tracks the latest IBKR feature gate the codebase has
 # audited and patched for. Bumping this ALSO requires patches to every
 # conditional read/write at the new gate — see ``client.py`` and

@@ -24,6 +24,7 @@ from ._pb_msgids import (
 )
 from ._server_versions import (
     MAX_CLIENT_VER,
+    MIN_CLIENT_VER,
     MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
     MIN_SERVER_VER_AUTO_CANCEL_PARENT,
     MIN_SERVER_VER_CME_TAGGING_FIELDS,
@@ -175,16 +176,14 @@ class Client:
     MaxRequests = 45
     RequestsInterval = 1
 
-    # ``MaxClientVersion`` advertises the most-recent TWS / IB Gateway
-    # server version this client knows how to talk to. The handshake at
-    # ``connectAsync`` sends ``v{Min}..{Max}`` and the server picks the
-    # min(server-max, our-max) at negotiation time. Bumping this MUST be
-    # paired with patches to every send-side / receive-side gated field
-    # at gates between the old cap and the new — see
-    # ``ib_async/_server_versions.py`` for the symbolic gate constants.
-    # As of v3.0 the binary path handles all gates 158-226 and the
-    # protobuf path takes over per-message-family at 201-213.
-    MinClientVersion = 157
+    # The handshake at ``connectAsync`` sends ``v{Min}..{Max}`` and the
+    # server picks min(server max, our max). ``MinClientVersion`` is TWS /
+    # IB Gateway 10.51 (server 226), the oldest IBKR accepts; a server
+    # older than that is refused at the handshake. ``MaxClientVersion`` is
+    # the newest server version this client knows; bumping it must come
+    # with the fields of every gate in between (see
+    # ``ib_async/_server_versions.py``).
+    MinClientVersion = MIN_CLIENT_VER
     MaxClientVersion = MAX_CLIENT_VER
 
     DISCONNECTED, CONNECTING, CONNECTED = range(3)
@@ -352,11 +351,9 @@ class Client:
     def setOptionalCapabilities(self, optCapab: str) -> None:
         """Set the optional capabilities string sent with ``startApi``.
 
-        The value is included in the START_API frame (binary path field
-        4 / proto ``optionalCapabilities``) and gated server-side by
-        ``MIN_SERVER_VER_OPTIONAL_CAPABILITIES`` (=72). Our
-        ``MinClientVersion`` is 157 so the gate is always satisfied.
-        Must be called before ``connectAsync`` to take effect — the
+        The value is sent as the START_API request's
+        ``optionalCapabilities``. Must be called before ``connectAsync``
+        to take effect — the
         value is read inside ``startApi`` which fires once during the
         connection handshake.
         """
@@ -616,7 +613,11 @@ class Client:
                 version, _connTime = fields
                 self._serverVersion = int(version)
                 if self._serverVersion < self.MinClientVersion:
-                    self._onSocketDisconnected("TWS/gateway version must be >= 972")
+                    self._onSocketDisconnected(
+                        f"TWS / IB Gateway server version {self._serverVersion} "
+                        f"is older than {self.MinClientVersion} (TWS API 10.51), "
+                        "the oldest ib_async supports"
+                    )
                     return
                 self.decoder.serverVersion = self._serverVersion
                 self.connState = Client.CONNECTED
