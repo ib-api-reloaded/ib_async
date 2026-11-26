@@ -465,6 +465,13 @@ are fixed in v3.0:
   registered, so the corrected request was deduplicated onto it and
   never updated. 321 now ends the stream it names, as the other
   stream-ending codes do.
+* **A startup request that failed was dropped silently.** Connect
+  reported only the startup requests that timed out. One that failed
+  otherwise, such as a refusal raised as ``RequestError`` with
+  ``RaiseRequestErrors``, was neither logged nor counted, so connect
+  succeeded without its data even with ``raiseSyncErrors``. It is now
+  logged at error level, and with ``raiseSyncErrors`` connect raises
+  ``ConnectionError``, as documented.
 * **Order notices and refused modifications cancelled live orders.** Three
   notices ended the order as Cancelled: 131, whose text says the
   sweep-to-fill flag and display size "will be ignored"; 10018, "Orders

@@ -2912,7 +2912,7 @@ class IB(Generic[EmptyT]):
 
             reqs = self._startupRequests(fetchFields, readonly, account, accounts)
 
-            # run initializing requests concurrently and log if any times out
+            # run initializing requests concurrently and log any that fails
             tasks = [asyncio.wait_for(send(), timeout) for send in reqs.values()]
             errors = []
             resps = await asyncio.gather(*tasks, return_exceptions=True)
@@ -2924,6 +2924,11 @@ class IB(Generic[EmptyT]):
                     # A request times out only under a limit.
                     assert timeout is not None  # noqa: S101 - narrows for the type checker
                     self._timedOut(name, timeout)
+                elif isinstance(resp, BaseException):
+                    # Such as a RequestError with RaiseRequestErrors.
+                    msg = f"{name} request failed: {resp!r}"
+                    errors.append(msg)
+                    self._logger.error(msg)
 
             # the request for executions must come after all orders are in
             if fetchFields & StartupFetch.EXECUTIONS:
@@ -2935,6 +2940,12 @@ class IB(Generic[EmptyT]):
                     self._logger.error(msg)
                     assert timeout is not None  # noqa: S101 - narrows for the type checker
                     self._timedOut("executions", timeout)
+                except RequestError as error:
+                    # A refusal with RaiseRequestErrors, reported as for
+                    # the requests above.
+                    msg = f"executions request failed: {error!r}"
+                    errors.append(msg)
+                    self._logger.error(msg)
 
             if raiseSyncErrors and len(errors) > 0:
                 raise ConnectionError(errors)

@@ -13,6 +13,8 @@ events, when the Trade appears.
 from __future__ import annotations
 
 import asyncio
+import logging
+from dataclasses import dataclass
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -56,6 +58,79 @@ def connect(tws: SimulatedTws) -> None:
     while asks := tws.openAsks():
         tws.answer(asks[0])
     assert task.done() and task.result() is tws.ib
+
+
+@dataclass(frozen=True, slots=True)
+class StartupRefusal:
+    """A startup request TWS refuses: what connect fetches, the request
+    the client sends, and the name connect reports it by."""
+
+    fetch: StartupFetch
+    kind: str
+    name: str
+
+
+REFUSALS = [
+    StartupRefusal(
+        StartupFetch.SUB_ACCOUNT_UPDATES,
+        "reqAccountUpdatesMulti",
+        "account updates for DU1",
+    ),
+    StartupRefusal(StartupFetch.EXECUTIONS, "reqExecutions", "executions"),
+]
+
+
+def connectRefusing(
+    tws: SimulatedTws, refusal: StartupRefusal, raiseSyncErrors: bool
+) -> asyncio.Future[ibi.IB]:
+    """Connect with RaiseRequestErrors, fetching what ``refusal`` names,
+    which TWS refuses; answer every other startup request."""
+    tws.ib.RaiseRequestErrors = True
+    tws.client.connectAsync = AsyncMock()
+    # A failed connect disconnects, which logs these.
+    tws.client.connectionStats.return_value = ibi.ConnectionStats(0, 0, 0, 0, 0, 0)
+    tws.client.getAccounts.return_value = ["DU1"]
+    tws.client.serverVersion.return_value = 226
+    tws.client.isReady.return_value = True
+    task: asyncio.Future[ibi.IB] = tws.start(
+        tws.ib.connectAsync(
+            clientId=CLIENT_ID,
+            timeout=0,
+            fetchFields=refusal.fetch,
+            raiseSyncErrors=raiseSyncErrors,
+        )
+    )
+    while asks := tws.openAsks():
+        if asks[0].kind == refusal.kind:
+            tws.refuse(asks[0], 321)
+        else:
+            tws.answer(asks[0])
+    return task
+
+
+@pytest.mark.parametrize("refusal", REFUSALS, ids=lambda r: r.kind)
+def test_a_refused_startup_request_is_logged(
+    caplog: pytest.LogCaptureFixture, refusal: StartupRefusal
+) -> None:
+    tws = SimulatedTws(getLoop())
+    with caplog.at_level(logging.ERROR, logger="ib_async.ib"):
+        task = connectRefusing(tws, refusal, raiseSyncErrors=False)
+
+    assert task.result() is tws.ib
+    [failed] = [r for r in caplog.records if "request failed" in r.getMessage()]
+    assert refusal.name in failed.getMessage()
+
+
+@pytest.mark.parametrize("refusal", REFUSALS, ids=lambda r: r.kind)
+def test_a_refused_startup_request_fails_connect_when_asked_to(
+    refusal: StartupRefusal,
+) -> None:
+    tws = SimulatedTws(getLoop())
+    task = connectRefusing(tws, refusal, raiseSyncErrors=True)
+
+    error = task.exception()
+    assert isinstance(error, ConnectionError)
+    assert f"{refusal.name} request failed" in str(error)
 
 
 def otherTrade(tws: SimulatedTws, orderId: int = 42) -> Trade | None:
