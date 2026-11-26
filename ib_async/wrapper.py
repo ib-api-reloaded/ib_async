@@ -921,8 +921,9 @@ class Wrapper(Generic[EmptyT]):
         self.ib.accountValueEvent.emit(acctVal)
 
     def accountDownloadEnd(self, _account: str):
-        # sent after updateAccountValue and updatePortfolio both finished
-        self.requests.set_result(SingletonKey("accountValues"))
+        # sent after updateAccountValue and updatePortfolio both finished;
+        # the values are in accountValues, and the request answers None
+        self.requests.set_result(SingletonKey("accountValues"), None)
 
     def accountUpdateMulti(
         self,
@@ -939,7 +940,8 @@ class Wrapper(Generic[EmptyT]):
         self.ib.accountValueEvent.emit(acctVal)
 
     def accountUpdateMultiEnd(self, reqId: int):
-        self.requests.set_result(ReqIdKey(reqId))
+        # The values are in accountValues; the request answers None.
+        self.requests.set_result(ReqIdKey(reqId), None)
 
     def accountSummary(
         self, reqId: int, account: str, tag: str, value: str, currency: str
@@ -950,7 +952,8 @@ class Wrapper(Generic[EmptyT]):
         self.ib.accountSummaryEvent.emit(acctVal)
 
     def accountSummaryEnd(self, reqId: int):
-        self.requests.set_result(ReqIdKey(reqId))
+        # The values are in acctSummary; the request answers None.
+        self.requests.set_result(ReqIdKey(reqId), None)
 
     def updatePortfolio(
         self,

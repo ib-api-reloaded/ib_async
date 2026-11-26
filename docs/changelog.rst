@@ -472,6 +472,16 @@ are fixed in v3.0:
   succeeded without its data even with ``raiseSyncErrors``. It is now
   logged at error level, and with ``raiseSyncErrors`` connect raises
   ``ConnectionError``, as documented.
+* **Return types say what each IB method returns.** Every public method
+  of ``IB`` declares its return type. ``reqAccountSummaryAsync``,
+  ``reqAccountUpdatesAsync`` and ``reqAccountUpdatesMultiAsync`` were
+  typed to answer None but answered an empty list; they answer None,
+  also on a refusal unless ``RaiseRequestErrors`` is set, and the values
+  are in ``accountSummary()`` and ``accountValues()``.
+  ``reqMatchingSymbols``, ``reqMarketRule`` and ``requestFA`` are typed
+  to answer None on their own timeout, and ``calculateImpliedVolatility``
+  and ``calculateOptionPrice`` on a refusal or their timeout, as their
+  async siblings were.
 * **Order notices and refused modifications cancelled live orders.** Three
   notices ended the order as Cancelled: 131, whose text says the
   sweep-to-fill flag and display size "will be ignored"; 10018, "Orders

@@ -217,6 +217,89 @@ def test_no_call_to_next(path: Path) -> None:
     assert not calls, f"next() calls: {', '.join(calls)}"
 
 
+# Generic types that say nothing without their parameters.
+GENERICS = {
+    "list", "dict", "set", "frozenset", "tuple", "Awaitable", "Coroutine",
+    "Callable", "Iterator", "Iterable", "Sequence", "Mapping", "Future",
+}  # fmt: skip
+
+
+def test_every_public_ib_method_declares_what_it_returns() -> None:
+    """Each public method of IB has a return annotation, and none of its
+    generic types is bare (``Awaitable`` or ``list`` without parameters)."""
+    path = PACKAGE / "ib.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+    [ib] = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "IB"]
+    unannotated = []
+    bare = []
+    for node in ib.body:
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        if node.name.startswith("_"):
+            continue
+        if node.returns is None:
+            unannotated.append(f"{node.name} (line {node.lineno})")
+            continue
+        parameterized = {
+            id(n.value) for n in ast.walk(node.returns) if isinstance(n, ast.Subscript)
+        }
+        if any(
+            isinstance(n, ast.Name) and n.id in GENERICS and id(n) not in parameterized
+            for n in ast.walk(node.returns)
+        ):
+            bare.append(f"{node.name} (line {node.lineno})")
+    assert not unannotated, f"no return annotation: {', '.join(unannotated)}"
+    assert not bare, f"bare generic return types: {', '.join(bare)}"
+
+
+# Blocking methods whose return type is narrower than their async
+# sibling's on purpose.
+NARROWER_THAN_ASYNC = {"qualifyContracts"}
+
+
+def _awaited(returns: ast.expr) -> str:
+    """The type an async method's return annotation awaits to."""
+    if (
+        isinstance(returns, ast.Subscript)
+        and isinstance(returns.value, ast.Name)
+        and returns.value.id == "Awaitable"
+    ):
+        return ast.unparse(returns.slice)
+    return ast.unparse(returns)
+
+
+def test_each_blocking_ib_method_returns_what_its_async_sibling_does() -> None:
+    """A method that runs ``self._run(self.xAsync(...))`` declares the
+    type ``xAsync`` answers."""
+    path = PACKAGE / "ib.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+    [ib] = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "IB"]
+    methods = {
+        n.name: n
+        for n in ib.body
+        if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    mismatched = []
+    for name, method in methods.items():
+        sibling = methods.get(f"{name}Async")
+        if sibling is None or name in NARROWER_THAN_ASYNC:
+            continue
+        runs = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "_run"
+            for node in ast.walk(method)
+        )
+        if not runs or method.returns is None or sibling.returns is None:
+            continue
+        if ast.unparse(method.returns) != _awaited(sibling.returns):
+            mismatched.append(
+                f"{name} -> {ast.unparse(method.returns)}, "
+                f"{name}Async -> {_awaited(sibling.returns)}"
+            )
+    assert not mismatched, "; ".join(mismatched)
+
+
 def test_importing_ib_async_patches_no_class():
     """A class has the methods its body defines: importing ib_async adds
     none to the classes it exports or to another library's."""

@@ -56,6 +56,7 @@ from ib_async.objects import (
     EmptyT,
     Execution,
     ExecutionFilter,
+    FamilyCode,
     Fill,
     HistogramData,
     HistoricalNews,
@@ -80,6 +81,7 @@ from ib_async.objects import (
     ScanDataList,
     ScannerSubscription,
     SmartComponent,
+    SoftDollarTier,
     TagValue,
     TimedOutRequest,
     TradeLogEntry,
@@ -102,6 +104,11 @@ from ib_async.wrapper import RequestError, Wrapper
 if TYPE_CHECKING:
     from ib_async._pb.ConfigResponse_pb2 import ConfigResponse
     from ib_async._pb.UpdateConfigResponse_pb2 import UpdateConfigResponse
+
+# What reqHistoricalTicks answers: one kind of tick, by whatToShow.
+HistoricalTicks = (
+    list[HistoricalTick] | list[HistoricalTickBidAsk] | list[HistoricalTickLast]
+)
 
 
 def _tagValueList(options: Sequence[TagValue]) -> list[TagValue]:
@@ -895,7 +902,7 @@ class IB(Generic[EmptyT]):
 
             self.waitOnUpdate(endTime - time.time() if timeout else 0)
 
-    def setTimeout(self, timeout: float = 60):
+    def setTimeout(self, timeout: float = 60) -> None:
         """
         Set a timeout for receiving messages from TWS/IBG, emitting
         ``timeoutEvent`` if there is no incoming data for too long.
@@ -1397,7 +1404,7 @@ class IB(Generic[EmptyT]):
 
         return trade
 
-    def reqGlobalCancel(self, orderCancel: OrderCancel | None = None):
+    def reqGlobalCancel(self, orderCancel: OrderCancel | None = None) -> None:
         """
         Cancel all active trades including those placed by other
         clients or TWS/IB gateway.
@@ -1419,7 +1426,7 @@ class IB(Generic[EmptyT]):
         """
         return self._run(self.reqCurrentTimeAsync())
 
-    def reqAccountUpdates(self, account: str = ""):
+    def reqAccountUpdates(self, account: str = "") -> None:
         """
         This is called at startup - no need to call again.
 
@@ -1434,7 +1441,7 @@ class IB(Generic[EmptyT]):
         """
         self._run(self.reqAccountUpdatesAsync(account))
 
-    def reqAccountUpdatesMulti(self, account: str = "", modelCode: str = ""):
+    def reqAccountUpdatesMulti(self, account: str = "", modelCode: str = "") -> None:
         """
         It is recommended to use :meth:`.accountValues` instead.
 
@@ -1448,7 +1455,7 @@ class IB(Generic[EmptyT]):
         """
         self._run(self.reqAccountUpdatesMultiAsync(account, modelCode))
 
-    def reqAccountSummary(self):
+    def reqAccountSummary(self) -> None:
         """
         It is recommended to use :meth:`.accountSummary` instead.
 
@@ -1459,7 +1466,7 @@ class IB(Generic[EmptyT]):
         """
         self._run(self.reqAccountSummaryAsync())
 
-    def reqAutoOpenOrders(self, autoBind: bool = True):
+    def reqAutoOpenOrders(self, autoBind: bool = True) -> None:
         """
         Bind manual TWS orders so that they can be managed from this client.
         The clientId must be 0 and the TWS API setting "Use negative numbers
@@ -1639,7 +1646,7 @@ class IB(Generic[EmptyT]):
             self.client.reqPnLSingle(reqId, account, modelCode, conId)
         return pnlSingle
 
-    def cancelPnLSingle(self, account: str, modelCode: str, conId: int):
+    def cancelPnLSingle(self, account: str, modelCode: str, conId: int) -> None:
         """
         Cancel PnLSingle subscription for the given account, modelCode
         and conId.
@@ -1676,7 +1683,7 @@ class IB(Generic[EmptyT]):
         """
         return self._run(self.reqContractDetailsAsync(contract))
 
-    def reqMatchingSymbols(self, pattern: str) -> list[ContractDescription]:
+    def reqMatchingSymbols(self, pattern: str) -> list[ContractDescription] | None:
         """
         Request contract descriptions of contracts that match a pattern.
 
@@ -1691,7 +1698,7 @@ class IB(Generic[EmptyT]):
         """
         return self._run(self.reqMatchingSymbolsAsync(pattern))
 
-    def reqMarketRule(self, marketRuleId: int) -> PriceIncrement:
+    def reqMarketRule(self, marketRuleId: int) -> list[PriceIncrement] | None:
         """
         Request price increments rule.
 
@@ -1746,7 +1753,7 @@ class IB(Generic[EmptyT]):
             )
         return bars
 
-    def cancelRealTimeBars(self, bars: RealTimeBarList):
+    def cancelRealTimeBars(self, bars: RealTimeBarList) -> None:
         """
         Cancel the realtime bars subscription.
 
@@ -1831,7 +1838,7 @@ class IB(Generic[EmptyT]):
             )
         )
 
-    def cancelHistoricalData(self, bars: BarDataList):
+    def cancelHistoricalData(self, bars: BarDataList) -> None:
         """
         Cancel the update subscription for the historical bars.
 
@@ -1915,7 +1922,7 @@ class IB(Generic[EmptyT]):
         useRth: bool,
         ignoreSize: bool = False,
         miscOptions: Sequence[TagValue] = (),
-    ) -> list[HistoricalTick] | list[HistoricalTickBidAsk] | list[HistoricalTickLast]:
+    ) -> HistoricalTicks:
         """
         Request historical ticks. The time resolution of the ticks
         is one second.
@@ -1957,7 +1964,7 @@ class IB(Generic[EmptyT]):
             )
         )
 
-    def reqMarketDataType(self, marketDataType: int):
+    def reqMarketDataType(self, marketDataType: int) -> None:
         """
         Set the market data type used for :meth:`.reqMktData`. The type
         IBKR then serves each stream with is ``Ticker.marketDataType``.
@@ -2397,7 +2404,7 @@ class IB(Generic[EmptyT]):
             )
         return dataList
 
-    def cancelScannerSubscription(self, dataList: ScanDataList):
+    def cancelScannerSubscription(self, dataList: ScanDataList) -> None:
         """
         Cancel market data subscription.
 
@@ -2429,9 +2436,10 @@ class IB(Generic[EmptyT]):
         optionPrice: float,
         underPrice: float,
         implVolOptions: Sequence[TagValue] = (),
-    ) -> OptionComputation:
+    ) -> OptionComputation | None:
         """
-        Calculate the volatility given the option price.
+        Calculate the volatility given the option price. Returns None
+        when TWS refuses or does not answer within 4 seconds.
 
         This method is blocking.
 
@@ -2456,9 +2464,10 @@ class IB(Generic[EmptyT]):
         volatility: float,
         underPrice: float,
         optPrcOptions: Sequence[TagValue] = (),
-    ) -> OptionComputation:
+    ) -> OptionComputation | None:
         """
-        Calculate the option price given the volatility.
+        Calculate the option price given the volatility. Returns None
+        when TWS refuses or does not answer within 4 seconds.
 
         This method is blocking.
 
@@ -2555,7 +2564,7 @@ class IB(Generic[EmptyT]):
         manualOrderTime: str = "",
         customerAccount: str = "",
         professionalCustomer: bool = False,
-    ):
+    ) -> None:
         """
         Exercise an options contract.
 
@@ -2671,7 +2680,7 @@ class IB(Generic[EmptyT]):
             )
         )
 
-    def reqNewsBulletins(self, allMessages: bool):
+    def reqNewsBulletins(self, allMessages: bool) -> None:
         """
         Subscribe to IB news bulletins.
 
@@ -2682,11 +2691,11 @@ class IB(Generic[EmptyT]):
         """
         self.client.reqNewsBulletins(allMessages)
 
-    def cancelNewsBulletins(self):
+    def cancelNewsBulletins(self) -> None:
         """Cancel subscription to IB news bulletins."""
         self.client.cancelNewsBulletins()
 
-    def requestFA(self, faDataType: int):
+    def requestFA(self, faDataType: int) -> str | None:
         """
         Request the FA configuration of one data type, as XML.
 
@@ -2707,7 +2716,7 @@ class IB(Generic[EmptyT]):
         """
         return self._run(self.requestFAAsync(faDataType))
 
-    def replaceFA(self, faDataType: int, xml: str):
+    def replaceFA(self, faDataType: int, xml: str) -> None:
         """
         Replaces Financial Advisor's settings.
 
@@ -2718,7 +2727,7 @@ class IB(Generic[EmptyT]):
         reqId = self.client.getReqId()
         self.client.replaceFA(reqId, faDataType, xml)
 
-    def reqWshMetaData(self):
+    def reqWshMetaData(self) -> None:
         """
         Request Wall Street Horizon metadata.
 
@@ -2731,7 +2740,7 @@ class IB(Generic[EmptyT]):
             self.wrapper._wshMetaReqId = reqId
             self.client.reqWshMetaData(reqId)
 
-    def cancelWshMetaData(self):
+    def cancelWshMetaData(self) -> None:
         """Cancel WSH metadata."""
         reqId = self.wrapper._wshMetaReqId
         if not reqId:
@@ -2742,7 +2751,7 @@ class IB(Generic[EmptyT]):
             # its awaiter, if any, is cancelled rather than left waiting
             self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
-    def reqWshEventData(self, data: WshEventData):
+    def reqWshEventData(self, data: WshEventData) -> None:
         """
         Request Wall Street Horizon event data.
 
@@ -2761,7 +2770,7 @@ class IB(Generic[EmptyT]):
             self.wrapper._wshEventReqId = reqId
             self.client.reqWshEventData(reqId, data)
 
-    def cancelWshEventData(self):
+    def cancelWshEventData(self) -> None:
         """Cancel active WSH event data."""
         reqId = self.wrapper._wshEventReqId
         if not reqId:
@@ -3112,7 +3121,8 @@ class IB(Generic[EmptyT]):
         )
 
     def reqAccountUpdatesAsync(self, account: str) -> Awaitable[None]:
-        """Async sibling of :meth:`reqAccountUpdates`."""
+        """Async sibling of :meth:`reqAccountUpdates`. Answers None when the
+        values are in."""
         # IBKR's answer names an account, not necessarily the one asked
         # for ("" for the only one): one account's request at a time.
         return self._startSingletonRequest(
@@ -3124,8 +3134,10 @@ class IB(Generic[EmptyT]):
     def reqAccountUpdatesMultiAsync(
         self, account: str, modelCode: str = ""
     ) -> Awaitable[None]:
-        """Async sibling of :meth:`reqAccountUpdatesMulti`."""
-        with self._reqIdRequest() as opened:
+        """Async sibling of :meth:`reqAccountUpdatesMulti`. Answers None when
+        the values are in, or when TWS refuses the request (with
+        ``RaiseRequestErrors``, a refusal raises ``RequestError``)."""
+        with self._reqIdRequest(refusal=refusedAsNone) as opened:
             self.client.reqAccountUpdatesMulti(opened.reqId, account, modelCode, False)
         return opened.future
 
@@ -3143,7 +3155,9 @@ class IB(Generic[EmptyT]):
         return list(self.wrapper.acctSummary.values())
 
     def reqAccountSummaryAsync(self) -> Awaitable[None]:
-        """Async sibling of :meth:`reqAccountSummary`."""
+        """Async sibling of :meth:`reqAccountSummary`. Answers None when the
+        summary is in, or when TWS refuses the request (with
+        ``RaiseRequestErrors``, a refusal raises ``RequestError``)."""
         tags = (
             "AccountType,NetLiquidation,TotalCashValue,SettledCash,"
             "AccruedCash,BuyingPower,EquityWithLoanValue,"
@@ -3157,7 +3171,7 @@ class IB(Generic[EmptyT]):
             "DayTradesRemainingT+2,DayTradesRemainingT+3,"
             "DayTradesRemainingT+4,Leverage,$LEDGER:ALL"
         )
-        with self._reqIdRequest() as opened:
+        with self._reqIdRequest(refusal=refusedAsNone) as opened:
             self.client.reqAccountSummary(opened.reqId, "All", tags)
         return opened.future
 
@@ -3366,7 +3380,7 @@ class IB(Generic[EmptyT]):
         useRth: bool,
         ignoreSize: bool = False,
         miscOptions: Sequence[TagValue] = (),
-    ) -> Awaitable[list]:
+    ) -> Awaitable[HistoricalTicks]:
         """Async sibling of :meth:`reqHistoricalTicks`."""
         miscOptions = _tagValueList(miscOptions)
         start = util.formatIBDatetime(startDateTime)
@@ -3402,7 +3416,9 @@ class IB(Generic[EmptyT]):
         with self._cancelling(opened, self.client.cancelHeadTimeStamp):
             return await opened.future
 
-    def reqSmartComponentsAsync(self, bboExchange):
+    def reqSmartComponentsAsync(
+        self, bboExchange: str
+    ) -> Awaitable[list[SmartComponent]]:
         """Async sibling of :meth:`reqSmartComponents`."""
         with self._reqIdRequest() as opened:
             self.client.reqSmartComponents(opened.reqId, bboExchange)
@@ -3601,8 +3617,9 @@ class IB(Generic[EmptyT]):
             opened.future, timeout, "reqHistoricalNewsAsync", opened.reqId
         )
 
-    async def requestFAAsync(self, faDataType: int):
-        """Async sibling of :meth:`requestFA`."""
+    async def requestFAAsync(self, faDataType: int) -> str | None:
+        """Async sibling of :meth:`requestFA`. Answers the XML, or None if
+        TWS does not answer within 4 seconds."""
         future = self._startSingletonRequest(
             CompositeKey("requestFA", (int(faDataType),)),
             lambda: self.client.requestFA(faDataType),
@@ -3646,25 +3663,25 @@ class IB(Generic[EmptyT]):
 
     # --- Public API expansion ----
 
-    def setServerLogLevel(self, logLevel: int):
+    def setServerLogLevel(self, logLevel: int) -> None:
         """Set the TWS / IB Gateway server-side log verbosity. 1=SYSTEM,
         2=ERROR, 3=WARNING, 4=INFORMATION, 5=DETAIL. Fire-and-forget.
         """
         self.client.setServerLogLevel(logLevel)
 
-    def reqSoftDollarTiersAsync(self) -> Awaitable[list]:
+    def reqSoftDollarTiersAsync(self) -> Awaitable[list[SoftDollarTier]]:
         """Fetch the soft-dollar tier list available to this account."""
         with self._reqIdRequest() as opened:
             self.client.reqSoftDollarTiers(opened.reqId)
         return opened.future
 
-    def reqFamilyCodesAsync(self) -> Awaitable[list]:
+    def reqFamilyCodesAsync(self) -> Awaitable[list[FamilyCode]]:
         """Fetch the FamilyCode list (FA users only)."""
         return self._startSingletonRequest(
             SingletonKey("familyCodes"), self.client.reqFamilyCodes
         )
 
-    def cancelHeadTimeStamp(self, reqId: int):
+    def cancelHeadTimeStamp(self, reqId: int) -> None:
         """Cancel an in-flight reqHeadTimeStamp.
 
         Sends the wire cancel and settles the in-flight registry entry
@@ -3675,7 +3692,7 @@ class IB(Generic[EmptyT]):
         self.client.cancelHeadTimeStamp(reqId)
         self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
-    def cancelHistogramData(self, reqId: int):
+    def cancelHistogramData(self, reqId: int) -> None:
         """Cancel an in-flight reqHistogramData.
 
         Settles the registry future so the awaiter wakes; see
@@ -3684,7 +3701,7 @@ class IB(Generic[EmptyT]):
         self.client.cancelHistogramData(reqId)
         self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
-    def cancelContractData(self, reqId: int):
+    def cancelContractData(self, reqId: int) -> None:
         """Cancel an in-flight reqContractDetails. Protobuf-only — TWS / IBG
         server >= 215 (MIN_SERVER_VER_CANCEL_CONTRACT_DATA).
 
@@ -3693,7 +3710,7 @@ class IB(Generic[EmptyT]):
         self.client.cancelContractData(reqId)
         self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
-    def cancelHistoricalTicks(self, reqId: int):
+    def cancelHistoricalTicks(self, reqId: int) -> None:
         """Cancel an in-flight reqHistoricalTicks. Protobuf-only —
         same gate as cancelContractData (215).
 
@@ -3702,21 +3719,21 @@ class IB(Generic[EmptyT]):
         self.client.cancelHistoricalTicks(reqId)
         self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
-    def queryDisplayGroups(self, reqId: int):
+    def queryDisplayGroups(self, reqId: int) -> None:
         """Query the TWS display-group list. Server replies via
         ``Wrapper.displayGroupList(reqId, groups)``."""
         self.client.queryDisplayGroups(reqId)
 
-    def subscribeToGroupEvents(self, reqId: int, groupId: int):
+    def subscribeToGroupEvents(self, reqId: int, groupId: int) -> None:
         """Subscribe to TWS display-group event stream. Updates flow
         via ``Wrapper.displayGroupUpdated(reqId, contractInfo)``."""
         self.client.subscribeToGroupEvents(reqId, groupId)
 
-    def updateDisplayGroup(self, reqId: int, contractInfo: str):
+    def updateDisplayGroup(self, reqId: int, contractInfo: str) -> None:
         """Push a contract change into a TWS display group."""
         self.client.updateDisplayGroup(reqId, contractInfo)
 
-    def unsubscribeFromGroupEvents(self, reqId: int):
+    def unsubscribeFromGroupEvents(self, reqId: int) -> None:
         """Unsubscribe from TWS display-group event stream."""
         self.client.unsubscribeFromGroupEvents(reqId)
 
