@@ -484,6 +484,12 @@ are fixed in v3.0:
   registered, so the corrected request was deduplicated onto it and
   never updated. 321 now ends the stream it names, as the other
   stream-ending codes do.
+* **Historical tick times were integers.** ``reqHistoricalTicks`` on the
+  protobuf wire answered ticks whose ``time`` was the raw epoch second,
+  though the field is a ``datetime``. Tick times are now datetimes in
+  the IB's default time zone, as bar and execution times are, and a
+  tick without attributes gets empty ``TickAttribBidAsk`` /
+  ``TickAttribLast`` instead of None.
 * **IBKR's unset values reached user objects.** A protobuf field that
   arrives holding IBKR's unset value for its type (2147483647 in a
   32-bit field, 9223372036854775807 in a 64-bit one,

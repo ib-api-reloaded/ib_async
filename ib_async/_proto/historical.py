@@ -34,6 +34,7 @@ proto.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, tzinfo
 from decimal import Decimal
 
 from .._pb import (
@@ -73,6 +74,8 @@ from ..objects import (
     HistoricalTick,
     HistoricalTickBidAsk,
     HistoricalTickLast,
+    TickAttribBidAsk,
+    TickAttribLast,
 )
 from ..util import UNSET_INTEGER
 from .contracts import createContractProto
@@ -365,24 +368,30 @@ def createHistoricalScheduleArgs(
 # ---------------------------------------------------------------------------
 
 
+def _tickTime(epochSeconds: int, tz: tzinfo) -> datetime:
+    """A tick's wire time (epoch seconds) as a datetime in ``tz``, the
+    IB's default time zone."""
+    return datetime.fromtimestamp(epochSeconds, tz)
+
+
 def createHistoricalTick(
-    proto: HistoricalTick_pb2.HistoricalTick,
+    proto: HistoricalTick_pb2.HistoricalTick, tz: tzinfo
 ) -> HistoricalTick:
     return HistoricalTick(
-        time=proto.time if proto.HasField("time") else 0,  # type: ignore[arg-type]
+        time=_tickTime(proto.time if proto.HasField("time") else 0, tz),
         price=float(proto.price) if proto.HasField("price") else 0.0,
         size=wire_size_to_float(proto.size) if proto.HasField("size") else 0.0,
     )
 
 
 def createHistoricalTickBidAsk(
-    proto: HistoricalTickBidAsk_pb2.HistoricalTickBidAsk,
+    proto: HistoricalTickBidAsk_pb2.HistoricalTickBidAsk, tz: tzinfo
 ) -> HistoricalTickBidAsk:
     return HistoricalTickBidAsk(
-        time=proto.time if proto.HasField("time") else 0,  # type: ignore[arg-type]
+        time=_tickTime(proto.time if proto.HasField("time") else 0, tz),
         tickAttribBidAsk=createTickAttribBidAsk(proto.tickAttribBidAsk)
         if proto.HasField("tickAttribBidAsk")
-        else None,  # type: ignore[arg-type]
+        else TickAttribBidAsk(),
         priceBid=float(proto.priceBid) if proto.HasField("priceBid") else 0.0,
         priceAsk=float(proto.priceAsk) if proto.HasField("priceAsk") else 0.0,
         sizeBid=wire_size_to_float(proto.sizeBid) if proto.HasField("sizeBid") else 0.0,
@@ -391,13 +400,13 @@ def createHistoricalTickBidAsk(
 
 
 def createHistoricalTickLast(
-    proto: HistoricalTickLast_pb2.HistoricalTickLast,
+    proto: HistoricalTickLast_pb2.HistoricalTickLast, tz: tzinfo
 ) -> HistoricalTickLast:
     return HistoricalTickLast(
-        time=proto.time if proto.HasField("time") else 0,  # type: ignore[arg-type]
+        time=_tickTime(proto.time if proto.HasField("time") else 0, tz),
         tickAttribLast=createTickAttribLast(proto.tickAttribLast)
         if proto.HasField("tickAttribLast")
-        else None,  # type: ignore[arg-type]
+        else TickAttribLast(),
         price=float(proto.price) if proto.HasField("price") else 0.0,
         size=wire_size_to_float(proto.size) if proto.HasField("size") else 0.0,
         exchange=proto.exchange if proto.HasField("exchange") else "",
@@ -413,31 +422,34 @@ def createHistoricalTickLast(
 
 
 def createHistoricalTicksArgs(
-    proto: HistoricalTicks_pb2.HistoricalTicks,
+    proto: HistoricalTicks_pb2.HistoricalTicks, tz: tzinfo
 ) -> HistoricalTicksArgs:
-    """``Wrapper.historicalTicks(reqId, ticks, done)`` args."""
+    """``Wrapper.historicalTicks(reqId, ticks, done)`` args, the tick
+    times in ``tz``."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
-    ticks = [createHistoricalTick(t) for t in proto.historicalTicks]
+    ticks = [createHistoricalTick(t, tz) for t in proto.historicalTicks]
     done = proto.isDone if proto.HasField("isDone") else False
     return HistoricalTicksArgs(reqId=reqId, ticks=ticks, done=done)
 
 
 def createHistoricalTicksBidAskArgs(
-    proto: HistoricalTicksBidAsk_pb2.HistoricalTicksBidAsk,
+    proto: HistoricalTicksBidAsk_pb2.HistoricalTicksBidAsk, tz: tzinfo
 ) -> HistoricalTicksBidAskArgs:
-    """``Wrapper.historicalTicksBidAsk(reqId, ticks, done)`` args."""
+    """``Wrapper.historicalTicksBidAsk(reqId, ticks, done)`` args, the
+    tick times in ``tz``."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
-    ticksBA = [createHistoricalTickBidAsk(t) for t in proto.historicalTicksBidAsk]
+    ticksBA = [createHistoricalTickBidAsk(t, tz) for t in proto.historicalTicksBidAsk]
     done = proto.isDone if proto.HasField("isDone") else False
     return HistoricalTicksBidAskArgs(reqId=reqId, ticks=ticksBA, done=done)
 
 
 def createHistoricalTicksLastArgs(
-    proto: HistoricalTicksLast_pb2.HistoricalTicksLast,
+    proto: HistoricalTicksLast_pb2.HistoricalTicksLast, tz: tzinfo
 ) -> HistoricalTicksLastArgs:
-    """``Wrapper.historicalTicksLast(reqId, ticks, done)`` args."""
+    """``Wrapper.historicalTicksLast(reqId, ticks, done)`` args, the tick
+    times in ``tz``."""
     reqId = proto.reqId if proto.HasField("reqId") else -1
-    ticksLast = [createHistoricalTickLast(t) for t in proto.historicalTicksLast]
+    ticksLast = [createHistoricalTickLast(t, tz) for t in proto.historicalTicksLast]
     done = proto.isDone if proto.HasField("isDone") else False
     return HistoricalTicksLastArgs(reqId=reqId, ticks=ticksLast, done=done)
 

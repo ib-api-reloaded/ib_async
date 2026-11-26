@@ -20,6 +20,8 @@ cancelTickByTickData.
 
 from __future__ import annotations
 
+import datetime
+
 import ib_async as ibi
 from ib_async._pb import (
     CancelHistoricalData_pb2,
@@ -182,15 +184,20 @@ def test_historical_data_end_proto_settles_singleton():
     assert req.future.done()
 
 
-def test_historical_ticks_proto_routes_through_wrapper():
-    """Smoke test: HistoricalTicks decodes and dispatches without error.
-    The wrapper.historicalTicks routes via the requests registry; with
-    no waiter open the call is a no-op."""
-    ib = _ibAtVersion(207)
+def test_historical_ticks_answer_datetimes_in_the_default_zone():
+    """Tick times come as epoch seconds and are read in the IB's default
+    time zone, as bar and execution times are."""
+    ib = _ibAtVersion(226)
+    req = ib.wrapper.requests.open(ReqIdKey(7), container=[])
     proto = HistoricalTicks_pb2.HistoricalTicks(reqId=7, isDone=True)
     t = proto.historicalTicks.add()
     t.time, t.price, t.size = 1700000000, 150.0, "100"
     ib.client.decoder.processProtoBuf(96, proto.SerializeToString())
+
+    [tick] = req.future.result()
+    zone = ib.wrapper.defaultTimezone
+    assert tick.time == datetime.datetime.fromtimestamp(1700000000, zone)
+    assert tick.time.tzinfo is zone
 
 
 def test_tick_by_tick_oneof_dispatch_routes_to_all_last():

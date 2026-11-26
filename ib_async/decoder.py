@@ -828,16 +828,25 @@ class Decoder(Generic[EmptyT]):
             a.reqId, a.startDateTime, a.endDateTime, a.timeZone, a.sessions
         )
 
+    # Historical tick times come as epoch seconds and are read in the IB's
+    # default time zone.
+
     def _protoHistoricalTicks(self, proto: HistoricalTicksProto) -> None:
-        a = _converters.historical.createHistoricalTicksArgs(proto)
+        a = _converters.historical.createHistoricalTicksArgs(
+            proto, self.wrapper.defaultTimezone
+        )
         self.wrapper.historicalTicks(a.reqId, a.ticks, a.done)
 
     def _protoHistoricalTicksBidAsk(self, proto: HistoricalTicksBidAskProto) -> None:
-        a = _converters.historical.createHistoricalTicksBidAskArgs(proto)
+        a = _converters.historical.createHistoricalTicksBidAskArgs(
+            proto, self.wrapper.defaultTimezone
+        )
         self.wrapper.historicalTicksBidAsk(a.reqId, a.ticks, a.done)
 
     def _protoHistoricalTicksLast(self, proto: HistoricalTicksLastProto) -> None:
-        a = _converters.historical.createHistoricalTicksLastArgs(proto)
+        a = _converters.historical.createHistoricalTicksLastArgs(
+            proto, self.wrapper.defaultTimezone
+        )
         self.wrapper.historicalTicksLast(a.reqId, a.ticks, a.done)
 
     # --- news + WSH handlers ---------------------------------------------

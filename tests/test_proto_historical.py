@@ -15,7 +15,9 @@ Coverage:
 
 from __future__ import annotations
 
+import datetime as dt
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import ib_async as ibi
 from ib_async._pb import (
@@ -72,6 +74,7 @@ from ib_async._proto.historical import (
     createRealtimeBarArgs,
     createRealTimeBarsRequestProto,
 )
+from ib_async.objects import TickAttribBidAsk, TickAttribLast
 
 # ---------------------------------------------------------------------------
 # BarData / HistoricalDataBar
@@ -291,16 +294,35 @@ def test_historical_schedule_full_round_trip():
 
 
 def test_historical_tick_empty_proto():
-    t = createHistoricalTick(HistoricalTick_pb2.HistoricalTick())
-    assert t.time == 0
+    t = createHistoricalTick(HistoricalTick_pb2.HistoricalTick(), dt.UTC)
+    assert t.time == dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
     assert t.price == 0.0
     assert t.size == 0.0
 
 
 def test_historical_tick_garbage_size():
     proto = HistoricalTick_pb2.HistoricalTick(time=1700000000, price=150.0, size="abc")
-    t = createHistoricalTick(proto)
+    t = createHistoricalTick(proto, dt.UTC)
     assert t.size == 0.0
+
+
+def test_historical_tick_times_are_datetimes_in_the_given_zone():
+    zone = ZoneInfo("US/Eastern")
+    proto = HistoricalTick_pb2.HistoricalTick(time=1700000000, price=1.0, size="1")
+    t = createHistoricalTick(proto, zone)
+    assert t.time == dt.datetime(2023, 11, 14, 17, 13, 20, tzinfo=zone)
+    assert t.time.tzinfo is zone
+
+
+def test_historical_ticks_without_an_attrib_get_an_empty_one():
+    bidAsk = createHistoricalTickBidAsk(
+        HistoricalTickBidAsk_pb2.HistoricalTickBidAsk(time=1), dt.UTC
+    )
+    last = createHistoricalTickLast(
+        HistoricalTickLast_pb2.HistoricalTickLast(time=1), dt.UTC
+    )
+    assert bidAsk.tickAttribBidAsk == TickAttribBidAsk()
+    assert last.tickAttribLast == TickAttribLast()
 
 
 def test_historical_tick_bid_ask_round_trip_with_attrib():
@@ -308,11 +330,11 @@ def test_historical_tick_bid_ask_round_trip_with_attrib():
         time=1700000000, priceBid=150.0, priceAsk=150.5, sizeBid="100", sizeAsk="200"
     )
     proto.tickAttribBidAsk.askPastHigh = True
-    t = createHistoricalTickBidAsk(proto)
+    proto.tickAttribBidAsk.bidPastLow = True
+    t = createHistoricalTickBidAsk(proto, dt.UTC)
     assert t.priceBid == 150.0
     assert t.sizeAsk == 200.0
-    assert t.tickAttribBidAsk is not None
-    assert t.tickAttribBidAsk.askPastHigh is True
+    assert t.tickAttribBidAsk == TickAttribBidAsk(bidPastLow=True, askPastHigh=True)
 
 
 def test_historical_tick_last_round_trip():
@@ -324,7 +346,7 @@ def test_historical_tick_last_round_trip():
         specialConditions="",
     )
     proto.tickAttribLast.pastLimit = True
-    t = createHistoricalTickLast(proto)
+    t = createHistoricalTickLast(proto, dt.UTC)
     assert t.price == 150.25
     assert t.exchange == "ARCA"
     assert t.tickAttribLast is not None
@@ -337,7 +359,7 @@ def test_historical_tick_last_round_trip():
 
 
 def test_historical_ticks_empty_proto():
-    args = createHistoricalTicksArgs(HistoricalTicks_pb2.HistoricalTicks())
+    args = createHistoricalTicksArgs(HistoricalTicks_pb2.HistoricalTicks(), dt.UTC)
     assert args.reqId == -1
     assert args.ticks == []
     assert args.done is False
@@ -349,7 +371,7 @@ def test_historical_ticks_round_trip_with_done_flag():
     a.time, a.price, a.size = 1700000000, 150.0, "100"
     b = proto.historicalTicks.add()
     b.time, b.price, b.size = 1700000010, 150.5, "150"
-    args = createHistoricalTicksArgs(proto)
+    args = createHistoricalTicksArgs(proto, dt.UTC)
     assert args.reqId == 7
     assert len(args.ticks) == 2
     assert args.ticks[0].price == 150.0
@@ -362,7 +384,7 @@ def test_historical_ticks_bid_ask_carries_done():
     t = proto.historicalTicksBidAsk.add()
     t.time, t.priceBid, t.priceAsk = 1700000000, 150.0, 150.5
     t.sizeBid, t.sizeAsk = "100", "200"
-    args = createHistoricalTicksBidAskArgs(proto)
+    args = createHistoricalTicksBidAskArgs(proto, dt.UTC)
     assert (args.reqId, len(args.ticks), args.done) == (7, 1, True)
 
 
@@ -371,7 +393,7 @@ def test_historical_ticks_last_carries_done():
     t = proto.historicalTicksLast.add()
     t.time, t.price, t.size = 1700000000, 150.0, "100"
     t.exchange = "ARCA"
-    args = createHistoricalTicksLastArgs(proto)
+    args = createHistoricalTicksLastArgs(proto, dt.UTC)
     assert (args.reqId, len(args.ticks), args.done) == (7, 1, False)
     assert args.ticks[0].exchange == "ARCA"
 
