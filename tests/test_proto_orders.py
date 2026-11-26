@@ -46,6 +46,7 @@ from ib_async._proto.orders import (
     createExecution,
     createExecutionFilterProto,
     createExecutionRequestProto,
+    createGlobalCancelRequestProto,
     createOpenOrder,
     createOrder,
     createOrderProto,
@@ -192,16 +193,12 @@ def test_create_order_proto_writes_decimal_quantity_via_canonical_string():
 def test_create_order_proto_coerces_none_plain_int_fields_to_dataclass_default():
     # Live regression: icli's whatIf-preview path stamps
     # ``parentId = None`` on a fresh-copy Order to suppress the parent
-    # link. The binary path's ``_formatField`` writes None as ``""``,
-    # which TWS parses as the
-    # field's wire default (``0`` for ``parentId``). The protobuf path
-    # has no equivalent and used to skip the field entirely, leaving
+    # link. The converter used to skip the field entirely, leaving
     # TWS to read proto3-absent as its own ``UNSET_INTEGER`` sentinel
     # and reject every previewOrder / placeOrder with ``Error 135:
     # Can't find order with id = 2147483647``. The converter must
     # coerce ``None`` on plain-int fields back to the dataclass
-    # default so the wire matches the binary path's effective
-    # behavior.
+    # default (``0`` for ``parentId``).
     order = Order(
         action="BUY",
         totalQuantity=Decimal(1),
@@ -690,6 +687,19 @@ def test_cancel_order_request_skips_unset_optional_fields():
     # Empty optionals stay unset on the wire.
     assert not proto.orderCancel.HasField("manualOrderCancelTime")
     assert not proto.orderCancel.HasField("extOperator")
+
+
+def test_cancels_carry_the_cme_tagging_fields():
+    cancel = createCancelOrderRequestProto(
+        orderId=42, extOperator="EXT-7", manualOrderIndicator=1
+    )
+    assert cancel.orderCancel.extOperator == "EXT-7"
+    assert cancel.orderCancel.manualOrderIndicator == 1
+    globalCancel = createGlobalCancelRequestProto(
+        extOperator="EXT-9", manualOrderIndicator=0
+    )
+    assert globalCancel.orderCancel.extOperator == "EXT-9"
+    assert globalCancel.orderCancel.HasField("manualOrderIndicator")
 
 
 # ---------------------------------------------------------------------------

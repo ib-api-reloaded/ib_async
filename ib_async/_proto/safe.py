@@ -28,9 +28,7 @@ if TYPE_CHECKING:
 # intentionally left out — for those, ``None`` is the domain unset sentinel
 # and is meant to skip the wire emission. If a caller sets ``None`` on a
 # plain ``int``, ``float``, ``bool`` or ``str`` field with a real default,
-# the field is set back to that default. The binary path does the
-# equivalent: ``Client._formatField`` writes None as "" when it formats
-# the message.
+# the field is set back to that default.
 _PLAIN_SCALAR_TYPES: Final[frozenset[str]] = frozenset({"int", "float", "bool", "str"})
 
 T = TypeVar("T")
@@ -39,10 +37,9 @@ T = TypeVar("T")
 def normalize_none_scalars(obj: T) -> T:
     """Coerce ``None`` on plain-scalar dataclass fields back to the field's
     default value. Mutates and returns ``obj`` so callers can chain it on
-    converter entry — the proto path's analog of the binary path's
-    ``NoneType → ""`` formatter, which the TWS server parses as the
-    field's wire-default (typically ``0`` for plain ``int`` fields like
-    ``parentId``, ``ocaType``, ``triggerMethod``).
+    converter entry. TWS reads a field's default (typically ``0`` for
+    plain ``int`` fields like ``parentId``, ``ocaType``,
+    ``triggerMethod``) for a field the message leaves out.
 
     Without this normalization, a caller that sets ``parentId = None``
     (to send no parent link) produces a wire frame missing the field

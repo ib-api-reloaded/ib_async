@@ -1,19 +1,10 @@
-"""Send-side per-msgId gating tests.
+"""Send-side request messages.
 
-For each gated ``Client`` send method, verify:
-
-1. On a server below the per-family gate, the legacy NUL-separated
-   binary frame goes out (no protobuf).
-2. On a server at or above the gate, a protobuf-framed message goes
-   out — 4-byte big-endian wire ``msgId = canonical + 200``, then a
-   serializable proto body.
-3. Round-tripping the proto body produces the right user-supplied
-   values (the ``clientId`` regression for ``placeOrder``, the
-   ``apiOnly`` flag for ``reqCompletedOrders``, etc.).
-
-Per-family gating is the design point: a server at version 207 emits
-protobuf for accounts/positions but binary for historical data, etc.
-The ``useProtoBuf(canonicalMsgId)`` boolean encodes that exactly.
+For each ``Client`` send method, verify that a protobuf-framed message
+goes out (4-byte big-endian wire ``msgId = canonical + 200``, then the
+serialized proto body) and that round-tripping the body gives the
+user-supplied values (the ``clientId`` regression for ``placeOrder``,
+the ``apiOnly`` flag for ``reqCompletedOrders``, etc.).
 """
 
 from __future__ import annotations
@@ -44,34 +35,6 @@ from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 # ---------------------------------------------------------------------------
 # placeOrder — gates at 203, regression-proves clientId round-trip
 # ---------------------------------------------------------------------------
-
-
-def test_place_order_uses_binary_below_gate():
-    ib = _ibAtVersion(202)
-    sent = _captureSend(ib)
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    order = ibi.LimitOrder("BUY", 100, 50.5)
-    order.clientId = 7
-    ib.client.placeOrder(orderId=42, contract=contract, order=order)
-    # Binary fallback at server >= MIN_SERVER_VER_PROTOBUF (201) uses a
-    # 4-byte big-endian raw msgId prefix (matching IBKR's
-    # ``comm.make_msg(msgId, useRawIntMsgId=True, text)``); the body
-    # text follows. The +200 sentinel does NOT apply on the binary path.
-    assert sent
-    body = sent[0][4:]
-    assert body.startswith(b"\x00\x00\x00\x03")  # PLACE_ORDER=3, raw int
-
-
-def test_place_order_pre_protobuf_server_uses_legacy_text_msgid():
-    """Server <201 keeps the legacy NUL-text msgId framing."""
-    ib = _ibAtVersion(200)
-    sent = _captureSend(ib)
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    order = ibi.LimitOrder("BUY", 100, 50.5)
-    order.clientId = 7
-    ib.client.placeOrder(orderId=42, contract=contract, order=order)
-    body = sent[0][4:]
-    assert body.startswith(b"3\x00")
 
 
 def test_place_order_uses_protobuf_at_gate_and_round_trips_clientId():
@@ -110,14 +73,6 @@ def test_cancel_order_uses_protobuf_at_gate():
     proto.ParseFromString(body)
     assert proto.orderId == 42
     assert proto.orderCancel.manualOrderCancelTime == "20300101 09:30:00"
-
-
-def test_cancel_order_uses_binary_below_gate():
-    ib = _ibAtVersion(201)
-    sent = _captureSend(ib)
-    ib.client.cancelOrder(orderId=42)
-    # Server >= 201 uses raw-int msgId prefix on the binary path.
-    assert sent[0][4:].startswith(b"\x00\x00\x00\x04")  # CANCEL_ORDER=4
 
 
 # ---------------------------------------------------------------------------
@@ -204,15 +159,6 @@ def test_req_contract_details_uses_protobuf_at_gate():
     assert proto.reqId == 7
     assert proto.contract.symbol == "AAPL"
     assert proto.contract.secType == "STK"
-
-
-def test_req_contract_details_below_gate_stays_binary():
-    ib = _ibAtVersion(204)
-    sent = _captureSend(ib)
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    ib.client.reqContractDetails(reqId=7, contract=contract)
-    # Server >= 201 uses raw-int msgId prefix on the binary path.
-    assert sent[0][4:].startswith(b"\x00\x00\x00\x09")  # REQ_CONTRACT_DATA=9
 
 
 def test_req_contract_details_option_chain_sweep_sends_no_strike():

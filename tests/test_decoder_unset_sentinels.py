@@ -63,15 +63,14 @@ def test_place_order_never_stamps_a_sentinel_onto_the_callers_order() -> None:
 
     ib = IB()
     client = ib.client
-    sent: list[tuple] = []
-    client._tryProto = lambda msg_id, thunk: True  # capture-side: skip the wire
+    client.connState = client.CONNECTED
+    client.conn.sendMsg = lambda msg: None  # skip the wire
 
     contract = Future(symbol="MNQ", exchange="CME", currency="USD")
     order = LimitOrder("BUY", 1, 100.0)
     order.volatility = UNSET_DOUBLE  # a TWS-populated cached order
     client.placeOrder(9999, contract, order)
     assert order.volatility is None
-    del sent
 
 
 def test_compete_up_to_mid_is_a_value_not_a_sentinel() -> None:

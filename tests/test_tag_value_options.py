@@ -5,17 +5,22 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import ib_async as ibi
-from ib_async.client import _formatField
+from ib_async._proto.market_data import createMarketDataRequestProto
 from ib_async.contract import TagValue
 
 OPTIONS = [TagValue("a", "1"), TagValue("b", "2")]
 
 
 def test_tuple_and_list_options_encode_identically():
-    for makeEmpty in (True, False):
-        asTuple = _formatField(tuple(OPTIONS), makeEmpty)
-        asList = _formatField(OPTIONS, makeEmpty)
-        assert asTuple == asList == "a=1;b=2;"
+    contract = ibi.Stock("SPY", "SMART", "USD", conId=756733)
+    asTuple = createMarketDataRequestProto(
+        7, contract, "", False, False, marketDataOptions=tuple(OPTIONS)
+    )
+    asList = createMarketDataRequestProto(
+        7, contract, "", False, False, marketDataOptions=OPTIONS
+    )
+    assert asTuple.SerializeToString() == asList.SerializeToString()
+    assert dict(asList.marketDataOptions) == {"a": "1", "b": "2"}
 
 
 def test_each_ib_gets_its_own_defaults():

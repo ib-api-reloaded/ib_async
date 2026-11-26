@@ -56,6 +56,7 @@ from .._pb import (
     CurrentTimeRequest_pb2,
     ErrorMessage_pb2,
     ExerciseOptionsRequest_pb2,
+    IdsRequest_pb2,
     LockAndExitConfig_pb2,
     MarketRule_pb2,
     MarketRuleRequest_pb2,
@@ -84,6 +85,8 @@ from .._pb import (
     UpdateDisplayGroupRequest_pb2,
     UserInfo_pb2,
     UserInfoRequest_pb2,
+    VerifyMessageRequest_pb2,
+    VerifyRequest_pb2,
 )
 from ..contract import Contract, ContractDescription, TagValue
 from ..objects import PriceIncrement, SmartComponent, SoftDollarTier
@@ -481,6 +484,22 @@ def createStartApiRequestProto(
     return proto
 
 
+def createIdsRequestProto(numIds: int) -> IdsRequest_pb2.IdsRequest:
+    return IdsRequest_pb2.IdsRequest(numIds=numIds)
+
+
+def createVerifyRequestProto(
+    apiName: str, apiVersion: str
+) -> VerifyRequest_pb2.VerifyRequest:
+    return VerifyRequest_pb2.VerifyRequest(apiName=apiName, apiVersion=apiVersion)
+
+
+def createVerifyMessageRequestProto(
+    apiData: str,
+) -> VerifyMessageRequest_pb2.VerifyMessageRequest:
+    return VerifyMessageRequest_pb2.VerifyMessageRequest(apiData=apiData)
+
+
 def createSetServerLogLevelRequestProto(
     logLevel: int,
 ) -> SetServerLogLevelRequest_pb2.SetServerLogLevelRequest:
@@ -611,13 +630,7 @@ def createCancelCalculateOptionPriceProto(
 
 
 # ---------------------------------------------------------------------------
-# ConfigRequest / UpdateConfigRequest — proto-only API config messages.
-#
-# These two have no binary-protocol counterpart; the wire only carries
-# them as protobuf payloads. The matching outbound msgIds (108
-# ``REQ_CONFIG`` and 109 ``UPDATE_CONFIG``) are intentionally absent
-# from ``PROTOBUF_MSG_IDS`` so the gating-table check is bypassed
-# (``Client.useProtoBuf`` is not consulted on the proto-only path).
+# ConfigRequest / UpdateConfigRequest — API config messages.
 # ---------------------------------------------------------------------------
 
 

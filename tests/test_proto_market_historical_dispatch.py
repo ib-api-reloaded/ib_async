@@ -249,16 +249,6 @@ def test_req_mkt_data_uses_protobuf_at_gate():
     assert proto.snapshot is True
 
 
-def test_req_mkt_data_uses_binary_below_gate():
-    ib = _ibAtVersion(205)
-    sent = _captureSend(ib)
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    ib.client.reqMktData(7, contract, "", False, False, [])
-    assert sent[0][4:].startswith(
-        b"\x00\x00\x00\x01"
-    )  # REQ_MKT_DATA=1, raw int (server>=201)
-
-
 def test_cancel_mkt_data_uses_protobuf_at_gate():
     ib = _ibAtVersion(206)
     sent = _captureSend(ib)

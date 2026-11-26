@@ -3,112 +3,24 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
-import math
 import struct
 import time
 from collections import deque
-from collections.abc import Callable, Sequence
-from decimal import Decimal
 
 from eventkit import Event
 from google.protobuf.message import Message
 
 from . import _pb_msgids as _M
 from . import _proto as _converters
-from ._pb_msgids import (
-    MIN_SERVER_VER_PROTOBUF,
-    PROTOBUF_MSG_ID,
-    PROTOBUF_MSG_IDS,
-)
-from ._server_versions import (
-    MAX_CLIENT_VER,
-    MIN_CLIENT_VER,
-    MIN_SERVER_VER_ADVANCED_ORDER_REJECT,
-    MIN_SERVER_VER_AUTO_CANCEL_PARENT,
-    MIN_SERVER_VER_CME_TAGGING_FIELDS,
-    MIN_SERVER_VER_CUSTOMER_ACCOUNT,
-    MIN_SERVER_VER_DURATION,
-    MIN_SERVER_VER_FA_PROFILE_DESUPPORT,
-    MIN_SERVER_VER_IMBALANCE_ONLY,
-    MIN_SERVER_VER_INCLUDE_OVERNIGHT,
-    MIN_SERVER_VER_MANUAL_ORDER_TIME,
-    MIN_SERVER_VER_MANUAL_ORDER_TIME_EXERCISE_OPTIONS,
-    MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS,
-    MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS,
-    MIN_SERVER_VER_POST_TO_ATS,
-    MIN_SERVER_VER_PROFESSIONAL_CUSTOMER,
-    MIN_SERVER_VER_REPLACE_FA_END,
-    MIN_SERVER_VER_RFQ_FIELDS,
-    MIN_SERVER_VER_UNDO_RFQ_FIELDS,
-)
+from ._pb_msgids import PROTOBUF_MSG_ID
+from ._server_versions import MAX_CLIENT_VER, MIN_CLIENT_VER, MIN_SERVER_VER_PROTOBUF
 from .connection import Connection
-from .contract import Contract, TagValue
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
 from .order import OrderCancel
 from .runtime import ConnectionPhase, ConnectionState, Tally, TransportState
-from .util import UNSET_DOUBLE, UNSET_INTEGER, dataclassAsTuple, getLoop, run
-
-# A value written as one field of a binary request message.
-WireField = Contract | float | int | str | bool | Decimal | Sequence[TagValue] | None
-
-
-def _formatContract(c: Contract) -> str:
-    """Format a contract as its fields in IBKR's order, separated by NUL."""
-    return "\0".join(
-        [
-            str(f)
-            for f in (
-                c.conId,
-                c.symbol,
-                c.secType,
-                c.lastTradeDateOrContractMonth,
-                c.strike,
-                c.right,
-                c.multiplier,
-                c.exchange,
-                c.primaryExchange,
-                c.currency,
-                c.localSymbol,
-                c.tradingClass,
-            )
-        ]
-    )
-
-
-def _formatField(field: WireField, makeEmpty: bool) -> str:
-    """Return the wire text for one field of a binary message.
-
-    With ``makeEmpty``, the IBKR unset values ``UNSET_INTEGER`` and
-    ``UNSET_DOUBLE`` are written as the empty string. The server expects
-    the empty string for an unset field. Without ``makeEmpty``, they are
-    written unchanged. Positive infinity is written as ``Infinity``,
-    which is the only spelling the server accepts. One example is
-    ``competeAgainstBestOffset`` set to
-    ``COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID``. The checks use the exact
-    type. A ``bool`` is written as ``1`` or ``0``, not as an ``int``. A
-    ``Decimal`` is written with ``str``.
-    """
-    if isinstance(field, Contract):  # any Contract subclass
-        return _formatContract(field)
-    if type(field) is str:
-        return field
-    if type(field) is bool:
-        return "1" if field else "0"
-    if type(field) is int:
-        return "" if makeEmpty and field == UNSET_INTEGER else str(field)
-    if type(field) is float:
-        if makeEmpty and field == UNSET_DOUBLE:
-            return ""
-        return "Infinity" if field == math.inf else str(field)
-    if field is None:
-        return ""
-    if type(field) is list or type(field) is tuple:
-        return "".join([f"{v.tag}={v.value};" for v in field])
-    return str(field)
-
+from .util import getLoop, run
 
 # The name of each connection state, indexed by Client.DISCONNECTED,
 # Client.CONNECTING and Client.CONNECTED (0, 1, 2).
@@ -151,6 +63,8 @@ class Client:
       network packet's data has been handled.
       A possible use is to write or evaluate the newly arrived data in
       one batch instead of item by item.
+
+    Every request is sent as its protobuf message.
 
     Parameters:
       MaxRequests (int):
@@ -244,55 +158,30 @@ class Client:
     def serverVersion(self) -> int:
         return self._serverVersion
 
-    def useProtoBuf(self, canonicalMsgId: int) -> bool:
-        """True when ``canonicalMsgId`` should be sent as protobuf.
-
-        Consults the ``PROTOBUF_MSG_IDS`` per-message gate table. Messages
-        not in the table (and connections below the per-family minimum
-        server version) stay on the legacy binary path.
-        """
-        gate = PROTOBUF_MSG_IDS.get(canonicalMsgId)
-        if gate is None:
-            return False
-        return self._serverVersion >= gate
-
     def sendProto(self, canonicalMsgId: int, serialized: bytes) -> None:
         """Send a protobuf-framed message.
 
         Wire framing: 4-byte big-endian length prefix, then 4-byte
         big-endian wire ``msgId = canonical + PROTOBUF_MSG_ID``, then the
-        serialized protobuf body. Receivers detect the +200 sentinel and route to
-        the protobuf decoder; everything else stays binary.
+        serialized protobuf body.
 
-        Handed to ``sendMsg`` like every binary frame, so protobuf
-        messages share the ONE outbound queue. Writing to ``conn``
-        directly (as this did) put proto frames outside the
-        ``MaxRequests`` / ``RequestsInterval`` pacing budget AND let
-        them overtake binary frames already waiting in the queue — on a
-        207+ gateway that is most of the session's traffic, including
-        every order. Request order and the IBKR pacing contract are not
-        optional for order messages.
+        The frame goes through ``sendMsg``, the one outbound queue, so
+        every request keeps its order and stays within the
+        ``MaxRequests`` / ``RequestsInterval`` pacing budget. Request
+        order and IBKR's pacing limits matter most for orders.
+
+        Raises ``ConnectionError`` when not connected: the socket would
+        drop the frame without a word, and the request with it.
         """
+        if not self.isConnected():
+            raise ConnectionError("Not connected")
         wireMsgId = canonicalMsgId + PROTOBUF_MSG_ID
         body = struct.pack(">I", wireMsgId) + serialized
         self.sendMsg(body)
 
-    def _tryProto(
-        self, canonicalMsgId: int, build_proto: Callable[[], Message]
-    ) -> bool:
-        """Emit the protobuf-encoded frame for ``canonicalMsgId`` when the
-        negotiated server supports it. Returns True when the proto path
-        handled the send so callers can early-return; False when the caller
-        must fall through to the binary path.
-
-        ``build_proto`` is invoked only when the proto gate is open, which
-        keeps the lazy ``from ._proto.XXX import ...`` deferred so older
-        connections never pay the import cost.
-        """
-        if not self.useProtoBuf(canonicalMsgId):
-            return False
-        self.sendProto(canonicalMsgId, build_proto().SerializeToString())
-        return True
+    def _request(self, canonicalMsgId: int, proto: Message) -> None:
+        """Send request ``proto`` as message ``canonicalMsgId``."""
+        self.sendProto(canonicalMsgId, proto.SerializeToString())
 
     def run(self):
         loop = getLoop()
@@ -440,37 +329,6 @@ class Client:
         self.reset()
         if wasReady:
             self.apiEnd.emit()
-
-    def send(self, *fields: WireField, makeEmpty: bool = True) -> None:
-        """Serialize and send the given fields using the IB socket protocol.
-
-        if 'makeEmpty' is True (default), then the IBKR values representing "no value"
-        become the empty string."""
-        if not self.isConnected():
-            raise ConnectionError("Not connected")
-
-        # First field is always the canonical msgId; remaining fields are
-        # the body. Pre-201 servers receive both as NUL-terminated text;
-        # 201+ servers receive a 4-byte big-endian raw msgId followed by
-        # the NUL-terminated body. Sending the legacy text msgId to a 201+ server makes
-        # the server fail to decode the frame and silently drop the
-        # connection — every binary-path message (startApi, anything
-        # that's not in PROTOBUF_MSG_IDS, anything below its proto gate)
-        # is affected.
-        msgId = fields[0]
-        if not isinstance(msgId, int):
-            raise TypeError(f"the first field is the message id, not {msgId!r}")
-        body = io.StringIO()
-        for field in fields[1:]:
-            body.write(_formatField(field, makeEmpty))
-            body.write("\0")
-
-        text = body.getvalue().encode()
-        if self._serverVersion >= MIN_SERVER_VER_PROTOBUF:
-            generated = struct.pack(">I", int(msgId)) + text
-        else:
-            generated = (str(msgId) + "\0").encode() + text
-        self.sendMsg(generated)
 
     def sendMsg(self, msg: bytes | None):
         loop = getLoop()
@@ -677,6 +535,9 @@ class Client:
                 msg = "Peer closed connection."
                 if not wasReady:
                     msg += f" clientId {self.clientId} already in use?"
+        # The socket is gone: a request from an event handler below raises
+        # ConnectionError instead of being dropped.
+        self.connState = Client.DISCONNECTED
 
         if msg:
             self._logger.error(msg)
@@ -700,8 +561,7 @@ class Client:
         if wasReady:
             self.apiEnd.emit()
 
-    # client request methods
-    # the message type id is sent first, often followed by a version number
+    # client request methods: each sends its request's protobuf message
 
     def reqMktData(
         self,
@@ -712,335 +572,36 @@ class Client:
         regulatorySnapshot,
         mktDataOptions,
     ):
-        def _proto():
-            return _converters.market_data.createMarketDataRequestProto(
+        self._request(
+            _M.REQ_MKT_DATA,
+            _converters.market_data.createMarketDataRequestProto(
                 reqId,
                 contract,
                 genericTickList,
                 snapshot,
                 regulatorySnapshot,
                 marketDataOptions=mktDataOptions,
-            )
-
-        if self._tryProto(_M.REQ_MKT_DATA, _proto):
-            return
-        fields = [1, 11, reqId, contract]
-
-        if contract.secType == "BAG":
-            legs = contract.comboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [leg.conId, leg.ratio, leg.action, leg.exchange]
-
-        dnc = contract.deltaNeutralContract
-        if dnc:
-            fields += [True, dnc.conId, dnc.delta, dnc.price]
-        else:
-            fields += [False]
-
-        fields += [genericTickList, snapshot, regulatorySnapshot, mktDataOptions]
-        self.send(*fields)
+            ),
+        )
 
     def cancelMktData(self, reqId):
-        def _proto():
-            return _converters.market_data.createCancelMarketDataProto(reqId)
-
-        if self._tryProto(_M.CANCEL_MKT_DATA, _proto):
-            return
-        self.send(2, 2, reqId)
+        self._request(
+            _M.CANCEL_MKT_DATA,
+            _converters.market_data.createCancelMarketDataProto(reqId),
+        )
 
     def placeOrder(self, orderId, contract, order):
-        # IBKR API BUG FIX (applies to BOTH binary and proto paths):
-        # IBKR sometimes back-populates the 'volatility' field into live orders, but then if we try to
-        # modify an order using cached order objects, IBKR rejects modifications because 'volatility'
-        # is not allowed to be set (even though _they_ added it to our previously submitted order).
-        # Solution: if an order is NOT a VOL order, reset 'volatility' to UNSET_DOUBLE so the proto
-        # path's ``_isValidFloat`` guard skips the field and the binary path's float handler emits
-        # an empty string. MUST run before the proto branch below — the proto path's
-        # ``createOrderProto`` writes ``volatility`` whenever it differs from UNSET_DOUBLE, so
-        # without this reset a TWS-populated value would ride out on every modify and the server
-        # would reject it.
+        # IBKR sometimes writes ``volatility`` back into a live order that
+        # is not a VOL order, then rejects a modification that sends it.
+        # Only a VOL order may carry it, so it is cleared for any other
+        # order before the request is built; None leaves it out.
         if not order.orderType.startswith("VOL"):
-            # ONLY volatility orders can have 'volatility' set when sending API
-            # data. None is the v3 dialect's unset: the proto guard skips the
-            # field and the binary handler emits an empty string — and the
-            # operator-visible Order object never carries a sentinel float.
             order.volatility = None
 
-        # On TWS / IB Gateway server versions that support protobuf for
-        # placeOrder (gate 203), emit a ``PlaceOrderRequest`` proto and
-        # return; binary fallback below preserves compatibility with
-        # older servers. Per-msgId gating (not per-connection): a 207
-        # server uses protobuf for orders but binary for historical
-        # data, etc.
-        def _proto():
-            return _converters.orders.createPlaceOrderRequestProto(
-                orderId, contract, order
-            )
-
-        if self._tryProto(_M.PLACE_ORDER, _proto):
-            return
-
-        version = self.serverVersion()
-
-        # The IBKR API protocol is just a series of in-order arguments denoted by position.
-        # The server parses all fields based on the first value (the message type).
-        fields = [
-            3,  # PLACE_ORDER message type
-            orderId,
-            contract,
-            contract.secIdType,
-            contract.secId,
-            order.action,
-            order.totalQuantity,
-            order.orderType,
-            order.lmtPrice,
-            order.auxPrice,
-            order.tif,
-            order.ocaGroup,
-            order.account,
-            order.openClose,
-            order.origin,
-            order.orderRef,
-            order.transmit,
-            order.parentId,
-            order.blockOrder,
-            order.sweepToFill,
-            order.displaySize,
-            order.triggerMethod,
-            order.outsideRth,
-            order.hidden,
-        ]
-
-        if contract.secType == "BAG":
-            legs = contract.comboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [
-                    leg.conId,
-                    leg.ratio,
-                    leg.action,
-                    leg.exchange,
-                    leg.openClose,
-                    leg.shortSaleSlot,
-                    leg.designatedLocation,
-                    leg.exemptCode,
-                ]
-
-            legs = order.orderComboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [leg.price]
-
-            params = order.smartComboRoutingParams or []
-            fields += [len(params)]
-            for param in params:
-                fields += [param.tag, param.value]
-
-        fields += [
-            "",
-            order.discretionaryAmt,
-            order.goodAfterTime,
-            order.goodTillDate,
-            order.faGroup,
-            order.faMethod,
-            order.faPercentage,
-        ]
-
-        if version < 177:
-            fields += [order.faProfile]
-
-        fields += [
-            order.modelCode,
-            order.shortSaleSlot,
-            order.designatedLocation,
-            order.exemptCode,
-            order.ocaType,
-            order.rule80A,
-            order.settlingFirm,
-            order.allOrNone,
-            order.minQty,
-            order.percentOffset,
-            order.eTradeOnly,  # always False
-            order.firmQuoteOnly,  # always False
-            order.nbboPriceCap,  # always UNSET
-            order.auctionStrategy,
-            order.startingPrice,
-            order.stockRefPrice,
-            order.delta,
-            order.stockRangeLower,
-            order.stockRangeUpper,
-            order.overridePercentageConstraints,
-            order.volatility,
-            order.volatilityType,
-            order.deltaNeutralOrderType,
-            order.deltaNeutralAuxPrice,
-        ]
-
-        if order.deltaNeutralOrderType:
-            fields += [
-                order.deltaNeutralConId,
-                order.deltaNeutralSettlingFirm,
-                order.deltaNeutralClearingAccount,
-                order.deltaNeutralClearingIntent,
-                order.deltaNeutralOpenClose,
-                order.deltaNeutralShortSale,
-                order.deltaNeutralShortSaleSlot,
-                order.deltaNeutralDesignatedLocation,
-            ]
-
-        fields += [
-            order.continuousUpdate,
-            order.referencePriceType,
-            order.trailStopPrice,
-            order.trailingPercent,
-            order.scaleInitLevelSize,
-            order.scaleSubsLevelSize,
-            order.scalePriceIncrement,
-        ]
-
-        if (
-            order.scalePriceIncrement is not None
-            and 0 < order.scalePriceIncrement < UNSET_DOUBLE
-        ):
-            fields += [
-                order.scalePriceAdjustValue,
-                order.scalePriceAdjustInterval,
-                order.scaleProfitOffset,
-                order.scaleAutoReset,
-                order.scaleInitPosition,
-                order.scaleInitFillQty,
-                order.scaleRandomPercent,
-            ]
-
-        fields += [
-            order.scaleTable,
-            order.activeStartTime,
-            order.activeStopTime,
-            order.hedgeType,
-        ]
-
-        if order.hedgeType:
-            fields += [order.hedgeParam]
-
-        fields += [
-            order.optOutSmartRouting,
-            order.clearingAccount,
-            order.clearingIntent,
-            order.notHeld,
-        ]
-
-        dnc = contract.deltaNeutralContract
-        if dnc:
-            fields += [True, dnc.conId, dnc.delta, dnc.price]
-        else:
-            fields += [False]
-
-        fields += [order.algoStrategy]
-        if order.algoStrategy:
-            params = order.algoParams or []
-            fields += [len(params)]
-            for param in params:
-                fields += [param.tag, param.value]
-
-        fields += [
-            order.algoId,
-            order.whatIf,
-            order.orderMiscOptions,
-            order.solicited,
-            order.randomizeSize,
-            order.randomizePrice,
-        ]
-
-        if order.orderType in {"PEG BENCH", "PEGBENCH"}:
-            fields += [
-                order.referenceContractId,
-                order.isPeggedChangeAmountDecrease,
-                order.peggedChangeAmount,
-                order.referenceChangeAmount,
-                order.referenceExchangeId,
-            ]
-
-        fields += [len(order.conditions)]
-        if order.conditions:
-            for cond in order.conditions:
-                fields += dataclassAsTuple(cond)
-            fields += [order.conditionsIgnoreRth, order.conditionsCancelOrder]
-
-        fields += [
-            order.adjustedOrderType,
-            order.triggerPrice,
-            order.lmtPriceOffset,
-            order.adjustedStopPrice,
-            order.adjustedStopLimitPrice,
-            order.adjustedTrailingAmount,
-            order.adjustableTrailingUnit,
-            order.extOperator,
-            order.softDollarTier.name,
-            order.softDollarTier.val,
-            order.cashQty,
-            order.mifid2DecisionMaker,
-            order.mifid2DecisionAlgo,
-            order.mifid2ExecutionTrader,
-            order.mifid2ExecutionAlgo,
-            order.dontUseAutoPriceForHedge,
-            order.isOmsContainer,
-            order.discretionaryUpToLimitPrice,
-            order.usePriceMgmtAlgo,
-        ]
-
-        if version >= MIN_SERVER_VER_DURATION:
-            fields += [order.duration]
-
-        if version >= MIN_SERVER_VER_POST_TO_ATS:
-            fields += [order.postToAts]
-
-        if version >= MIN_SERVER_VER_AUTO_CANCEL_PARENT:
-            fields += [order.autoCancelParent]
-
-        if version >= MIN_SERVER_VER_ADVANCED_ORDER_REJECT:
-            fields += [order.advancedErrorOverride]
-
-        if version >= MIN_SERVER_VER_MANUAL_ORDER_TIME:
-            fields += [order.manualOrderTime]
-
-        if version >= MIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS:
-            if contract.exchange == "IBKRATS":
-                fields += [order.minTradeQty]
-            if order.orderType in {"PEG BEST", "PEGBEST"}:
-                fields += [order.minCompeteSize, order.competeAgainstBestOffset]
-                if order.competeAgainstBestOffset == math.inf:
-                    fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
-            elif order.orderType in {"PEG MID", "PEGMID"}:
-                fields += [order.midOffsetAtWhole, order.midOffsetAtHalf]
-
-        # Gates 178+.
-
-        if version >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
-            fields += [order.customerAccount]
-
-        if version >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
-            fields += [order.professionalCustomer]
-
-        # Interim 2-field RFQ block, written ONLY for servers in
-        # [RFQ_FIELDS, UNDO_RFQ_FIELDS).  IBKR writes ``("", UNSET_INTEGER)``
-        # — bondAccruedInterest plus a placeholder int.
-        if MIN_SERVER_VER_RFQ_FIELDS <= version < MIN_SERVER_VER_UNDO_RFQ_FIELDS:
-            fields += [order.bondAccruedInterest, UNSET_INTEGER]
-
-        if version >= MIN_SERVER_VER_INCLUDE_OVERNIGHT:
-            fields += [order.includeOvernight]
-
-        if version >= MIN_SERVER_VER_CME_TAGGING_FIELDS:
-            # ``manualOrderIndicator`` rides at gate 192; ``extOperator``
-            # is gate 105 (EXT_OPERATOR) and is already written above as
-            # part of the unconditional block — see IBKR ref line 2674.
-            fields += [order.manualOrderIndicator]
-
-        if version >= MIN_SERVER_VER_IMBALANCE_ONLY:
-            fields += [order.imbalanceOnly]
-
-        self.send(*fields)
+        self._request(
+            _M.PLACE_ORDER,
+            _converters.orders.createPlaceOrderRequestProto(orderId, contract, order),
+        )
 
     def cancelOrder(self, orderId, orderCancel=None):
         # Accept either a fully-formed ``OrderCancel`` envelope or
@@ -1054,245 +615,111 @@ class Client:
         elif isinstance(orderCancel, str):
             orderCancel = OrderCancel(manualOrderCancelTime=orderCancel)
 
-        def _proto():
-            return _converters.orders.createCancelOrderRequestProto(
+        self._request(
+            _M.CANCEL_ORDER,
+            _converters.orders.createCancelOrderRequestProto(
                 orderId,
                 manualOrderCancelTime=orderCancel.manualOrderCancelTime,
                 extOperator=orderCancel.extOperator,
                 manualOrderIndicator=orderCancel.manualOrderIndicator,
-            )
-
-        if self._tryProto(_M.CANCEL_ORDER, _proto):
-            return
-
-        # Binary wire layout shifts at MIN_SERVER_VER_CME_TAGGING_FIELDS
-        # (192): IBKR drops the legacy ``VERSION=1`` prefix and appends
-        # ``extOperator`` + ``manualOrderIndicator``. There's also an
-        # interim RFQ_FIELDS triplet on servers in [187, 190).
-        fields: list[WireField] = [4]
-        if self.serverVersion() < MIN_SERVER_VER_CME_TAGGING_FIELDS:
-            fields.append(1)  # legacy VERSION
-        fields.append(orderId)
-        if self.serverVersion() >= MIN_SERVER_VER_MANUAL_ORDER_TIME:
-            fields.append(orderCancel.manualOrderCancelTime)
-        if (
-            MIN_SERVER_VER_RFQ_FIELDS
-            <= self.serverVersion()
-            < MIN_SERVER_VER_UNDO_RFQ_FIELDS
-        ):
-            fields += ["", "", UNSET_INTEGER]
-        if self.serverVersion() >= MIN_SERVER_VER_CME_TAGGING_FIELDS:
-            fields += [orderCancel.extOperator, orderCancel.manualOrderIndicator]
-        self.send(*fields)
+            ),
+        )
 
     def reqOpenOrders(self):
-        def _proto():
-            return _converters.orders.createOpenOrdersRequestProto()
-
-        if self._tryProto(_M.REQ_OPEN_ORDERS, _proto):
-            return
-        self.send(5, 1)
+        self._request(
+            _M.REQ_OPEN_ORDERS, _converters.orders.createOpenOrdersRequestProto()
+        )
 
     def reqAccountUpdates(self, subscribe, acctCode):
-        def _proto():
-            return _converters.accounts.createAccountDataRequestProto(
-                subscribe, acctCode
-            )
-
-        if self._tryProto(_M.REQ_ACCT_DATA, _proto):
-            return
-        self.send(6, 2, subscribe, acctCode)
+        self._request(
+            _M.REQ_ACCT_DATA,
+            _converters.accounts.createAccountDataRequestProto(subscribe, acctCode),
+        )
 
     def reqExecutions(self, reqId, execFilter):
-        def _proto():
-            return _converters.orders.createExecutionRequestProto(reqId, execFilter)
-
-        if self._tryProto(_M.REQ_EXECUTIONS, _proto):
-            return
-        fields: list[WireField] = [
-            7,
-            3,
-            reqId,
-            execFilter.clientId,
-            execFilter.acctCode,
-            execFilter.time,
-            execFilter.symbol,
-            execFilter.secType,
-            execFilter.exchange,
-            execFilter.side,
-        ]
-        # ``lastNDays`` and ``specificDates`` arrived at gate 200
-        # (PARAMETRIZED_DAYS_OF_EXECUTIONS).  ``getattr`` keeps the wire
-        # write decoupled from the dataclass shape. ``lastNDays`` is
-        # ``int | None`` on the public surface; the wire wants IBKR's
-        # ``UNSET_INTEGER`` sentinel for "no filter" (the binary path's
-        # format handler maps that sentinel to empty string under
-        # ``makeEmpty``).
-        if self.serverVersion() >= MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS:
-            lastNDays = getattr(execFilter, "lastNDays", None)
-            fields += [lastNDays if lastNDays is not None else UNSET_INTEGER]
-            specificDates = getattr(execFilter, "specificDates", None) or []
-            fields += [len(specificDates)]
-            for specificDate in specificDates:
-                fields += [specificDate]
-        self.send(*fields)
+        self._request(
+            _M.REQ_EXECUTIONS,
+            _converters.orders.createExecutionRequestProto(reqId, execFilter),
+        )
 
     def reqIds(self, numIds):
-        self.send(8, 1, numIds)
+        self._request(_M.REQ_IDS, _converters.rest.createIdsRequestProto(numIds))
 
     def reqContractDetails(self, reqId, contract):
-        def _proto():
-            return _converters.contracts.createContractDataRequestProto(reqId, contract)
-
-        if self._tryProto(_M.REQ_CONTRACT_DATA, _proto):
-            return
-        fields = [
-            9,
-            8,
-            reqId,
-            contract,
-            contract.includeExpired,
-            contract.secIdType,
-            contract.secId,
-        ]
-
-        if self.serverVersion() >= 176:
-            fields += [contract.issuerId]
-
-        self.send(*fields)
+        self._request(
+            _M.REQ_CONTRACT_DATA,
+            _converters.contracts.createContractDataRequestProto(reqId, contract),
+        )
 
     def reqMktDepth(self, reqId, contract, numRows, isSmartDepth, mktDepthOptions):
-        def _proto():
-            return _converters.market_data.createMarketDepthRequestProto(
+        self._request(
+            _M.REQ_MKT_DEPTH,
+            _converters.market_data.createMarketDepthRequestProto(
                 reqId,
                 contract,
                 numRows,
                 isSmartDepth,
                 marketDepthOptions=mktDepthOptions,
-            )
-
-        if self._tryProto(_M.REQ_MKT_DEPTH, _proto):
-            return
-        self.send(
-            10,
-            5,
-            reqId,
-            contract.conId,
-            contract.symbol,
-            contract.secType,
-            contract.lastTradeDateOrContractMonth,
-            contract.strike,
-            contract.right,
-            contract.multiplier,
-            contract.exchange,
-            contract.primaryExchange,
-            contract.currency,
-            contract.localSymbol,
-            contract.tradingClass,
-            numRows,
-            isSmartDepth,
-            mktDepthOptions,
+            ),
         )
 
     def cancelMktDepth(self, reqId, isSmartDepth):
-        def _proto():
-            return _converters.market_data.createCancelMarketDepthProto(
-                reqId, isSmartDepth
-            )
-
-        if self._tryProto(_M.CANCEL_MKT_DEPTH, _proto):
-            return
-        self.send(11, 1, reqId, isSmartDepth)
+        self._request(
+            _M.CANCEL_MKT_DEPTH,
+            _converters.market_data.createCancelMarketDepthProto(reqId, isSmartDepth),
+        )
 
     def reqNewsBulletins(self, allMsgs):
-        def _proto():
-            return _converters.news.createNewsBulletinsRequestProto(allMsgs)
-
-        if self._tryProto(_M.REQ_NEWS_BULLETINS, _proto):
-            return
-        self.send(12, 1, allMsgs)
+        self._request(
+            _M.REQ_NEWS_BULLETINS,
+            _converters.news.createNewsBulletinsRequestProto(allMsgs),
+        )
 
     def cancelNewsBulletins(self):
-        def _proto():
-            return _converters.news.createCancelNewsBulletinsProto()
-
-        if self._tryProto(_M.CANCEL_NEWS_BULLETINS, _proto):
-            return
-        self.send(13, 1)
+        self._request(
+            _M.CANCEL_NEWS_BULLETINS, _converters.news.createCancelNewsBulletinsProto()
+        )
 
     def setServerLogLevel(self, logLevel):
-        def _proto():
-            return _converters.rest.createSetServerLogLevelRequestProto(logLevel)
-
-        if self._tryProto(_M.SET_SERVER_LOGLEVEL, _proto):
-            return
-        self.send(14, 1, logLevel)
+        self._request(
+            _M.SET_SERVER_LOGLEVEL,
+            _converters.rest.createSetServerLogLevelRequestProto(logLevel),
+        )
 
     def reqAutoOpenOrders(self, bAutoBind):
-        def _proto():
-            return _converters.orders.createAutoOpenOrdersRequestProto(bAutoBind)
-
-        if self._tryProto(_M.REQ_AUTO_OPEN_ORDERS, _proto):
-            return
-        self.send(15, 1, bAutoBind)
+        self._request(
+            _M.REQ_AUTO_OPEN_ORDERS,
+            _converters.orders.createAutoOpenOrdersRequestProto(bAutoBind),
+        )
 
     def reqAllOpenOrders(self):
-        def _proto():
-            return _converters.orders.createAllOpenOrdersRequestProto()
-
-        if self._tryProto(_M.REQ_ALL_OPEN_ORDERS, _proto):
-            return
-        self.send(16, 1)
+        self._request(
+            _M.REQ_ALL_OPEN_ORDERS, _converters.orders.createAllOpenOrdersRequestProto()
+        )
 
     def reqManagedAccts(self):
-        def _proto():
-            return _converters.accounts.createManagedAccountsRequestProto()
-
-        if self._tryProto(_M.REQ_MANAGED_ACCTS, _proto):
-            return
-        self.send(17, 1)
+        self._request(
+            _M.REQ_MANAGED_ACCTS,
+            _converters.accounts.createManagedAccountsRequestProto(),
+        )
 
     def requestFA(self, faData):
-        # FA Profiles (faData == 2) were de-supported at server gate 177:
-        # refuse the request here rather than send one no server answers.
-        if (
-            self.serverVersion() >= MIN_SERVER_VER_FA_PROFILE_DESUPPORT
-            and int(faData) == 2
-        ):
+        # IBKR no longer supports FA profiles (faData 2): refuse the
+        # request here rather than send one no server answers.
+        if int(faData) == 2:
             raise ValueError(
-                "FA profiles (faDataType 2) are not supported from server "
-                f"version {MIN_SERVER_VER_FA_PROFILE_DESUPPORT}; this one is "
-                f"{self.serverVersion()}"
+                "FA profiles (faDataType 2) are not supported by TWS / IB Gateway 10.51"
             )
-
-        def _proto():
-            return _converters.accounts.createFARequestProto(faData)
-
-        if self._tryProto(_M.REQ_FA, _proto):
-            return
-        self.send(18, 1, faData)
+        self._request(_M.REQ_FA, _converters.accounts.createFARequestProto(faData))
 
     def replaceFA(self, reqId, faData, cxml):
-        # FA Profiles (faData == 2) were de-supported at server gate 177
-        # (FA_PROFILE_DESUPPORT). Reject locally before sending.
-        if (
-            self.serverVersion() >= MIN_SERVER_VER_FA_PROFILE_DESUPPORT
-            and int(faData) == 2
-        ):
+        # IBKR no longer supports FA profiles (faData 2): nothing is sent.
+        if int(faData) == 2:
             return
-
-        def _proto():
-            return _converters.accounts.createFAReplaceProto(reqId, faData, cxml)
-
-        if self._tryProto(_M.REPLACE_FA, _proto):
-            return
-        # The trailing ``reqId`` field only exists at server gate 157+
-        # (REPLACE_FA_END). Sending it to a sub-157 server desyncs the
-        # frame, so the write is gated.
-        fields: list[WireField] = [19, 1, faData, cxml]
-        if self.serverVersion() >= MIN_SERVER_VER_REPLACE_FA_END:
-            fields.append(reqId)
-        self.send(*fields)
+        self._request(
+            _M.REPLACE_FA,
+            _converters.accounts.createFAReplaceProto(reqId, faData, cxml),
+        )
 
     def reqHistoricalData(
         self,
@@ -1307,8 +734,9 @@ class Client:
         keepUpToDate,
         chartOptions,
     ):
-        def _proto():
-            return _converters.historical.createHistoricalDataRequestProto(
+        self._request(
+            _M.REQ_HISTORICAL_DATA,
+            _converters.historical.createHistoricalDataRequestProto(
                 reqId,
                 contract,
                 endDateTime,
@@ -1319,31 +747,8 @@ class Client:
                 formatDate,
                 keepUpToDate,
                 chartOptions=chartOptions,
-            )
-
-        if self._tryProto(_M.REQ_HISTORICAL_DATA, _proto):
-            return
-        fields = [
-            20,
-            reqId,
-            contract,
-            contract.includeExpired,
-            endDateTime,
-            barSizeSetting,
-            durationStr,
-            useRTH,
-            whatToShow,
-            formatDate,
-        ]
-
-        if contract.secType == "BAG":
-            legs = contract.comboLegs or []
-            fields += [len(legs)]
-            for leg in legs:
-                fields += [leg.conId, leg.ratio, leg.action, leg.exchange]
-
-        fields += [keepUpToDate, chartOptions]
-        self.send(*fields)
+            ),
+        )
 
     def exerciseOptions(
         self,
@@ -1357,8 +762,9 @@ class Client:
         customerAccount: str = "",
         professionalCustomer: bool = False,
     ):
-        def _proto():
-            return _converters.rest.createExerciseOptionsRequestProto(
+        self._request(
+            _M.EXERCISE_OPTIONS,
+            _converters.rest.createExerciseOptionsRequestProto(
                 reqId,
                 contract,
                 exerciseAction,
@@ -1368,40 +774,8 @@ class Client:
                 manualOrderTime=manualOrderTime,
                 customerAccount=customerAccount,
                 professionalCustomer=professionalCustomer,
-            )
-
-        if self._tryProto(_M.EXERCISE_OPTIONS, _proto):
-            return
-        fields: list[WireField] = [
-            21,
-            2,
-            reqId,
-            contract.conId,
-            contract.symbol,
-            contract.secType,
-            contract.lastTradeDateOrContractMonth,
-            contract.strike,
-            contract.right,
-            contract.multiplier,
-            contract.exchange,
-            contract.currency,
-            contract.localSymbol,
-            contract.tradingClass,
-            exerciseAction,
-            exerciseQuantity,
-            account,
-            override,
-        ]
-        # Gated trailers: each field is only written when the connected
-        # server actually understands it — sending an extra trailer to a
-        # pre-180 server desyncs the wire frame.
-        if self.serverVersion() >= MIN_SERVER_VER_MANUAL_ORDER_TIME_EXERCISE_OPTIONS:
-            fields += [manualOrderTime]
-        if self.serverVersion() >= MIN_SERVER_VER_CUSTOMER_ACCOUNT:
-            fields += [customerAccount]
-        if self.serverVersion() >= MIN_SERVER_VER_PROFESSIONAL_CUSTOMER:
-            fields += [professionalCustomer]
-        self.send(*fields)
+            ),
+        )
 
     def reqScannerSubscription(
         self,
@@ -1410,349 +784,216 @@ class Client:
         scannerSubscriptionOptions,
         scannerSubscriptionFilterOptions,
     ):
-        def _proto():
-            return _converters.scanner.createScannerSubscriptionRequestProto(
+        self._request(
+            _M.REQ_SCANNER_SUBSCRIPTION,
+            _converters.scanner.createScannerSubscriptionRequestProto(
                 reqId,
                 subscription,
                 scannerSubscriptionOptions=scannerSubscriptionOptions,
                 scannerSubscriptionFilterOptions=scannerSubscriptionFilterOptions,
-            )
-
-        if self._tryProto(_M.REQ_SCANNER_SUBSCRIPTION, _proto):
-            return
-        sub = subscription
-        self.send(
-            22,
-            reqId,
-            sub.numberOfRows,
-            sub.instrument,
-            sub.locationCode,
-            sub.scanCode,
-            sub.abovePrice,
-            sub.belowPrice,
-            sub.aboveVolume,
-            sub.marketCapAbove,
-            sub.marketCapBelow,
-            sub.moodyRatingAbove,
-            sub.moodyRatingBelow,
-            sub.spRatingAbove,
-            sub.spRatingBelow,
-            sub.maturityDateAbove,
-            sub.maturityDateBelow,
-            sub.couponRateAbove,
-            sub.couponRateBelow,
-            sub.excludeConvertible,
-            sub.averageOptionVolumeAbove,
-            sub.scannerSettingPairs,
-            sub.stockTypeFilter,
-            scannerSubscriptionFilterOptions,
-            scannerSubscriptionOptions,
+            ),
         )
 
     def cancelScannerSubscription(self, reqId):
-        def _proto():
-            return _converters.scanner.createCancelScannerSubscriptionProto(reqId)
-
-        if self._tryProto(_M.CANCEL_SCANNER_SUBSCRIPTION, _proto):
-            return
-        self.send(23, 1, reqId)
+        self._request(
+            _M.CANCEL_SCANNER_SUBSCRIPTION,
+            _converters.scanner.createCancelScannerSubscriptionProto(reqId),
+        )
 
     def reqScannerParameters(self):
-        def _proto():
-            return _converters.scanner.createScannerParametersRequestProto()
-
-        if self._tryProto(_M.REQ_SCANNER_PARAMETERS, _proto):
-            return
-        self.send(24, 1)
+        self._request(
+            _M.REQ_SCANNER_PARAMETERS,
+            _converters.scanner.createScannerParametersRequestProto(),
+        )
 
     def cancelHistoricalData(self, reqId):
-        def _proto():
-            return _converters.historical.createCancelHistoricalDataProto(reqId)
-
-        if self._tryProto(_M.CANCEL_HISTORICAL_DATA, _proto):
-            return
-        self.send(25, 1, reqId)
+        self._request(
+            _M.CANCEL_HISTORICAL_DATA,
+            _converters.historical.createCancelHistoricalDataProto(reqId),
+        )
 
     def reqCurrentTime(self):
-        def _proto():
-            return _converters.rest.createCurrentTimeRequestProto()
-
-        if self._tryProto(_M.REQ_CURRENT_TIME, _proto):
-            return
-        self.send(49, 1)
+        self._request(
+            _M.REQ_CURRENT_TIME, _converters.rest.createCurrentTimeRequestProto()
+        )
 
     def reqCurrentTimeInMillis(self):
-        """Request the IBKR server clock in milliseconds. Protobuf only —
-        no binary fallback (IBKR never shipped this on the legacy wire).
-
-        Raises ``ValueError`` on servers below
-        ``MIN_SERVER_VER_PROTOBUF_REST_MESSAGES_3`` (213). The wire
-        frame would otherwise leave with the protobuf +200 sentinel
-        for a server that has no idea what to do with it, leaving
-        the awaiter wedged forever.
-        """
-        if not self.useProtoBuf(_M.REQ_CURRENT_TIME_IN_MILLIS):
-            raise ValueError(
-                "reqCurrentTimeInMillis requires TWS / IB Gateway server "
-                "version >= 213 (protobuf REST messages); current server "
-                f"version is {self._serverVersion}."
-            )
-
-        self.sendProto(
+        """Request the IBKR server clock in milliseconds."""
+        self._request(
             _M.REQ_CURRENT_TIME_IN_MILLIS,
-            _converters.rest.createCurrentTimeInMillisRequestProto().SerializeToString(),
+            _converters.rest.createCurrentTimeInMillisRequestProto(),
         )
 
     def reqRealTimeBars(
         self, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
     ):
-        def _proto():
-            return _converters.historical.createRealTimeBarsRequestProto(
+        self._request(
+            _M.REQ_REAL_TIME_BARS,
+            _converters.historical.createRealTimeBarsRequestProto(
                 reqId,
                 contract,
                 barSize,
                 whatToShow,
                 useRTH,
                 realTimeBarsOptions=realTimeBarsOptions,
-            )
-
-        if self._tryProto(_M.REQ_REAL_TIME_BARS, _proto):
-            return
-        self.send(
-            50, 3, reqId, contract, barSize, whatToShow, useRTH, realTimeBarsOptions
+            ),
         )
 
     def cancelRealTimeBars(self, reqId):
-        def _proto():
-            return _converters.historical.createCancelRealTimeBarsProto(reqId)
-
-        if self._tryProto(_M.CANCEL_REAL_TIME_BARS, _proto):
-            return
-        self.send(51, 1, reqId)
+        self._request(
+            _M.CANCEL_REAL_TIME_BARS,
+            _converters.historical.createCancelRealTimeBarsProto(reqId),
+        )
 
     def calculateImpliedVolatility(
         self, reqId, contract, optionPrice, underPrice, implVolOptions
     ):
-        def _proto():
-            return _converters.rest.createCalculateImpliedVolatilityRequestProto(
+        self._request(
+            _M.REQ_CALC_IMPLIED_VOLAT,
+            _converters.rest.createCalculateImpliedVolatilityRequestProto(
                 reqId,
                 contract,
                 optionPrice,
                 underPrice,
                 impliedVolatilityOptions=implVolOptions,
-            )
-
-        if self._tryProto(_M.REQ_CALC_IMPLIED_VOLAT, _proto):
-            return
-        self.send(
-            54,
-            3,
-            reqId,
-            contract,
-            optionPrice,
-            underPrice,
-            implVolOptions,
+            ),
         )
 
     def calculateOptionPrice(
         self, reqId, contract, volatility, underPrice, optPrcOptions
     ):
-        def _proto():
-            return _converters.rest.createCalculateOptionPriceRequestProto(
+        self._request(
+            _M.REQ_CALC_OPTION_PRICE,
+            _converters.rest.createCalculateOptionPriceRequestProto(
                 reqId,
                 contract,
                 volatility,
                 underPrice,
                 optionPriceOptions=optPrcOptions,
-            )
-
-        if self._tryProto(_M.REQ_CALC_OPTION_PRICE, _proto):
-            return
-        self.send(
-            55,
-            3,
-            reqId,
-            contract,
-            volatility,
-            underPrice,
-            optPrcOptions,
+            ),
         )
 
     def cancelCalculateImpliedVolatility(self, reqId):
-        def _proto():
-            return _converters.rest.createCancelCalculateImpliedVolatilityProto(reqId)
-
-        if self._tryProto(_M.CANCEL_CALC_IMPLIED_VOLAT, _proto):
-            return
-        self.send(56, 1, reqId)
+        self._request(
+            _M.CANCEL_CALC_IMPLIED_VOLAT,
+            _converters.rest.createCancelCalculateImpliedVolatilityProto(reqId),
+        )
 
     def cancelCalculateOptionPrice(self, reqId):
-        def _proto():
-            return _converters.rest.createCancelCalculateOptionPriceProto(reqId)
-
-        if self._tryProto(_M.CANCEL_CALC_OPTION_PRICE, _proto):
-            return
-        self.send(57, 1, reqId)
+        self._request(
+            _M.CANCEL_CALC_OPTION_PRICE,
+            _converters.rest.createCancelCalculateOptionPriceProto(reqId),
+        )
 
     def reqGlobalCancel(self, orderCancel=None):
         if orderCancel is None:
             orderCancel = OrderCancel()
-
-        def _proto():
-            return _converters.orders.createGlobalCancelRequestProto(
+        self._request(
+            _M.REQ_GLOBAL_CANCEL,
+            _converters.orders.createGlobalCancelRequestProto(
                 extOperator=orderCancel.extOperator,
                 manualOrderIndicator=orderCancel.manualOrderIndicator,
-            )
-
-        if self._tryProto(_M.REQ_GLOBAL_CANCEL, _proto):
-            return
-
-        # Binary wire layout: pre-192 carries VERSION=1 prefix; >=192
-        # drops VERSION and appends extOperator + manualOrderIndicator.
-        fields: list[WireField] = [58]
-        if self.serverVersion() < MIN_SERVER_VER_CME_TAGGING_FIELDS:
-            fields.append(1)  # legacy VERSION
-        if self.serverVersion() >= MIN_SERVER_VER_CME_TAGGING_FIELDS:
-            fields += [orderCancel.extOperator, orderCancel.manualOrderIndicator]
-        self.send(*fields)
+            ),
+        )
 
     def reqMarketDataType(self, marketDataType):
-        def _proto():
-            return _converters.market_data.createMarketDataTypeRequestProto(
-                marketDataType
-            )
-
-        if self._tryProto(_M.REQ_MARKET_DATA_TYPE, _proto):
-            return
-        self.send(59, 1, marketDataType)
+        self._request(
+            _M.REQ_MARKET_DATA_TYPE,
+            _converters.market_data.createMarketDataTypeRequestProto(marketDataType),
+        )
 
     def reqPositions(self):
-        def _proto():
-            return _converters.accounts.createPositionsRequestProto()
-
-        if self._tryProto(_M.REQ_POSITIONS, _proto):
-            return
-        self.send(61, 1)
+        self._request(
+            _M.REQ_POSITIONS, _converters.accounts.createPositionsRequestProto()
+        )
 
     def reqAccountSummary(self, reqId, groupName, tags):
-        def _proto():
-            return _converters.accounts.createAccountSummaryRequestProto(
+        self._request(
+            _M.REQ_ACCOUNT_SUMMARY,
+            _converters.accounts.createAccountSummaryRequestProto(
                 reqId, groupName, tags
-            )
-
-        if self._tryProto(_M.REQ_ACCOUNT_SUMMARY, _proto):
-            return
-        self.send(62, 1, reqId, groupName, tags)
+            ),
+        )
 
     def cancelAccountSummary(self, reqId):
-        def _proto():
-            return _converters.accounts.createCancelAccountSummaryProto(reqId)
-
-        if self._tryProto(_M.CANCEL_ACCOUNT_SUMMARY, _proto):
-            return
-        self.send(63, 1, reqId)
+        self._request(
+            _M.CANCEL_ACCOUNT_SUMMARY,
+            _converters.accounts.createCancelAccountSummaryProto(reqId),
+        )
 
     def cancelPositions(self):
-        def _proto():
-            return _converters.accounts.createCancelPositionsProto()
-
-        if self._tryProto(_M.CANCEL_POSITIONS, _proto):
-            return
-        self.send(64, 1)
+        self._request(
+            _M.CANCEL_POSITIONS, _converters.accounts.createCancelPositionsProto()
+        )
 
     def verifyRequest(self, apiName, apiVersion):
-        self.send(65, 1, apiName, apiVersion)
+        self._request(
+            _M.VERIFY_REQUEST,
+            _converters.rest.createVerifyRequestProto(apiName, apiVersion),
+        )
 
     def verifyMessage(self, apiData):
-        self.send(66, 1, apiData)
+        self._request(
+            _M.VERIFY_MESSAGE, _converters.rest.createVerifyMessageRequestProto(apiData)
+        )
 
     def queryDisplayGroups(self, reqId):
-        def _proto():
-            return _converters.rest.createQueryDisplayGroupsRequestProto(reqId)
-
-        if self._tryProto(_M.QUERY_DISPLAY_GROUPS, _proto):
-            return
-        self.send(67, 1, reqId)
+        self._request(
+            _M.QUERY_DISPLAY_GROUPS,
+            _converters.rest.createQueryDisplayGroupsRequestProto(reqId),
+        )
 
     def subscribeToGroupEvents(self, reqId, groupId):
-        def _proto():
-            return _converters.rest.createSubscribeToGroupEventsRequestProto(
-                reqId, groupId
-            )
-
-        if self._tryProto(_M.SUBSCRIBE_TO_GROUP_EVENTS, _proto):
-            return
-        self.send(68, 1, reqId, groupId)
+        self._request(
+            _M.SUBSCRIBE_TO_GROUP_EVENTS,
+            _converters.rest.createSubscribeToGroupEventsRequestProto(reqId, groupId),
+        )
 
     def updateDisplayGroup(self, reqId, contractInfo):
-        def _proto():
-            return _converters.rest.createUpdateDisplayGroupRequestProto(
-                reqId, contractInfo
-            )
-
-        if self._tryProto(_M.UPDATE_DISPLAY_GROUP, _proto):
-            return
-        self.send(69, 1, reqId, contractInfo)
+        self._request(
+            _M.UPDATE_DISPLAY_GROUP,
+            _converters.rest.createUpdateDisplayGroupRequestProto(reqId, contractInfo),
+        )
 
     def unsubscribeFromGroupEvents(self, reqId):
-        def _proto():
-            return _converters.rest.createUnsubscribeFromGroupEventsRequestProto(reqId)
-
-        if self._tryProto(_M.UNSUBSCRIBE_FROM_GROUP_EVENTS, _proto):
-            return
-        self.send(70, 1, reqId)
+        self._request(
+            _M.UNSUBSCRIBE_FROM_GROUP_EVENTS,
+            _converters.rest.createUnsubscribeFromGroupEventsRequestProto(reqId),
+        )
 
     def startApi(self):
-        def _proto():
-            return _converters.rest.createStartApiRequestProto(
-                self.clientId, self.optCapab
-            )
-
-        if self._tryProto(_M.START_API, _proto):
-            return
-        self.send(71, 2, self.clientId, self.optCapab)
-
-    def verifyAndAuthRequest(self, apiName, apiVersion, opaqueIsvKey):
-        self.send(72, 1, apiName, apiVersion, opaqueIsvKey)
-
-    def verifyAndAuthMessage(self, apiData, xyzResponse):
-        self.send(73, 1, apiData, xyzResponse)
+        self._request(
+            _M.START_API,
+            _converters.rest.createStartApiRequestProto(self.clientId, self.optCapab),
+        )
 
     def reqPositionsMulti(self, reqId, account, modelCode):
-        def _proto():
-            return _converters.accounts.createPositionsMultiRequestProto(
+        self._request(
+            _M.REQ_POSITIONS_MULTI,
+            _converters.accounts.createPositionsMultiRequestProto(
                 reqId, account, modelCode
-            )
-
-        if self._tryProto(_M.REQ_POSITIONS_MULTI, _proto):
-            return
-        self.send(74, 1, reqId, account, modelCode)
+            ),
+        )
 
     def cancelPositionsMulti(self, reqId):
-        def _proto():
-            return _converters.accounts.createCancelPositionsMultiProto(reqId)
-
-        if self._tryProto(_M.CANCEL_POSITIONS_MULTI, _proto):
-            return
-        self.send(75, 1, reqId)
+        self._request(
+            _M.CANCEL_POSITIONS_MULTI,
+            _converters.accounts.createCancelPositionsMultiProto(reqId),
+        )
 
     def reqAccountUpdatesMulti(self, reqId, account, modelCode, ledgerAndNLV):
-        def _proto():
-            return _converters.accounts.createAccountUpdatesMultiRequestProto(
+        self._request(
+            _M.REQ_ACCOUNT_UPDATES_MULTI,
+            _converters.accounts.createAccountUpdatesMultiRequestProto(
                 reqId, account, modelCode, ledgerAndNLV
-            )
-
-        if self._tryProto(_M.REQ_ACCOUNT_UPDATES_MULTI, _proto):
-            return
-        self.send(76, 1, reqId, account, modelCode, ledgerAndNLV)
+            ),
+        )
 
     def cancelAccountUpdatesMulti(self, reqId):
-        def _proto():
-            return _converters.accounts.createCancelAccountUpdatesMultiProto(reqId)
-
-        if self._tryProto(_M.CANCEL_ACCOUNT_UPDATES_MULTI, _proto):
-            return
-        self.send(77, 1, reqId)
+        self._request(
+            _M.CANCEL_ACCOUNT_UPDATES_MULTI,
+            _converters.accounts.createCancelAccountUpdatesMultiProto(reqId),
+        )
 
     def reqSecDefOptParams(
         self,
@@ -1762,88 +1003,61 @@ class Client:
         underlyingSecType,
         underlyingConId,
     ):
-        def _proto():
-            return _converters.rest.createSecDefOptParamsRequestProto(
+        self._request(
+            _M.REQ_SEC_DEF_OPT_PARAMS,
+            _converters.rest.createSecDefOptParamsRequestProto(
                 reqId,
                 underlyingSymbol,
                 futFopExchange,
                 underlyingSecType,
                 underlyingConId,
-            )
-
-        if self._tryProto(_M.REQ_SEC_DEF_OPT_PARAMS, _proto):
-            return
-        self.send(
-            78,
-            reqId,
-            underlyingSymbol,
-            futFopExchange,
-            underlyingSecType,
-            underlyingConId,
+            ),
         )
 
     def reqSoftDollarTiers(self, reqId):
-        def _proto():
-            return _converters.rest.createSoftDollarTiersRequestProto(reqId)
-
-        if self._tryProto(_M.REQ_SOFT_DOLLAR_TIERS, _proto):
-            return
-        self.send(79, reqId)
+        self._request(
+            _M.REQ_SOFT_DOLLAR_TIERS,
+            _converters.rest.createSoftDollarTiersRequestProto(reqId),
+        )
 
     def reqFamilyCodes(self):
-        def _proto():
-            return _converters.accounts.createFamilyCodesRequestProto()
-
-        if self._tryProto(_M.REQ_FAMILY_CODES, _proto):
-            return
-        self.send(80)
+        self._request(
+            _M.REQ_FAMILY_CODES, _converters.accounts.createFamilyCodesRequestProto()
+        )
 
     def reqMatchingSymbols(self, reqId, pattern):
-        def _proto():
-            return _converters.rest.createMatchingSymbolsRequestProto(reqId, pattern)
-
-        if self._tryProto(_M.REQ_MATCHING_SYMBOLS, _proto):
-            return
-        self.send(81, reqId, pattern)
+        self._request(
+            _M.REQ_MATCHING_SYMBOLS,
+            _converters.rest.createMatchingSymbolsRequestProto(reqId, pattern),
+        )
 
     def reqMktDepthExchanges(self):
-        def _proto():
-            return _converters.market_data.createMarketDepthExchangesRequestProto()
-
-        if self._tryProto(_M.REQ_MKT_DEPTH_EXCHANGES, _proto):
-            return
-        self.send(82)
+        self._request(
+            _M.REQ_MKT_DEPTH_EXCHANGES,
+            _converters.market_data.createMarketDepthExchangesRequestProto(),
+        )
 
     def reqSmartComponents(self, reqId, bboExchange):
-        def _proto():
-            return _converters.rest.createSmartComponentsRequestProto(
-                reqId, bboExchange
-            )
-
-        if self._tryProto(_M.REQ_SMART_COMPONENTS, _proto):
-            return
-        self.send(83, reqId, bboExchange)
+        self._request(
+            _M.REQ_SMART_COMPONENTS,
+            _converters.rest.createSmartComponentsRequestProto(reqId, bboExchange),
+        )
 
     def reqNewsArticle(self, reqId, providerCode, articleId, newsArticleOptions):
-        def _proto():
-            return _converters.news.createNewsArticleRequestProto(
+        self._request(
+            _M.REQ_NEWS_ARTICLE,
+            _converters.news.createNewsArticleRequestProto(
                 reqId,
                 providerCode,
                 articleId,
                 newsArticleOptions=newsArticleOptions,
-            )
-
-        if self._tryProto(_M.REQ_NEWS_ARTICLE, _proto):
-            return
-        self.send(84, reqId, providerCode, articleId, newsArticleOptions)
+            ),
+        )
 
     def reqNewsProviders(self):
-        def _proto():
-            return _converters.news.createNewsProvidersRequestProto()
-
-        if self._tryProto(_M.REQ_NEWS_PROVIDERS, _proto):
-            return
-        self.send(85)
+        self._request(
+            _M.REQ_NEWS_PROVIDERS, _converters.news.createNewsProvidersRequestProto()
+        )
 
     def reqHistoricalNews(
         self,
@@ -1855,8 +1069,9 @@ class Client:
         totalResults,
         historicalNewsOptions,
     ):
-        def _proto():
-            return _converters.news.createHistoricalNewsRequestProto(
+        self._request(
+            _M.REQ_HISTORICAL_NEWS,
+            _converters.news.createHistoricalNewsRequestProto(
                 reqId,
                 conId,
                 providerCodes,
@@ -1864,94 +1079,57 @@ class Client:
                 endDateTime,
                 totalResults,
                 historicalNewsOptions=historicalNewsOptions,
-            )
-
-        if self._tryProto(_M.REQ_HISTORICAL_NEWS, _proto):
-            return
-        self.send(
-            86,
-            reqId,
-            conId,
-            providerCodes,
-            startDateTime,
-            endDateTime,
-            totalResults,
-            historicalNewsOptions,
+            ),
         )
 
     def reqHeadTimeStamp(self, reqId, contract, whatToShow, useRTH, formatDate):
-        def _proto():
-            return _converters.historical.createHeadTimestampRequestProto(
+        self._request(
+            _M.REQ_HEAD_TIMESTAMP,
+            _converters.historical.createHeadTimestampRequestProto(
                 reqId, contract, useRTH, whatToShow, formatDate
-            )
-
-        if self._tryProto(_M.REQ_HEAD_TIMESTAMP, _proto):
-            return
-        self.send(
-            87, reqId, contract, contract.includeExpired, useRTH, whatToShow, formatDate
+            ),
         )
 
     def reqHistogramData(self, tickerId, contract, useRTH, timePeriod):
-        def _proto():
-            return _converters.historical.createHistogramDataRequestProto(
+        self._request(
+            _M.REQ_HISTOGRAM_DATA,
+            _converters.historical.createHistogramDataRequestProto(
                 tickerId, contract, bool(useRTH), timePeriod
-            )
-
-        if self._tryProto(_M.REQ_HISTOGRAM_DATA, _proto):
-            return
-        self.send(88, tickerId, contract, contract.includeExpired, useRTH, timePeriod)
+            ),
+        )
 
     def cancelHistogramData(self, tickerId):
-        def _proto():
-            return _converters.historical.createCancelHistogramDataProto(tickerId)
-
-        if self._tryProto(_M.CANCEL_HISTOGRAM_DATA, _proto):
-            return
-        self.send(89, tickerId)
+        self._request(
+            _M.CANCEL_HISTOGRAM_DATA,
+            _converters.historical.createCancelHistogramDataProto(tickerId),
+        )
 
     def cancelHeadTimeStamp(self, reqId):
-        def _proto():
-            return _converters.historical.createCancelHeadTimestampProto(reqId)
-
-        if self._tryProto(_M.CANCEL_HEAD_TIMESTAMP, _proto):
-            return
-        self.send(90, reqId)
+        self._request(
+            _M.CANCEL_HEAD_TIMESTAMP,
+            _converters.historical.createCancelHeadTimestampProto(reqId),
+        )
 
     def cancelContractData(self, reqId):
-        """Cancel an in-flight reqContractDetails. Protobuf-only —
-        IBKR ships no binary form (gate 215, MIN_SERVER_VER_CANCEL_CONTRACT_DATA).
-        """
-
-        self.sendProto(
+        """Cancel an in-flight reqContractDetails."""
+        self._request(
             _M.CANCEL_CONTRACT_DATA,
-            _converters.historical.createCancelContractDataProto(
-                reqId
-            ).SerializeToString(),
+            _converters.historical.createCancelContractDataProto(reqId),
         )
 
     def cancelHistoricalTicks(self, reqId):
-        """Cancel an in-flight reqHistoricalTicks. Protobuf-only
-        (gate 215, MIN_SERVER_VER_CANCEL_CONTRACT_DATA shares the gate).
-        """
-
-        self.sendProto(
+        """Cancel an in-flight reqHistoricalTicks."""
+        self._request(
             _M.CANCEL_HISTORICAL_TICKS,
-            _converters.historical.createCancelHistoricalTicksProto(
-                reqId
-            ).SerializeToString(),
+            _converters.historical.createCancelHistoricalTicksProto(reqId),
         )
 
     def reqConfig(self, reqId):
-        """Fetch the TWS / IB Gateway runtime config. Protobuf-only
-        (gate 219, MIN_SERVER_VER_CONFIG). Server replies with
-        ``ConfigResponse`` carrying nested LockAndExitConfig /
+        """Fetch the TWS / IB Gateway runtime config. The server replies
+        with ``ConfigResponse`` carrying nested LockAndExitConfig /
         ApiConfig / MessageConfig / OrdersConfig sub-messages.
         """
-
-        self.sendProto(
-            _M.REQ_CONFIG,
-            _converters.rest.createConfigRequestProto(reqId).SerializeToString(),
-        )
+        self._request(_M.REQ_CONFIG, _converters.rest.createConfigRequestProto(reqId))
 
     def updateConfig(
         self,
@@ -1963,12 +1141,10 @@ class Client:
         acceptedWarnings=None,
         resetAPIOrderSequence=False,
     ):
-        """Push a TWS / IB Gateway config update. Protobuf-only
-        (gate 221, MIN_SERVER_VER_UPDATE_CONFIG). Server replies
+        """Push a TWS / IB Gateway config update. The server replies
         with ``UpdateConfigResponse`` carrying status + changed-fields list.
         """
-
-        self.sendProto(
+        self._request(
             _M.UPDATE_CONFIG,
             _converters.rest.createUpdateConfigRequestProto(
                 reqId,
@@ -1978,50 +1154,36 @@ class Client:
                 orders=orders,
                 acceptedWarnings=acceptedWarnings,
                 resetAPIOrderSequence=resetAPIOrderSequence,
-            ).SerializeToString(),
+            ),
         )
 
     def reqMarketRule(self, marketRuleId):
-        def _proto():
-            return _converters.rest.createMarketRuleRequestProto(marketRuleId)
-
-        if self._tryProto(_M.REQ_MARKET_RULE, _proto):
-            return
-        self.send(91, marketRuleId)
+        self._request(
+            _M.REQ_MARKET_RULE,
+            _converters.rest.createMarketRuleRequestProto(marketRuleId),
+        )
 
     def reqPnL(self, reqId, account, modelCode):
-        def _proto():
-            return _converters.scanner.createPnLRequestProto(reqId, account, modelCode)
-
-        if self._tryProto(_M.REQ_PNL, _proto):
-            return
-        self.send(92, reqId, account, modelCode)
+        self._request(
+            _M.REQ_PNL,
+            _converters.scanner.createPnLRequestProto(reqId, account, modelCode),
+        )
 
     def cancelPnL(self, reqId):
-        def _proto():
-            return _converters.scanner.createCancelPnLProto(reqId)
-
-        if self._tryProto(_M.CANCEL_PNL, _proto):
-            return
-        self.send(93, reqId)
+        self._request(_M.CANCEL_PNL, _converters.scanner.createCancelPnLProto(reqId))
 
     def reqPnLSingle(self, reqId, account, modelCode, conid):
-        def _proto():
-            return _converters.scanner.createPnLSingleRequestProto(
+        self._request(
+            _M.REQ_PNL_SINGLE,
+            _converters.scanner.createPnLSingleRequestProto(
                 reqId, account, modelCode, conid
-            )
-
-        if self._tryProto(_M.REQ_PNL_SINGLE, _proto):
-            return
-        self.send(94, reqId, account, modelCode, conid)
+            ),
+        )
 
     def cancelPnLSingle(self, reqId):
-        def _proto():
-            return _converters.scanner.createCancelPnLSingleProto(reqId)
-
-        if self._tryProto(_M.CANCEL_PNL_SINGLE, _proto):
-            return
-        self.send(95, reqId)
+        self._request(
+            _M.CANCEL_PNL_SINGLE, _converters.scanner.createCancelPnLSingleProto(reqId)
+        )
 
     def reqHistoricalTicks(
         self,
@@ -2035,8 +1197,9 @@ class Client:
         ignoreSize,
         miscOptions,
     ):
-        def _proto():
-            return _converters.historical.createHistoricalTicksRequestProto(
+        self._request(
+            _M.REQ_HISTORICAL_TICKS,
+            _converters.historical.createHistoricalTicksRequestProto(
                 reqId,
                 contract,
                 startDateTime,
@@ -2046,96 +1209,53 @@ class Client:
                 useRth,
                 ignoreSize,
                 miscOptions=miscOptions,
-            )
-
-        if self._tryProto(_M.REQ_HISTORICAL_TICKS, _proto):
-            return
-        self.send(
-            96,
-            reqId,
-            contract,
-            contract.includeExpired,
-            startDateTime,
-            endDateTime,
-            numberOfTicks,
-            whatToShow,
-            useRth,
-            ignoreSize,
-            miscOptions,
+            ),
         )
 
     def reqTickByTickData(self, reqId, contract, tickType, numberOfTicks, ignoreSize):
-        def _proto():
-            return _converters.market_data.createTickByTickRequestProto(
+        self._request(
+            _M.REQ_TICK_BY_TICK_DATA,
+            _converters.market_data.createTickByTickRequestProto(
                 reqId, contract, tickType, numberOfTicks, ignoreSize
-            )
-
-        if self._tryProto(_M.REQ_TICK_BY_TICK_DATA, _proto):
-            return
-        self.send(97, reqId, contract, tickType, numberOfTicks, ignoreSize)
+            ),
+        )
 
     def cancelTickByTickData(self, reqId):
-        def _proto():
-            return _converters.market_data.createCancelTickByTickProto(reqId)
-
-        if self._tryProto(_M.CANCEL_TICK_BY_TICK_DATA, _proto):
-            return
-        self.send(98, reqId)
+        self._request(
+            _M.CANCEL_TICK_BY_TICK_DATA,
+            _converters.market_data.createCancelTickByTickProto(reqId),
+        )
 
     def reqCompletedOrders(self, apiOnly):
-        def _proto():
-            return _converters.orders.createCompletedOrdersRequestProto(apiOnly)
-
-        if self._tryProto(_M.REQ_COMPLETED_ORDERS, _proto):
-            return
-        self.send(99, apiOnly)
+        self._request(
+            _M.REQ_COMPLETED_ORDERS,
+            _converters.orders.createCompletedOrdersRequestProto(apiOnly),
+        )
 
     def reqWshMetaData(self, reqId):
-        def _proto():
-            return _converters.news.createWshMetaDataRequestProto(reqId)
-
-        if self._tryProto(_M.REQ_WSH_META_DATA, _proto):
-            return
-        self.send(100, reqId)
+        self._request(
+            _M.REQ_WSH_META_DATA, _converters.news.createWshMetaDataRequestProto(reqId)
+        )
 
     def cancelWshMetaData(self, reqId):
-        def _proto():
-            return _converters.news.createCancelWshMetaDataProto(reqId)
-
-        if self._tryProto(_M.CANCEL_WSH_META_DATA, _proto):
-            return
-        self.send(101, reqId)
+        self._request(
+            _M.CANCEL_WSH_META_DATA,
+            _converters.news.createCancelWshMetaDataProto(reqId),
+        )
 
     def reqWshEventData(self, reqId, data: WshEventData):
-        def _proto():
-            return _converters.news.createWshEventDataRequestProto(reqId, data)
-
-        if self._tryProto(_M.REQ_WSH_EVENT_DATA, _proto):
-            return
-        fields = [102, reqId, data.conId]
-        if self.serverVersion() >= 171:
-            fields += [
-                data.filter,
-                data.fillWatchlist,
-                data.fillPortfolio,
-                data.fillCompetitors,
-            ]
-        if self.serverVersion() >= 173:
-            fields += [data.startDate, data.endDate, data.totalLimit]
-        self.send(*fields, makeEmpty=False)
+        self._request(
+            _M.REQ_WSH_EVENT_DATA,
+            _converters.news.createWshEventDataRequestProto(reqId, data),
+        )
 
     def cancelWshEventData(self, reqId):
-        def _proto():
-            return _converters.news.createCancelWshEventDataProto(reqId)
-
-        if self._tryProto(_M.CANCEL_WSH_EVENT_DATA, _proto):
-            return
-        self.send(103, reqId)
+        self._request(
+            _M.CANCEL_WSH_EVENT_DATA,
+            _converters.news.createCancelWshEventDataProto(reqId),
+        )
 
     def reqUserInfo(self, reqId):
-        def _proto():
-            return _converters.rest.createUserInfoRequestProto(reqId)
-
-        if self._tryProto(_M.REQ_USER_INFO, _proto):
-            return
-        self.send(104, reqId)
+        self._request(
+            _M.REQ_USER_INFO, _converters.rest.createUserInfoRequestProto(reqId)
+        )

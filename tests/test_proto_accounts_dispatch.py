@@ -277,15 +277,6 @@ def test_account_update_multi_end_proto_settles_reqId():
 # ---------- reqAccountUpdates → REQ_ACCT_DATA ---------------------------
 
 
-def test_req_account_updates_uses_binary_below_gate():
-    ib = _ibAtVersion(206)
-    sent = _captureSend(ib)
-    ib.client.reqAccountUpdates(True, "DU1")
-    assert sent[0][4:].startswith(
-        b"\x00\x00\x00\x06"
-    )  # REQ_ACCT_DATA=6, raw int (server>=201)
-
-
 def test_req_account_updates_uses_protobuf_at_gate():
     ib = _ibAtVersion(207)
     sent = _captureSend(ib)
@@ -329,15 +320,6 @@ def test_cancel_positions_uses_protobuf_at_gate():
     canonical, body = _decodeProtoFrame(sent[0])
     assert canonical == CANCEL_POSITIONS
     assert body == b""
-
-
-def test_req_positions_uses_binary_below_gate():
-    ib = _ibAtVersion(206)
-    sent = _captureSend(ib)
-    ib.client.reqPositions()
-    assert sent[0][4:].startswith(
-        b"\x00\x00\x00\x3d"
-    )  # REQ_POSITIONS=61, raw int (server>=201)
 
 
 # ---------- reqAccountSummary / cancelAccountSummary --------------------

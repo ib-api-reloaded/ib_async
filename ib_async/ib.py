@@ -1370,8 +1370,8 @@ class IB(Generic[EmptyT]):
                 ignored if ``orderCancel`` is also supplied.
             orderCancel: Full ``OrderCancel`` envelope carrying CME
                 tagging fields (``manualOrderCancelTime``,
-                ``extOperator``, ``manualOrderIndicator``). Required
-                for compliant cancels on TWS / IB Gateway >= 192.
+                ``extOperator``, ``manualOrderIndicator``), required
+                for compliant cancels.
         """
         if orderCancel is None and manualCancelOrderTime:
             orderCancel = OrderCancel(manualOrderCancelTime=manualCancelOrderTime)
@@ -1412,8 +1412,8 @@ class IB(Generic[EmptyT]):
         Args:
             orderCancel: Optional ``OrderCancel`` envelope carrying
                 CME-tagging fields (``extOperator``,
-                ``manualOrderIndicator``). Required for compliant
-                global cancels on TWS / IB Gateway >= 192.
+                ``manualOrderIndicator``), required for compliant
+                global cancels.
         """
         self.client.reqGlobalCancel(orderCancel)
         self._logger.info("reqGlobalCancel")
@@ -2871,11 +2871,7 @@ class IB(Generic[EmptyT]):
             reqs["positions"] = self.reqPositionsAsync
         if not readonly and fetchFields & StartupFetch.ORDERS_OPEN:
             reqs["open orders"] = self._startupOpenOrdersAsync
-        if (
-            not readonly
-            and self.client.serverVersion() >= 150
-            and fetchFields & StartupFetch.ORDERS_COMPLETE
-        ):
+        if not readonly and fetchFields & StartupFetch.ORDERS_COMPLETE:
             reqs["completed orders"] = functools.partial(
                 self.reqCompletedOrdersAsync, False
             )
@@ -3108,14 +3104,7 @@ class IB(Generic[EmptyT]):
         )
 
     def reqCurrentTimeInMillisAsync(self) -> Awaitable[int]:
-        """Return the IB server clock in milliseconds since the Unix epoch.
-
-        v3.0 new capability — requires TWS / IB Gateway at server
-        version 213 or newer (the protobuf REST-messages gate). On an
-        older server this raises ``ValueError`` immediately. There's no
-        binary fallback because IBKR never shipped this message family
-        on the legacy NUL-separated wire.
-        """
+        """Return the IB server clock in milliseconds since the Unix epoch."""
         return self._startSingletonRequest(
             SingletonKey("currentTimeInMillis"), self.client.reqCurrentTimeInMillis
         )
@@ -3702,8 +3691,7 @@ class IB(Generic[EmptyT]):
         self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def cancelContractData(self, reqId: int) -> None:
-        """Cancel an in-flight reqContractDetails. Protobuf-only — TWS / IBG
-        server >= 215 (MIN_SERVER_VER_CANCEL_CONTRACT_DATA).
+        """Cancel an in-flight reqContractDetails.
 
         Settles the registry future so the awaiter wakes.
         """
@@ -3711,8 +3699,7 @@ class IB(Generic[EmptyT]):
         self.wrapper.requests.withdraw(ReqIdKey(reqId))
 
     def cancelHistoricalTicks(self, reqId: int) -> None:
-        """Cancel an in-flight reqHistoricalTicks. Protobuf-only —
-        same gate as cancelContractData (215).
+        """Cancel an in-flight reqHistoricalTicks.
 
         Settles the registry future so the awaiter wakes.
         """
@@ -3738,8 +3725,7 @@ class IB(Generic[EmptyT]):
         self.client.unsubscribeFromGroupEvents(reqId)
 
     def reqConfigAsync(self) -> Awaitable[ConfigResponse | None]:
-        """Fetch the TWS / IB Gateway runtime config. Protobuf-only —
-        server >= 219 (MIN_SERVER_VER_CONFIG). The future settles with
+        """Fetch the TWS / IB Gateway runtime config. The future settles with
         the raw ``ConfigResponse`` proto carrying nested
         LockAndExitConfig / ApiConfig / MessageConfig / OrdersConfig
         sub-messages, or None when TWS refuses the request."""
@@ -3756,8 +3742,7 @@ class IB(Generic[EmptyT]):
         acceptedWarnings=None,
         resetAPIOrderSequence: bool = False,
     ) -> Awaitable[UpdateConfigResponse | None]:
-        """Push a TWS / IB Gateway config update. Protobuf-only —
-        server >= 221 (MIN_SERVER_VER_UPDATE_CONFIG). The future settles
+        """Push a TWS / IB Gateway config update. The future settles
         with the raw ``UpdateConfigResponse`` proto carrying status +
         changed-fields list, or None when TWS refuses the request."""
         with self._reqIdRequest(refusal=refusedAsNone) as opened:

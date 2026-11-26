@@ -266,9 +266,30 @@ def test_peer_close_after_api_ready_tears_down_once():
     assert session.errors == ["Peer closed connection."]
     assert not session.client.isReady() and not session.client.isConnected()
     with pytest.raises(ConnectionError):
-        session.client.send(1, 2)
+        session.client.reqCurrentTime()
     with pytest.raises(ConnectionError):
         session.client.getReqId()
+
+
+def test_a_request_from_a_peer_close_handler_raises() -> None:
+    """The socket is gone while the close's events run, so a request a
+    handler sends raises instead of being dropped."""
+    session = Session()
+    ready(session)
+    sent = len(session.conn.sent)
+    raised: list[str] = []
+
+    def requestOnError(_message: str) -> None:
+        try:
+            session.client.reqCurrentTime()
+        except ConnectionError as error:
+            raised.append(str(error))
+
+    session.client.apiError += requestOnError
+    session.client._onSocketDisconnected("")
+
+    assert raised == ["Not connected"]
+    assert len(session.conn.sent) == sent
 
 
 def test_client_disconnect_tears_down_once():

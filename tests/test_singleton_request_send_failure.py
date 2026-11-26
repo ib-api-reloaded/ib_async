@@ -18,20 +18,6 @@ def _connectedIB(serverVersion: int) -> ibi.IB:
     return ib
 
 
-def test_current_time_in_millis_below_213_raises_and_leaves_nothing_open():
-    ib = _connectedIB(212)
-
-    with pytest.raises(ValueError, match="213"):
-        ib.reqCurrentTimeInMillisAsync()
-    assert SingletonKey("currentTimeInMillis") not in ib.wrapper.requests
-
-    # A retry raises again instead of attaching to a future that can
-    # never settle.
-    with pytest.raises(ValueError, match="213"):
-        ib.reqCurrentTimeInMillisAsync()
-    assert SingletonKey("currentTimeInMillis") not in ib.wrapper.requests
-
-
 def test_failed_send_is_withdrawn_and_a_later_call_sends_again():
     ib = _connectedIB(226)
     ib.client.reqPositions = MagicMock(side_effect=[ConnectionError("down"), None])

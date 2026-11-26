@@ -38,15 +38,12 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 
 **Added**
 
-* **Protobuf wire protocol** alongside the legacy binary path. The
-  client emits protobuf for messages whose gate the negotiated TWS /
-  IB Gateway server version supports; falls back to binary below the
-  gate. Per-message gating means a server at version 207 uses
-  protobuf for accounts but binary for historical data, etc. The
-  binary path remains fully supported for older server versions.
+* **Protobuf wire protocol.** Every request goes out as its protobuf
+  message and every answer is read as protobuf, as TWS / IB Gateway
+  10.51 (server version 226) speaks it.
 * **14 new public methods on** ``IB``:
 
-  * ``IB.reqCurrentTimeInMillisAsync`` (server >= 213)
+  * ``IB.reqCurrentTimeInMillisAsync``
   * ``IB.setServerLogLevel``
   * ``IB.reqSoftDollarTiersAsync``
   * ``IB.reqFamilyCodesAsync``
@@ -54,9 +51,9 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   * ``IB.cancelHistogramData`` (now settles awaiter with ``CancelledError``)
   * ``IB.queryDisplayGroups``, ``IB.subscribeToGroupEvents``,
     ``IB.updateDisplayGroup``, ``IB.unsubscribeFromGroupEvents``
-  * ``IB.cancelContractData`` (protobuf-only, server >= 215; settles awaiter)
-  * ``IB.cancelHistoricalTicks`` (protobuf-only, server >= 215; settles awaiter)
-  * ``IB.reqConfigAsync``, ``IB.updateConfigAsync`` (protobuf-only, server >= 219)
+  * ``IB.cancelContractData`` (settles awaiter)
+  * ``IB.cancelHistoricalTicks`` (settles awaiter)
+  * ``IB.reqConfigAsync``, ``IB.updateConfigAsync``
 
 * **Streams.** Every live stream is a read-only ``Stream`` of its own type
   in ``ib_async.streams``, with its ``reqId`` and exactly the data it has:
@@ -430,6 +427,15 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   replacement; the Wall Street Horizon calls
   (``reqWshMetaData`` / ``reqWshEventData``) cover corporate events
   but not financial statements or ratios.
+* The text request encoder. Every request goes out as its protobuf
+  message, which TWS / IB Gateway 10.51 accepts for each of them, so
+  ``Client.send``, ``Client.useProtoBuf`` and the per-message gate
+  table ``PROTOBUF_MSG_IDS`` are gone. ``reqIds``, ``verifyRequest``
+  and ``verifyMessage`` now send their protobuf messages.
+  ``Client.verifyAndAuthRequest`` and ``verifyAndAuthMessage`` are
+  gone: IBKR has no protobuf form for them. A request on a closed
+  connection raises ``ConnectionError`` instead of being dropped by
+  the socket without a word.
 
 **Fixed (silent-data-loss and wire-protocol bugs)**
 
@@ -857,12 +863,8 @@ are fixed in v3.0:
 * **``Order._toDecimal``** filters NaN / Infinity from both float
   and Decimal inputs so a stray ``Decimal('NaN')`` from user code
   lands as ``None``.
-* **Binary path msgId framing** at server >= 201 now uses a 4-byte
-  big-endian raw integer prefix. The legacy NUL-text framing was
-  silently dropped by server 201+.
-* **Wire-boundary None-coalesce** at the protobuf converter entry
-  mirrors the binary path, which writes ``None`` as ``""``: callers
-  that stamp ``None`` onto plain-
+* **Wire-boundary None-coalesce** at the protobuf converter entry:
+  callers that stamp ``None`` onto plain-
   scalar dataclass fields (e.g. an order-preview path setting
   ``parentId = None``) now produce wire frames with the field at its
   dataclass default rather than absent, which TWS rejected as

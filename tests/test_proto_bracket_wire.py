@@ -27,18 +27,13 @@ from decimal import Decimal
 
 import ib_async as ibi
 from ib_async._pb import PlaceOrderRequest_pb2
-from ib_async._pb_msgids import (
-    MIN_SERVER_VER_PROTOBUF_PLACE_ORDER,
-    PLACE_ORDER,
-    REQ_CURRENT_TIME,
-)
+from ib_async._pb_msgids import PLACE_ORDER, REQ_CURRENT_TIME
+from ib_async._server_versions import MAX_CLIENT_VER
 from ib_async.ordertypes import LimitOrder
 from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
 
-#: The live incident ran against a current IB Gateway; every gate in
-#: ``PROTOBUF_MSG_IDS`` is open there, so placeOrder takes the protobuf
-#: path. Pin the tests at the placeOrder gate exactly.
-_GATE = MIN_SERVER_VER_PROTOBUF_PLACE_ORDER
+#: The live incident ran against a current IB Gateway.
+_GATE = MAX_CLIENT_VER
 
 _PARENT_ID = 10282
 _CHILD_ID = 10283
@@ -218,23 +213,21 @@ def test_place_request_omits_server_owned_open_order_fields():
         assert not proto.order.HasField(serverOwned), serverOwned
 
 
-def test_a_queued_binary_frame_is_not_overtaken_by_a_later_place_order():
-    """FIFO across both wire paths.
+def test_a_place_order_waits_its_turn_when_the_budget_is_spent():
+    """FIFO through the pacing queue.
 
-    With the pacing budget exhausted, a binary frame waits in ``_msgQ``;
-    a protobuf ``placeOrder`` issued afterwards must queue BEHIND it
-    rather than jump straight to the socket. An order that overtakes the
-    request that was supposed to precede it is the reordering hazard
-    behind attached-order graphs.
+    With the pacing budget exhausted, a ``placeOrder`` issued after
+    another request must queue in ``_msgQ`` rather than jump straight to
+    the socket. An order that overtakes the request that was supposed to
+    precede it is the reordering hazard behind attached-order graphs.
     """
     ib = _ibAtVersion(_GATE)
     sent = _captureSend(ib)
     ib.client.MaxRequests = 1
 
-    # REQ_CURRENT_TIME gates to protobuf only at 213, so at the placeOrder
-    # gate (203) it is a plain binary frame.
-    ib.client.send(REQ_CURRENT_TIME)
+    ib.client.reqCurrentTime()
     assert len(sent) == 1
+    assert _decodeProtoFrame(sent[0])[0] == REQ_CURRENT_TIME
 
     ib.client.placeOrder(_PARENT_ID, _nqz6(), _bracket_orders()[0])
     # Budget spent: the order frame waits its turn instead of racing ahead.

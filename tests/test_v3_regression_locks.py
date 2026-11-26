@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import math
-import struct
 from collections import OrderedDict
 from decimal import Decimal
 
@@ -25,9 +24,7 @@ import ib_async as ibi
 from ib_async._requests import ReqIdKey
 from ib_async._server_versions import (
     MIN_SERVER_VER_DURATION,
-    MIN_SERVER_VER_FA_PROFILE_DESUPPORT,
     MIN_SERVER_VER_PROTOBUF,
-    MIN_SERVER_VER_REPLACE_FA_END,
 )
 from ib_async.ibcontroller import Watchdog
 from ib_async.objects import (
@@ -532,72 +529,30 @@ from ib_async._pb import (
     Contract_pb2,
     Execution_pb2,
     ExecutionDetails_pb2,
+    FARequest_pb2,
     OpenOrder_pb2,
     OrderStatus_pb2,
     TickPrice_pb2,
     TickSize_pb2,
 )
+from ib_async._pb_msgids import REQ_FA
 from ib_async._proto.orders import createOrder, createOrderProto
+from ib_async._server_versions import MAX_CLIENT_VER
 from ib_async._subscriptions import MktDataSub
 from ib_async.ibcontroller import IBC
-from tests._helpers import _captureSend, _ibAtVersion, inject_trade
+from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion, inject_trade
 
 # ---------------------------------------------------------------------------
-# Client.replaceFA reqId trailing field gated at server 157
+# requestFA / replaceFA refuse faData=2 (Profiles), which IBKR dropped
 # ---------------------------------------------------------------------------
 
 
-def test_replace_fa_omits_reqid_below_gate_157():
-    """At server 156 (< MIN_SERVER_VER_REPLACE_FA_END=157) the trailing
-    ``reqId`` field must NOT be appended. Sending it to a pre-157
-    server desyncs the frame on the IBKR side.
+def test_request_fa_rejects_profile_faData():
+    """IBKR no longer supports FA profiles (faData=2). ``requestFA`` must
+    refuse the request without putting anything on the wire, which no
+    server would answer.
     """
-    assert MIN_SERVER_VER_REPLACE_FA_END == 157
-    ib = _ibAtVersion(156)
-    sent = _captureSend(ib)
-
-    ib.client.replaceFA(reqId=99, faData=1, cxml="<xml/>")
-
-    # Frame body (after 4-byte length prefix) is NUL-separated text on
-    # this pre-201 server. Fields in order: msgId="19", version="1",
-    # faData="1", cxml="<xml/>" — reqId NOT appended.
-    body = sent[0][4:]
-    fields = body.split(b"\x00")
-    # Fields: ["19", "1", "1", "<xml/>", ""] (trailing empty from final NUL)
-    assert fields[:4] == [b"19", b"1", b"1", b"<xml/>"]
-    # The 5th field would be the reqId if appended. Confirm it's the
-    # trailing empty (last NUL of the frame), not "99".
-    assert b"99" not in fields
-
-
-def test_replace_fa_appends_reqid_at_gate_157():
-    """At exactly server 157, the trailing ``reqId`` field IS written.
-    This is the threshold where IBKR began acknowledging the reqId on
-    replaceFAEnd; the gate is exact.
-    """
-    ib = _ibAtVersion(MIN_SERVER_VER_REPLACE_FA_END)  # 157
-    sent = _captureSend(ib)
-
-    ib.client.replaceFA(reqId=99, faData=1, cxml="<xml/>")
-
-    body = sent[0][4:]
-    fields = body.split(b"\x00")
-    # reqId="99" lands as the 5th field at and above gate 157.
-    assert fields[:5] == [b"19", b"1", b"1", b"<xml/>", b"99"]
-
-
-# ---------------------------------------------------------------------------
-# requestFA / replaceFA reject faData=2 (Profiles) at gate 177
-# ---------------------------------------------------------------------------
-
-
-def test_request_fa_rejects_profile_faData_at_gate_177():
-    """faData=2 (Profiles) was de-supported at server gate 177
-    (FA_PROFILE_DESUPPORT). ``requestFA`` must refuse the request
-    without putting anything on the wire, which no server would answer.
-    """
-    assert MIN_SERVER_VER_FA_PROFILE_DESUPPORT == 177
-    ib = _ibAtVersion(MIN_SERVER_VER_FA_PROFILE_DESUPPORT)
+    ib = _ibAtVersion(MAX_CLIENT_VER)
     sent = _captureSend(ib)
 
     with pytest.raises(ValueError, match="FA profiles"):
@@ -605,40 +560,26 @@ def test_request_fa_rejects_profile_faData_at_gate_177():
     assert sent == []
 
 
-def test_replace_fa_rejects_profile_faData_at_gate_177():
+def test_replace_fa_rejects_profile_faData():
     """Same rule on the replaceFA path."""
-    ib = _ibAtVersion(MIN_SERVER_VER_FA_PROFILE_DESUPPORT)
+    ib = _ibAtVersion(MAX_CLIENT_VER)
     sent = _captureSend(ib)
 
     ib.client.replaceFA(reqId=1, faData=2, cxml="<xml/>")
     assert sent == []
 
 
-def test_request_fa_still_accepts_groups_faData_at_gate_177():
-    """The companion positive path — ``faData=1`` (Groups) still flows
-    through at gate 177. Only Profiles (2) was de-supported.
+def test_request_fa_still_accepts_groups_faData():
+    """The companion positive path — ``faData=1`` (Groups) still goes
+    out. Only Profiles (2) was dropped.
     """
-    ib = _ibAtVersion(MIN_SERVER_VER_FA_PROFILE_DESUPPORT)
+    ib = _ibAtVersion(MAX_CLIENT_VER)
     sent = _captureSend(ib)
 
     ib.client.requestFA(faData=1)
-    # On server 177 (>= MIN_SERVER_VER_PROTOBUF=201? no, 177 < 201), the
-    # binary path fires. The frame body starts with "18\x00" (msgId=18,
-    # legacy NUL-text since serverVersion < 201).
-    assert sent[0][4:].startswith(b"18\x00")
-
-
-def test_request_fa_below_gate_177_accepts_profile():
-    """Pre-177 the Profile rejection doesn't apply — the request flows
-    through verbatim. Locks the gate behaviour at exact boundaries.
-    """
-    ib = _ibAtVersion(176)
-    sent = _captureSend(ib)
-
-    ib.client.requestFA(faData=2)
-    # Frame still fires; gate-177 rejection only kicks in at 177+.
-    assert sent
-    assert sent[0][4:].startswith(b"18\x00")
+    canonical, body = _decodeProtoFrame(sent[0])
+    assert canonical == REQ_FA
+    assert FARequest_pb2.FARequest.FromString(body).faDataType == 1
 
 
 # ---------------------------------------------------------------------------
@@ -717,43 +658,6 @@ def test_decoder_uses_named_constant_for_duration_gate():
     # intended gate. ``159`` may appear in unrelated contexts but never
     # adjacent to ``serverVersion`` and ``duration``.
     assert ">= 159" not in decoder_src or "MIN_SERVER_VER_DURATION" in decoder_src
-
-
-# ---------------------------------------------------------------------------
-# Client.send raw-int msgId framing at server >= 201
-# ---------------------------------------------------------------------------
-
-
-def test_send_uses_raw_int_msg_id_at_protobuf_gate():
-    """At server >= MIN_SERVER_VER_PROTOBUF (201), the binary ``Client.send``
-    emits a 4-byte big-endian raw msgId prefix followed by NUL-terminated
-    body bytes. Sending the legacy NUL-text msgId to a 201+ server makes the
-    server fail to decode and silently drop the connection.
-    """
-    assert MIN_SERVER_VER_PROTOBUF == 201
-    ib = _ibAtVersion(MIN_SERVER_VER_PROTOBUF)
-    sent = _captureSend(ib)
-
-    # Use a benign send — cancelOrder of a non-existent reqId. msgId
-    # for cancelOrder is 4.
-    ib.client.cancelOrder(orderId=99999)
-
-    body = sent[0][4:]  # strip outer length prefix
-    # First 4 bytes are the big-endian raw msgId (4 == CANCEL_ORDER).
-    assert body[:4] == struct.pack(">I", 4)
-
-
-def test_send_uses_legacy_text_msg_id_below_protobuf_gate():
-    """At server < 201, ``Client.send`` keeps the legacy NUL-separated
-    text msgId framing. ``"4\\x00"`` precedes the body bytes.
-    """
-    ib = _ibAtVersion(200)
-    sent = _captureSend(ib)
-
-    ib.client.cancelOrder(orderId=99999)
-
-    body = sent[0][4:]
-    assert body.startswith(b"4\x00")
 
 
 # ---------------------------------------------------------------------------
@@ -920,9 +824,11 @@ async def test_req_tickers_async_closes_subs_on_gather_raise():
     # Stub the wire send so reqMktData doesn't try to hit a real socket.
     ib.client.conn.sendMsg = lambda _msg: None  # type: ignore[method-assign]
 
-    contracts = [ibi.Stock("AAPL"), ibi.Stock("MSFT"), ibi.Stock("GOOG")]
-    for c in contracts:
-        c.conId = abs(hash(c.symbol))  # synthetic but deterministic
+    contracts = [
+        ibi.Stock("AAPL", conId=265598),
+        ibi.Stock("MSFT", conId=272093),
+        ibi.Stock("GOOG", conId=208813720),
+    ]
 
     # Fire reqTickersAsync as a background task so we can interrupt one
     # of its in-flight futures mid-flight.

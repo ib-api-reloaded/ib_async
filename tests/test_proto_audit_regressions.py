@@ -30,7 +30,6 @@ import math
 import pathlib
 import struct
 import struct as _struct
-import sys
 from datetime import datetime
 from decimal import Decimal
 from decimal import Decimal as D
@@ -60,6 +59,7 @@ from ib_async._pb import (
     Order_pb2,
     ScannerData_pb2,
     ScannerParameters_pb2,
+    StartApiRequest_pb2,
     TickByTickData_pb2,
     TickNews_pb2,
     UpdateConfigResponse_pb2,
@@ -105,11 +105,9 @@ from ib_async._requests import CompositeKey, ReqIdKey, SingletonKey
 from ib_async._requests import ReqIdKey as _ReqIdKey
 from ib_async._requests import SingletonKey as _SingletonKey
 from ib_async._server_versions import (
-    MIN_SERVER_VER_CME_TAGGING_FIELDS,
     MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS,
     MIN_SERVER_VER_IMBALANCE_ONLY,
     MIN_SERVER_VER_INELIGIBILITY_REASONS,
-    MIN_SERVER_VER_MANUAL_ORDER_TIME,
     MIN_SERVER_VER_PENDING_PRICE_REVISION,
     MIN_SERVER_VER_PROTOBUF,
     MIN_SERVER_VER_SYNT_REALTIME_BARS,
@@ -117,7 +115,6 @@ from ib_async._server_versions import (
 )
 from ib_async._subscriptions import MktDataSub, MktDepthSub, PnLSingleSub, TickByTickSub
 from ib_async.client import Client as _Client
-from ib_async.client import _formatField
 from ib_async.contract import ComboLeg, Contract, TagValue
 from ib_async.decoder import _CONV, _PROTO_MSG_CLASSES, Decoder, _initProtoMsgClasses
 from ib_async.objects import (
@@ -135,7 +132,6 @@ from ib_async.order import (
     ExecutionCondition,
     MarginCondition,
     Order,
-    OrderCancel,
     OrderComboLeg,
     OrderStatus,
     PercentChangeCondition,
@@ -146,7 +142,6 @@ from ib_async.order import (
 )
 from ib_async.ordertypes import LimitOrder
 from ib_async.ticker import Ticker
-from ib_async.util import UNSET_INTEGER
 from ib_async.wrapper import (
     _GENERIC_TICK_NO_CLAMP,
     _WARNING_CODES,
@@ -929,90 +924,6 @@ def test_historical_data_end_signal_gate_196(serverVersion, fields, expected_end
 
 
 # ---------------------------------------------------------------------------
-# cancelOrder / reqGlobalCancel — CME_TAGGING_FIELDS gate (192)
-# ---------------------------------------------------------------------------
-
-
-def test_cancel_order_pre_192_carries_legacy_version_byte():
-    """Pre-192 wire frame: [4, 1, orderId, manualOrderCancelTime] —
-    the leading 1 is a VERSION marker IBKR drops at gate 192. Without
-    the gate, a 192+ server reads the 1 as orderId and our cancel
-    targets order ID 1 instead of the real one.
-    """
-
-    ib = ibi.IB()
-    ib.client._serverVersion = 191  # below CME_TAGGING_FIELDS
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ib.client.cancelOrder(42, OrderCancel(manualOrderCancelTime="20300101 09:30:00"))
-
-    assert len(sent) == 1
-    args = sent[0]
-    # [msgId=4, VERSION=1, orderId=42, manualOrderCancelTime, ...]
-    assert args[0] == 4
-    assert args[1] == 1  # legacy VERSION
-    assert args[2] == 42
-    assert args[3] == "20300101 09:30:00"
-
-
-def test_cancel_order_post_192_drops_version_appends_cme_tagging():
-    """At gate 192 IBKR drops the VERSION byte and appends
-    extOperator + manualOrderIndicator. Wrong gate means our cancel
-    frame is corrupted: the leading 1 lands as orderId.
-    """
-
-    ib = ibi.IB()
-    ib.client._serverVersion = 192
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ib.client.cancelOrder(
-        42,
-        OrderCancel(
-            manualOrderCancelTime="20300101 09:30:00",
-            extOperator="EXT-7",
-            manualOrderIndicator=42,
-        ),
-    )
-
-    assert len(sent) == 1
-    args = sent[0]
-    # [msgId=4, orderId=42, manualOrderCancelTime, extOperator, manualOrderIndicator]
-    assert args[0] == 4
-    assert args[1] == 42  # orderId — NOT VERSION
-    assert args[2] == "20300101 09:30:00"
-    assert args[3] == "EXT-7"
-    assert args[4] == 42
-
-
-def test_req_global_cancel_post_192_appends_cme_tagging():
-    """reqGlobalCancel mirrors cancelOrder's gating: drop VERSION,
-    append extOperator + manualOrderIndicator at 192+.
-    """
-
-    ib = ibi.IB()
-    ib.client._serverVersion = 192
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ib.client.reqGlobalCancel(OrderCancel(extOperator="EXT-9", manualOrderIndicator=7))
-
-    assert len(sent) == 1
-    args = sent[0]
-    # [msgId=58, extOperator, manualOrderIndicator]
-    assert args == (58, "EXT-9", 7)
-
-
-def test_req_global_cancel_pre_192_keeps_version_byte():
-    ib = ibi.IB()
-    ib.client._serverVersion = 191
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ib.client.reqGlobalCancel()
-
-    assert len(sent) == 1
-    assert sent[0] == (58, 1)  # legacy VERSION=1, no CME-tagging
-
-
-# ---------------------------------------------------------------------------
 # Binary contractDetails — gate 182 (LAST_TRADE_DATE), gate 179 (FUND_DATA),
 # gate 186 (INELIGIBILITY_REASONS).
 # ---------------------------------------------------------------------------
@@ -1673,244 +1584,6 @@ def test_binary_open_order_skips_trailer_below_gate_183():
     assert o.imbalanceOnly is False
 
 
-# ---------------------------------------------------------------------------
-# placeOrder gated trailers — gates 183, 184, 187-190, 189, 192, 199
-# ---------------------------------------------------------------------------
-
-
-def _placeOrderArgs(serverVersion: int):
-    """Drive Client.placeOrder against the binary path on a synthetic
-    server version, capturing the field tuple the encoder produced.
-    Returns ``(args_tuple, ib)`` so callers can assert on field values
-    AND on order-attribute mutations placeOrder performs.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    contract = ibi.Stock("AAPL", "SMART", "USD")
-    order = ibi.LimitOrder("BUY", 100, 50.5)
-    ib.client.placeOrder(orderId=42, contract=contract, order=order)
-    assert len(sent) == 1, f"expected one send, got {len(sent)}"
-    return sent[0], ib
-
-
-def test_place_order_at_192_writes_manual_order_indicator():
-    """At MIN_SERVER_VER_CME_TAGGING_FIELDS (192) IBKR writes
-    ``order.manualOrderIndicator`` past every other gated trailer.
-    Below 192 it must NOT be written — the field would shift later
-    fields out of position on the wire.
-    """
-    args_192, _ = _placeOrderArgs(192)
-    args_191, _ = _placeOrderArgs(191)
-
-    # 192 carries one more trailer than 191 — manualOrderIndicator.
-    assert len(args_192) == len(args_191) + 1
-    # The trailer is the LAST field at server 192 (IMBALANCE_ONLY is
-    # gate 199, so not written here).
-    assert args_192[-1] is None  # default Order.manualOrderIndicator
-    # extOperator is unconditional in our send (gate 105 / EXT_OPERATOR
-    # is below MIN_CLIENT_VER) — verify it appears in BOTH frames.
-    assert "" in args_191  # default extOperator empty string
-    assert "" in args_192
-
-
-def test_place_order_at_199_writes_imbalance_only():
-    """At MIN_SERVER_VER_IMBALANCE_ONLY (199) the bool ``order.imbalanceOnly``
-    is appended past the gate-192 trailer. Adding a default-False order
-    verifies the bool lands as a trailing argument.
-    """
-    args_199, _ = _placeOrderArgs(199)
-    args_198, _ = _placeOrderArgs(198)
-
-    # 199 carries one more trailer than 198 — imbalanceOnly.
-    assert len(args_199) == len(args_198) + 1
-    # imbalanceOnly defaults False at the dataclass.
-    assert args_199[-1] is False
-    # gate-192 manualOrderIndicator sits one slot earlier.
-    assert args_199[-2] is None
-
-
-def test_place_order_at_184_writes_customer_and_professional():
-    """At MIN_SERVER_VER_PROFESSIONAL_CUSTOMER (184), customerAccount
-    (gate 183, str) AND professionalCustomer (gate 184, bool) sit
-    consecutively past gate 170. The fields aren't on Order yet — the
-    getattr fallback must produce the IBKR defaults: "" and False.
-    """
-    args_184, _ = _placeOrderArgs(184)
-    args_182, _ = _placeOrderArgs(182)
-
-    # 184 carries TWO more trailers than 182 — customerAccount + professionalCustomer.
-    assert len(args_184) == len(args_182) + 2
-    # Fields trail in the order: ..., customerAccount="", professionalCustomer=False
-    # then RFQ_FIELDS at 187-190 (interim) which doesn't apply here.
-    assert args_184[-2] == ""  # customerAccount default
-    assert args_184[-1] is False  # professionalCustomer default
-
-
-def test_place_order_in_rfq_window_writes_interim_fields():
-    """Servers in [MIN_SERVER_VER_RFQ_FIELDS (187),
-    MIN_SERVER_VER_UNDO_RFQ_FIELDS (190)) get the interim 2-field RFQ
-    block: bondAccruedInterest (str, default "") + UNSET_INTEGER
-    placeholder. Outside the window the block is not written.
-    """
-    # 188 is in the window; 190 closes it.  At 188 the trailer order is
-    #   ..., customerAccount="", professionalCustomer=False,
-    #        bondAccruedInterest="", UNSET_INTEGER  (RFQ pair)
-    # At 190 the RFQ pair is gone but includeOvernight (gate 189)
-    # remains; so 188 = 4 trailers, 190 = 3.
-    args_188, _ = _placeOrderArgs(188)
-    args_190, _ = _placeOrderArgs(190)
-
-    # The RFQ pair at 188's tail: bondAccruedInterest="" then UNSET_INTEGER.
-    assert args_188[-2] is None  # bondAccruedInterest default (Decimal | None)
-    assert args_188[-1] == UNSET_INTEGER  # RFQ placeholder int (literal in client.py)
-
-    # Same window edges, different counts.
-    assert len(args_188) == len(args_190) + 1  # +RFQ pair, -includeOvernight
-
-
-def test_place_order_at_189_writes_include_overnight():
-    """MIN_SERVER_VER_INCLUDE_OVERNIGHT (189) appends a bool. The field
-    isn't on Order yet — getattr fallback returns False.
-    """
-    args_189, _ = _placeOrderArgs(189)
-    args_188, _ = _placeOrderArgs(188)
-
-    # 189 carries one more trailer than 188 — includeOvernight.
-    assert len(args_189) == len(args_188) + 1
-    assert args_189[-1] is False  # includeOvernight default
-
-
-# ---------------------------------------------------------------------------
-# exerciseOptions gated trailers — gates 180, 183, 184
-# ---------------------------------------------------------------------------
-
-
-def test_exercise_options_at_184_writes_all_gated_trailers():
-    """At MIN_SERVER_VER_PROFESSIONAL_CUSTOMER (184) all three gated
-    trailers — manualOrderTime (gate 180), customerAccount (183),
-    professionalCustomer (184) — are written in order. Below 180 none
-    of them appear.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 184
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    contract = ibi.Option("AAPL", "20300119", 150.0, "C", "SMART")
-    contract.conId = 12345
-    ib.client.exerciseOptions(
-        reqId=7,
-        contract=contract,
-        exerciseAction=1,
-        exerciseQuantity=1,
-        account="DU123456",
-        override=0,
-        manualOrderTime="20300101 09:30:00",
-        customerAccount="CUST-1",
-        professionalCustomer=True,
-    )
-    assert len(sent) == 1
-    args = sent[0]
-    # The three trailers are the last three fields, in order.
-    assert args[-3] == "20300101 09:30:00"
-    assert args[-2] == "CUST-1"
-    assert args[-1] is True
-
-
-def test_exercise_options_below_180_drops_all_gated_trailers():
-    """Below MIN_SERVER_VER_MANUAL_ORDER_TIME_EXERCISE_OPTIONS (180)
-    none of the three trailers are written. Sending them anyway would
-    desync the wire frame on a legacy server.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 179
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    contract = ibi.Option("AAPL", "20300119", 150.0, "C", "SMART")
-    contract.conId = 12345
-    ib.client.exerciseOptions(
-        reqId=7,
-        contract=contract,
-        exerciseAction=1,
-        exerciseQuantity=1,
-        account="DU123456",
-        override=0,
-        manualOrderTime="20300101 09:30:00",
-        customerAccount="CUST-1",
-        professionalCustomer=True,
-    )
-    assert len(sent) == 1
-    args = sent[0]
-    # Last field is `override` (= 0) — no trailers past it.
-    assert args[-1] == 0
-
-
-# ---------------------------------------------------------------------------
-# reqExecutions gated trailers — gate 200 (PARAMETRIZED_DAYS_OF_EXECUTIONS)
-# ---------------------------------------------------------------------------
-
-
-def test_req_executions_at_200_writes_last_n_days_and_specific_dates():
-    """At MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS (200) IBKR
-    writes ``execFilter.lastNDays`` plus an int count of
-    ``specificDates`` followed by each date. The dataclass doesn't
-    carry these fields yet — the ``getattr`` fallback writes the
-    IBKR defaults (UNSET_INTEGER + 0 dates).
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 200
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ef = ibi.ExecutionFilter(clientId=7, symbol="AAPL")
-    ib.client.reqExecutions(reqId=42, execFilter=ef)
-    assert len(sent) == 1
-    args = sent[0]
-    # Default: lastNDays=UNSET_INTEGER, specificDates count=0
-    assert args[-2] == UNSET_INTEGER
-    assert args[-1] == 0
-
-
-def test_req_executions_at_200_writes_each_specific_date():
-    """When the caller supplies ``specificDates`` via getattr-friendly
-    monkey-patch, each date is written past the count.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 200
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ef = ibi.ExecutionFilter(clientId=7)
-    # Sibling task 162 will add these dataclass fields; today the
-    # method must read them via getattr so this monkeypatch lands.
-    ef.lastNDays = 5  # type: ignore[attr-defined]
-    ef.specificDates = [20300101, 20300102]  # type: ignore[attr-defined]
-    ib.client.reqExecutions(reqId=42, execFilter=ef)
-    assert len(sent) == 1
-    args = sent[0]
-    # Layout tail: ..., lastNDays=5, count=2, date1, date2
-    assert args[-4] == 5
-    assert args[-3] == 2
-    assert args[-2] == 20300101
-    assert args[-1] == 20300102
-
-
-def test_req_executions_below_200_omits_parametrized_fields():
-    """Below MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS (200) no
-    extra trailers are written. The legacy 7-field filter ends at
-    ``execFilter.side``.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 199
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ef = ibi.ExecutionFilter(clientId=7, symbol="AAPL", side="BUY")
-    ib.client.reqExecutions(reqId=42, execFilter=ef)
-    assert len(sent) == 1
-    args = sent[0]
-    # Last legacy field is execFilter.side.
-    assert args[-1] == "BUY"
-
-
 def test_max_client_version_advertises_modern_protobuf_gates():
     """The handshake banner sends ``v{Min}..{Max}`` and the server
     negotiates ``min(server, Max)``. With Max capped at 178 every
@@ -2398,31 +2071,6 @@ def test_binary_exec_details_at_exact_gate_178_reads_pending_price_revision():
     assert ex.submitter == ""
 
 
-@pytest.mark.parametrize(
-    "offset, expected",
-    [
-        (-1, (4, 1, 42)),  # below gate 169: no manualOrderCancelTime trailer
-        (0, (4, 1, 42, "20300101 09:30:00")),  # at gate 169: trailer appended
-    ],
-    ids=["below_gate_169", "at_gate_169"],
-)
-def test_cancel_order_manual_order_time_gate_169(offset, expected):
-    """Gate 169 (MANUAL_ORDER_TIME): ``manualOrderCancelTime`` appears in
-    the cancelOrder frame at and above gate 169, but not below. Same
-    cancel call exercises both sides — the only variable is server
-    version and the resulting wire-arg tuple.
-    """
-
-    ib = ibi.IB()
-    ib.client._serverVersion = MIN_SERVER_VER_MANUAL_ORDER_TIME + offset
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ib.client.cancelOrder(42, OrderCancel(manualOrderCancelTime="20300101 09:30:00"))
-
-    assert len(sent) == 1
-    assert sent[0] == expected
-
-
 def test_binary_contract_details_skips_ineligibility_below_gate_186():
     """Gate 186 (INELIGIBILITY_REASONS) below: at 185 there's no count
     slot at the tail.
@@ -2509,22 +2157,6 @@ def test_binary_contract_details_at_exact_gate_186_reads_ineligibility_count():
     _, cd = seen[0]
     assert len(cd.ineligibilityReasonList) == 1
     assert cd.ineligibilityReasonList[0].id_ == "R7"
-
-
-def test_req_global_cancel_at_exact_gate_192_drops_version():
-    """Gate 192 boundary in reqGlobalCancel: at exactly 192 the legacy
-    VERSION byte must be absent. Pairs with the existing 191 test.
-    """
-
-    serverVersion = MIN_SERVER_VER_CME_TAGGING_FIELDS
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    sent: list = []
-    ib.client.send = lambda *a: sent.append(a)
-    ib.client.reqGlobalCancel()
-
-    assert len(sent) == 1
-    assert sent[0] == (58, "", None)
 
 
 def test_historical_data_at_pre_124_consumes_legacy_version_prefix():
@@ -2840,23 +2472,24 @@ def test_order_bound_signature_uses_ibkr_argument_names():
 
 
 def test_set_optional_capabilities_stores_value_for_start_api():
-    """``setOptionalCapabilities`` stores the value ``startApi`` sends.
-    The value is read inside ``startApi`` (binary path field 4 / proto
-    ``optionalCapabilities``); without the public setter, third-party
-    integrations have no way to set it short of reaching into
-    ``client.optCapab`` directly.
+    """``setOptionalCapabilities`` stores the value ``startApi`` sends as
+    the START_API request's ``optionalCapabilities``; without the public
+    setter, third-party integrations have no way to set it short of
+    reaching into ``client.optCapab`` directly.
     """
     ib = ibi.IB()
     assert ib.client.optCapab == ""
     ib.client.setOptionalCapabilities("xyz")
     assert ib.client.optCapab == "xyz"
 
-    sent: list = []
-    ib.client.send = lambda *a, **kw: sent.append(a)
-    ib.client._serverVersion = 200  # below MIN_SERVER_VER_PROTOBUF
+    sent: list[tuple[int, bytes]] = []
+    ib.client.sendProto = lambda msgId, body: sent.append((msgId, body))
     ib.client.clientId = 9
     ib.client.startApi()
-    assert sent == [(71, 2, 9, "xyz")]
+    [(msgId, body)] = sent
+    request = StartApiRequest_pb2.StartApiRequest.FromString(body)
+    assert msgId == 71
+    assert (request.clientId, request.optionalCapabilities) == (9, "xyz")
 
 
 def test_warning_codes_includes_connection_state_notifications():
@@ -2898,18 +2531,14 @@ def test_connection_state_codes_logged_at_warning_level(caplog):
 
 
 def test_send_proto_shares_the_throttle_queue():
-    """``sendProto`` hands its frame to ``sendMsg`` like every binary
-    frame, so both paths share ONE outbound queue.
-
-    This inverts an earlier pin that recorded the bypass as a known
-    limitation. The bypass had two live-money consequences on a 207+
-    gateway, where protobuf carries most of the session INCLUDING every
-    order: proto frames spent no budget in the ``MaxRequests`` /
-    ``RequestsInterval`` sliding window, and a proto frame could
-    overtake binary frames already queued behind the throttle. Request
-    ORDER and IBKR's pacing contract are not optional for orders.
+    """``sendProto`` hands its frame to ``sendMsg``, the one outbound
+    queue, so every request spends budget in the ``MaxRequests`` /
+    ``RequestsInterval`` sliding window and none overtakes a request
+    already queued behind the throttle. Request order and IBKR's pacing
+    limits matter most for orders.
     """
     ib = ibi.IB()
+    ib.client.connState = ib.client.CONNECTED
     sent: list = []
     ib.client.conn.sendMsg = lambda data: sent.append(data)
     ib.client.sendProto(1, b"\x00\x00")
@@ -2926,7 +2555,7 @@ def test_handshake_prefix_matches_ibkr_make_initial_msg():
     """
 
     ib = ibi.IB()
-    body = b"v157..225"
+    body = b"v226..226"
     framed = ib.client._prefix(body)
     assert framed == _struct.pack(">I", len(body)) + body
     assert len(framed) == 4 + len(body)
@@ -3474,60 +3103,16 @@ def test_account_update_multi_carries_model_code_into_accumulator_key():
 
 
 # ---------------------------------------------------------------------------
-# Binary-path field encoder + safe_decimal sentinel coverage
+# Order offsets + safe_decimal sentinel coverage
 # ---------------------------------------------------------------------------
 
 
-def test_send_encodes_positive_infinity_as_ibkr_infinity_string():
-    """``math.inf`` on the binary send path must serialize to the literal
-    ``"Infinity"`` — not ``"Infinite"``. Fields like ``competeAgainstBestOffset =
-    COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID`` (an alias for
-    ``DOUBLE_INFINITY``) only travel correctly with the IBKR-canonical
-    spelling; ``"Infinite"`` is rejected as a parse error server-side
-    and silently corrupts mid-peg-to-mid orders.
-    """
-
-    assert _formatField(math.inf, makeEmpty=True) == "Infinity"
-    assert _formatField(math.inf, makeEmpty=False) == "Infinity"
-
-
-def test_send_encodes_unset_double_as_empty_when_makeempty():
-    """``UNSET_DOUBLE`` (sys.float_info.max) becomes empty string on the
-    ``makeEmpty=True`` path — matching IBKR's ``make_field_handle_empty``
-    semantics. With ``makeEmpty=False`` it serializes verbatim.
-    """
-
-    UNSET_DOUBLE = sys.float_info.max
-    assert _formatField(UNSET_DOUBLE, makeEmpty=True) == ""
-    assert _formatField(UNSET_DOUBLE, makeEmpty=False) != ""
-
-
-def test_send_encodes_unset_integer_as_empty_when_makeempty():
-    """``UNSET_INTEGER`` becomes empty string on the ``makeEmpty=True``
-    path; matches IBKR's ``make_field_handle_empty``.
-    """
-
-    assert _formatField(UNSET_INTEGER, makeEmpty=True) == ""
-    assert _formatField(UNSET_INTEGER, makeEmpty=False) == str(UNSET_INTEGER)
-
-
-def test_send_encodes_bool_as_zero_or_one_string():
-    """IBKR's ``make_field`` encodes ``True``/``False`` as ``"1"``/``"0"``.
-    Our handler must produce the same strings or every gated boolean field
-    arrives as the Python repr ``"True"`` / ``"False"`` and TWS rejects.
-    """
-
-    assert _formatField(True, makeEmpty=True) == "1"
-    assert _formatField(False, makeEmpty=True) == "0"
-
-
-def test_send_encodes_none_as_empty_string():
-    """``None`` → empty string on the wire. We permissively serialize as
-    empty so contributor sites that forget to filter ``None`` from their
-    field tuples don't crash.
-    """
-
-    assert _formatField(None, makeEmpty=True) == ""
+def test_peg_best_up_to_mid_sends_infinity():
+    """COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID is +Infinity, and the
+    PlaceOrderRequest carries it as the double +Infinity."""
+    order = Order(orderType="PEG BEST", competeAgainstBestOffset=math.inf)
+    proto = createPlaceOrderRequestProto(1, Contract(conId=1), order)
+    assert proto.order.competeAgainstBestOffset == math.inf
 
 
 def test_safe_decimal_rejects_every_ibkr_unset_sentinel_string():
@@ -3633,39 +3218,6 @@ def test_format_proto_double_strips_trailing_zeros_and_decimal():
     assert format_proto_double(1.5) == "1.5"
     assert format_proto_double(1.50000000) == "1.5"
     assert format_proto_double(0.0) == "0"
-
-
-def test_send_round_trips_full_field_tuple_with_infinity_and_unset():
-    """End-to-end shape check: a field tuple combining str / int / float /
-    bool / None / UNSET / inf must produce a NUL-terminated wire string
-    that matches the per-type lambdas. Locks the contract for the
-    handler-table dispatch in ``Client.send``.
-    """
-
-    UNSET_DOUBLE = sys.float_info.max
-    fields = [
-        "TEST",
-        42,
-        1.5,
-        True,
-        False,
-        None,
-        UNSET_DOUBLE,
-        UNSET_INTEGER,
-        math.inf,
-    ]
-    parts = [_formatField(f, makeEmpty=True) for f in fields]
-    assert parts == [
-        "TEST",
-        "42",
-        "1.5",
-        "1",
-        "0",
-        "",
-        "",
-        "",
-        "Infinity",
-    ]
 
 
 # ---------------------------------------------------------------------------

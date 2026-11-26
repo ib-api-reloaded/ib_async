@@ -13,8 +13,6 @@ verify the future settles with the millisecond timestamp.
 
 from __future__ import annotations
 
-import pytest
-
 import ib_async as ibi
 from ib_async._pb import (
     CalculateImpliedVolatilityRequest_pb2,
@@ -29,6 +27,7 @@ from ib_async._pb import (
     FamilyCodes_pb2,
     FAReplace_pb2,
     FARequest_pb2,
+    IdsRequest_pb2,
     MarketRule_pb2,
     MarketRuleRequest_pb2,
     MatchingSymbolsRequest_pb2,
@@ -47,6 +46,8 @@ from ib_async._pb import (
     SymbolSamples_pb2,
     UserInfo_pb2,
     UserInfoRequest_pb2,
+    VerifyMessageRequest_pb2,
+    VerifyRequest_pb2,
 )
 from ib_async._pb_msgids import (
     CANCEL_CALC_IMPLIED_VOLAT,
@@ -59,6 +60,7 @@ from ib_async._pb_msgids import (
     REQ_CURRENT_TIME_IN_MILLIS,
     REQ_FA,
     REQ_FAMILY_CODES,
+    REQ_IDS,
     REQ_MARKET_RULE,
     REQ_MATCHING_SYMBOLS,
     REQ_SEC_DEF_OPT_PARAMS,
@@ -67,9 +69,33 @@ from ib_async._pb_msgids import (
     REQ_USER_INFO,
     SET_SERVER_LOGLEVEL,
     START_API,
+    VERIFY_MESSAGE,
+    VERIFY_REQUEST,
 )
 from ib_async._requests import CompositeKey, ReqIdKey, SingletonKey
 from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion
+
+
+def test_ids_and_verify_requests_go_out_as_protobuf():
+    """reqIds, verifyRequest and verifyMessage had only a binary form."""
+    ib = _ibAtVersion(226)
+    sent = _captureSend(ib)
+    ib.client.reqIds(5)
+    ib.client.verifyRequest("app", "1.0")
+    ib.client.verifyMessage("data")
+
+    [ids, verify, message] = [_decodeProtoFrame(frame) for frame in sent]
+    assert ids[0] == REQ_IDS
+    assert IdsRequest_pb2.IdsRequest.FromString(ids[1]).numIds == 5
+    assert verify[0] == VERIFY_REQUEST
+    request = VerifyRequest_pb2.VerifyRequest.FromString(verify[1])
+    assert (request.apiName, request.apiVersion) == ("app", "1.0")
+    assert message[0] == VERIFY_MESSAGE
+    assert (
+        VerifyMessageRequest_pb2.VerifyMessageRequest.FromString(message[1]).apiData
+        == "data"
+    )
+
 
 # ===========================================================================
 # RECEIVE SIDE
@@ -235,19 +261,6 @@ def test_req_current_time_in_millis_always_protobuf():
     assert canonical == REQ_CURRENT_TIME_IN_MILLIS
     proto = CurrentTimeInMillisRequest_pb2.CurrentTimeInMillisRequest()
     proto.ParseFromString(body)
-
-
-def test_req_current_time_in_millis_rejects_pre_213_server():
-    """A pre-213 server has no idea what the protobuf +200 sentinel
-    means. Better to raise on the caller's stack than ship a malformed
-    frame and leave the awaiter wedged forever.
-    """
-
-    ib = _ibAtVersion(212)
-    sent = _captureSend(ib)
-    with pytest.raises(ValueError, match="version >= 213"):
-        ib.client.reqCurrentTimeInMillis()
-    assert sent == []
 
 
 def test_req_user_info_uses_protobuf_at_gate():
@@ -447,21 +460,3 @@ def test_req_market_rule_uses_protobuf_at_gate():
 # ===========================================================================
 # Below-gate sanity
 # ===========================================================================
-
-
-def test_req_current_time_below_gate_uses_binary():
-    ib = _ibAtVersion(212)
-    sent = _captureSend(ib)
-    ib.client.reqCurrentTime()
-    assert sent[0][4:].startswith(
-        b"\x00\x00\x00\x31"
-    )  # REQ_CURRENT_TIME=49, raw int (server>=201)
-
-
-def test_set_server_log_level_below_gate_uses_binary():
-    ib = _ibAtVersion(212)
-    sent = _captureSend(ib)
-    ib.client.setServerLogLevel(3)
-    assert sent[0][4:].startswith(
-        b"\x00\x00\x00\x0e"
-    )  # SET_SERVER_LOGLEVEL=14, raw int (server>=201)

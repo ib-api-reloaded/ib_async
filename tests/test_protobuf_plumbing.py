@@ -1,55 +1,22 @@
-"""Phase-0 protobuf plumbing tests.
-
-These exercise the wire-framing seam without any real protobuf
-converters wired up: gate-table sanity, ``Client.useProtoBuf`` boundary
-behaviour, ``Client.sendProto`` framing, and the receive-side
-``_onSocketHasData`` discriminator that strips the +200 sentinel and
-routes to ``Decoder.processProtoBuf``.
+"""Protobuf wire framing: ``Client.sendProto`` framing, and the
+receive-side ``_onSocketHasData`` discriminator that strips the +200
+sentinel and routes to ``Decoder.processProtoBuf``.
 """
 
 from __future__ import annotations
 
 import struct
 
+import pytest
+
 import ib_async as ibi
 from ib_async._pb import ManagedAccounts_pb2, NextValidId_pb2
-from ib_async._pb_msgids import (
-    MIN_SERVER_VER_PROTOBUF,
-    MIN_SERVER_VER_PROTOBUF_PLACE_ORDER,
-    MIN_SERVER_VER_PROTOBUF_REST_MESSAGES_3,
-    PLACE_ORDER,
-    PROTOBUF_MSG_ID,
-    PROTOBUF_MSG_IDS,
-    REQ_CURRENT_TIME_IN_MILLIS,
-    REQ_HISTORICAL_DATA,
-)
-
-# --- Gate-table sanity ----------------------------------------------------
+from ib_async._pb_msgids import PLACE_ORDER, PROTOBUF_MSG_ID
+from ib_async._server_versions import MAX_CLIENT_VER, MIN_SERVER_VER_PROTOBUF
 
 
 def test_protobuf_msg_id_sentinel_is_200():
     assert PROTOBUF_MSG_ID == 200
-
-
-def test_protobuf_msg_ids_table_covers_known_messages():
-    # A few representative entries from each family.
-    assert PROTOBUF_MSG_IDS[PLACE_ORDER] == MIN_SERVER_VER_PROTOBUF_PLACE_ORDER
-    assert PROTOBUF_MSG_IDS[REQ_HISTORICAL_DATA] == 208
-    assert (
-        PROTOBUF_MSG_IDS[REQ_CURRENT_TIME_IN_MILLIS]
-        == MIN_SERVER_VER_PROTOBUF_REST_MESSAGES_3
-    )
-
-
-def test_protobuf_msg_ids_table_size_matches_ibkr_reference():
-    # The protocol gates 77 messages onto protobuf by server version;
-    # if IBKR adds or drops a message family, this
-    # test will fail loudly so we have to make a deliberate decision
-    # about syncing.
-    assert len(PROTOBUF_MSG_IDS) == 77
-
-
-# --- useProtoBuf boundary behaviour --------------------------------------
 
 
 def _client_at_version(version: int):
@@ -58,42 +25,25 @@ def _client_at_version(version: int):
     return ib.client
 
 
-def test_use_protobuf_returns_false_when_server_below_msgs_minimum():
-    # PLACE_ORDER gate is 203; on a 200 server it must stay binary.
-    client = _client_at_version(200)
-    assert client.useProtoBuf(PLACE_ORDER) is False
-
-
-def test_use_protobuf_returns_true_at_exact_gate():
-    # Boundary case: server == gate.
-    client = _client_at_version(MIN_SERVER_VER_PROTOBUF_PLACE_ORDER)
-    assert client.useProtoBuf(PLACE_ORDER) is True
-
-
-def test_use_protobuf_returns_true_above_gate():
-    client = _client_at_version(225)
-    assert client.useProtoBuf(PLACE_ORDER) is True
-
-
-def test_use_protobuf_per_family_intermediate_server():
-    # Server 207: accounts/positions are protobuf-eligible (gate 207),
-    # historical data is NOT (gate 208), even though the same connection
-    # is past the baseline 201 protobuf gate.
-    client = _client_at_version(207)
-    assert client.useProtoBuf(PLACE_ORDER) is True  # gate 203
-    assert client.useProtoBuf(REQ_HISTORICAL_DATA) is False  # gate 208
-
-
-def test_use_protobuf_returns_false_for_unknown_msg_id():
-    client = _client_at_version(225)
-    assert client.useProtoBuf(9999) is False
-
-
 # --- sendProto wire framing ----------------------------------------------
 
 
+def test_send_proto_refuses_without_a_connection():
+    """The socket drops a frame it cannot write without a word, so a
+    request on a closed connection raises instead of vanishing."""
+    client = _client_at_version(MAX_CLIENT_VER)
+    sent: list[bytes] = []
+    client.conn.sendMsg = sent.append  # type: ignore[method-assign]
+    with pytest.raises(ConnectionError):
+        client.placeOrder(
+            1, ibi.Stock("SPY", "SMART", "USD"), ibi.MarketOrder("BUY", 1)
+        )
+    assert sent == []
+
+
 def test_send_proto_adds_sentinel_and_length_prefix():
-    client = _client_at_version(225)
+    client = _client_at_version(MAX_CLIENT_VER)
+    client.connState = client.CONNECTED
     sent: list[bytes] = []
     client.conn.sendMsg = sent.append  # type: ignore[method-assign]
 

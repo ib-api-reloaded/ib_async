@@ -86,10 +86,9 @@ def _ibAtVersion(version: int) -> ibi.IB:
     """Construct an ``IB`` pinned to the given server version with the
     client pretend-connected.
 
-    Tests that exercise gated send paths or proto dispatch need the
-    client past the ``CONNECTED`` guard so ``Client.send`` doesn't raise
-    ``ConnectionError`` and ``Decoder.processProtoBuf`` runs at the right
-    serverVersion. No real socket I/O happens — tests replace
+    Tests that exercise send paths or proto dispatch need the client past
+    the ``CONNECTED`` guard so ``Client.sendProto`` doesn't raise
+    ``ConnectionError``. No real socket I/O happens — tests replace
     ``conn.sendMsg`` via ``_captureSend``.
     """
     ib = ibi.IB()
