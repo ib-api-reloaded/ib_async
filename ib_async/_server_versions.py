@@ -1,20 +1,12 @@
-"""Minimum-server-version constants for the IBKR API gating.
+"""IBKR's server version gates.
 
 Every wire-protocol field, message family, and capability that IBKR has
-ever shipped is gated by a minimum server version. ``Client.reqXxx``
-methods must check ``self._serverVersion >= MIN_SERVER_VER_X`` before
-writing a gated field, and ``Decoder.processXxxMsg`` methods must
-likewise gate conditional reads. Mismatched gates produce malformed
-wire frames the server can't parse OR mis-decoded responses where we
-read fields the server never sent.
+shipped is gated by a minimum server version. The client accepts only
+``MIN_CLIENT_VER`` (226) and up, where every gate below is open, so the
+code needs a gate only for a field or message IBKR adds after it.
 
 This module holds IBKR's server version numbers, which must match the
 protocol IBKR publishes. Update them when bumping ``MAX_CLIENT_VER``.
-
-Constants below the protobuf cutoff (201) are kept too even though our
-modern client only negotiates >= MIN_CLIENT_VER. They're available for
-older-server-compat conditional reads that the binary decoder still
-performs (e.g. PRE_OPEN_BID_ASK at 132, MARKET_CAP_PRICE at 131).
 """
 
 from __future__ import annotations

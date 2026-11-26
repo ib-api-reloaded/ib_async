@@ -180,8 +180,8 @@ def test_startup_requests_that_time_out_are_reported_by_name(
     session.run()
     session.receive(
         handshake(MAX_CLIENT_VER),
-        nextValidIdFrame(100, proto=False),
-        managedAccountsFrame(["DU1"], proto=False),
+        nextValidIdFrame(100),
+        managedAccountsFrame(["DU1"]),
     )
 
     clock.advance(2.1)

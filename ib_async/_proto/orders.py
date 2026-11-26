@@ -133,12 +133,11 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     ``seekPriceImprovement``, ``whatIfType``, ``hedgeMaxSize``) are written
     too.
     """
-    # Wire-boundary parity with the binary path: ``Client.send`` maps
-    # ``None`` on a plain-int Order field to ``""``, which the server
-    # parses as the wire-default (``0`` for ``parentId`` / ``ocaType``
-    # / ``triggerMethod`` / …). The protobuf path can't emit ``""`` for
-    # an ``optional int32`` slot, so we coerce ``None → field default``
-    # here before the per-field gates run. Without this, a caller that
+    # ``None`` on a plain-int Order field means the field's default
+    # (``0`` for ``parentId`` / ``ocaType`` / ``triggerMethod`` / …).
+    # The proto can't carry ``None`` in an ``optional int32`` slot, so
+    # we coerce ``None → field default`` here before the per-field
+    # gates run. Without this, a caller that
     # sets ``order.parentId = None`` (to send no parent link) produces
     # a wire frame missing the field; TWS reads
     # proto3-absent as its own ``UNSET_INTEGER = 2147483647`` sentinel
@@ -300,8 +299,8 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.scaleTable = order.scaleTable
 
     # Hedge: hedgeParam is only meaningful with a hedgeType. Send it only
-    # when hedgeType is set, as the binary path does; decoding reads it
-    # back only in that case too.
+    # when hedgeType is set; decoding reads it back only in that case
+    # too.
     if order.hedgeType:
         proto.hedgeType = order.hedgeType
         if order.hedgeParam:
@@ -1206,9 +1205,7 @@ def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
         state.warningText = proto.warningText
     if proto.HasField("marginCurrency"):
         state.marginCurrency = proto.marginCurrency
-    # OutsideRTH margin variants — strings on the wire matching the
-    # in-RTH shape; the binary path delivers them through the same
-    # str-coerced field family.
+    # OutsideRTH margin variants — strings, like the in-RTH fields.
     if proto.HasField("initMarginBeforeOutsideRTH"):
         state.initMarginBeforeOutsideRTH = str(proto.initMarginBeforeOutsideRTH)
     if proto.HasField("maintMarginBeforeOutsideRTH"):
@@ -1255,11 +1252,9 @@ def createExecution(proto: Execution_pb2.Execution) -> Execution:
     if proto.HasField("execId"):
         ex.execId = proto.execId
     # ``time`` is a wire string in IBKR's "YYYYmmdd  HH:MM:SS [tz]"
-    # format; the wrapper's existing tz-normalization code parses
-    # this. The binary-path execDetails handler does the parsing
-    # there, so we leave the raw string on the domain object for the
-    # wrapper to normalize per its existing flow.
-    # (See ``Wrapper.execDetails`` for the parse + tz application.)
+    # format. The converter has no time zone, so it leaves the raw
+    # string; the decoder (``Decoder._normalizeExecutionTime``) parses
+    # it in the IB's time zone.
     if proto.HasField("acctNumber"):
         ex.acctNumber = proto.acctNumber
     if proto.HasField("exchange"):
@@ -1554,8 +1549,7 @@ def createExecutionFilterProto(
     execFilter: ExecutionFilter,
 ) -> ExecutionFilter_pb2.ExecutionFilter:
     # Wire-boundary coalesce — restore dataclass defaults for any plain
-    # scalar a caller stomped to ``None``. Mirrors the binary path's
-    # ``NoneType → ""`` formatter at converter entry.
+    # scalar a caller stomped to ``None``.
     normalize_none_scalars(execFilter)
 
     proto = ExecutionFilter_pb2.ExecutionFilter()
@@ -1575,10 +1569,8 @@ def createExecutionFilterProto(
         proto.exchange = execFilter.exchange
     if execFilter.side:
         proto.side = execFilter.side
-    # ``lastNDays`` / ``specificDates`` ship past
-    # ``MIN_SERVER_VER_PARAMETRIZED_DAYS_OF_EXECUTIONS`` (200). The
-    # gating is the caller's responsibility; the encoder unconditionally
-    # writes when the domain field carries a non-sentinel value.
+    # ``lastNDays`` / ``specificDates`` are written when the domain field
+    # carries a value.
     if _isValidInt(execFilter.lastNDays):
         proto.lastNDays = execFilter.lastNDays
     if execFilter.specificDates:

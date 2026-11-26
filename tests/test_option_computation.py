@@ -17,7 +17,6 @@ from hypothesis import strategies as st
 
 import ib_async as ibi
 from ib_async._pb import TickOptionComputation_pb2
-from ib_async._server_versions import MAX_CLIENT_VER
 from ib_async.decoder import Decoder
 from ib_async.objects import OptionComputation
 from ib_async.util import getLoop
@@ -114,7 +113,7 @@ def modelGreeks(
     )
     if delta is not None:
         proto.delta = delta
-    Decoder(tws.wrapper, MAX_CLIENT_VER)._protoTickOptionComputation(proto)
+    Decoder(tws.wrapper)._protoTickOptionComputation(proto)
     assert ticker.modelGreeks is not None
     return ticker.modelGreeks
 

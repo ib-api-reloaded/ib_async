@@ -2,10 +2,9 @@
 
 TWS answers ``reqHistoricalData(formatDate=3)`` with ``MMdd HH:MM:SS <tz>``
 bar timestamps -- the year never reaches the wire. The response bounds IB
-reports for the dataset stay full-width, so they anchor the run; the bars
+reports for the dataset stay full-width, so they anchor the run. The bars
 themselves are dated only once the whole series has arrived, because the
-bounds do not share a frame with the bars on any server at or above
-``MIN_SERVER_VER_HISTORICAL_DATA_END`` nor in the protobuf transport.
+bounds arrive in a separate message after the bars.
 """
 
 from __future__ import annotations
@@ -16,21 +15,17 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import ib_async as ibi
+from ib_async._pb import (
+    HistoricalData_pb2,
+    HistoricalDataBar_pb2,
+    HistoricalDataEnd_pb2,
+)
 from ib_async._requests import ReqIdKey
 from ib_async._subscriptions import HistoricalBarsSub
-from ib_async.decoder import Decoder
 from ib_async.util import isIBShortDatetime, parseIBDatetime, parseIBShortDatetimes
 
 EASTERN = ZoneInfo("US/Eastern")
-
-# A decoder that predates ``MIN_SERVER_VER_HISTORICAL_DATA_END`` carries no
-# msgId 108 handler at all, so the split-frame half of the transport
-# coverage has nothing to drive. The wrapper-level cases below pin the
-# same deferred dating without a decoder.
-requiresSplitEndFrame = pytest.mark.skipif(
-    not hasattr(Decoder, "historicalDataEnd"),
-    reason="decoder predates the split end-of-dataset frame",
-)
+HISTORICAL_DATA, HISTORICAL_DATA_END = 17, 108
 
 
 def _openBarRequest(ib: ibi.IB, reqId: int = 1):
@@ -250,77 +245,45 @@ def test_short_bar_update_before_the_dataset_is_dated_is_dropped():
 # -- decoder layer ------------------------------------------------------------
 
 
-@requiresSplitEndFrame
+def _bar(
+    date: str, open_: float, close: float
+) -> HistoricalDataBar_pb2.HistoricalDataBar:
+    return HistoricalDataBar_pb2.HistoricalDataBar(
+        date=date,
+        open=open_,
+        high=open_ + 1,
+        low=close - 1,
+        close=close,
+        volume="5583527",
+        WAP="208.961",
+        barCount=28611,
+    )
+
+
 def test_short_bars_survive_the_split_end_frame():
-    """From ``MIN_SERVER_VER_HISTORICAL_DATA_END`` the bounds ship in their
-    own frame after the bars, so nothing inside the bar frame can date
-    them."""
+    """The bounds arrive in their own message after the bars, so nothing
+    in the bar message can date them."""
     ib = ibi.IB(defaults=ibi.IBDefaults(timezone=EASTERN))
-    ib.client.serverVersion = lambda: 225  # type: ignore[method-assign]
     ib.wrapper.clientId = 0
     future = _openBarRequest(ib, reqId=6)
 
     decoder = ib.client.decoder
-    decoder.serverVersion = 225
-    decoder.historicalData(
-        [
-            "17",
-            "6",
-            "2",
-            "0714 09:30:00 US/Eastern",
-            "209.93",
-            "210.91",
-            "207.67",
-            "207.89",
-            "5583527",
-            "208.961",
-            "28611",
-            "0714 10:00:00 US/Eastern",
-            "207.90",
-            "208.78",
-            "207.54",
-            "208.03",
-            "2978782",
-            "208.082",
-            "16926",
-        ]
+    bars = HistoricalData_pb2.HistoricalData(
+        reqId=6,
+        historicalDataBars=[
+            _bar("0714 09:30:00 US/Eastern", 209.93, 207.89),
+            _bar("0714 10:00:00 US/Eastern", 207.90, 208.03),
+        ],
     )
-    decoder.historicalDataEnd(
-        ["108", "6", "20250714 08:59:54 US/Eastern", "20250715 08:59:54 US/Eastern"]
+    decoder.processProtoBuf(HISTORICAL_DATA, bars.SerializeToString())
+    end = HistoricalDataEnd_pb2.HistoricalDataEnd(
+        reqId=6,
+        startDateStr="20250714 08:59:54 US/Eastern",
+        endDateStr="20250715 08:59:54 US/Eastern",
     )
+    decoder.processProtoBuf(HISTORICAL_DATA_END, end.SerializeToString())
 
     assert [bar.date for bar in future.result()] == [
         datetime(2025, 7, 14, 9, 30, tzinfo=EASTERN),
         datetime(2025, 7, 14, 10, 0, tzinfo=EASTERN),
-    ]
-
-
-def test_short_bars_survive_the_legacy_inline_end():
-    """Below ``MIN_SERVER_VER_HISTORICAL_DATA_END`` the bounds ride in the
-    bar frame -- the payload from the original report."""
-    ib = ibi.IB(defaults=ibi.IBDefaults(timezone=EASTERN))
-    future = _openBarRequest(ib, reqId=6)
-
-    decoder = ib.client.decoder
-    decoder.serverVersion = 195
-    decoder.historicalData(
-        [
-            "17",
-            "6",
-            "20250714 08:59:54 US/Eastern",
-            "20250715 08:59:54 US/Eastern",
-            "1",
-            "0714 09:30:00 US/Eastern",
-            "209.93",
-            "210.91",
-            "207.67",
-            "207.89",
-            "5583527",
-            "208.961",
-            "28611",
-        ]
-    )
-
-    assert [bar.date for bar in future.result()] == [
-        datetime(2025, 7, 14, 9, 30, tzinfo=EASTERN)
     ]

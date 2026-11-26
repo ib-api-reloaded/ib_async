@@ -436,6 +436,16 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   gone: IBKR has no protobuf form for them. A request on a closed
   connection raises ``ConnectionError`` instead of being dropped by
   the socket without a word.
+* The text message decoder. TWS / IB Gateway 10.51 sends every message
+  the library reads as protobuf, so ``Decoder.interpret``, its handler
+  table and its per-message text handlers are gone, with the
+  server-version branches they carried. The one text message still
+  read is tickEFP (EFP ticks), which has no protobuf form; any other
+  text frame is counted in ``runtimeState().counters.unknownMessages`` and
+  logged at warning level with its message id. The wrapper callbacks
+  ``deltaNeutralValidation``, ``verifyAndAuthMessageAPI`` and
+  ``verifyAndAuthCompleted`` are gone: only text messages reached
+  them.
 
 **Fixed (silent-data-loss and wire-protocol bugs)**
 

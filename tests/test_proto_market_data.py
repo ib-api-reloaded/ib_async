@@ -16,6 +16,10 @@ Coverage strategy mirrors ``test_proto_accounts``:
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+import pytest
+
 import ib_async as ibi
 from ib_async._pb import (
     CancelMarketData_pb2,
@@ -69,8 +73,8 @@ from ib_async._proto.market_data import (
     createUpdateMktDepthL2Args,
     dispatchTickByTick,
 )
-from ib_async._server_versions import MAX_CLIENT_VER
 from ib_async.decoder import Decoder
+from ib_async.objects import TickAttrib
 from ib_async.util import getLoop
 from tests._sim import SimulatedTws
 
@@ -112,14 +116,26 @@ def test_tick_price_full_round_trip():
     assert args.size == 100.0
 
 
-def test_tick_price_attrMask_is_silently_dropped():
-    """Match binary path: attrMask is read but not surfaced."""
+@pytest.mark.parametrize(
+    ("attrMask", "attrib"),
+    [
+        (0, TickAttrib()),
+        (1, TickAttrib(canAutoExecute=True)),
+        (6, TickAttrib(pastLimit=True, preOpen=True)),
+        (7, TickAttrib(canAutoExecute=True, pastLimit=True, preOpen=True)),
+    ],
+)
+def test_tick_price_attrMask_bits_become_the_attrib(
+    attrMask: int, attrib: TickAttrib
+) -> None:
     proto = TickPrice_pb2.TickPrice(
-        reqId=1, tickType=4, price=150.25, size="100", attrMask=3
+        reqId=1, tickType=4, price=150.25, size="100", attrMask=attrMask
     )
-    args = createPriceSizeTickArgs(proto)
-    # PriceSizeTickArgs has exactly 4 named fields; no attrMask slot.
-    assert not hasattr(args, "attrMask")
+    assert createPriceSizeTickArgs(proto).attrib == attrib
+
+    wrapper = MagicMock()
+    Decoder(wrapper).processProtoBuf(1, proto.SerializeToString())
+    wrapper.priceSizeTick.assert_called_once_with(1, 4, 150.25, 100.0, attrib)
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +253,7 @@ def test_tick_option_computation_missing_greeks_reach_the_ticker_as_none():
         gamma=0.05,
         undPrice=100.0,
     )
-    Decoder(tws.wrapper, MAX_CLIENT_VER)._protoTickOptionComputation(proto)
+    Decoder(tws.wrapper)._protoTickOptionComputation(proto)
     greeks = ticker.modelGreeks
     assert greeks is not None
     assert (greeks.pvDividend, greeks.vega, greeks.theta) == (None, None, None)

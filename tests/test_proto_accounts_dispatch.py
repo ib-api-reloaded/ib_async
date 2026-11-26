@@ -3,10 +3,8 @@
 Mirrors the orders / contracts equivalents (test_proto_decoder_dispatch
 and test_proto_client_gating) for the account / position message
 families. Receive side: a synthetic proto payload routes through
-``processProtoBuf`` and lands the same wrapper state the binary path
-produces. Send side: per ``useProtoBuf(canonicalMsgId)`` boolean, a
-server below the family gate keeps NUL-separated text framing while a
-server at or above the gate emits a 4-byte BE protobuf frame.
+``processProtoBuf`` and the resulting wrapper state is asserted. Send
+side: every request goes out as a 4-byte BE protobuf frame.
 
 Both directions guard against the standard converter bug-prevention
 checklist: source-to-target writes, HasField guards, no module
@@ -100,8 +98,8 @@ def test_portfolio_value_proto_lands_in_portfolio_dict():
 
 
 def test_portfolio_value_zero_position_drops_cached_entry():
-    """A zero-position portfolio update must remove the cached entry,
-    matching the wire-binary path's drop-on-close semantics."""
+    """A zero-position portfolio update must remove the cached entry:
+    the position is closed."""
     ib = ibi.IB()
 
     # Seed a position first.
@@ -270,7 +268,7 @@ def test_account_update_multi_end_proto_settles_reqId():
 
 
 # ===========================================================================
-# SEND SIDE — useProtoBuf gating per canonical msgId at gate 207
+# SEND SIDE — each request as its protobuf message
 # ===========================================================================
 
 

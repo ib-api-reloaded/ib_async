@@ -223,10 +223,9 @@ def createContractProto(
     sites (market data, historical data, etc.) pass ``None`` and the wire
     proto omits ``perLegPrice`` on every leg.
     """
-    # Mirror the binary path's ``NoneType → ""`` wire formatter: callers
-    # may stamp ``None`` onto a plain-int / plain-float / plain-str
-    # Contract field; the proto path can't emit ``""`` for an
-    # ``optional int32`` slot so we coerce ``None → dataclass default``
+    # Callers may stamp ``None`` onto a plain-int / plain-float /
+    # plain-str Contract field; the proto can't carry ``None`` in an
+    # ``optional int32`` slot, so we coerce ``None → dataclass default``
     # before the per-field gates run.
     normalize_none_scalars(contract)
 
@@ -246,8 +245,7 @@ def createContractProto(
         proto.secType = contract.secType
     if contract.lastTradeDateOrContractMonth:
         proto.lastTradeDateOrContractMonth = contract.lastTradeDateOrContractMonth
-    # ``lastTradeDate`` is a RECEIVE-ONLY field; the binary path's
-    # contract formatter never sent it either. Echoing a previously
+    # ``lastTradeDate`` is a RECEIVE-ONLY field. Echoing a previously
     # qualified contract's exact expiry back on a request contradicts
     # ``lastTradeDateOrContractMonth`` whenever a caller reuses a
     # qualified contract to search another month (e.g. an option-chain
@@ -293,7 +291,7 @@ def createContractProto(
     # Per-leg pricing rides on ComboLeg.perLegPrice; the parallel list
     # ``order.orderComboLegs`` carries it on the order side. When there
     # are more contract legs than order legs, the extras get no per-leg
-    # price (unset on the wire), as on the binary path.
+    # price (unset on the wire).
     orderLegs = (
         order.orderComboLegs if order is not None and order.orderComboLegs else []
     )
@@ -404,8 +402,7 @@ def createContractDetails(
         details.secIdList = [
             TagValue(tag=tag, value=value) for tag, value in proto.secIdList.items()
         ]
-    # Bond-side fields; the binary path handled them via a separate
-    # ``bondContractDetails`` message. The proto unifies them here.
+    # Bond-side fields, which the proto carries on the same message.
     if proto.HasField("cusip"):
         details.cusip = proto.cusip
     if proto.HasField("ratings"):
@@ -493,14 +490,13 @@ def createContractDetails(
 
 
 def _setLastTradeDate(details: ContractDetails, isBond: bool) -> None:
-    """Split ``contract.lastTradeDateOrContractMonth`` into the
-    separate fields the binary path delivered.
+    """Split ``contract.lastTradeDateOrContractMonth`` into its separate
+    fields.
 
     The wire packs date + time (and bond timezone) into a single
-    space- or hyphen-separated string. The binary contractDetails
-    decoder splits it; the proto path needs the same split or
-    callers see ``ContractDetails.lastTradeTime`` (and bond
-    ``maturity`` / ``timeZoneId``) empty.
+    space- or hyphen-separated string. Without the split, callers see
+    ``ContractDetails.lastTradeTime`` (and bond ``maturity`` /
+    ``timeZoneId``) empty.
     """
     contract = details.contract
     if contract is None:

@@ -37,7 +37,6 @@ from ib_async.contract import (
     Contract,
     ContractDescription,
     ContractDetails,
-    DeltaNeutralContract,
     ScanData,
 )
 from ib_async.depth import DepthOperation
@@ -900,11 +899,8 @@ class Wrapper(Generic[EmptyT]):
 
     def nextValidId(self, reqId: int):
         # Bump the client's reqId sequence so subsequent requests don't
-        # collide with the server-side counter. On the binary path the
-        # client's ``_onSocketHasData`` snoop also does this for ``msgId
-        # 9``, but the protobuf path routes straight here via
-        # ``_protoNextValidId`` without touching that snoop, so this is
-        # the only update path on 213+ gateways.
+        # collide with the server-side counter. This is the only place
+        # the request ids are updated from TWS.
         if reqId > 0:
             self.ib.client.updateReqId(reqId)
 
@@ -1155,8 +1151,7 @@ class Wrapper(Generic[EmptyT]):
     def completedOrder(self, contract: Contract, order: Order, orderState: OrderState):
         # ``completedStatus`` carries the post-hoc terminal state TWS
         # records for completed orders; ``status`` may be unset on this
-        # path. Fall back to ``status`` to remain backwards-compatible
-        # with older servers / decoders that only fill the latter.
+        # path. Fall back to ``status`` when it is.
         rawStatus = orderState.completedStatus or orderState.status
         terminalStatus = OrderStatus.terminalFromCompleted(rawStatus)
         if terminalStatus is None:
@@ -1471,9 +1466,8 @@ class Wrapper(Generic[EmptyT]):
 
     def orderBound(self, permId: int, clientId: int, orderId: int):
         # IBKR's contract on this callback is ``(permId, clientId,
-        # orderId)``. Both the binary decoder (``decoder.py`` msgId 100)
-        # and the proto decoder (``_protoOrderBound``) call us with that
-        # argument order. The body stays a no-op — the wrapper has no
+        # orderId)``, and the decoder (``_protoOrderBound``) calls us with
+        # that argument order. The body stays a no-op — the wrapper has no
         # domain-side bookkeeping tied to manual-order binding — but the
         # signature follows that contract so subclasses overriding this
         # method see the values under their documented names.
@@ -2175,9 +2169,6 @@ class Wrapper(Generic[EmptyT]):
             # debug-level keeps the cancel race quiet.
             self._logger.debug(f"tickOptionComputation: Unknown reqId: {reqId}")
 
-    def deltaNeutralValidation(self, reqId: int, dnc: DeltaNeutralContract):
-        pass
-
     def scannerParameters(self, xml: str):
         self.requests.set_result(SingletonKey("scannerParams"), xml)
 
@@ -2318,10 +2309,8 @@ class Wrapper(Generic[EmptyT]):
         self.requests.set_result(CompositeKey("requestFA", (faDataType,)), faXmlData)
 
     def replaceFAEnd(self, _reqId: int, _text: str):
-        # No client-side waiter today; the binary path's wrap() factory
-        # silently drops this when the wrapper has no method, so we keep
-        # the proto path dispatch consistent by accepting the call as a
-        # no-op rather than raising. If a future feature wants the
+        # No client-side waiter today, so the call is accepted as a no-op
+        # rather than raising. If a future feature wants the
         # replace-FA reqId back, hook the registry settle here.
         pass
 
@@ -2424,10 +2413,10 @@ class Wrapper(Generic[EmptyT]):
         advancedOrderRejectJson: str,
         errorTime: int = 0,
     ):
-        # ``errorTime`` is wall-clock millis since epoch on TWS/Gateway
-        # >= MIN_SERVER_VER_ERROR_TIME (194); 0 on older servers. Default
-        # at the tail so callers that don't carry it (older test code,
-        # kwarg-form invocations from before v3.0) keep working.
+        # ``errorTime`` is wall-clock millis since epoch, 0 when the
+        # message has none. Default at the tail so callers that don't
+        # carry it (older test code, kwarg-form invocations from before
+        # v3.0) keep working.
         # https://interactivebrokers.github.io/tws-api/message_codes.html
         # https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/#api-error-codes
         # reqId == -1 is the IBKR convention for a system-level error
@@ -2701,12 +2690,6 @@ class Wrapper(Generic[EmptyT]):
 
     def verifyCompleted(self, isSuccessful: bool, errorText: str):
         """3rd-party API authentication completion callback."""
-
-    def verifyAndAuthMessageAPI(self, apiData: str, xyzChallenge: str):
-        """3rd-party API auth+xyz challenge callback."""
-
-    def verifyAndAuthCompleted(self, isSuccessful: bool, errorText: str):
-        """3rd-party API auth+xyz completion callback."""
 
     def displayGroupList(self, reqId: int, groups: str):
         """TWS display-group sync — initial list."""

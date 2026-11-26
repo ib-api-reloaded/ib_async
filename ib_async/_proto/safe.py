@@ -36,19 +36,17 @@ T = TypeVar("T")
 
 def normalize_none_scalars(obj: T) -> T:
     """Coerce ``None`` on plain-scalar dataclass fields back to the field's
-    default value. Mutates and returns ``obj`` so callers can chain it on
-    converter entry. TWS reads a field's default (typically ``0`` for
-    plain ``int`` fields like ``parentId``, ``ocaType``,
-    ``triggerMethod``) for a field the message leaves out.
+    default value (typically ``0`` for plain ``int`` fields like
+    ``parentId``, ``ocaType``, ``triggerMethod``). Mutates and returns
+    ``obj`` so callers can chain it on converter entry.
 
     Without this normalization, a caller that sets ``parentId = None``
     (to send no parent link) produces a wire frame missing the field
     entirely; TWS reads
     proto3-absent as its own ``UNSET_INTEGER = 2147483647`` sentinel and
     rejects the request with ``Error 135: Can't find order with id =
-    2147483647``. The binary path always emits ``""`` for None and the
-    server reads ``""`` as the field's default, which is what
-    end-users expect from ``= None``.
+    2147483647``. The field's default is what end-users expect from
+    ``= None``.
 
     Only acts on plain-scalar annotations (``int`` / ``float`` / ``bool``
     / ``str``). ``int | None`` / ``Decimal | None`` / etc are left alone
@@ -141,8 +139,7 @@ def fill_tag_value_map(
     """Copy a domain ``list[TagValue]`` into a proto ``map<string,string>``.
 
     The target is the map field of the parent proto. An empty or ``None``
-    input leaves the map field unset on the wire. The binary path also
-    skips the options block when the list is empty.
+    input leaves the map field unset on the wire.
     """
     if not items:
         return
@@ -170,9 +167,8 @@ def safe_decimal(value: str | Decimal | float | None) -> Decimal | None:
     does not contaminate the result; ``Decimal(str(0.1)) == Decimal('0.1')``.
 
     Pre-coerced ``Decimal`` inputs pass through unchanged (after the
-    sentinel / NaN / Infinity guards) so callers like ``Decoder.parse``
-    that re-run the helper over already-coerced dataclass attributes
-    are idempotent.
+    sentinel / NaN / Infinity guards), so running the helper again over
+    an already-coerced value changes nothing.
     """
     if value is None or value == "":
         return None
@@ -201,10 +197,9 @@ def wire_size_to_float(s: str) -> float:
 
     Goes through ``safe_decimal`` so empty / ``"nan"`` / sentinel /
     garbage land as ``0.0`` instead of raising. The wrapper's
-    ``size == 0`` checks are semantically equivalent to "size is unset"
-    on the binary path, so dropping unparseable values to zero matches
-    that behaviour exactly. Used by the tick, market-depth and
-    historical-tick converters, whose wrapper methods take floats.
+    ``size == 0`` checks treat that as "size is unset". Used by the
+    tick, market-depth and historical-tick converters, whose wrapper
+    methods take floats.
     """
     d = safe_decimal(s)
     return float(d) if d is not None else 0.0

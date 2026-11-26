@@ -3,9 +3,8 @@
 The tests replace the socket with a recording connection and pass the
 server's frames to the client's data handler. The handshake property
 runs at server version 226, the only one the client accepts. It sends
-nextValidId and managedAccounts in either order,
-each as a binary frame or a protobuf message, and then connects a second
-session after a disconnect. The disconnect tests close the socket from
+nextValidId and managedAccounts in either order as protobuf messages, and
+then connects a second session after a disconnect. The disconnect tests close the socket from
 the peer side and disconnect from the client side in each connection
 state.
 """
@@ -14,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import logging
 from unittest.mock import patch
 
 import pytest
@@ -27,6 +27,7 @@ from tests._session import (
     RecordingConnection,
     Session,
     errorFrame,
+    frame,
     handshake,
     managedAccountsFrame,
     nextValidIdFrame,
@@ -38,8 +39,6 @@ accountLists = st.lists(st.sampled_from(["DU1", "DU2", "DU3"]), min_size=1, uniq
 
 @given(
     idFirst=st.booleans(),
-    protoId=st.booleans(),
-    protoAccounts=st.booleans(),
     orderId=st.integers(1, 10**6),
     accounts=accountLists,
     secondOrderId=st.integers(1, 10**6),
@@ -48,8 +47,6 @@ accountLists = st.lists(st.sampled_from(["DU1", "DU2", "DU3"]), min_size=1, uniq
 @examples()
 def test_api_starts_after_next_valid_id_and_managed_accounts(
     idFirst,
-    protoId,
-    protoAccounts,
     orderId,
     accounts,
     secondOrderId,
@@ -63,12 +60,12 @@ def test_api_starts_after_next_valid_id_and_managed_accounts(
 
     session.receive(handshake(MAX_CLIENT_VER))
     assert client.isConnected() and not client.isReady()
-    assert client.serverVersion() == MAX_CLIENT_VER == client.decoder.serverVersion
+    assert client.serverVersion() == MAX_CLIENT_VER
     assert len(session.conn.sent) == 2  # startApi went out
     assert session.started == 0 and not task.done()
 
-    first = nextValidIdFrame(orderId, protoId)
-    second = managedAccountsFrame(accounts, protoAccounts)
+    first = nextValidIdFrame(orderId)
+    second = managedAccountsFrame(accounts)
     if not idFirst:
         first, second = second, first
     session.receive(first)
@@ -84,7 +81,7 @@ def test_api_starts_after_next_valid_id_and_managed_accounts(
     assert client.getReqId() == orderId + 1
 
     # A later nextValidId does not lower the request id or restart the API.
-    session.receive(nextValidIdFrame(1, protoId))
+    session.receive(nextValidIdFrame(1))
     assert client.getReqId() == orderId + 2
     assert session.started == 1
 
@@ -95,13 +92,50 @@ def test_api_starts_after_next_valid_id_and_managed_accounts(
     task = session.connect(clientId=7)
     session.receive(
         handshake(MAX_CLIENT_VER),
-        managedAccountsFrame(secondAccounts, protoAccounts),
-        nextValidIdFrame(secondOrderId, protoId),
+        managedAccountsFrame(secondAccounts),
+        nextValidIdFrame(secondOrderId),
     )
     assert task.done() and task.exception() is None
     assert session.started == 2 and session.ended == 1
     assert client.getReqId() == secondOrderId
     assert client.getAccounts() == secondAccounts
+
+
+@given(cuts=st.lists(st.integers(0, 1000), max_size=8))
+@examples()
+def test_the_handshake_and_api_start_survive_any_split_of_the_bytes(cuts):
+    """TCP may deliver the handshake answer, nextValidId and
+    managedAccounts in any chunks, a frame split or several together."""
+    session = Session()
+    task = session.connect(clientId=7)
+    data = (
+        handshake(MAX_CLIENT_VER)
+        + nextValidIdFrame(500)
+        + managedAccountsFrame(["DU1", "DU2"])
+    )
+    points = sorted({c % (len(data) + 1) for c in cuts} | {0, len(data)})
+    for start, end in zip(points, points[1:], strict=False):
+        session.receive(data[start:end])
+
+    assert task.done() and task.exception() is None
+    assert session.client.getReqId() == 500
+    assert session.client.getAccounts() == ["DU1", "DU2"]
+
+
+def test_a_frame_that_is_not_a_handshake_answer_is_logged_and_skipped(
+    caplog: pytest.LogCaptureFixture,
+):
+    session = Session()
+    task = session.connect()
+    with caplog.at_level(logging.ERROR, logger="ib_async.client"):
+        session.receive(frame(b"not\x00a\x00handshake\x00"))
+    assert "Not a handshake answer" in caplog.text
+    assert not session.client.isConnected()
+
+    session.receive(
+        handshake(MAX_CLIENT_VER), nextValidIdFrame(1), managedAccountsFrame(["DU1"])
+    )
+    assert task.done() and task.exception() is None
 
 
 def test_peer_close_before_connect_emits_no_events():
@@ -135,15 +169,12 @@ CLIENT_ID_IN_USE = (
 )
 
 
-@pytest.mark.parametrize("proto", [False, True])
-def test_client_id_in_use_fails_connect_with_the_server_error(proto):
+def test_client_id_in_use_fails_connect_with_the_server_error():
     # TWS answers startApi with error 326 and closes the socket. connect
     # has no timeout here, so only the close can end it.
     session = Session()
     task = session.connect(clientId=3)
-    session.receive(
-        handshake(MAX_CLIENT_VER), errorFrame(-1, 326, CLIENT_ID_IN_USE, proto)
-    )
+    session.receive(handshake(MAX_CLIENT_VER), errorFrame(-1, 326, CLIENT_ID_IN_USE))
     assert not task.done()
     session.client._onSocketDisconnected("")
     session.run()
@@ -228,9 +259,7 @@ def test_server_too_old_fails_connect():
 def test_error_after_api_start_does_not_mark_a_refusal():
     session = Session()
     ready(session)
-    session.receive(
-        errorFrame(-1, 1100, "Connectivity between IBKR and TWS lost.", False)
-    )
+    session.receive(errorFrame(-1, 1100, "Connectivity between IBKR and TWS lost."))
     session.client._onSocketDisconnected("")
     assert session.errors == ["Peer closed connection."]
 
@@ -241,9 +270,7 @@ def test_ib_connect_raises_client_id_in_use():
         session.ib.connectAsync("127.0.0.1", 7497, clientId=3, timeout=0)
     )
     session.run()
-    session.receive(
-        handshake(MAX_CLIENT_VER), errorFrame(-1, 326, CLIENT_ID_IN_USE, True)
-    )
+    session.receive(handshake(MAX_CLIENT_VER), errorFrame(-1, 326, CLIENT_ID_IN_USE))
     session.client._onSocketDisconnected("")
     session.run()
     error = task.exception()

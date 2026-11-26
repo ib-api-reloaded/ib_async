@@ -49,38 +49,35 @@ def startWhatIf(session: Session) -> asyncio.Future[ibi.OrderState]:
     )
 
 
-@pytest.mark.parametrize("proto", [False, True])
 @pytest.mark.parametrize("code", REFUSED_REQUEST)
-def test_a_refused_what_if_answers_the_refusal(code: int, proto: bool) -> None:
+def test_a_refused_what_if_answers_the_refusal(code: int) -> None:
     session = Session()
     ready(session)
     whatIf = startWhatIf(session)
     session.run()
 
     text = REFUSAL_TEXTS[code]
-    session.receive(errorFrame(whatIfOrderId(session), code, text, proto))
+    session.receive(errorFrame(whatIfOrderId(session), code, text))
 
     state = whatIf.result()
     assert (state.whatIfErrorCode, state.whatIfErrorString) == (code, text)
     assert session.ib.trades() == []
 
 
-@pytest.mark.parametrize("proto", [False, True])
-def test_a_refused_what_if_raises_when_asked_to(proto: bool) -> None:
+def test_a_refused_what_if_raises_when_asked_to() -> None:
     session = Session()
     ready(session)
     session.ib.RaiseRequestErrors = True
     whatIf = startWhatIf(session)
     session.run()
 
-    session.receive(errorFrame(whatIfOrderId(session), 321, READ_ONLY, proto))
+    session.receive(errorFrame(whatIfOrderId(session), 321, READ_ONLY))
 
     error = whatIf.exception()
     assert isinstance(error, ibi.RequestError) and error.code == 321
 
 
-@pytest.mark.parametrize("proto", [False, True])
-def test_a_snapshot_refused_with_321_ends(proto: bool) -> None:
+def test_a_snapshot_refused_with_321_ends() -> None:
     session = Session()
     ready(session)
     tickers = asyncio.ensure_future(
@@ -91,7 +88,7 @@ def test_a_snapshot_refused_with_321_ends(proto: bool) -> None:
     [sub] = session.ib.wrapper.subscriptions
 
     text = "Snapshot market data subscription is not applicable to generic ticks"
-    session.receive(errorFrame(sub.reqId, 321, text, proto))
+    session.receive(errorFrame(sub.reqId, 321, text))
     session.run()
     assert tickers.done() and tickers.exception() is None
     assert len(session.ib.wrapper.subscriptions) == 0

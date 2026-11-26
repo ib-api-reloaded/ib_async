@@ -2,9 +2,8 @@
 
 Same pattern as test_proto_accounts_dispatch / market_historical_dispatch.
 Synthetic proto payloads route through ``Decoder.processProtoBuf`` and
-the resulting wrapper / registry state is asserted directly. Send-side
-per ``useProtoBuf(canonicalMsgId)``: a server below the per-family gate
-emits NUL-separated text; at or above, a 4-byte BE protobuf frame.
+the resulting wrapper / registry state is asserted directly. On the send
+side every request goes out as a protobuf frame.
 """
 
 from __future__ import annotations
@@ -410,8 +409,3 @@ def test_cancel_pnl_single_uses_protobuf_at_gate():
     proto = CancelPnLSingle_pb2.CancelPnLSingle()
     proto.ParseFromString(body)
     assert proto.reqId == 7
-
-
-# ===========================================================================
-# Below-gate sanity: server <209/<210 stays binary
-# ===========================================================================

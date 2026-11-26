@@ -548,7 +548,7 @@ def test_calculate_implied_volatility_request_round_trip():
     assert parsed.contract.symbol == "AAPL"
     assert parsed.optionPrice == 1.25
     assert parsed.underPrice == 200.0
-    # Options map is sent empty (binary path doesn't carry it either).
+    # No options given, so the map is empty.
     assert len(parsed.impliedVolatilityOptions) == 0
 
 

@@ -132,7 +132,7 @@ def test_current_time_in_millis_proto_settles_singleton_with_millis():
 
 def test_user_info_proto_settles_reqId():
     """``Wrapper.userInfo`` settles the reqId without surfacing the
-    ``whiteBrandingId`` payload (mirrors binary path behaviour). The
+    ``whiteBrandingId`` payload. The
     waiter sees the future done but no value bound."""
     ib = ibi.IB()
     req = ib.wrapper.requests.open(ReqIdKey(7), container=[])

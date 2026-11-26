@@ -122,7 +122,7 @@ def test_each_request_is_counted_once_by_how_it_ends() -> None:
     refused, refusedId = started(
         session, lambda: ib.reqHeadTimeStampAsync(STOCK, "TRADES", True, 1)
     )
-    session.receive(errorFrame(refusedId, 162, "no data", False))
+    session.receive(errorFrame(refusedId, 162, "no data"))
     abandoned, _ = started(session, ib.reqExecutionsAsync)
     abandoned.cancel()
     withdrawn, withdrawnId = started(
@@ -196,7 +196,7 @@ def test_each_subscription_is_counted_by_kind_and_by_how_it_ends() -> None:
     [reqId] = [
         sub.reqId for sub in ib.wrapper.subscriptions if isinstance(sub, TickByTickSub)
     ]
-    session.receive(errorFrame(reqId, 354, "not subscribed", True))
+    session.receive(errorFrame(reqId, 354, "not subscribed"))
     ib.cancelMktDepth(STOCK)
     c = ib.runtimeState().counters
     assert (c.subscriptionsAdded, c.subscriptionsNotSent) == (9, 1)
@@ -214,9 +214,9 @@ def test_each_subscription_is_counted_by_kind_and_by_how_it_ends() -> None:
 def test_errors_and_warnings_are_counted_by_code() -> None:
     session = connected()
     session.receive(
-        errorFrame(-1, 2104, "Market data farm connection is OK", False),
-        errorFrame(-1, 2104, "Market data farm connection is OK", True),
-        errorFrame(77, 354, "not subscribed", False),
+        errorFrame(-1, 2104, "Market data farm connection is OK"),
+        errorFrame(-1, 2104, "Market data farm connection is OK"),
+        errorFrame(77, 354, "not subscribed"),
     )
     c = session.ib.runtimeState().counters
     assert c.warnings == (CodeCount(2104, 2),)

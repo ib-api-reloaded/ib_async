@@ -9,11 +9,9 @@ fixed and that future refactors could silently break:
   ``Decimal('NaN')`` truthy-trap (``if report.realizedPNL:`` is True
   on NaN but False on None).
 
-* ``Decoder._normalizeExecutionTime`` is shared between the binary
-  ``execDetails`` decoder and the protobuf ``_protoExecutionDetails``
-  handler. Both paths must produce equivalent tz-aware datetimes for
-  the same wire string so executions round-trip identically across
-  wire formats.
+* ``Decoder._protoExecutionDetails`` normalizes the execution time
+  with ``Decoder._normalizeExecutionTime``. The fill must carry the
+  same tz-aware datetime the helper produces for the wire string.
 
 * ``Decoder.processProtoBuf`` must survive an unknown msgId, malformed
   bytes, and an empty discriminated-union (oneof) payload — none of
@@ -105,18 +103,13 @@ from ib_async._requests import CompositeKey, ReqIdKey, SingletonKey
 from ib_async._requests import ReqIdKey as _ReqIdKey
 from ib_async._requests import SingletonKey as _SingletonKey
 from ib_async._server_versions import (
-    MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS,
-    MIN_SERVER_VER_IMBALANCE_ONLY,
-    MIN_SERVER_VER_INELIGIBILITY_REASONS,
-    MIN_SERVER_VER_PENDING_PRICE_REVISION,
     MIN_SERVER_VER_PROTOBUF,
-    MIN_SERVER_VER_SYNT_REALTIME_BARS,
     UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM,
 )
 from ib_async._subscriptions import MktDataSub, MktDepthSub, PnLSingleSub, TickByTickSub
 from ib_async.client import Client as _Client
 from ib_async.contract import ComboLeg, Contract, TagValue
-from ib_async.decoder import _CONV, _PROTO_MSG_CLASSES, Decoder, _initProtoMsgClasses
+from ib_async.decoder import _PROTO_MSG_CLASSES, _initProtoMsgClasses
 from ib_async.objects import (
     MONETARY_ACCOUNT_VALUE_TAGS,
     BarData,
@@ -237,7 +230,7 @@ def test_commission_report_explicit_none_survives_wrapper_dispatch():
 
 
 # ---------------------------------------------------------------------------
-# _normalizeExecutionTime: binary and proto paths must agree
+# _normalizeExecutionTime: execution times on the decoded fill
 # ---------------------------------------------------------------------------
 
 
@@ -304,11 +297,9 @@ def test_normalize_execution_time_date_only_combines_with_midnight():
     assert result.tzinfo is not None
 
 
-def test_normalize_execution_time_binary_proto_equivalence():
-    """The binary execDetails path and the protobuf
-    ``_protoExecutionDetails`` path must land *equivalent* ex.time
-    values for the same wire string. They share the helper, so a
-    refactor that changes one path must touch the other.
+def test_normalize_execution_time_matches_decoded_fill():
+    """The protobuf ``_protoExecutionDetails`` path must land the same
+    ex.time the helper produces for the wire string.
     """
     ib = ibi.IB()
     ib.wrapper.clientId = 0
@@ -348,7 +339,7 @@ def test_normalize_execution_time_binary_proto_equivalence():
     proto_fill = ib.wrapper.fills["exec-equiv"]
     proto_time = proto_fill.execution.time
 
-    # --- direct helper call (the same code the binary path reaches) ----
+    # --- direct helper call ---------------------------------------------
     direct_time = ib.client.decoder._normalizeExecutionTime(wire_time)
 
     # Same instant, same tz — the proto path must not have drifted.
@@ -407,7 +398,6 @@ def test_proto_tick_by_tick_empty_oneof_is_dropped():
     """``TickByTickData`` with no oneof variant set decodes via the
     discriminated-union dispatch — the dispatcher returns ``None``
     and the handler must drop silently. No wrapper method is called.
-    Mirrors the binary path's ``tickType=0`` no-op branch.
     """
     ib = ibi.IB()
     seen: list[tuple] = []
@@ -461,23 +451,6 @@ LAST_TRADE_DATE_FORMS = [
 
 
 @pytest.mark.parametrize(("wire", "date", "time", "zone"), LAST_TRADE_DATE_FORMS)
-def test_binary_contract_details_splits_every_last_trade_date_form(
-    wire, date, time, zone
-):
-    ib = ibi.IB()
-    ib.client._serverVersion = 182
-    ib.client.decoder.serverVersion = 182
-    seen: list = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append(cd)
-    ib.client.decoder.contractDetails(_binary_contract_details_fields(last_times=wire))
-    [cd] = seen
-    assert cd.contract.lastTradeDateOrContractMonth == date
-    assert cd.lastTradeTime == (time or "")
-    if zone:
-        assert cd.timeZoneId == zone
-
-
-@pytest.mark.parametrize(("wire", "date", "time", "zone"), LAST_TRADE_DATE_FORMS)
 def test_proto_contract_details_splits_every_last_trade_date_form(
     wire, date, time, zone
 ):
@@ -491,11 +464,32 @@ def test_proto_contract_details_splits_every_last_trade_date_form(
     assert details.lastTradeTime == (time or "")
 
 
+@pytest.mark.parametrize(("wire", "date", "time", "zone"), LAST_TRADE_DATE_FORMS)
+def test_proto_bond_contract_details_splits_every_last_trade_date_form(
+    wire, date, time, zone
+):
+    """A bond's value splits into maturity, time and zone."""
+    proto = ContractData_pb2.ContractData()
+    proto.reqId = 7
+    proto.contract.symbol = "TBOND"
+    proto.contract.secType = "BOND"
+    proto.contract.lastTradeDateOrContractMonth = wire
+    proto.contractDetails.marketName = "BOND"
+    ib = ibi.IB()
+    seen: list[ibi.ContractDetails] = []
+    ib.wrapper.bondContractDetails = lambda reqId, cd: seen.append(cd)
+    ib.client.decoder.processProtoBuf(18, proto.SerializeToString())
+    [cd] = seen
+    assert cd.maturity == date
+    assert cd.lastTradeTime == (time or "")
+    assert cd.timeZoneId == (zone or "")
+
+
 def test_contract_details_splits_last_trade_date_for_non_bond():
     """ContractDetails wire packs date+time as a single string in
-    ``contract.lastTradeDateOrContractMonth``. The binary path
-    splits into separate ``lastTradeTime`` (and bond ``maturity``,
-    ``timeZoneId``) fields. The proto path must do the same split.
+    ``contract.lastTradeDateOrContractMonth``. The converter splits it
+    into separate ``lastTradeTime`` (and bond ``maturity``,
+    ``timeZoneId``) fields.
     """
     proto = ContractData_pb2.ContractData()
     proto.contract.symbol = "ESM6"
@@ -726,7 +720,7 @@ def test_req_current_time_in_millis_async_end_to_end():
     """
 
     ib = ibi.IB()
-    ib.client._serverVersion = 213
+    ib.client._serverVersion = 226
     ib.client.connState = ib.client.CONNECTED
     sent: list[bytes] = []
     ib.client.conn = type("X", (), {"sendMsg": lambda self, msg: sent.append(msg)})()
@@ -760,15 +754,14 @@ def test_is_valid_float_handles_nan_safely():
 
 
 # ---------------------------------------------------------------------------
-# errorMsg / _protoError — server >= 194 ERROR_TIME gate
+# ErrorMessage dispatch and the advertised client version
 # ---------------------------------------------------------------------------
 
 
 def test_proto_error_routes_to_wrapper_with_error_time():
-    """Canonical msgId 4 (ERR_MSG) on the protobuf path must decode and
-    dispatch to wrapper.error — including errorTime past gate 194.
-    Without this handler, every server-pushed error on a protobuf-routed
-    connection would be silently debug-dropped.
+    """Canonical msgId 4 (ERR_MSG) must decode and dispatch to
+    wrapper.error, errorTime included. Without this handler, every
+    server-pushed error would be silently debug-dropped.
     """
     ib = ibi.IB()
     seen: list[tuple] = []
@@ -789,799 +782,6 @@ def test_proto_error_routes_to_wrapper_with_error_time():
     assert args[2] == "No security definition has been found"
     assert args[3] == ""
     assert args[4] == 1715251800123  # errorTime
-
-
-def test_binary_error_msg_drops_legacy_version_prefix_on_server_194():
-    """Pre-194 wire frame: [msgId, version, reqId, errorCode, errorString]
-    194+ wire frame: [msgId, reqId, errorCode, errorString, advRejectJson, errorTime]
-    The legacy version prefix is gone — eating it unconditionally
-    corrupts the entire message on a 194+ server.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 194
-    ib.client.decoder.serverVersion = 194
-    seen: list[tuple] = []
-    ib.wrapper.error = lambda *a, **kw: seen.append(a)
-
-    # 194+ wire frame fields list (msgId comes off in the dispatcher,
-    # we feed the rest including msgId placeholder for the slice).
-    # Binary path delivers fields as already-decoded str (NUL-split).
-    fields = ["4", "42", "200", "some error", "", "1715251800123"]
-    ib.client.decoder.errorMsg(fields)
-
-    assert len(seen) == 1
-    assert seen[0] == (42, 200, "some error", "", 1715251800123)
-
-
-def test_binary_error_msg_pre_194_keeps_legacy_version_prefix():
-    """Pre-194 wire frame keeps the version prefix; we must consume it
-    or reqId/errorCode/errorString shift one slot left.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 193
-    ib.client.decoder.serverVersion = 193
-    seen: list[tuple] = []
-    ib.wrapper.error = lambda *a, **kw: seen.append(a)
-
-    # Pre-194 wire frame fields: msgId, version, reqId, errorCode,
-    # errorString, advancedOrderRejectJson (ADVANCED_ORDER_REJECT >= 166).
-    fields = ["4", "2", "42", "200", "some error", ""]
-    ib.client.decoder.errorMsg(fields)
-
-    assert len(seen) == 1
-    assert seen[0] == (42, 200, "some error", "", 0)  # errorTime defaults 0
-
-
-# ---------------------------------------------------------------------------
-# historicalData gate 196 (HISTORICAL_DATA_END)
-# ---------------------------------------------------------------------------
-
-
-def test_historical_data_end_msg_id_108_routes_to_wrapper():
-    """Binary msgId 108 (HISTORICAL_DATA_END) added at server v196 was
-    not in our handlers dict — every modern TWS historical-data
-    subscription wedged forever waiting for the end signal.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 196
-    ib.client.decoder.serverVersion = 196
-    seen: list[tuple] = []
-    ib.wrapper.historicalDataEnd = lambda *a, **kw: seen.append(a)
-
-    fields = ["108", "5", "20240101", "20240131"]
-    ib.client.decoder.historicalDataEnd(fields)
-
-    assert seen == [(5, "20240101", "20240131")]
-
-
-@pytest.mark.parametrize(
-    "serverVersion, fields, expected_ends",
-    [
-        # Pre-196: startDateStr/endDateStr inline, historicalData itself
-        # emits the end signal at the tail.
-        (
-            195,
-            [
-                "17",
-                "5",
-                "20240101",
-                "20240131",
-                "1",
-                "20240115",
-                "100.0",
-                "101.0",
-                "99.5",
-                "100.5",
-                "1000",
-                "100.25",
-                "10",
-            ],
-            [(5, "20240101", "20240131")],
-        ),
-        # >=196: no inline start/end. The end signal arrives via msgId 108.
-        (
-            196,
-            [
-                "17",
-                "5",
-                "1",
-                "20240115",
-                "100.0",
-                "101.0",
-                "99.5",
-                "100.5",
-                "1000",
-                "100.25",
-                "10",
-            ],
-            [],
-        ),
-    ],
-    ids=["pre_196_inline_end_signal", "gate_196_no_inline_end"],
-)
-def test_historical_data_end_signal_gate_196(serverVersion, fields, expected_ends):
-    """Gate 196 (HISTORICAL_DATA_END) wire-frame alignment.
-
-    Pre-196 servers carry startDateStr/endDateStr inline in the bars
-    frame and the historicalData handler itself fires
-    ``historicalDataEnd`` at the tail. >=196 those fields move to a
-    dedicated msgId 108 frame; the inline emit must be suppressed or
-    callers see the end signal twice.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    bars: list = []
-    ends: list[tuple] = []
-    ib.wrapper.historicalData = lambda *a: bars.append(a)
-    ib.wrapper.historicalDataEnd = lambda *a: ends.append(a)
-
-    ib.client.decoder.historicalData(fields)
-
-    assert len(bars) == 1
-    assert bars[0][0] == 5  # reqId
-    assert ends == expected_ends
-
-
-# ---------------------------------------------------------------------------
-# Binary contractDetails — gate 182 (LAST_TRADE_DATE), gate 179 (FUND_DATA),
-# gate 186 (INELIGIBILITY_REASONS).
-# ---------------------------------------------------------------------------
-
-
-def _binary_contract_details_fields(
-    *,
-    secType: str = "STK",
-    last_trade_date: str = "",
-    last_times: str = "20260619",
-    fund_block: list[str] | None = None,
-    ineligibility_count: int = 0,
-    ineligibility_pairs: list[tuple[str, str]] | None = None,
-    pre_182: bool = False,
-) -> list[str]:
-    """Build a synthetic non-bond contractDetails wire fields list.
-    Layout matches IBKR processContractDataMsg with serverVersion>=164.
-    """
-    head = [
-        "10",  # msgId placeholder
-        "7",  # reqId
-        "ESM6",  # symbol
-        secType,
-        last_times,  # lastTimes (lastTradeDateOrContractMonth)
-    ]
-    if not pre_182:
-        head.append(last_trade_date)
-    head += [
-        "100.5",  # strike
-        "C",  # right
-        "GLOBEX",  # exchange
-        "USD",  # currency
-        "ESM6",  # localSymbol
-        "ES",  # marketName
-        "ES",  # tradingClass
-        "12345",  # conId
-        "0.25",  # minTick
-        "50",  # multiplier
-        "LIMIT,MKT",  # orderTypes
-        "GLOBEX",  # validExchanges
-        "1",  # priceMagnifier
-        "0",  # underConId
-        "E-mini SP",  # longName
-        "GLOBEX",  # primaryExchange
-        "202606",  # contractMonth
-        "Financial",  # industry
-        "Index",  # category
-        "Broad",  # subcategory
-        "US/Central",  # timeZoneId
-        "0830-1500",  # tradingHours
-        "0830-1500",  # liquidHours
-        "",  # evRule
-        "0",  # evMultiplier
-        "0",  # numSecIds
-        "0",  # aggGroup
-        "ES",  # underSymbol
-        "IND",  # underSecType
-        "0",  # marketRuleIds
-        "20260619",  # realExpirationDate
-        "ETP",  # stockType
-        "1",  # minSize
-        "1",  # sizeIncrement
-        "1",  # suggestedSizeIncrement
-    ]
-    if fund_block is not None:
-        head += fund_block
-    head.append(str(ineligibility_count))
-    if ineligibility_pairs:
-        for rid, rdesc in ineligibility_pairs:
-            head += [rid, rdesc]
-    return head
-
-
-def test_binary_contract_details_reads_last_trade_date_at_gate_182():
-    """Gate 182: ``lastTradeDate`` is appended after the legacy
-    ``lastTradeDateOrContractMonth``. Without the gated read, ``strike``
-    lands as ``lastTradeDate`` and every following field shifts left.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 182
-    ib.client.decoder.serverVersion = 182
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_contract_details_fields(last_trade_date="20260619-15:00:00")
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    reqId, cd = seen[0]
-    assert reqId == 7
-    assert cd.contract.lastTradeDate == "20260619-15:00:00"
-    # strike must still land in the right slot (not shifted).
-    assert cd.contract.strike == 100.5
-    assert cd.contract.exchange == "GLOBEX"
-
-
-def test_binary_contract_details_skips_last_trade_date_below_gate_182():
-    """Below gate 182 the slot does not exist; reading it would shift
-    every following field one slot left.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 181
-    ib.client.decoder.serverVersion = 181
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_contract_details_fields(pre_182=True)
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    # Default empty string — no shift.
-    assert cd.contract.lastTradeDate == ""
-    assert cd.contract.strike == 100.5
-    assert cd.contract.exchange == "GLOBEX"
-
-
-def test_binary_contract_details_reads_fund_block_at_gate_179_for_fund():
-    """Gate 179 + secType=='FUND': 17-field fund-family block ships
-    between size-rules and ineligibility-reasons. Without it the
-    ineligibility count would land as ``fundName`` and the parser
-    would mis-segment everything.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 188
-    ib.client.decoder.serverVersion = 188
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fund_block = [
-        "Vanguard 500",  # fundName
-        "Vanguard",  # fundFamily
-        "Index",  # fundType
-        "0.0",  # fundFrontLoad
-        "0.0",  # fundBackLoad
-        "",  # fundBackLoadTimeInterval
-        "0.04",  # fundManagementFee
-        "0",  # fundClosed
-        "0",  # fundClosedForNewInvestors
-        "0",  # fundClosedForNewMoney
-        "1000",  # fundNotifyAmount
-        "3000",  # fundMinimumInitialPurchase
-        "1000",  # fundSubsequentMinimumPurchase
-        "ALL",  # fundBlueSkyStates
-        "ALL",  # fundBlueSkyTerritories
-        "AnnualDist",  # fundDistributionPolicyIndicator
-        "Equity",  # fundAssetType
-    ]
-    fields = _binary_contract_details_fields(
-        secType="FUND",
-        last_trade_date="",
-        fund_block=fund_block,
-    )
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert cd.fundName == "Vanguard 500"
-    assert cd.fundFamily == "Vanguard"
-    assert cd.fundManagementFee == "0.04"
-    assert cd.fundAssetType == "Equity"
-    # Default empty list when count==0.
-    assert cd.ineligibilityReasonList == []
-
-
-def test_binary_contract_details_skips_fund_block_for_non_fund():
-    """Gate 179 only fires on FUND secType; for STK no fund block is
-    on the wire and reading one would corrupt the ineligibility count.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 188
-    ib.client.decoder.serverVersion = 188
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_contract_details_fields(
-        secType="STK",
-        last_trade_date="20260619-15:00:00",
-    )
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert cd.fundName == ""  # default
-    assert cd.ineligibilityReasonList == []
-
-
-def test_binary_contract_details_reads_ineligibility_at_gate_186():
-    """Gate 186: ``ineligibilityReasonList`` is a count-prefixed
-    list of ``(id_, description)`` pairs. Skipping the count at 186+
-    leaves stale data in subsequent decodes.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 188
-    ib.client.decoder.serverVersion = 188
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_contract_details_fields(
-        last_trade_date="20260619-15:00:00",
-        ineligibility_count=2,
-        ineligibility_pairs=[("R1", "Restricted to US"), ("R2", "Pro only")],
-    )
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert len(cd.ineligibilityReasonList) == 2
-    assert cd.ineligibilityReasonList[0].id_ == "R1"
-    assert cd.ineligibilityReasonList[0].description == "Restricted to US"
-    assert cd.ineligibilityReasonList[1].id_ == "R2"
-
-
-# ---------------------------------------------------------------------------
-# Binary bondContractDetails — gate 188 (BOND_TRADING_HOURS).
-# ---------------------------------------------------------------------------
-
-
-def _binary_bond_contract_details_fields(
-    *,
-    include_trading_hours: bool,
-) -> list[str]:
-    """Build a synthetic bondContractDetails wire fields list at >=164."""
-    head = [
-        "18",  # msgId
-        "9",  # reqId
-        "TBOND",  # symbol
-        "BOND",  # secType
-        "ABC123",  # cusip
-        "5.5",  # coupon
-        "20300515",  # lastTimes (maturity)
-        "20240101",  # issueDate
-        "AAA",  # ratings
-        "Treasury",  # bondType
-        "Fixed",  # couponType
-        "0",  # convertible
-        "0",  # callable
-        "0",  # putable
-        "",  # descAppend
-        "BONDDESK",  # exchange
-        "USD",  # currency
-        "BONDS",  # marketName
-        "BONDS",  # tradingClass
-        "12345",  # conId
-        "0.01",  # minTick
-        "LIMIT",  # orderTypes
-        "BONDDESK",  # validExchanges
-        "",  # nextOptionDate
-        "",  # nextOptionType
-        "0",  # nextOptionPartial
-        "",  # notes
-        "US Treasury 5.5% 2030",  # longName
-    ]
-    if include_trading_hours:
-        head += ["US/Eastern", "0930-1600", "0930-1600"]
-    head += [
-        "",  # evRule
-        "0",  # evMultiplier
-        "0",  # numSecIds
-        "0",  # aggGroup
-        "0",  # marketRuleIds
-        "1",  # minSize
-        "1",  # sizeIncrement
-        "1",  # suggestedSizeIncrement
-    ]
-    return head
-
-
-def test_binary_bond_contract_details_reads_trading_hours_at_gate_188():
-    """Gate 188: bond messages gain ``timeZoneId``/``tradingHours``/
-    ``liquidHours`` between ``longName`` and ``evRule``. Without these
-    reads ``evRule`` lands as ``timeZoneId`` and the rest shifts left.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 188
-    ib.client.decoder.serverVersion = 188
-    seen: list[tuple] = []
-    ib.wrapper.bondContractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_bond_contract_details_fields(include_trading_hours=True)
-    ib.client.decoder.bondContractDetails(fields)
-
-    assert len(seen) == 1
-    reqId, cd = seen[0]
-    assert reqId == 9
-    assert cd.timeZoneId == "US/Eastern"
-    assert cd.tradingHours == "0930-1600"
-    assert cd.liquidHours == "0930-1600"
-    # Sanity: aggGroup did not shift onto evMultiplier slot. Wire ``"0"``
-    # collapses to ``None`` (the universal unset marker on the public
-    # ``int | None`` dataclass field) so callers gating on
-    # ``if details.aggGroup:`` stay falsy without the UNSET_INTEGER
-    # sentinel leaking.
-    assert cd.aggGroup is None
-
-
-def test_binary_bond_contract_details_skips_trading_hours_below_gate_188():
-    """Below gate 188 the trading-hours block does not exist on the
-    wire; reading it would shift every following field one slot left.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 187
-    ib.client.decoder.serverVersion = 187
-    seen: list[tuple] = []
-    ib.wrapper.bondContractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_bond_contract_details_fields(include_trading_hours=False)
-    ib.client.decoder.bondContractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    # Defaults — no shift. ``aggGroup`` wire ``"0"`` collapses to
-    # ``None`` (universal unset marker on the public dataclass).
-    assert cd.tradingHours == ""
-    assert cd.liquidHours == ""
-    assert cd.aggGroup is None
-
-
-# ---------------------------------------------------------------------------
-# Binary execDetails — gate 198 (SUBMITTER).
-# ---------------------------------------------------------------------------
-
-
-def _binary_exec_details_fields(
-    *,
-    pending_price_revision: str = "0",
-    submitter: str | None = None,
-) -> list[str]:
-    head = [
-        "11",  # msgId
-        "1",  # reqId
-        "100",  # orderId
-        "12345",  # conId
-        "AAPL",  # symbol
-        "STK",  # secType
-        "",  # lastTradeDateOrContractMonth
-        "0",  # strike
-        "",  # right
-        "",  # multiplier
-        "NASDAQ",  # exchange
-        "USD",  # currency
-        "AAPL",  # localSymbol
-        "AAPL",  # tradingClass
-        "EXEC-1",  # execId
-        "20260101  09:30:00",  # timeStr
-        "DU12345",  # acctNumber
-        "NASDAQ",  # exchange (exec)
-        "BOT",  # side
-        "100",  # shares
-        "150.50",  # price
-        "777",  # permId
-        "0",  # clientId
-        "0",  # liquidation
-        "100",  # cumQty
-        "150.50",  # avgPrice
-        "",  # orderRef
-        "",  # evRule
-        "0",  # evMultiplier
-        "",  # modelCode
-        "1",  # lastLiquidity
-        pending_price_revision,  # pendingPriceRevision (gate 178)
-    ]
-    if submitter is not None:
-        head.append(submitter)
-    return head
-
-
-def test_binary_exec_details_reads_submitter_at_gate_198():
-    """Gate 198: ``submitter`` is appended past pendingPriceRevision.
-    Without the gated read the value is silently dropped on every fill.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 198
-    ib.client.decoder.serverVersion = 198
-    seen: list[tuple] = []
-    ib.wrapper.execDetails = lambda reqId, c, ex: seen.append((reqId, c, ex))
-
-    fields = _binary_exec_details_fields(submitter="trader42")
-    ib.client.decoder.execDetails(fields)
-
-    assert len(seen) == 1
-    _, _, ex = seen[0]
-    assert ex.submitter == "trader42"
-    assert ex.pendingPriceRevision is False
-
-
-def test_binary_exec_details_skips_submitter_below_gate_198():
-    """Below gate 198 the slot does not exist; reading would IndexError
-    or pull non-existent data."""
-    ib = ibi.IB()
-    ib.client._serverVersion = 197
-    ib.client.decoder.serverVersion = 197
-    seen: list[tuple] = []
-    ib.wrapper.execDetails = lambda reqId, c, ex: seen.append((reqId, c, ex))
-
-    fields = _binary_exec_details_fields(submitter=None)
-    ib.client.decoder.execDetails(fields)
-
-    assert len(seen) == 1
-    _, _, ex = seen[0]
-    assert ex.submitter == ""  # default
-
-
-# ---------------------------------------------------------------------------
-# Binary openOrder — trailing wire fields past gate 170.
-# Most slots are consumed-and-discarded pending Order dataclass field
-# expansion (task #163); only ``extOperator`` and ``imbalanceOnly`` are
-# surfaced today.
-# ---------------------------------------------------------------------------
-
-
-def _make_open_order_fields(server_version: int) -> list[str]:
-    """Build a minimal openOrder fields list valid for the given server
-    version. Fills only enough slots for the decoder to reach the trailer.
-    The trailer fields are appended by the caller.
-    """
-    # Up to and including the "skip ETradeOnly/firmQuoteOnly/nbboPriceCap"
-    # slots we mirror IBKR's default-zero output for empty fields.
-    fields = [
-        "5",  # msgId
-        "100",  # orderId
-        "12345",  # conId
-        "AAPL",  # symbol
-        "STK",  # secType
-        "",  # lastTradeDateOrContractMonth
-        "0",  # strike
-        "",  # right
-        "",  # multiplier
-        "SMART",  # exchange
-        "USD",  # currency
-        "AAPL",  # localSymbol
-        "NMS",  # tradingClass
-        "BUY",  # action
-        "100",  # totalQuantity
-        "LMT",  # orderType
-        "150.0",  # lmtPrice
-        "0",  # auxPrice
-        "DAY",  # tif
-        "",  # ocaGroup
-        "DU12345",  # account
-        "",  # openClose
-        "0",  # origin
-        "",  # orderRef
-        "0",  # clientId
-        "777",  # permId
-        "0",  # outsideRth
-        "0",  # hidden
-        "0",  # discretionaryAmt
-        "",  # goodAfterTime
-        "",  # sharesAllocation (skipped)
-        "",  # faGroup
-        "",  # faMethod
-        "",  # faPercentage
-    ]
-    if server_version < 177:
-        fields.append("")  # faProfile
-    fields += [
-        "",  # modelCode
-        "",  # goodTillDate
-        "",  # rule80A
-        "0",  # percentOffset
-        "",  # settlingFirm
-        "0",  # shortSaleSlot
-        "",  # designatedLocation
-        "-1",  # exemptCode
-        "0",  # auctionStrategy
-        "0",  # startingPrice
-        "0",  # stockRefPrice
-        "0",  # delta
-        "0",  # stockRangeLower
-        "0",  # stockRangeUpper
-        "0",  # displaySize
-        "0",  # blockOrder
-        "0",  # sweepToFill
-        "0",  # allOrNone
-        "0",  # minQty
-        "0",  # ocaType
-        "0",  # eTradeOnly
-        "0",  # firmQuoteOnly
-        "0",  # nbboPriceCap
-        "0",  # parentId
-        "0",  # triggerMethod
-        "0",  # volatility
-        "0",  # volatilityType
-        "",  # deltaNeutralOrderType (empty -> no nested block)
-        "0",  # deltaNeutralAuxPrice
-        "0",  # continuousUpdate
-        "0",  # referencePriceType
-        "0",  # trailStopPrice
-        "0",  # trailingPercent
-        "0",  # basisPoints
-        "0",  # basisPointsType
-        "",  # comboLegsDescrip
-        "0",  # numLegs
-        "0",  # numOrderLegs
-        "0",  # numSmartComboParams
-        "0",  # scaleInitLevelSize
-        "0",  # scaleSubsLevelSize
-        "",  # increment (UNSET -> no scale block)
-        "",  # hedgeType (empty -> no hedgeParam)
-        "0",  # optOutSmartRouting
-        "",  # clearingAccount
-        "",  # clearingIntent
-        "0",  # notHeld
-        "0",  # dncPresent
-        "",  # algoStrategy (empty -> no algoParams)
-        "0",  # solicited
-        "0",  # whatIf
-        "",  # status
-        "0",  # initMarginBefore
-        "0",  # maintMarginBefore
-        "0",  # equityWithLoanBefore
-        "0",  # initMarginChange
-        "0",  # maintMarginChange
-        "0",  # equityWithLoanChange
-        "0",  # initMarginAfter
-        "0",  # maintMarginAfter
-        "0",  # equityWithLoanAfter
-        "0",  # commission
-        "0",  # minCommission
-        "0",  # maxCommission
-        "USD",  # commissionCurrency
-    ]
-    if server_version >= 195:
-        # FULL_ORDER_PREVIEW_FIELDS block — IBKR's
-        # ``decodeWhatIfInfoAndCommissionAndFees`` appends OutsideRTH
-        # margins + suggestedSize / rejectReason + repeated
-        # orderAllocations between commissionCurrency and warningText.
-        fields += [
-            "USD",  # marginCurrency
-            "0",  # initMarginBeforeOutsideRTH
-            "0",  # maintMarginBeforeOutsideRTH
-            "0",  # equityWithLoanBeforeOutsideRTH
-            "0",  # initMarginChangeOutsideRTH
-            "0",  # maintMarginChangeOutsideRTH
-            "0",  # equityWithLoanChangeOutsideRTH
-            "0",  # initMarginAfterOutsideRTH
-            "0",  # maintMarginAfterOutsideRTH
-            "0",  # equityWithLoanAfterOutsideRTH
-            "",  # suggestedSize
-            "",  # rejectReason
-            "0",  # accountsCount (no orderAllocations)
-        ]
-    fields += [
-        "",  # warningText
-        "0",  # randomizeSize
-        "0",  # randomizePrice
-        # No PEG_BENCH (orderType != "PEG BENCH")
-        "0",  # numConditions
-        "",  # adjustedOrderType
-        "0",  # triggerPrice
-        "0",  # trailStopPrice
-        "0",  # lmtPriceOffset
-        "0",  # adjustedStopPrice
-        "0",  # adjustedStopLimitPrice
-        "0",  # adjustedTrailingAmount
-        "0",  # adjustableTrailingUnit
-        "",  # softDollarTier.name
-        "",  # softDollarTier.val
-        "",  # softDollarTier.displayName
-        "0",  # cashQty
-        "0",  # dontUseAutoPriceForHedge
-        "0",  # isOmsContainer
-        "0",  # discretionaryUpToLimitPrice
-        "0",  # usePriceMgmtAlgo
-    ]
-    if server_version >= 159:
-        fields.append("0")  # duration
-    if server_version >= 160:
-        fields.append("0")  # postToAts
-    if server_version >= 162:
-        fields.append("0")  # autoCancelParent
-    if server_version >= 170:
-        # PEGBEST_PEGMID block (5 fields)
-        fields += ["0", "0", "0", "0", "0"]
-    return fields
-
-
-def test_binary_open_order_reads_ext_operator_at_gate_193():
-    """Gate 193 (CME_TAGGING_FIELDS_IN_OPEN_ORDER): the wire trailer
-    appends ``extOperator`` + ``manualOrderIndicator`` after the
-    customerAccount/professionalCustomer/bondAccrued/includeOvernight
-    slots. ``extOperator`` is one of the two trailing fields that has
-    a corresponding Order dataclass field today.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 193
-    ib.client.decoder.serverVersion = 193
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    fields = _make_open_order_fields(193)
-    # Trailer in 193 order: customerAccount, professionalCustomer,
-    # bondAccruedInterest, includeOvernight, extOperator, manualOrderIndicator.
-    fields += [
-        "DU12345",  # customerAccount (consumed)
-        "0",  # professionalCustomer (consumed)
-        "",  # bondAccruedInterest (consumed)
-        "0",  # includeOvernight (consumed)
-        "EXT-7",  # extOperator (surfaced)
-        "1",  # manualOrderIndicator (consumed)
-    ]
-    ib.client.decoder.openOrder(fields)
-
-    assert len(seen) == 1
-    _, _, o, _ = seen[0]
-    assert o.extOperator == "EXT-7"
-    # imbalanceOnly stays at default since we are below gate 199.
-    assert o.imbalanceOnly is False
-
-
-def test_binary_open_order_reads_imbalance_only_at_gate_199():
-    """Gate 199: ``imbalanceOnly`` is the final trailer slot. With
-    submitter at 198 and CME-tagging at 193 already consumed, this
-    field must be read into the Order dataclass field that exists.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 199
-    ib.client.decoder.serverVersion = 199
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    fields = _make_open_order_fields(199)
-    fields += [
-        "DU12345",  # customerAccount
-        "0",  # professionalCustomer
-        "",  # bondAccruedInterest
-        "0",  # includeOvernight
-        "EXT-9",  # extOperator
-        "0",  # manualOrderIndicator
-        "trader1",  # submitter (consumed)
-        "1",  # imbalanceOnly (surfaced)
-    ]
-    ib.client.decoder.openOrder(fields)
-
-    assert len(seen) == 1
-    _, _, o, _ = seen[0]
-    assert o.extOperator == "EXT-9"
-    assert o.imbalanceOnly is True
-
-
-def test_binary_open_order_skips_trailer_below_gate_183():
-    """Below gate 183 (CUSTOMER_ACCOUNT) the entire trailer is
-    absent; reading any of it would IndexError or pull stale data.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 182
-    ib.client.decoder.serverVersion = 182
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    fields = _make_open_order_fields(182)
-    ib.client.decoder.openOrder(fields)
-
-    assert len(seen) == 1
-    _, _, o, _ = seen[0]
-    assert o.extOperator == ""
-    assert o.imbalanceOnly is False
 
 
 def test_max_client_version_advertises_modern_protobuf_gates():
@@ -1771,439 +971,17 @@ def test_combo_leg_more_contract_legs_than_order_legs_safe():
 
 
 # ---------------------------------------------------------------------------
-# Binary openOrder — FULL_ORDER_PREVIEW_FIELDS block (server >= 195).
-# IBKR's ``decodeWhatIfInfoAndCommissionAndFees`` appends an OutsideRTH
-# margin family + suggestedSize / rejectReason / orderAllocations between
-# commissionCurrency and warningText. Skipping the block left the wire
-# stream shifted left for every gated read past warningText.
+# Outbound protobuf framing
 # ---------------------------------------------------------------------------
 
 
-def test_binary_open_order_decodes_full_order_preview_block():
-    """The FULL_ORDER_PREVIEW_FIELDS block on the
-    binary openOrder path was completely absent. With the gate at 195
-    every modern server delivers OutsideRTH margins + suggestedSize +
-    orderAllocations through this slot — the missing read shifted the
-    wire by 13+ slots and corrupted every gated read past warningText.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 199
-    ib.client.decoder.serverVersion = 199
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    fields = _make_open_order_fields(199)
-    # Patch the FULL_ORDER_PREVIEW block (13 slots: marginCurrency,
-    # 9 OutsideRTH margins, suggestedSize, rejectReason, accountsCount).
-    # Three "USD" tokens exist in the payload: contract.currency,
-    # commissionCurrency, marginCurrency. marginCurrency is the third.
-    first = fields.index("USD")
-    second = fields.index("USD", first + 1)
-    block_start = fields.index("USD", second + 1)
-    fields[block_start + 10] = "5"  # suggestedSize
-    fields[block_start + 11] = "test-reject-reason"  # rejectReason
-    fields += [
-        "DU12345",  # customerAccount
-        "0",  # professionalCustomer
-        "",  # bondAccruedInterest
-        "0",  # includeOvernight
-        "EXT-9",  # extOperator
-        "0",  # manualOrderIndicator
-        "trader1",  # submitter
-        "0",  # imbalanceOnly
-    ]
-
-    ib.client.decoder.openOrder(fields)
-
-    assert len(seen) == 1
-    _, _, o, st = seen[0]
-    assert st.marginCurrency == "USD"
-    assert st.suggestedSize == Decimal(5)
-    assert st.rejectReason == "test-reject-reason"
-    assert st.orderAllocations == []
-    # Trailer fields past warningText still align after the new block.
-    assert o.extOperator == "EXT-9"
-
-
-def test_binary_open_order_decodes_order_allocations():
-    """The FULL_ORDER_PREVIEW block ships an ``accountsCount`` int and
-    that many ``OrderAllocation`` records (7 fields each). The decoder
-    must materialize them as ``OrderAllocation`` dataclass instances on
-    ``OrderState.orderAllocations``.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 199
-    ib.client.decoder.serverVersion = 199
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    # The FULL_ORDER_PREVIEW accountsCount slot defaults to "0"; replace
-    # it with "1" and inject one allocation right after.
-    base = _make_open_order_fields(199)
-    # Three "USD" tokens exist: contract.currency, commissionCurrency,
-    # marginCurrency. marginCurrency is the third. accountsCount is at
-    # offset +12 from marginCurrency (OutsideRTH x9 + suggestedSize +
-    # rejectReason).
-    first = base.index("USD")
-    second = base.index("USD", first + 1)
-    block_start = base.index("USD", second + 1)
-    base[block_start + 12] = "1"  # accountsCount = 1
-    # Insert 7 OrderAllocation fields right after accountsCount.
-    base[block_start + 13 : block_start + 13] = [
-        "DU-ALLOC-A",  # account
-        "10",  # position
-        "20",  # positionDesired
-        "15",  # positionAfter
-        "5",  # desiredAllocQty
-        "5",  # allowedAllocQty
-        "0",  # isMonetary
-    ]
-    base += [
-        "DU12345",  # customerAccount
-        "0",  # professionalCustomer
-        "",  # bondAccruedInterest
-        "0",  # includeOvernight
-        "EXT-9",  # extOperator
-        "0",  # manualOrderIndicator
-        "trader1",  # submitter
-        "0",  # imbalanceOnly
-    ]
-
-    ib.client.decoder.openOrder(base)
-
-    assert len(seen) == 1
-    _, _, _, st = seen[0]
-    assert len(st.orderAllocations) == 1
-    alloc = st.orderAllocations[0]
-    assert alloc.account == "DU-ALLOC-A"
-    assert alloc.position == Decimal(10)
-    assert alloc.positionDesired == Decimal(20)
-    assert alloc.positionAfter == Decimal(15)
-    assert alloc.desiredAllocQty == Decimal(5)
-    assert alloc.allowedAllocQty == Decimal(5)
-    assert alloc.isMonetary is False
-
-
-# ---------------------------------------------------------------------------
-# Cross-version boundary matrix. For every recently-fixed gate, lock
-# both the pre-gate path (server v=N-1) AND the post-gate path (server v=N)
-# so an off-by-one in the comparison can't pass either side silently.
-# ---------------------------------------------------------------------------
-
-
-def test_binary_open_order_skips_full_order_preview_block_below_gate_195():
-    """Gate 195 (FULL_ORDER_PREVIEW_FIELDS) below: at 194 the block is
-    absent from the wire. Pairs with the existing >=199 above-test
-    and the new gate-195 boundary test for off-by-one coverage.
-    """
-
-    serverVersion = MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS - 1
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    fields = _make_open_order_fields(serverVersion)
-    fields += [
-        "DU12345",
-        "0",
-        "",
-        "0",
-        "EXT-X",
-        "0",
-    ]
-    ib.client.decoder.openOrder(fields)
-
-    assert len(seen) == 1
-    _, _, o, st = seen[0]
-    assert st.marginCurrency == ""
-    assert st.suggestedSize is None
-    assert st.rejectReason == ""
-    assert st.orderAllocations == []
-    assert o.extOperator == "EXT-X"
-
-
-def test_binary_open_order_at_exact_gate_195_reads_full_order_preview_block():
-    """Gate 195 boundary: at exactly MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
-    the block IS present. Pairs with the below-195 test.
-    """
-
-    serverVersion = MIN_SERVER_VER_FULL_ORDER_PREVIEW_FIELDS
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    fields = _make_open_order_fields(serverVersion)
-    first = fields.index("USD")
-    second = fields.index("USD", first + 1)
-    block_start = fields.index("USD", second + 1)
-    fields[block_start + 10] = "7"
-    fields[block_start + 11] = "test-reason-195"
-    fields += [
-        "DU12345",
-        "0",
-        "",
-        "0",
-        "EXT-G",
-        "0",
-    ]
-    ib.client.decoder.openOrder(fields)
-
-    assert len(seen) == 1
-    _, _, o, st = seen[0]
-    assert st.marginCurrency == "USD"
-    assert st.suggestedSize == Decimal(7)
-    assert st.rejectReason == "test-reason-195"
-    assert o.extOperator == "EXT-G"
-
-
-def test_binary_open_order_at_exact_gate_198_skips_imbalance_only():
-    """Gate 199 (IMBALANCE_ONLY) boundary: at exactly 198 the slot is
-    NOT consumed. Pairs with the existing 199 above-test.
-    """
-
-    serverVersion = MIN_SERVER_VER_IMBALANCE_ONLY - 1
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.openOrder = lambda *a: seen.append(a)
-
-    fields = _make_open_order_fields(serverVersion)
-    fields += [
-        "DU12345",
-        "0",
-        "",
-        "0",
-        "EXT-J",
-        "0",
-        "trader198",
-    ]
-    ib.client.decoder.openOrder(fields)
-
-    assert len(seen) == 1
-    _, _, o, _ = seen[0]
-    assert o.extOperator == "EXT-J"
-    assert o.imbalanceOnly is False
-
-
-def _exec_details_fields_pre_178() -> list[str]:
-    """Build a synthetic execDetails wire fields list at server <178 —
-    no pendingPriceRevision slot.
-    """
-    return [
-        "11",
-        "1",
-        "100",
-        "12345",
-        "AAPL",
-        "STK",
-        "",
-        "0",
-        "",
-        "",
-        "NASDAQ",
-        "USD",
-        "AAPL",
-        "AAPL",
-        "EXEC-1",
-        "20260101  09:30:00",
-        "DU12345",
-        "NASDAQ",
-        "BOT",
-        "100",
-        "150.50",
-        "777",
-        "0",
-        "0",
-        "100",
-        "150.50",
-        "",
-        "",
-        "0",
-        "",
-        "1",
-    ]
-
-
-def test_binary_exec_details_skips_pending_price_revision_below_gate_178():
-    """Gate 178 (PENDING_PRICE_REVISION) below: at 177 no slot on the
-    wire. Pairs with the >=178 above-tests already in the file.
-    """
-
-    serverVersion = MIN_SERVER_VER_PENDING_PRICE_REVISION - 1
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.execDetails = lambda reqId, c, ex: seen.append((reqId, c, ex))
-
-    fields = _exec_details_fields_pre_178()
-    ib.client.decoder.execDetails(fields)
-
-    assert len(seen) == 1
-    _, _, ex = seen[0]
-    assert ex.pendingPriceRevision is False
-    assert ex.lastLiquidity == 1
-
-
-def test_binary_exec_details_at_exact_gate_178_reads_pending_price_revision():
-    """Gate 178 boundary: at exactly 178 the slot is consumed.
-    Pairs with the pre-178 test for off-by-one.
-    """
-
-    serverVersion = MIN_SERVER_VER_PENDING_PRICE_REVISION
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.execDetails = lambda reqId, c, ex: seen.append((reqId, c, ex))
-
-    fields = _binary_exec_details_fields(pending_price_revision="1", submitter=None)
-    ib.client.decoder.execDetails(fields)
-
-    assert len(seen) == 1
-    _, _, ex = seen[0]
-    assert ex.pendingPriceRevision is True
-    assert ex.submitter == ""
-
-
-def test_binary_contract_details_skips_ineligibility_below_gate_186():
-    """Gate 186 (INELIGIBILITY_REASONS) below: at 185 there's no count
-    slot at the tail.
-    """
-
-    serverVersion = MIN_SERVER_VER_INELIGIBILITY_REASONS - 1
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = [
-        "10",
-        "7",
-        "ESM6",
-        "STK",
-        "20260619",
-        "20260619-15:00:00",
-        "100.5",
-        "C",
-        "GLOBEX",
-        "USD",
-        "ESM6",
-        "ES",
-        "ES",
-        "12345",
-        "0.25",
-        "50",
-        "LIMIT,MKT",
-        "GLOBEX",
-        "1",
-        "0",
-        "E-mini",
-        "GLOBEX",
-        "202606",
-        "Financial",
-        "Index",
-        "Broad",
-        "US/Central",
-        "0830-1500",
-        "0830-1500",
-        "",
-        "0",
-        "0",
-        "0",
-        "ES",
-        "IND",
-        "0",
-        "20260619",
-        "ETP",
-        "1",
-        "1",
-        "1",
-    ]
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert cd.ineligibilityReasonList == []
-    assert cd.stockType == "ETP"
-
-
-def test_binary_contract_details_at_exact_gate_186_reads_ineligibility_count():
-    """Gate 186 boundary: at exactly 186 the count slot is present.
-    Pairs with below-186 for off-by-one.
-    """
-
-    serverVersion = MIN_SERVER_VER_INELIGIBILITY_REASONS
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_contract_details_fields(
-        last_trade_date="20260619-15:00:00",
-        ineligibility_count=1,
-        ineligibility_pairs=[("R7", "Restricted")],
-    )
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert len(cd.ineligibilityReasonList) == 1
-    assert cd.ineligibilityReasonList[0].id_ == "R7"
-
-
-def test_historical_data_at_pre_124_consumes_legacy_version_prefix():
-    """Gate 124 (SYNT_REALTIME_BARS) below: at 123 the historicalData
-    wire frame carries a legacy VERSION prefix that must be eaten.
-    """
-
-    serverVersion = MIN_SERVER_VER_SYNT_REALTIME_BARS - 1
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    bars: list = []
-    ends: list[tuple] = []
-    ib.wrapper.historicalData = lambda *a: bars.append(a)
-    ib.wrapper.historicalDataEnd = lambda *a: ends.append(a)
-
-    fields = [
-        "17",
-        "3",
-        "5",
-        "20240101",
-        "20240131",
-        "1",
-        "20240115",
-        "100.0",
-        "101.0",
-        "99.5",
-        "100.5",
-        "1000",
-        "100.25",
-        "10",
-    ]
-    ib.client.decoder.historicalData(fields)
-
-    assert len(bars) == 1
-    assert bars[0][0] == 5
-    assert ends == [(5, "20240101", "20240131")]
-
-
-def test_cancel_contract_data_emits_proto_only_at_gate_215():
-    """Gate 215 (CANCEL_CONTRACT_DATA): IBKR ships no binary form so
-    the client unconditionally takes the protobuf path. The wire
-    frame is [4-byte len][4-byte wireMsgId = canonical + 200][body].
+def test_cancel_contract_data_sends_a_protobuf_frame():
+    """cancelContractData goes out as a protobuf frame:
+    [4-byte len][4-byte wireMsgId = canonical + 200][body].
     """
 
     ib = ibi.IB()
-    ib.client._serverVersion = 215
+    ib.client._serverVersion = 226
     ib.client.connState = ib.client.CONNECTED
     sent: list[bytes] = []
     ib.client.conn = type("X", (), {"sendMsg": lambda self, msg: sent.append(msg)})()
@@ -2217,13 +995,11 @@ def test_cancel_contract_data_emits_proto_only_at_gate_215():
     assert wireMsgId == CANCEL_CONTRACT_DATA + PROTOBUF_MSG_ID
 
 
-def test_cancel_historical_ticks_emits_proto_only_at_gate_215():
-    """Gate 215 partner: cancelHistoricalTicks shares the gate. Same
-    proto-only contract.
-    """
+def test_cancel_historical_ticks_sends_a_protobuf_frame():
+    """cancelHistoricalTicks goes out as a protobuf frame too."""
 
     ib = ibi.IB()
-    ib.client._serverVersion = 215
+    ib.client._serverVersion = 226
     ib.client.connState = ib.client.CONNECTED
     sent: list[bytes] = []
     ib.client.conn = type("X", (), {"sendMsg": lambda self, msg: sent.append(msg)})()
@@ -2455,7 +1231,7 @@ def test_account_value_decimal_view_returns_none_for_non_currency_tags():
 
 def test_order_bound_signature_uses_ibkr_argument_names():
     """``Wrapper.orderBound``'s signature must match IBKR's callback
-    contract ``(permId, clientId, orderId)``. Both decoders pass arguments in
+    contract ``(permId, clientId, orderId)``. The decoder passes arguments in
     that order; the parameter names are part of the public contract for
     subclasses overriding this hook.
     """
@@ -3154,49 +1930,6 @@ def test_safe_decimal_rejects_infinity_strings_for_decimal_field():
     assert safe_decimal("Infinite") is None  # not a valid Decimal at all
 
 
-def test_decoder_conv_int_empty_string_returns_zero():
-    """IBKR's ``decode(int, fields)`` with empty wire field returns 0
-    (via ``int_type(s or 0)``). Our ``_CONV[int]`` must match — a wire
-    msg whose int field arrives empty should decode to 0, not raise.
-    """
-
-    assert _CONV[int]("") == 0
-    assert _CONV[int]("0") == 0
-    assert _CONV[int]("42") == 42
-    assert _CONV[int]("-1") == -1
-
-
-def test_decoder_conv_float_empty_string_returns_zero():
-    """Same contract for floats: empty wire → 0.0."""
-
-    assert _CONV[float]("") == 0.0
-    assert _CONV[float]("0") == 0.0
-    assert _CONV[float]("1.5") == 1.5
-
-
-def test_decoder_conv_bool_empty_string_returns_false():
-    """IBKR's ``decode(bool, fields)`` returns ``s != 0`` after coercing
-    via ``int_type(s or 0)``. Empty string lands as ``False``.
-    """
-
-    assert _CONV[bool]("") is False
-    assert _CONV[bool]("0") is False
-    assert _CONV[bool]("1") is True
-
-
-def test_decoder_conv_int_handles_long_values_without_precision_loss():
-    """``permId`` and other gate-191 long-typed fields can carry values
-    well past 2^31. Python ``int`` is arbitrary-precision so the
-    ``_CONV[int]`` path must round-trip a 19-digit long without going
-    through a float intermediate.
-    """
-
-    big = 9223372036854775806  # one less than UNSET_LONG
-    decoded = _CONV[int](str(big))
-    assert decoded == big
-    assert isinstance(decoded, int)
-
-
 def test_safe_decimal_preserves_high_precision_for_position_fields():
     """Position quantities can have >15 decimal digits (fractional shares).
     ``safe_decimal`` must not round-trip through ``float`` and lose
@@ -3227,10 +1960,8 @@ def test_format_proto_double_strips_trailing_zeros_and_decimal():
 
 def test_scanner_subscription_filter_options_round_trip_on_proto():
     """``reqScannerSubscription`` accepts a ``scannerSubscriptionFilterOptions``
-    TagValue list (per IBKR's signature). The proto path must serialize
-    those TagValues into the wire ``map<string, string>`` field — the
-    binary path concatenates them; both paths must surface the same
-    semantic options to the server.
+    TagValue list (per IBKR's signature). The request must serialize
+    those TagValues into the wire ``map<string, string>`` field.
     """
 
     sub = ScannerSubscription(scanCode="TOP_PERC_GAIN", instrument="STK")
@@ -3457,9 +2188,7 @@ def test_proto_bond_contract_data_dispatches_to_bond_wrapper_method():
 
     The base ``Wrapper`` aliases ``bondContractDetails = contractDetails``
     so default behaviour is unchanged, but a subclass overriding the
-    bond callback alone must still see proto-arriving bond rows. The
-    binary path already routes msgId 18 to ``bondContractDetails`` via
-    its handler table; the proto path now matches.
+    bond callback alone must still see bond rows.
     """
     ib = ibi.IB()
 
@@ -3532,57 +2261,6 @@ def test_proto_contract_data_dispatches_to_plain_wrapper_method():
 # ---------------------------------------------------------------------------
 # Complex order-type wire encoding.
 # ---------------------------------------------------------------------------
-
-
-def test_binary_bond_contract_details_explicit_timezone_wins_at_gate_188():
-    """Gate 188: when the wire ships an explicit ``timeZoneId`` block AND
-    the legacy 3-part split-string in ``lastTradeDateOrContractMonth``,
-    the explicit field MUST win. Our decoder reads the explicit block first then splits
-    the legacy string; without the gate guard the split would clobber
-    the freshly-decoded explicit value with a stale third component.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 188
-    ib.client.decoder.serverVersion = 188
-    seen: list[tuple] = []
-    ib.wrapper.bondContractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_bond_contract_details_fields(include_trading_hours=True)
-    # Replace lastTimes (slot 6) with a 3-part legacy string carrying
-    # an OLD timezone. The new explicit block ships ``US/Eastern``.
-    fields[6] = "20300515-09:30:00-Asia/Tokyo"
-    ib.client.decoder.bondContractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    # Explicit block wins — NOT the stale split[2].
-    assert cd.timeZoneId == "US/Eastern"
-    # Maturity + lastTradeTime still come from the split.
-    assert cd.maturity == "20300515"
-    assert cd.lastTradeTime == "09:30:00"
-
-
-def test_binary_bond_contract_details_pre_188_split_still_populates_timezone():
-    """Below gate 188 there is no explicit timezone block, so the
-    legacy 3-part split-string must still populate ``timeZoneId``.
-    Regression lock: the gate guard added to fix the post-188 clobber
-    must NOT also disable pre-188 split-derived population.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = 187
-    ib.client.decoder.serverVersion = 187
-    seen: list[tuple] = []
-    ib.wrapper.bondContractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_bond_contract_details_fields(include_trading_hours=False)
-    fields[6] = "20300515-09:30:00-Asia/Tokyo"
-    ib.client.decoder.bondContractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert cd.maturity == "20300515"
-    assert cd.lastTradeTime == "09:30:00"
-    assert cd.timeZoneId == "Asia/Tokyo"
 
 
 def test_proto_price_condition_full_round_trip():
@@ -3711,9 +2389,7 @@ def test_proto_margin_and_time_conditions_round_trip():
 
 def test_proto_hedge_param_decode_requires_hedge_type():
     """Decoder pairing rule: ``hedgeParam`` is only consumed when a
-    matching ``hedgeType`` is present, as on the binary path, where
-    the param is read only after a non-empty hedgeType. A
-    malformed wire frame with a stray hedgeParam (no hedgeType)
+    matching ``hedgeType`` is present. A malformed wire frame with a stray hedgeParam (no hedgeType)
     must NOT surface that param onto the domain object.
     """
 
@@ -3729,8 +2405,7 @@ def test_proto_hedge_param_decode_requires_hedge_type():
 def test_proto_algo_params_paired_with_algo_strategy():
     """``algoParams`` is meaningful only with a non-empty
     ``algoStrategy``. The decoder must consume algoParams only when
-    algoStrategy is present, as on the binary path, where the params
-    length is read only after a non-empty strategy.
+    algoStrategy is present.
     """
 
     # algoStrategy missing, algoParams populated — decoder must not
@@ -4307,30 +2982,21 @@ def test_proto_msg_handlers_cover_every_ibkr_canonical_msg_id():
     )
 
 
-def test_tick_efp_binary_handler_reads_all_nine_fields():
-    """``tickEFP`` (msgId 47) wire format carries 9 payload fields after
+def test_tick_efp_text_frame_reads_all_nine_fields():
+    """``tickEFP`` (msgId 47) carries 9 payload fields after
     msgId+version: reqId, tickType, basisPoints, formattedBasisPoints,
     totalDividends, holdDays, futureLastTradeDate, dividendImpact,
-    dividendsToLastTradeDate. The binary dispatch must forward all
-    nine to ``Wrapper.tickEFP`` — dropping any of them silently truncates
-    EFP ticks (used for SSF / index futures).
+    dividendsToLastTradeDate. ``processText`` must forward all nine to
+    ``Wrapper.tickEFP``. Dropping any of them truncates EFP ticks (used
+    for SSF / index futures).
 
-    ``tickEFP`` is binary-only; IBKR's ``msgId2handleInfoProtoBuf`` does
-    not include it, so no proto path needs cross-checking.
+    ``tickEFP`` has no protobuf form, so TWS sends it as a text frame.
     """
     ib = ibi.IB()
     captured: list[tuple] = []
     ib.wrapper.tickEFP = lambda *args: captured.append(args)  # type: ignore[method-assign]
 
-    # ``Decoder`` caches the bound wrapper method at construction time
-    # (one ``getattr`` per ``wrap(...)`` call) so we rebuild the handler
-    # table after stubbing the wrapper method, mirroring what subclass
-    # users would do at startup.
-
-    ib.client.decoder = Decoder(ib.wrapper, ib.client.serverVersion or 0)
-
-    # msgId, version, then the 9 EFP fields. ``Decoder.interpret`` is fed
-    # post-split string fields (the wire ``\0``-split happens upstream).
+    # msgId, version, then the 9 EFP fields, already split on NUL.
     fields = [
         "47",  # msgId
         "1",  # version
@@ -4344,7 +3010,7 @@ def test_tick_efp_binary_handler_reads_all_nine_fields():
         "0.75",  # dividendImpact
         "2.50",  # dividendsToLastTradeDate
     ]
-    ib.client.decoder.interpret(fields)
+    ib.client.decoder.processText(fields)
 
     assert captured == [(42, 38, 12.5, "+12.50", 100.25, 30, "20251220", 0.75, 2.50)], (
         "tickEFP must pass all nine fields through unchanged"
@@ -4505,40 +3171,36 @@ def test_order_convenience_constructors_coerce_decimal():
 # ---------------------------------------------------------------------------
 # Malformed-input survival (fuzz / corruption / half-disconnect)
 #
-# A broken TCP, a pre-2.x server in test, or a corrupted stream during
-# recovery can deliver any of the wire shapes below. None of them may
-# crash the decoder, wedge the connection, or silently corrupt state.
+# A broken TCP or a corrupted stream during recovery can deliver any of
+# the wire shapes below. None of them may crash the decoder, wedge the
+# connection, or silently corrupt state.
 # ---------------------------------------------------------------------------
 
 
-def test_interpret_truncated_binary_frame_does_not_raise(caplog):
-    """Scenario 1: handler expects more fields than the frame carries.
-    The unpack succeeds (``*fields`` is permissive) but the handler
-    indexes past the end and hits ``IndexError``. ``Decoder.interpret``
-    must catch and log; the connection survives.
+def test_truncated_tick_efp_text_frame_is_logged(caplog):
+    """A tickEFP text frame with fewer fields than the message carries
+    fails to unpack. ``processText`` catches and logs the field list;
+    the connection survives.
     """
     ib = ibi.IB()
     # msgId 47 (tickEFP) needs 11 fields total; we send only 4.
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
-        ib.client.decoder.interpret(["47", "1", "42", "38"])
+        ib.client.decoder.processText(["47", "1", "42", "38"])
     # The exception path was taken — the log carries the failing field list.
     assert "fields=['47', '1', '42', '38']" in caplog.text
 
 
-def test_interpret_oversized_binary_frame_absorbs_silently():
-    """Scenario 2: more fields than the handler expects. The wrap()
-    plan zips converters with ``fields[skip:]`` — extra trailing fields
-    are silently absorbed, NOT misinterpreted as part of an adjacent
-    handler's payload. No exception; no corruption of state.
+def test_oversized_tick_efp_text_frame_absorbs_trailing_fields():
+    """Trailing fields past the nine tickEFP fields are ignored. They
+    are not read as part of the tick. No exception; no corruption of
+    state.
     """
     ib = ibi.IB()
     captured: list = []
     ib.wrapper.tickEFP = lambda *a: captured.append(a)  # type: ignore[method-assign]
 
-    ib.client.decoder = Decoder(ib.wrapper, ib.client.serverVersion or 0)
-
     # 11-field tickEFP plus 5 trailing junk fields.
-    ib.client.decoder.interpret(
+    ib.client.decoder.processText(
         [
             "47",
             "1",
@@ -4563,15 +3225,15 @@ def test_interpret_oversized_binary_frame_absorbs_silently():
     assert captured == [(42, 38, 12.5, "+12.50", 100.25, 30, "20251220", 0.75, 2.50)]
 
 
-def test_interpret_wrong_type_binary_field_caught(caplog):
-    """Scenario 3: handler expects an int but the wire field is the
-    literal string ``"abc"``. The per-field converter raises
-    ``ValueError`` and the wrap() try/except catches and logs.
+def test_wrong_type_tick_efp_text_field_is_logged(caplog):
+    """tickEFP expects an int reqId but the wire field is the literal
+    string ``"abc"``. ``int()`` raises ``ValueError``; ``processText``
+    catches and logs.
     """
     ib = ibi.IB()
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
         # tickEFP wants int reqId — feed it "abc" instead.
-        ib.client.decoder.interpret(
+        ib.client.decoder.processText(
             [
                 "47",
                 "1",
@@ -4589,58 +3251,16 @@ def test_interpret_wrong_type_binary_field_caught(caplog):
     assert "Error for tickEFP with fields=" in caplog.text
 
 
-def test_interpret_unknown_binary_msg_id_does_not_raise(caplog):
-    """Scenario 11 (binary side): msgId outside the handler dict.
-    ``self.handlers[msgId]`` raises ``KeyError``; the outer try/except
-    in ``interpret`` catches and logs. Connection survives.
+def test_unread_text_msg_id_is_counted_and_logged(caplog):
+    """A text frame other than tickEFP is not read. ``processText``
+    counts it as unknown and logs a warning naming its id. Connection
+    survives.
     """
     ib = ibi.IB()
-    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
-        ib.client.decoder.interpret(["9999", "1", "stuff"])
-    assert "Error handling fields: ['9999', '1', 'stuff']" in caplog.text
-
-
-def test_interpret_non_numeric_msg_id_does_not_raise(caplog):
-    """Scenario 3 variant: the msgId itself is not parseable as int.
-    ``int(fields[0])`` raises ``ValueError``; outer try/except catches.
-    """
-    ib = ibi.IB()
-    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
-        ib.client.decoder.interpret(["NOT_A_NUMBER", "1", "x"])
-    # Logged as expected, connection survives.
-    assert "Error handling fields: ['NOT_A_NUMBER', '1', 'x']" in caplog.text
-
-
-def test_interpret_empty_fields_list_does_not_raise(caplog):
-    """Edge case: a body of all NULs splits to ``[""]`` after pop().
-    ``int(fields[0])`` raises ``ValueError`` (empty-string-to-int);
-    outer try/except catches. The decoder must never propagate this.
-    """
-    ib = ibi.IB()
-    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
-        ib.client.decoder.interpret([""])
-    # Silent surrender to logging.
-
-
-def test_interpret_fields_with_embedded_extra_empties():
-    """Scenario 12: split('\\0') on a body with embedded NULs produces
-    extra empty fields. Many binary handlers tolerate empty-string
-    fields (per-type converters default empty to 0 / None). Verify
-    that a wrap()-style handler doesn't crash on extra blank fields
-    and the dispatch table absorbs them silently.
-    """
-    ib = ibi.IB()
-    captured: list = []
-    # Use updateNewsBulletin (msgId 14, wired via ``wrap([int, int, str, str])``)
-    # — pure converter chain, no serverVersion-gated branches.
-    ib.wrapper.updateNewsBulletin = lambda *a: captured.append(a)  # type: ignore[method-assign]
-
-    ib.client.decoder = Decoder(ib.wrapper, 200)
-    # msgId, version, msgId-news, msgType, newsMessage, originExch
-    # Append 3 empty trailing fields (simulating split('\\0') on a NUL-runny
-    # body) — extra fields must be silently absorbed by the zip().
-    ib.client.decoder.interpret(["14", "1", "5", "1", "headline", "NYSE", "", "", ""])
-    assert captured == [(5, 1, "headline", "NYSE")]
+    with caplog.at_level(logging.WARNING, logger="ib_async.Decoder"):
+        ib.client.decoder.processText(["56", "1", "stuff"])
+    assert ib.client.decoder.tally.unknownMessages == 1
+    assert "Text message 56 is not read" in caplog.text
 
 
 def test_process_proto_buf_empty_payload_does_not_raise():
@@ -4688,15 +3308,15 @@ def test_process_proto_buf_oversized_payload_round_trips():
     assert [call[:2] for call in captured] == [(7, 200)]
 
 
-def test_process_proto_buf_binary_frame_routed_as_proto_logs(caplog):
-    """Scenario 10: a NUL-separated binary frame mistakenly handed to
+def test_process_proto_buf_text_frame_routed_as_proto_logs(caplog):
+    """Scenario 10: a NUL-separated text frame mistakenly handed to
     ``processProtoBuf``. ``ParseFromString`` raises ``DecodeError``;
     the handler catches and logs at error level. Connection survives.
     """
     ib = ibi.IB()
-    binary_frame = b"4\x001\x002\x00200\x00message\x00"
+    text_frame = b"4\x001\x002\x00200\x00message\x00"
     with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
-        ib.client.decoder.processProtoBuf(4, binary_frame)
+        ib.client.decoder.processProtoBuf(4, text_frame)
     assert "Error decoding protobuf msg 4 (" in caplog.text
 
 
@@ -4773,45 +3393,6 @@ def test_safe_decimal_negative_real_value_not_conflated_with_unset():
     assert safe_decimal("2147483647") is None
 
 
-def test_process_proto_buf_protobuf_frame_handed_to_binary_logs(caplog):
-    """Scenario 9: a wire frame that should have routed to the proto
-    decoder gets handed to the binary ``interpret`` instead. The
-    proto bytes look like an opaque blob to ``int(fields[0])`` —
-    ``ValueError`` raises and the outer try/except catches.
-    """
-    ib = ibi.IB()
-    proto = ErrorMessage_pb2.ErrorMessage()
-    proto.id = 1
-    proto.errorCode = 200
-    proto.errorMsg = "x"
-    raw = proto.SerializeToString()
-    # Mock how the binary decoder would see this: a list of fields
-    # produced by raw.split('\0') — entirely arbitrary byte boundaries.
-    fields = raw.decode(errors="backslashreplace").split("\0")
-    with caplog.at_level(logging.ERROR, logger="ib_async.Decoder"):
-        ib.client.decoder.interpret(fields)
-    # Logged-and-dropped: connection survives.
-
-
-def test_decoder_parse_non_dataclass_raises_typeerror_caught_by_interpret():
-    """Scenario 13: ``Decoder.parse(obj)`` with a non-dataclass would
-    raise ``TypeError`` from ``dataclasses.fields(obj)``. In production
-    the only callers feed dataclass instances, but if a future refactor
-    accidentally passes the wrong type, the error must propagate up to
-    ``interpret``'s try/except (which catches all ``Exception``) so the
-    connection does not crash. Verify ``parse(int)`` raises TypeError.
-    """
-    ib = ibi.IB()
-
-    # Direct call to parse with a wrong-type arg raises — confirms the
-    # error path is sensible (not a silent corruption).
-    with pytest.raises(TypeError):
-        ib.client.decoder.parse(42)  # type: ignore[arg-type]
-    # And via the interpret outer try/except, the same situation would
-    # be caught at the dispatch layer — verified by the broader
-    # "interpret_unknown_binary_msg_id_does_not_raise" test above.
-
-
 def test_process_proto_buf_msg_id_mid_int_overflow_does_not_raise():
     """Adversarial: a wire msgId that is enormous (e.g. 2**31 - 1).
     ``_protoDispatch.get`` returns None, debug-log, drop. No crash.
@@ -4820,177 +3401,3 @@ def test_process_proto_buf_msg_id_mid_int_overflow_does_not_raise():
     ib.client.decoder.processProtoBuf(2**31 - 1, b"")
     ib.client.decoder.processProtoBuf(0, b"")
     ib.client.decoder.processProtoBuf(-1, b"")
-
-
-# ---------------------------------------------------------------------------
-# Binary orderStatus (msgId 3) — gate 131 MARKET_CAP_PRICE.
-# Pre-131 servers send a leading version field and no mktCapPrice; >=131
-# drops the version and appends mktCapPrice. A static wrap() with skip=1
-# either parses status as Decimal (pre-131 → silent drop) or works.
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "serverVersion, fields, expected_mktCapPrice",
-    [
-        # Pre-131: leading version prefix, no mktCapPrice trailer.
-        (
-            130,
-            [
-                "3",  # msgId
-                "6",  # version
-                "1234",  # orderId
-                "Submitted",  # status
-                "10.5",  # filled
-                "0",  # remaining
-                "120.25",  # avgFillPrice
-                "55",  # permId
-                "0",  # parentId
-                "120.25",  # lastFillPrice
-                "1",  # clientId
-                "",  # whyHeld
-            ],
-            None,
-        ),
-        # Gate 131: version prefix dropped, mktCapPrice appended.
-        (
-            131,
-            [
-                "3",  # msgId
-                "1234",  # orderId (no version prefix at >=131)
-                "Submitted",  # status
-                "10.5",  # filled
-                "0",  # remaining
-                "120.25",  # avgFillPrice
-                "55",  # permId
-                "0",  # parentId
-                "120.25",  # lastFillPrice
-                "1",  # clientId
-                "",  # whyHeld
-                "5000000000",  # mktCapPrice
-            ],
-            Decimal(5000000000),
-        ),
-    ],
-    ids=["pre_131_no_mkt_cap_price", "gate_131_with_mkt_cap_price"],
-)
-def test_binary_order_status_market_cap_price_gate_131(
-    serverVersion, fields, expected_mktCapPrice
-):
-    """Gate 131 (MARKET_CAP_PRICE) wire-frame alignment.
-
-    Pre-131 servers send a leading version field and no mktCapPrice;
-    >=131 drops the version and appends mktCapPrice. Decoder must
-    branch at the gate or status mis-parses as Decimal (pre-131) /
-    mktCapPrice goes missing (post-131).
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.orderStatus = lambda *args: seen.append(args)
-
-    ib.client.decoder.orderStatusMsg(fields)
-
-    assert len(seen) == 1
-    args = seen[0]
-    assert args[0] == 1234
-    assert args[1] == "Submitted"
-    assert args[2] == Decimal("10.5")
-    assert args[3] == Decimal(0)
-    assert args[4] == Decimal("120.25")
-    assert args[5] == 55
-    assert args[6] == 0
-    assert args[7] == Decimal("120.25")
-    assert args[8] == 1
-    assert args[9] == ""
-    assert args[10] == expected_mktCapPrice
-
-
-# ---------------------------------------------------------------------------
-# Binary contractDetails — gate 134 REAL_EXPIRATION_DATE and gate 152
-# STOCK_TYPE. With MIN_CLIENT_VER=100 a server in the 100-151 range can
-# deliver a strictly shorter frame; reading unconditionally would mis-align
-# every following gated field.
-# ---------------------------------------------------------------------------
-
-
-def _binary_contract_details_pre134_fields() -> list[str]:
-    """contractDetails wire frame as a server <134 would send it.
-    No realExpirationDate, no stockType, no minSize/sizeIncrement.
-    """
-    return [
-        "10",  # msgId placeholder
-        "8",  # version (only present pre-SIZE_RULES)
-        "7",  # reqId
-        "ESM6",  # symbol
-        "STK",  # secType
-        "20260619",  # lastTimes
-        "100.5",  # strike
-        "C",  # right
-        "GLOBEX",  # exchange
-        "USD",  # currency
-        "ESM6",  # localSymbol
-        "ES",  # marketName
-        "ES",  # tradingClass
-        "12345",  # conId
-        "0.25",  # minTick
-        "1",  # mdSizeMultiplier (gate 124-163 obsolete read)
-        "50",  # multiplier
-        "LIMIT,MKT",  # orderTypes
-        "GLOBEX",  # validExchanges
-        "1",  # priceMagnifier
-        "0",  # underConId
-        "E-mini",  # longName
-        "GLOBEX",  # primaryExchange
-        "202606",  # contractMonth
-        "Financial",  # industry
-        "Index",  # category
-        "Broad",  # subcategory
-        "US/Central",  # timeZoneId
-        "0830-1500",  # tradingHours
-        "0830-1500",  # liquidHours
-        "",  # evRule
-        "0",  # evMultiplier
-        "0",  # numSecIds
-        "0",  # aggGroup
-        "ES",  # underSymbol
-        "IND",  # underSecType
-        "0",  # marketRuleIds
-        # NB: no realExpirationDate, no stockType, no minSize trio
-    ]
-
-
-@pytest.mark.parametrize(
-    "serverVersion, extra_fields, expected_real_expiration",
-    [
-        # Pre-134: frame carries no realExpirationDate slot.
-        (133, [], ""),
-        # At gate 134 (and below 152): slot is consumed onto cd.realExpirationDate.
-        (151, ["20260619"], "20260619"),
-    ],
-    ids=["pre_134_no_slot", "gate_134_slot_consumed"],
-)
-def test_binary_contract_details_real_expiration_date_gate_134(
-    serverVersion, extra_fields, expected_real_expiration
-):
-    """Gate 134 (REAL_EXPIRATION_DATE) wire-frame alignment.
-
-    Pre-134 servers don't carry the slot; consuming it would either
-    run the unpack dry or shift a later field into the
-    ``realExpirationDate`` slot. >=134 must read it, and on <152 the
-    stockType slot is still absent.
-    """
-    ib = ibi.IB()
-    ib.client._serverVersion = serverVersion
-    ib.client.decoder.serverVersion = serverVersion
-    seen: list[tuple] = []
-    ib.wrapper.contractDetails = lambda reqId, cd: seen.append((reqId, cd))
-
-    fields = _binary_contract_details_pre134_fields() + extra_fields
-    ib.client.decoder.contractDetails(fields)
-
-    assert len(seen) == 1
-    _, cd = seen[0]
-    assert cd.realExpirationDate == expected_real_expiration
-    assert cd.stockType == ""

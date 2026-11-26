@@ -26,8 +26,7 @@ Wire-shape notes:
 * The news-side requests (article / historical news) carry trailing
   ``map<string, string>`` option fields
   — these are TagValue lists on the public surface; pass-through must
-  preserve them or the proto path silently drops user-provided options
-  the binary path would have shipped.
+  preserve them or the request silently drops user-provided options.
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@ from google.protobuf.message import Message
 from . import _pb_msgids as _M
 from . import _proto as _converters
 from ._pb_msgids import PROTOBUF_MSG_ID
-from ._server_versions import MAX_CLIENT_VER, MIN_CLIENT_VER, MIN_SERVER_VER_PROTOBUF
+from ._server_versions import MAX_CLIENT_VER, MIN_CLIENT_VER
 from .connection import Connection
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
@@ -45,10 +45,6 @@ class Client:
 
     * When blocking, ``client.connect()`` can be made to time out with
       the timeout parameter (default 2 seconds).
-
-    * Optional ``wrapper.priceSizeTick(reqId, tickType, price, size)`` that
-      combines price and size instead of the two wrapper methods
-      priceTick and sizeTick.
 
     * Automatic request throttling.
 
@@ -106,7 +102,7 @@ class Client:
         self.wrapper = wrapper
         # The session's counters (ib_async.runtime); IB passes its wrapper's.
         self.tally = Tally() if tally is None else tally
-        self.decoder = Decoder(wrapper, 0, self.tally)
+        self.decoder = Decoder(wrapper, self.tally)
         self.apiStart = Event("apiStart")
         self.apiEnd = Event("apiEnd")
         self.apiError = Event("apiError")
@@ -119,7 +115,6 @@ class Client:
         self.conn.disconnected += self._onSocketDisconnected
 
         # extra optional wrapper methods
-        self._priceSizeTick = getattr(wrapper, "priceSizeTick", None)
         self._tcpDataArrived = getattr(wrapper, "tcpDataArrived", None)
         self._tcpDataProcessed = getattr(wrapper, "tcpDataProcessed", None)
 
@@ -422,52 +417,16 @@ class Client:
             self._data = self._data[msgEnd:]
             tally.framesReceived += 1
 
-            # Wire framing depends on server version and the +200 sentinel.
-            # Pre-handshake and legacy (<201) servers use NUL-separated
-            # text. From 201 onwards the body opens with a 4-byte big-endian
-            # wire msgId; if that wire msgId is greater than the protobuf
-            # sentinel (200) the body is a protobuf payload, otherwise it
-            # is a binary frame with the new 4-byte msgId framing.
-            if self._serverVersion >= MIN_SERVER_VER_PROTOBUF:
-                wireMsgId = struct.unpack(">I", body[:4])[0]
-                payload = body[4:]
-                if wireMsgId > PROTOBUF_MSG_ID:
-                    canonicalMsgId = wireMsgId - PROTOBUF_MSG_ID
-                    if debug:
-                        self._logger.debug(
-                            "<<< proto %d, %d bytes", canonicalMsgId, len(payload)
-                        )
-                    self.decoder.processProtoBuf(canonicalMsgId, payload)
-                    # The binary branch below snoops for ``nextValidId`` (9)
-                    # and ``managedAccounts`` (15) to flip ``_apiReady`` and
-                    # fire ``apiStart``. On a 207+ gateway TWS sends both of
-                    # those via protobuf, so we need the same snoop here.
-                    # The proto handlers run before this point, so
-                    # ``wrapper.accounts`` is already populated for msgId 15.
-                    # For msgId 9 we only need a boolean — ``updateReqId``
-                    # itself happens inside ``wrapper.nextValidId``.
-                    if not self._apiReady:
-                        if canonicalMsgId == 9:
-                            self._hasReqId = True
-                        elif canonicalMsgId == 15:
-                            self._accounts = list(self.wrapper.accounts)
-                        if self._hasReqId and self._accounts:
-                            self._startedApi()
-                    continue
-                fields = [
-                    str(wireMsgId),
-                    *payload.decode(errors="backslashreplace").split("\0"),
-                ]
-                fields.pop()
-            else:
+            if not self._serverVersion:
+                # The handshake's answer, as NUL-separated text: the server
+                # version and the connection time.
                 fields = body.decode(errors="backslashreplace").split("\0")
                 fields.pop()
-
-            if debug:
-                self._logger.debug("<<< %s", ",".join(fields))
-
-            if not self._serverVersion and len(fields) == 2:
-                # this concludes the handshake
+                if debug:
+                    self._logger.debug("<<< %s", ",".join(fields))
+                if len(fields) != 2:
+                    self._logger.error("Not a handshake answer: %r", fields)
+                    continue
                 version, _connTime = fields
                 self._serverVersion = int(version)
                 if self._serverVersion < self.MinClientVersion:
@@ -477,28 +436,46 @@ class Client:
                         "the oldest ib_async supports"
                     )
                     return
-                self.decoder.serverVersion = self._serverVersion
                 self.connState = Client.CONNECTED
                 self.startApi()
                 self.wrapper.connectAck()
                 self._logger.info(f"Logged on to server version {self._serverVersion}")
-            else:
-                if not self._apiReady:
-                    # snoop for nextValidId and managedAccounts response,
-                    # when both are in then the client is ready
-                    msgId = int(fields[0])
-                    if msgId == 9:
-                        _, _, validId = fields
-                        self.updateReqId(int(validId))
-                        self._hasReqId = True
-                    elif msgId == 15:
-                        _, _, accts = fields
-                        self._accounts = [a for a in accts.split(",") if a]
-                    if self._hasReqId and self._accounts:
-                        self._startedApi()
+                continue
 
-                # decode and handle the message
-                self.decoder.interpret(fields)
+            # After the handshake each body opens with a 4-byte big-endian
+            # wire msgId. One greater than the sentinel (200) marks a
+            # protobuf payload; anything else is a text frame.
+            wireMsgId = struct.unpack(">I", body[:4])[0]
+            payload = body[4:]
+            if wireMsgId <= PROTOBUF_MSG_ID:
+                fields = [
+                    str(wireMsgId),
+                    *payload.decode(errors="backslashreplace").split("\0"),
+                ]
+                fields.pop()
+                if debug:
+                    self._logger.debug("<<< %s", ",".join(fields))
+                self.decoder.processText(fields)
+                continue
+
+            canonicalMsgId = wireMsgId - PROTOBUF_MSG_ID
+            if debug:
+                self._logger.debug(
+                    "<<< proto %d, %d bytes", canonicalMsgId, len(payload)
+                )
+            self.decoder.processProtoBuf(canonicalMsgId, payload)
+            # The API is ready once nextValidId (9) and managedAccounts (15)
+            # are in. Their handlers run before this point, so
+            # ``wrapper.accounts`` is already set for 15, and
+            # ``wrapper.nextValidId`` has already updated the request ids
+            # for 9.
+            if not self._apiReady:
+                if canonicalMsgId == 9:
+                    self._hasReqId = True
+                elif canonicalMsgId == 15:
+                    self._accounts = list(self.wrapper.accounts)
+                if self._hasReqId and self._accounts:
+                    self._startedApi()
 
         if self._tcpDataProcessed:
             self._tcpDataProcessed()

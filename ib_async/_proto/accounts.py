@@ -164,8 +164,7 @@ def createUpdateAccountValueArgs(
     ``Wrapper.updateAccountValue(tag, val, currency, account)`` expects.
 
     Wire ``key`` maps to domain ``tag``; wire ``accountName`` maps to
-    domain ``account``. Missing fields fall through as empty strings —
-    the binary path produces the same shape via ``self.wrap("updateAccountValue", [str, str, str, str])``.
+    domain ``account``. Missing fields fall through as empty strings.
     """
     tag = proto.key if proto.HasField("key") else ""
     val = proto.value if proto.HasField("value") else ""
@@ -494,7 +493,7 @@ def createManagedAccountsRequestProto() -> (
 
 def createFamilyCode(proto: FamilyCode_pb2.FamilyCode) -> FamilyCode:
     """Wire fields ``accountId`` / ``familyCode`` map to domain
-    ``accountID`` / ``familyCodeStr`` (the binary path's spelling)."""
+    ``accountID`` / ``familyCodeStr``."""
     accountID = proto.accountId if proto.HasField("accountId") else ""
     familyCodeStr = proto.familyCode if proto.HasField("familyCode") else ""
     return FamilyCode(accountID, familyCodeStr)

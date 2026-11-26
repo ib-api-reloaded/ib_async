@@ -318,11 +318,17 @@ def test_create_contract_details_decimal_field_works_with_truthy_check():
     assert decoded.minTick
 
 
+def test_create_contract_details_reads_the_real_expiration_date():
+    proto = ContractDetails_pb2.ContractDetails(realExpirationDate="20261218")
+    details = createContractDetails(proto, Contract())
+    assert details.realExpirationDate == "20261218"
+    empty = createContractDetails(ContractDetails_pb2.ContractDetails(), Contract())
+    assert empty.realExpirationDate == ""
+
+
 def test_create_contract_details_bond_fields_unified_with_regular():
-    # The proto unifies bond-specific fields into ContractDetails; the
-    # binary path handled them via a separate bondContractDetails msg.
-    # Both paths must produce equivalent domain objects when bond data
-    # arrives. ``coupon`` is now Decimal end-to-end.
+    # The proto carries bond-specific fields on ContractDetails.
+    # ``coupon`` is Decimal end-to-end.
     proto = ContractDetails_pb2.ContractDetails()
     proto.cusip = "037833100"
     proto.ratings = "Aaa"
@@ -475,8 +481,7 @@ def test_create_contract_description_handles_missing_inner_contract():
 # ``Contract.strike`` defaults to ``0.0``, so a bare ``!= UNSET_DOUBLE``
 # check put ``strike: 0`` on the wire for every strikeless contract and the
 # server answered ``Error 200: No security definition has been found for
-# the request``. ``lastTradeDate`` is receive-only and was never sent by
-# the binary path.
+# the request``. ``lastTradeDate`` is receive-only and is never sent.
 # ---------------------------------------------------------------------------
 
 

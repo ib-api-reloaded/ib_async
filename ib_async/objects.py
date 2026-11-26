@@ -508,7 +508,7 @@ class AccountValue:
         UNSET_LONG sentinel strings, empty values, ``"NaN"`` and
         ``"Infinity"``. Routed through ``safe_decimal`` so the sentinel
         guard list stays in lockstep with every other Decimal-coercion
-        site (``decoder.parse``, ``_proto/*`` converters); a divergent
+        site (the ``_proto/*`` converters); a divergent
         ad-hoc parse here previously surfaced a fake 1.8e308 / 2.1B
         ``NetLiquidation`` whenever IBKR shipped the unset sentinel.
         A ``$LEDGER-`` per-currency tag classifies like its bare tag.

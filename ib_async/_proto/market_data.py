@@ -11,10 +11,10 @@ working.
 
 It covers ``MARKET_DEPTH``, ``MARKET_DEPTH_L2``,
 ``MKT_DEPTH_EXCHANGES``, ``REROUTE_MKT_DATA_REQ``,
-``REROUTE_MKT_DEPTH_REQ`` and ``DELTA_NEUTRAL_VALIDATION`` too. The
+``REROUTE_MKT_DEPTH_REQ`` too. The
 tickOptionComputation values pass IBKR's "not computed" values (``-1``,
-``-2``) through, as the binary path does, and the wrapper maps them to
-``None``. A value missing from the message decodes to ``None``.
+``-2``) through, and the wrapper maps them to ``None``. A value missing
+from the message decodes to ``None``.
 
 Wire shapes:
 
@@ -25,10 +25,9 @@ Wire shapes:
   similarly string-on-wire, float-at-call-site.
 * ``MarketDepthData.price`` is wire ``double`` and routed unchanged.
 
-The send-side ``createXxxRequestProto`` factories mirror the binary
-``Client.send(...)`` shape: every caller-supplied field gets written
-into the proto, including bool flags whose proto3 default would
-otherwise silently swallow a ``True``.
+The send-side ``createXxxRequestProto`` factories write every
+caller-supplied field into the proto, including bool flags whose
+proto3 default would otherwise silently swallow a ``True``.
 """
 
 from __future__ import annotations
@@ -63,10 +62,6 @@ from .._pb import (
     TickSize_pb2,
     TickSnapshotEnd_pb2,
     TickString_pb2,
-)
-from .._server_versions import (
-    MIN_SERVER_VER_PAST_LIMIT,
-    MIN_SERVER_VER_PRE_OPEN_BID_ASK,
 )
 from ..contract import Contract, TagValue
 from ..objects import (
@@ -251,30 +246,17 @@ TickByTickDispatch: TypeAlias = (
 # ---------------------------------------------------------------------------
 
 
-def decodeTickAttribFromMask(attrMask: int, serverVersion: int) -> TickAttrib:
-    """Decode the wire ``attrMask`` bitfield into a ``TickAttrib`` dataclass.
-
-    Bit layout:
-
-    - pre-PAST_LIMIT (109): ``canAutoExecute = (attrMask == 1)``
-    - PAST_LIMIT (109)+:    ``canAutoExecute = bit 0``, ``pastLimit = bit 1``
-    - PRE_OPEN_BID_ASK (132)+: ``preOpen = bit 2``
-    """
-    attrib = TickAttrib()
-    if serverVersion >= MIN_SERVER_VER_PAST_LIMIT:
-        attrib.canAutoExecute = bool(attrMask & 1)
-        attrib.pastLimit = bool(attrMask & 2)
-        if serverVersion >= MIN_SERVER_VER_PRE_OPEN_BID_ASK:
-            attrib.preOpen = bool(attrMask & 4)
-    else:
-        attrib.canAutoExecute = attrMask == 1
-    return attrib
+def decodeTickAttribFromMask(attrMask: int) -> TickAttrib:
+    """Decode the wire ``attrMask`` bitfield into a ``TickAttrib`` dataclass:
+    bit 0 is ``canAutoExecute``, bit 1 ``pastLimit``, bit 2 ``preOpen``."""
+    return TickAttrib(
+        canAutoExecute=bool(attrMask & 1),
+        pastLimit=bool(attrMask & 2),
+        preOpen=bool(attrMask & 4),
+    )
 
 
-def createPriceSizeTickArgs(
-    proto: TickPrice_pb2.TickPrice,
-    serverVersion: int = 0,
-) -> PriceSizeTickArgs:
+def createPriceSizeTickArgs(proto: TickPrice_pb2.TickPrice) -> PriceSizeTickArgs:
     """``Wrapper.priceSizeTick(reqId, tickType, price, size, attrib)`` args.
 
     The wire ``attrMask`` decodes into a ``TickAttrib`` carrying
@@ -286,7 +268,7 @@ def createPriceSizeTickArgs(
     price = float(proto.price) if proto.HasField("price") else 0.0
     size = wire_size_to_float(proto.size) if proto.HasField("size") else 0.0
     attrMask = proto.attrMask if proto.HasField("attrMask") else 0
-    attrib = decodeTickAttribFromMask(attrMask, serverVersion)
+    attrib = decodeTickAttribFromMask(attrMask)
     return PriceSizeTickArgs(
         reqId=reqId, tickType=tickType, price=price, size=size, attrib=attrib
     )
@@ -731,12 +713,3 @@ def createCancelTickByTickProto(reqId: int) -> CancelTickByTick_pb2.CancelTickBy
     if reqId != UNSET_INTEGER:
         proto.reqId = reqId
     return proto
-
-
-# ---------------------------------------------------------------------------
-# DeltaNeutralValidation (msgId 56)
-# ---------------------------------------------------------------------------
-# IBKR does not ship a dedicated ``DeltaNeutralValidation`` proto — the
-# validation message is encoded as the existing ``DeltaNeutralContract``
-# proto directly. The decoder dispatches msgId 56 to ``createDeltaNeutralContract``
-# from ``contracts.py`` and packages it with the reqId at the call site.

@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import struct
 
+from google.protobuf.message import Message
+
 import ib_async as ibi
 from ib_async._pb import ErrorMessage_pb2, ManagedAccounts_pb2, NextValidId_pb2
 from ib_async._pb_msgids import PROTOBUF_MSG_ID
@@ -79,51 +81,38 @@ def handshake(version: int) -> bytes:
     return frame(b"%d\x0020261016 12:00:00 UTC\x00" % version)
 
 
-def binaryFrame(msgId: int, *fields: str) -> bytes:
-    body = struct.pack(">I", msgId) + "".join([f + "\0" for f in fields]).encode()
-    return frame(body)
-
-
-def nextValidIdFrame(orderId: int, proto: bool) -> bytes:
-    if not proto:
-        return binaryFrame(NEXT_VALID_ID, "1", str(orderId))
-    message = NextValidId_pb2.NextValidId(orderId=orderId)
+def protoFrame(msgId: int, message: Message) -> bytes:
+    """A protobuf frame for the canonical ``msgId``."""
     return frame(
-        struct.pack(">I", PROTOBUF_MSG_ID + NEXT_VALID_ID) + message.SerializeToString()
+        struct.pack(">I", PROTOBUF_MSG_ID + msgId) + message.SerializeToString()
     )
 
 
-def managedAccountsFrame(accounts: list[str], proto: bool) -> bytes:
-    joined = ",".join(accounts)
-    if not proto:
-        return binaryFrame(MANAGED_ACCOUNTS, "1", joined)
-    message = ManagedAccounts_pb2.ManagedAccounts(accountsList=joined)
-    return frame(
-        struct.pack(">I", PROTOBUF_MSG_ID + MANAGED_ACCOUNTS)
-        + message.SerializeToString()
-    )
+def nextValidIdFrame(orderId: int) -> bytes:
+    return protoFrame(NEXT_VALID_ID, NextValidId_pb2.NextValidId(orderId=orderId))
 
 
-def errorFrame(reqId: int, errorCode: int, errorMsg: str, proto: bool) -> bytes:
-    if not proto:
-        return binaryFrame(ERROR, str(reqId), str(errorCode), errorMsg, "", "0")
+def managedAccountsFrame(accounts: list[str]) -> bytes:
+    message = ManagedAccounts_pb2.ManagedAccounts(accountsList=",".join(accounts))
+    return protoFrame(MANAGED_ACCOUNTS, message)
+
+
+def errorFrame(reqId: int, errorCode: int, errorMsg: str) -> bytes:
     message = ErrorMessage_pb2.ErrorMessage(
         id=reqId, errorCode=errorCode, errorMsg=errorMsg
     )
-    return frame(
-        struct.pack(">I", PROTOBUF_MSG_ID + ERROR) + message.SerializeToString()
-    )
+    return protoFrame(ERROR, message)
 
 
 def ready(
     session: Session, version: int = MAX_CLIENT_VER, orderId: int = 100
 ) -> asyncio.Task[None]:
-    """Connect and complete the handshake with binary frames."""
+    """Connect and complete the handshake."""
     task = session.connect()
     session.receive(
         handshake(version),
-        nextValidIdFrame(orderId, proto=False),
-        managedAccountsFrame(["DU1"], proto=False),
+        nextValidIdFrame(orderId),
+        managedAccountsFrame(["DU1"]),
     )
     assert task.done() and task.exception() is None
     return task

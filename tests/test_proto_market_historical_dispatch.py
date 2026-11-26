@@ -2,17 +2,15 @@
 
 Same pattern as ``test_proto_accounts_dispatch``: synthetic proto
 payloads route through ``Decoder.processProtoBuf`` and the resulting
-wrapper / ticker / registry state is asserted directly. Send-side per
-``useProtoBuf(canonicalMsgId)`` boolean: a server below the per-family
-gate emits NUL-separated text framing; a server at or above the gate
-emits a 4-byte BE protobuf frame.
+wrapper / ticker / registry state is asserted directly. On the send side
+every request goes out as a protobuf frame.
 
 Coverage spans the market-data and historical receive msgIds (TickPrice, TickSize,
 TickGeneric, TickString, MarketDepth, MarketDepthL2, MarketDataType,
 MktDepthExchanges, RerouteMktData/Depth, RealTimeBarTick,
 HeadTimestamp, HistogramData, HistoricalDataUpdate, HistoricalTicks*,
-TickByTick, HistoricalSchedule, HistoricalDataEnd) and the per-msgId
-gating for reqMktData / cancelMktData / reqMktDepth / cancelMktDepth /
+TickByTick, HistoricalSchedule, HistoricalDataEnd) and the protobuf
+requests for reqMktData / cancelMktData / reqMktDepth / cancelMktDepth /
 reqMarketDataType / reqMktDepthExchanges / reqHistoricalData /
 cancelHistoricalData / reqRealTimeBars / cancelRealTimeBars /
 reqHeadTimeStamp / cancelHeadTimeStamp / reqHistogramData /

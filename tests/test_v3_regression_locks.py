@@ -23,7 +23,6 @@ import pytest
 import ib_async as ibi
 from ib_async._requests import ReqIdKey
 from ib_async._server_versions import (
-    MIN_SERVER_VER_DURATION,
     MIN_SERVER_VER_PROTOBUF,
 )
 from ib_async.ibcontroller import Watchdog
@@ -520,25 +519,17 @@ def test_to_decimal_math_nan_vs_decimal_nan_equivalent():
 # Send-side test scaffolding lives in ``tests._helpers``.
 # ---------------------------------------------------------------------------
 
-import pathlib
 import warnings
 
 import ib_async.ibcontroller as ibc_mod
 from ib_async._pb import (
-    CommissionAndFeesReport_pb2,
-    Contract_pb2,
-    Execution_pb2,
-    ExecutionDetails_pb2,
     FARequest_pb2,
     OpenOrder_pb2,
     OrderStatus_pb2,
-    TickPrice_pb2,
-    TickSize_pb2,
 )
 from ib_async._pb_msgids import REQ_FA
 from ib_async._proto.orders import createOrder, createOrderProto
 from ib_async._server_versions import MAX_CLIENT_VER
-from ib_async._subscriptions import MktDataSub
 from ib_async.ibcontroller import IBC
 from tests._helpers import _captureSend, _decodeProtoFrame, _ibAtVersion, inject_trade
 
@@ -625,39 +616,6 @@ def test_place_order_volatility_preserved_for_vol_orders():
 
     ib.client.placeOrder(orderId=42, contract=contract, order=order)
     assert order.volatility == 0.42  # preserved
-
-
-# ---------------------------------------------------------------------------
-# Binary openOrder duration gate at exact server 158
-# ---------------------------------------------------------------------------
-
-
-def test_min_server_ver_duration_constant_is_158():
-    """The duration field on binary ``openOrder`` is gated at exactly
-    server 158 (``MIN_SERVER_VER_DURATION``). A literal ``159`` would
-    be off-by-one — duration would never read on a 158 server,
-    silently shifting every subsequent field by one position and
-    corrupting OpenOrder for that server. The named constant guards
-    against this.
-    """
-    assert MIN_SERVER_VER_DURATION == 158
-
-
-def test_decoder_uses_named_constant_for_duration_gate():
-    """Source-level lock: ``decoder.py`` must reference the named
-    constant, not a literal. A future refactor that hardcodes ``158``
-    or ``159`` would lose the off-by-one safety the constant provides.
-    """
-
-    decoder_src = pathlib.Path("ib_async/decoder.py").read_text(encoding="utf-8")
-    # The constant import + usage at the openOrder gate.
-    assert "MIN_SERVER_VER_DURATION" in decoder_src, (
-        "decoder.py must import + use the named constant for the duration gate"
-    )
-    # Defensive: no stray ``>= 159`` literal that could shadow the
-    # intended gate. ``159`` may appear in unrelated contexts but never
-    # adjacent to ``serverVersion`` and ``duration``.
-    assert ">= 159" not in decoder_src or "MIN_SERVER_VER_DURATION" in decoder_src
 
 
 # ---------------------------------------------------------------------------
@@ -818,7 +776,7 @@ async def test_req_tickers_async_closes_subs_on_gather_raise():
     reqId index.
     """
     ib = ibi.IB()
-    ib.client._serverVersion = MIN_SERVER_VER_PROTOBUF
+    ib.client._serverVersion = MAX_CLIENT_VER
     ib.client.connState = ib.client.CONNECTED
     ib.client._apiReady = True  # getReqId / isReady gates
     # Stub the wire send so reqMktData doesn't try to hit a real socket.
@@ -1075,7 +1033,7 @@ def test_order_state_commission_alias_round_trips(cls):
 
 
 # ---------------------------------------------------------------------------
-# Binary orderStatus wire frame round-trips Decimal | None
+# OrderStatus round-trips Decimal | None
 # ---------------------------------------------------------------------------
 
 
@@ -1096,16 +1054,22 @@ def _seed_trade_for_order_status(
     )
 
 
+_UNSET_DOUBLE = 1.7976931348623157e308
+_UNSET_DOUBLE_TEXT = "1.7976931348623157E308"
+
+
 @pytest.mark.parametrize(
-    "filled, remaining, avgFillPrice, lastFillPrice, mktCapPrice, expected",
+    "values, expected",
     [
-        # Explicit numeric strings land as Decimal at full precision.
+        # Explicit numbers land as Decimal at full precision.
         (
-            "10.5",
-            "0",
-            "120.25",
-            "120.25",
-            "5000000000",
+            OrderStatus_pb2.OrderStatus(
+                filled="10.5",
+                remaining="0",
+                avgFillPrice=120.25,
+                lastFillPrice=120.25,
+                mktCapPrice=5000000000.0,
+            ),
             {
                 "filled": Decimal("10.5"),
                 "remaining": Decimal(0),
@@ -1114,13 +1078,9 @@ def _seed_trade_for_order_status(
                 "mktCapPrice": Decimal(5000000000),
             },
         ),
-        # Empty strings land as None (the canonical unset sentinel).
+        # Absent fields land as None (the canonical unset sentinel).
         (
-            "",
-            "",
-            "",
-            "",
-            "",
+            OrderStatus_pb2.OrderStatus(),
             {
                 "filled": None,
                 "remaining": None,
@@ -1129,14 +1089,16 @@ def _seed_trade_for_order_status(
                 "mktCapPrice": None,
             },
         ),
-        # IBKR UNSET_DOUBLE sentinel lands as None — must NOT materialise
-        # as a 1.8e308 Decimal that poisons "if filled:" guards.
+        # The IBKR UNSET_DOUBLE sentinel lands as None. It must not become
+        # a 1.8e308 Decimal that poisons "if filled:" guards.
         (
-            "1.7976931348623157E308",
-            "1.7976931348623157E308",
-            "1.7976931348623157E308",
-            "1.7976931348623157E308",
-            "1.7976931348623157E308",
+            OrderStatus_pb2.OrderStatus(
+                filled=_UNSET_DOUBLE_TEXT,
+                remaining=_UNSET_DOUBLE_TEXT,
+                avgFillPrice=_UNSET_DOUBLE,
+                lastFillPrice=_UNSET_DOUBLE,
+                mktCapPrice=_UNSET_DOUBLE,
+            ),
             {
                 "filled": None,
                 "remaining": None,
@@ -1146,39 +1108,27 @@ def _seed_trade_for_order_status(
             },
         ),
     ],
-    ids=["explicit_decimal_strings", "empty_strings", "unset_double_sentinel"],
+    ids=["explicit_values", "absent_fields", "unset_double_sentinel"],
 )
-def test_binary_order_status_decimal_fields_round_trip(
-    filled, remaining, avgFillPrice, lastFillPrice, mktCapPrice, expected
+def test_order_status_decimal_fields_round_trip(
+    values: OrderStatus_pb2.OrderStatus, expected: dict[str, Decimal | None]
 ):
-    """Binary path: ``Decoder.orderStatusMsg`` with serverVersion >=131
-    sends Decimal-typed wire strings through ``safe_decimal`` and lands
-    them on ``Trade.orderStatus``. Empty / UNSET sentinel inputs must
-    coerce to ``None`` rather than NaN / 1.8e308 contamination.
+    """The OrderStatus message's Decimal-typed fields land on
+    ``Trade.orderStatus`` through ``safe_decimal``. Absent and UNSET
+    sentinel inputs become ``None`` rather than NaN or 1.8e308.
     """
     ib = ibi.IB()
-    ib.client._serverVersion = 200
-    ib.client.decoder.serverVersion = 200
     trade = _seed_trade_for_order_status(ib)
 
-    # Wire layout >=131: msgId, orderId, status, filled, remaining,
-    # avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld,
-    # mktCapPrice.
-    fields = [
-        "3",
-        str(trade.order.orderId),
-        "Filled",
-        filled,
-        remaining,
-        avgFillPrice,
-        str(trade.order.permId),
-        "0",
-        lastFillPrice,
-        str(trade.order.clientId),
-        "",
-        mktCapPrice,
-    ]
-    ib.client.decoder.orderStatusMsg(fields)
+    message = OrderStatus_pb2.OrderStatus(
+        orderId=trade.order.orderId,
+        status="Filled",
+        permId=trade.order.permId,
+        parentId=0,
+        clientId=trade.order.clientId,
+    )
+    message.MergeFrom(values)
+    ib.client.decoder.processProtoBuf(3, message.SerializeToString())
 
     status = trade.orderStatus
     assert status.filled == expected["filled"]
@@ -1196,19 +1146,14 @@ def test_binary_order_status_decimal_fields_round_trip(
 
 
 # ---------------------------------------------------------------------------
-# Trade.serverOrder snapshot Decimal coherence on binary openOrder
+# Trade.serverOrder snapshot Decimal coherence on openOrder
 # ---------------------------------------------------------------------------
 
 
 def test_server_order_decimal_fields_round_trip_via_proto_open_order():
-    """Receive-side ``openOrder`` (protobuf path) must populate
-    ``Trade.serverOrder`` with proper ``Decimal`` instances on every
-    Decimal-typed Order field — not coincidentally-equal floats.
-
-    The binary openOrder handler shares ``self.wrapper.openOrder`` with
-    the proto path, so the serverOrder snapshot is built identically;
-    the proto path is the canonical receive path on modern servers
-    (gate 203+) and is exercised here.
+    """Receive-side ``openOrder`` must populate ``Trade.serverOrder`` with
+    proper ``Decimal`` instances on every Decimal-typed Order field, not
+    coincidentally-equal floats.
     """
 
     ib = ibi.IB()
@@ -1353,283 +1298,3 @@ def test_create_order_proto_exhaustive_parity_round_trip():
         assert isinstance(v, Decimal), (
             f"{name} must round-trip as Decimal, got {type(v).__name__}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Cross-wire-path equivalence (binary vs protobuf produce identical wrapper state)
-# ---------------------------------------------------------------------------
-
-
-def test_binary_and_proto_order_status_produce_identical_trade_state():
-    """msgId 3 (OrderStatus). Binary and protobuf paths must land
-    byte-equivalent ``Decimal`` values on ``Trade.orderStatus`` —
-    same precision, same sentinel→None mapping.
-    """
-
-    # Binary path
-    ib_bin = ibi.IB()
-    ib_bin.client._serverVersion = 200
-    ib_bin.client.decoder.serverVersion = 200
-    trade_bin = inject_trade(
-        ib_bin, orderId=1, permId=999, clientId=0, status="Submitted"
-    )
-    ib_bin.client.decoder.orderStatusMsg(
-        [
-            "3",
-            "1",
-            "Filled",
-            "100.5",
-            "0",
-            "150.25",
-            "999",
-            "0",
-            "150.25",
-            "0",
-            "",
-            "1000000",
-        ]
-    )
-
-    # Proto path
-    ib_proto = ibi.IB()
-    trade_proto = inject_trade(
-        ib_proto, orderId=1, permId=999, clientId=0, status="Submitted"
-    )
-    proto = OrderStatus_pb2.OrderStatus(
-        orderId=1,
-        status="Filled",
-        filled="100.5",
-        remaining="0",
-        avgFillPrice=150.25,
-        permId=999,
-        parentId=0,
-        lastFillPrice=150.25,
-        clientId=0,
-        whyHeld="",
-        mktCapPrice=1000000.0,
-    )
-    ib_proto.client.decoder.processProtoBuf(3, proto.SerializeToString())
-
-    b = trade_bin.orderStatus
-    p = trade_proto.orderStatus
-    assert b.status == p.status
-    assert b.filled == p.filled == Decimal("100.5")
-    assert b.remaining == p.remaining == Decimal(0)
-    assert b.avgFillPrice == p.avgFillPrice == Decimal("150.25")
-    assert b.lastFillPrice == p.lastFillPrice == Decimal("150.25")
-    assert b.mktCapPrice == p.mktCapPrice == Decimal(1000000)
-
-
-def test_binary_and_proto_exec_details_produce_identical_execution_state():
-    """msgId 11 (ExecutionDetails). Binary and protobuf paths must land
-    a byte-equivalent ``Execution`` with the same Decimal-typed
-    ``shares`` / ``price`` / ``cumQty`` / ``avgPrice`` / ``evMultiplier``.
-    """
-
-    # Binary path (mirroring _binary_exec_details_fields pattern)
-    ib_bin = ibi.IB()
-    ib_bin.client._serverVersion = 200
-    ib_bin.client.decoder.serverVersion = 200
-    seen_bin: list = []
-    ib_bin.wrapper.execDetails = lambda reqId, c, ex: seen_bin.append((reqId, c, ex))
-    ib_bin.client.decoder.execDetails(
-        [
-            "11",  # msgId
-            "-1",  # reqId
-            "200",  # orderId
-            "12345",  # conId
-            "AAPL",  # symbol
-            "STK",  # secType
-            "",  # lastTradeDateOrContractMonth
-            "0",  # strike
-            "",  # right
-            "",  # multiplier
-            "SMART",  # exchange
-            "USD",  # currency
-            "AAPL",  # localSymbol
-            "NMS",  # tradingClass
-            "EXEC-1",  # execId
-            "20260510 14:30:00",  # time
-            "DU111111",  # acctNumber
-            "ISLAND",  # exchange (ex.exchange)
-            "BOT",  # side
-            "100.5",  # shares
-            "150.25",  # price
-            "999",  # permId
-            "0",  # clientId
-            "0",  # liquidation
-            "100.5",  # cumQty
-            "150.25",  # avgPrice
-            "",  # orderRef
-            "",  # evRule
-            "0",  # evMultiplier
-            "",  # modelCode
-            "1",  # lastLiquidity
-            "0",  # pendingPriceRevision (server >=178)
-            "",  # submitter (server >=198)
-        ]
-    )
-
-    # Proto path
-    ib_proto = ibi.IB()
-    proto = ExecutionDetails_pb2.ExecutionDetails()
-    proto.reqId = -1
-    proto.contract.CopyFrom(
-        Contract_pb2.Contract(
-            conId=12345,
-            symbol="AAPL",
-            secType="STK",
-            exchange="SMART",
-            currency="USD",
-            localSymbol="AAPL",
-            tradingClass="NMS",
-        )
-    )
-    proto.execution.CopyFrom(
-        Execution_pb2.Execution(
-            orderId=200,
-            execId="EXEC-1",
-            time="20260510 14:30:00",
-            acctNumber="DU111111",
-            exchange="ISLAND",
-            side="BOT",
-            shares="100.5",
-            price=150.25,
-            permId=999,
-            clientId=0,
-            cumQty="100.5",
-            avgPrice=150.25,
-            lastLiquidity=1,
-        )
-    )
-    seen_proto: list = []
-    ib_proto.wrapper.execDetails = lambda reqId, c, ex: seen_proto.append(
-        (reqId, c, ex)
-    )
-    ib_proto.client.decoder.processProtoBuf(11, proto.SerializeToString())
-
-    assert len(seen_bin) == 1 and len(seen_proto) == 1
-    _, _, ex_bin = seen_bin[0]
-    _, _, ex_proto = seen_proto[0]
-    assert ex_bin.shares == ex_proto.shares == Decimal("100.5")
-    assert ex_bin.price == ex_proto.price == Decimal("150.25")
-    assert ex_bin.cumQty == ex_proto.cumQty == Decimal("100.5")
-    assert ex_bin.avgPrice == ex_proto.avgPrice == Decimal("150.25")
-
-
-def test_binary_and_proto_commission_report_produce_identical_state():
-    """msgId 59 (CommissionAndFeesReport). Binary and protobuf paths
-    must land byte-equivalent Decimal-typed ``commissionAndFees`` /
-    ``realizedPNL`` / ``yield_`` on the report.
-    """
-
-    # Binary path
-    ib_bin = ibi.IB()
-    ib_bin.client._serverVersion = 200
-    ib_bin.client.decoder.serverVersion = 200
-    seen_bin: list = []
-    ib_bin.wrapper.commissionReport = lambda r: seen_bin.append(r)
-    ib_bin.client.decoder.commissionReport(
-        [
-            "59",  # msgId
-            "6",  # version
-            "EXEC-7",  # execId
-            "1.25",  # commissionAndFees
-            "USD",  # currency
-            "0.50",  # realizedPNL
-            "0.0375",  # yield_
-            "20300101",  # yieldRedemptionDate
-        ]
-    )
-
-    # Proto path
-    ib_proto = ibi.IB()
-    seen_proto: list = []
-    ib_proto.wrapper.commissionReport = lambda r: seen_proto.append(r)
-    proto = CommissionAndFeesReport_pb2.CommissionAndFeesReport(
-        execId="EXEC-7",
-        commissionAndFees=1.25,
-        currency="USD",
-        realizedPNL=0.50,
-        bondYield=0.0375,
-        yieldRedemptionDate="20300101",
-    )
-    ib_proto.client.decoder.processProtoBuf(59, proto.SerializeToString())
-
-    assert len(seen_bin) == 1 and len(seen_proto) == 1
-    r_bin, r_proto = seen_bin[0], seen_proto[0]
-    assert r_bin.execId == r_proto.execId == "EXEC-7"
-    assert r_bin.commissionAndFees == r_proto.commissionAndFees == Decimal("1.25")
-    assert r_bin.realizedPNL == r_proto.realizedPNL == Decimal("0.50")
-    assert r_bin.yield_ == r_proto.yield_ == Decimal("0.0375")
-    assert r_bin.yieldRedemptionDate == r_proto.yieldRedemptionDate == 20300101
-
-
-def test_binary_and_proto_tick_price_produce_identical_ticker_state():
-    """msgId 1 (TickPrice). Binary and protobuf paths must update the
-    matching ``Ticker`` with the same price + size.
-    """
-
-    def _seedTicker(ib, reqId):
-        contract = ibi.Stock("AAPL", "SMART", "USD")
-        contract.conId = 7
-        ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
-        ib.wrapper.subscriptions.add(
-            MktDataSub(reqId=reqId, contract=contract, ticker=ticker)
-        )
-        return ticker
-
-    # Binary path — tickType 1 (bid), price 150.25, size 100
-    ib_bin = ibi.IB()
-    ib_bin.client._serverVersion = 200
-    ib_bin.client.decoder.serverVersion = 200
-    ticker_bin = _seedTicker(ib_bin, 5)
-    # Wire: [msgId, version, reqId, tickType, price, size, attrMask]
-    ib_bin.client.decoder.priceSizeTick(["1", "1", "5", "1", "150.25", "100", "0"])
-
-    # Proto path
-    ib_proto = ibi.IB()
-    ib_proto.client._serverVersion = 207
-    ib_proto.client.decoder.serverVersion = 207
-    ticker_proto = _seedTicker(ib_proto, 5)
-    proto = TickPrice_pb2.TickPrice(
-        reqId=5, tickType=1, price=150.25, size="100", attrMask=0
-    )
-    ib_proto.client.decoder.processProtoBuf(1, proto.SerializeToString())
-
-    assert ticker_bin.bid == ticker_proto.bid == 150.25
-    assert ticker_bin.bidSize == ticker_proto.bidSize == 100.0
-
-
-def test_binary_and_proto_tick_size_produce_identical_ticker_state():
-    """msgId 2 (TickSize). Binary and protobuf paths must update the
-    matching ``Ticker`` with the same volume / size value.
-    """
-
-    def _seedTicker(ib, reqId):
-        contract = ibi.Stock("AAPL", "SMART", "USD")
-        contract.conId = 7
-        ticker = ib.wrapper.subscriptions.get_or_create_ticker(contract)
-        ib.wrapper.subscriptions.add(
-            MktDataSub(reqId=reqId, contract=contract, ticker=ticker)
-        )
-        return ticker
-
-    # Binary path — tickType 8 (volume), size 1000
-    # Wire: tickSize is wrap("tickSize", [int, int, float]) which skips 2 fields
-    # so layout is [msgId, version, reqId, tickType, size]
-    ib_bin = ibi.IB()
-    ib_bin.client._serverVersion = 200
-    ib_bin.client.decoder.serverVersion = 200
-    ticker_bin = _seedTicker(ib_bin, 5)
-    ib_bin.client.decoder.handlers[2](["2", "1", "5", "8", "1000"])
-
-    # Proto path
-    ib_proto = ibi.IB()
-    ib_proto.client._serverVersion = 207
-    ib_proto.client.decoder.serverVersion = 207
-    ticker_proto = _seedTicker(ib_proto, 5)
-    proto = TickSize_pb2.TickSize(reqId=5, tickType=8, size="1000")
-    ib_proto.client.decoder.processProtoBuf(2, proto.SerializeToString())
-
-    assert ticker_bin.volume == ticker_proto.volume == 1000.0

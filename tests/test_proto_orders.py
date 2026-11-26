@@ -1298,7 +1298,7 @@ def test_compete_up_to_mid_round_trips_through_proto():
 
 
 def test_the_unset_double_decodes_as_unset_for_compete_against_best_offset():
-    """As on the binary path and for the mid offsets beside it."""
+    """As for the mid offsets beside it."""
     proto = Order_pb2.Order(
         competeAgainstBestOffset=sys.float_info.max, midOffsetAtWhole=sys.float_info.max
     )

@@ -1,8 +1,9 @@
 """Fuzz tests for the decoder.
 
-The decoder is fed random field lists for every binary message id and
-random bytes for every protobuf message id. It must log and drop what it
-cannot read, raise nothing, and still decode the next valid frame.
+The decoder is fed random bytes for every protobuf message id and random
+field lists as text frames, tickEFP among them. It must log and drop
+what it cannot read, raise nothing, and still decode the next valid
+frame.
 """
 
 from __future__ import annotations
@@ -12,11 +13,13 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import ib_async as ibi
+from ib_async._pb import CurrentTime_pb2
 from ib_async._requests import SingletonKey
 from ib_async.decoder import _PROTO_MESSAGES, Decoder
 from tests._property import examples
 
 SERVER_VERSION = 226
+CURRENT_TIME = 49
 
 fields = st.lists(
     st.one_of(
@@ -33,25 +36,25 @@ fields = st.lists(
 
 def decoder() -> tuple[ibi.IB, Decoder]:
     ib = ibi.IB()
-    return ib, Decoder(ib.wrapper, SERVER_VERSION)
+    return ib, Decoder(ib.wrapper)
 
 
 def assert_valid_frame_decodes(ib: ibi.IB, dec: Decoder) -> None:
     """Check that a current-time frame still answers a current-time request."""
     req = ib.wrapper.requests.open(SingletonKey("currentTime"))
-    dec.interpret(["49", "1", "1700000000"])
+    frame = CurrentTime_pb2.CurrentTime(currentTime=1700000000)
+    dec.processProtoBuf(CURRENT_TIME, frame.SerializeToString())
     assert req.future.done() and not req.future.cancelled()
     assert req.future.result().timestamp() == 1700000000
 
 
-MSG_IDS = sorted(Decoder(ibi.IB().wrapper, SERVER_VERSION).handlers)
-
-
-@given(msgId=st.sampled_from(MSG_IDS), body=fields)
+@given(msgId=st.sampled_from([47, 56, 69, 70, 3]), body=fields)
 @examples()
-def test_malformed_binary_frame_is_dropped(msgId, body):
+def test_malformed_text_frame_is_dropped(msgId, body):
+    """tickEFP (47) is the one text message read; any other is counted
+    as unknown."""
     ib, dec = decoder()
-    dec.interpret([str(msgId), *body])
+    dec.processText([str(msgId), *body])
     assert_valid_frame_decodes(ib, dec)
 
 

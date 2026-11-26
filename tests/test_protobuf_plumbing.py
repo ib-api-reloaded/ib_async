@@ -1,18 +1,22 @@
 """Protobuf wire framing: ``Client.sendProto`` framing, and the
-receive-side ``_onSocketHasData`` discriminator that strips the +200
-sentinel and routes to ``Decoder.processProtoBuf``.
+receive-side ``_onSocketHasData`` discriminator. It strips the +200
+sentinel and routes a protobuf frame to ``Decoder.processProtoBuf``, and
+routes a text frame to ``Decoder.processText``.
 """
 
 from __future__ import annotations
 
 import struct
+from unittest.mock import patch
 
 import pytest
 
 import ib_async as ibi
 from ib_async._pb import ManagedAccounts_pb2, NextValidId_pb2
 from ib_async._pb_msgids import PLACE_ORDER, PROTOBUF_MSG_ID
-from ib_async._server_versions import MAX_CLIENT_VER, MIN_SERVER_VER_PROTOBUF
+from ib_async._server_versions import MAX_CLIENT_VER
+
+TICK_EFP = 47
 
 
 def test_protobuf_msg_id_sentinel_is_200():
@@ -63,19 +67,11 @@ def test_send_proto_adds_sentinel_and_length_prefix():
 # --- Receive-side framing detection ---------------------------------------
 
 
-def _binary_legacy_frame(fields: list[str]) -> bytes:
-    """Build a legacy NUL-separated text frame as TWS would emit pre-201."""
-    body = ("\0".join(fields) + "\0").encode()
-    return struct.pack(">I", len(body)) + body
-
-
-def _binary_v201_frame(canonical_msg_id: int, rest_fields: list[str]) -> bytes:
-    """Build a v201+ binary frame: 4-byte BE wire msgId followed by NUL
-    text. The wire msgId equals the canonical id (no +200 sentinel).
-    With zero fields the body is just the 4-byte wire msgId — IBKR's
-    convention is to trail NULs only when there's at least one field."""
-    text = ("\0".join(rest_fields) + "\0").encode() if rest_fields else b""
-    body = struct.pack(">I", canonical_msg_id) + text
+def _text_frame(msg_id: int, fields: list[str]) -> bytes:
+    """Build a text frame: 4-byte BE wire msgId, then NUL-terminated
+    fields. The wire msgId is the canonical id (no +200 sentinel)."""
+    text = "".join([f + "\0" for f in fields]).encode()
+    body = struct.pack(">I", msg_id) + text
     return struct.pack(">I", len(body)) + body
 
 
@@ -85,7 +81,7 @@ def _protobuf_frame(canonical_msg_id: int, payload: bytes) -> bytes:
 
 
 def test_receive_routes_protobuf_message_to_processProtoBuf():
-    client = _client_at_version(MIN_SERVER_VER_PROTOBUF)
+    client = _client_at_version(MAX_CLIENT_VER)
 
     seen: list[tuple[int, bytes]] = []
     client.decoder.processProtoBuf = lambda mid, p: seen.append((mid, p))  # type: ignore[method-assign]
@@ -96,75 +92,65 @@ def test_receive_routes_protobuf_message_to_processProtoBuf():
     assert seen == [(PLACE_ORDER, b"\x0a\x05hello")]
 
 
-def test_receive_routes_v201_binary_message_to_interpret():
-    client = _client_at_version(MIN_SERVER_VER_PROTOBUF)
+def test_receive_routes_text_message_to_processText():
+    client = _client_at_version(MAX_CLIENT_VER)
 
     seen: list[list[str]] = []
-    client.decoder.interpret = lambda fields: seen.append(fields)  # type: ignore[method-assign]
+    client.decoder.processText = seen.append  # type: ignore[method-assign]
 
-    # Server emits a binary openOrderEnd (msgId 53, no +200) under the
-    # v201 framing: 4-byte BE wire msgId followed by NUL-separated text.
-    frame = _binary_v201_frame(53, [])
-    client._onSocketHasData(frame)
+    # A wire msgId of 200 or less is a text frame. The fields follow the
+    # id, which leads the list.
+    client._onSocketHasData(_text_frame(TICK_EFP, ["1", "5"]))
+    client._onSocketHasData(_text_frame(53, []))
 
-    assert seen == [["53"]]
-
-
-def test_receive_legacy_pre_handshake_routes_to_interpret():
-    # Before the server-version handshake completes, _serverVersion is
-    # 0; the receive-side falls back to legacy NUL-separated text. We
-    # don't simulate the actual handshake here — just verify the
-    # framing branch picks the legacy path.
-    client = _client_at_version(0)
-    seen: list[list[str]] = []
-
-    def fake_interpret(fields):
-        # Stop the handshake from kicking in by capturing the fields
-        # before the server-version-set side effect.
-        seen.append(fields)
-        # Reset so repeated calls in this test don't trigger snoop logic.
-        client._serverVersion = 0
-
-    client.decoder.interpret = fake_interpret  # type: ignore[method-assign]
-
-    # Synthetic post-handshake binary message: msgId 49 (currentTime)
-    # carried in legacy NUL-separated form.
-    frame = _binary_legacy_frame(["49", "1", "1700000000"])
-    client._serverVersion = 100  # below MIN_SERVER_VER_PROTOBUF
-    client._onSocketHasData(frame)
-
-    assert seen == [["49", "1", "1700000000"]]
+    assert seen == [["47", "1", "5"], ["53"]]
 
 
-def test_receive_handles_split_proto_then_binary_in_one_buffer():
-    client = _client_at_version(MIN_SERVER_VER_PROTOBUF)
+def test_receive_handles_proto_then_text_in_one_buffer():
+    client = _client_at_version(MAX_CLIENT_VER)
 
     proto_seen: list[tuple[int, bytes]] = []
-    bin_seen: list[list[str]] = []
+    text_seen: list[list[str]] = []
     client.decoder.processProtoBuf = lambda mid, p: proto_seen.append((mid, p))  # type: ignore[method-assign]
-    client.decoder.interpret = lambda fields: bin_seen.append(fields)  # type: ignore[method-assign]
+    client.decoder.processText = text_seen.append  # type: ignore[method-assign]
 
     frame_a = _protobuf_frame(PLACE_ORDER, b"\x08\x01")
-    frame_b = _binary_v201_frame(49, ["1", "1700000000"])
+    frame_b = _text_frame(TICK_EFP, ["1", "5"])
     client._onSocketHasData(frame_a + frame_b)
 
     assert proto_seen == [(PLACE_ORDER, b"\x08\x01")]
-    assert bin_seen == [["49", "1", "1700000000"]]
+    assert text_seen == [["47", "1", "5"]]
+
+
+def test_tick_efp_text_frame_reaches_the_wrapper():
+    """TWS sends tickEFP only as text. The decoder reads it; any other
+    text frame is counted as unknown."""
+    client = _client_at_version(MAX_CLIENT_VER)
+    fields = ["1", "5", "38", "2.5", "2.50", "101.25", "30", "20261218", "0.1", "0.2"]
+    with patch.object(client.wrapper, "tickEFP") as tickEFP:
+        client._onSocketHasData(_text_frame(TICK_EFP, fields))
+        tickEFP.assert_called_once_with(
+            5, 38, 2.5, "2.50", 101.25, 30, "20261218", 0.1, 0.2
+        )
+        assert client.tally.unknownMessages == 0
+
+        # currentTime has a protobuf form; its text form is not read.
+        client._onSocketHasData(_text_frame(49, ["1", "1700000000"]))
+        tickEFP.assert_called_once()
+    assert client.tally.unknownMessages == 1
+    assert client.tally.decodeFailures == 0
 
 
 # --- apiReady snoop on the protobuf receive path -------------------------
 
 
 def test_proto_path_snoops_next_valid_id_and_managed_accounts_to_fire_api_start():
-    # On a 207+ gateway TWS routes ``nextValidId`` (msgId 9) and
-    # ``managedAccounts`` (msgId 15) through the protobuf receive path.
-    # The handshake-completion snoop that flips ``_apiReady`` and fires
-    # ``apiStart`` lives in ``_onSocketHasData`` and used to run only in
-    # the binary branch, so the apiStart event never emitted on a fully
-    # protobuf session — ``connectAsync`` timed out at ``apiStart``.
+    # TWS sends ``nextValidId`` (msgId 9) and ``managedAccounts`` (msgId
+    # 15) as protobuf. ``_onSocketHasData`` starts the API and fires
+    # ``apiStart`` once both are in.
 
     ib = ibi.IB()
-    ib.client._serverVersion = 214
+    ib.client._serverVersion = MAX_CLIENT_VER
     fired: list[bool] = []
     ib.client.apiStart += lambda: fired.append(True)
 

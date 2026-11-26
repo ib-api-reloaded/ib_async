@@ -19,6 +19,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import ib_async as ibi
+from ib_async._pb import CurrentTime_pb2
 from ib_async._requests import SingletonKey
 from ib_async.decoder import _PROTO_MSG_CLASSES, Decoder, _initProtoMsgClasses
 from tests._property import examples
@@ -147,14 +148,15 @@ def messageFor(draw: st.DrawFn, msgId: int) -> Message:
 
 def decoder() -> tuple[ibi.IB, Decoder]:
     ib = ibi.IB()
-    dec = Decoder(ib.wrapper, SERVER_VERSION)
+    dec = Decoder(ib.wrapper)
     dec.logger = MagicMock()
     return ib, dec
 
 
 def assert_valid_frame_decodes(ib: ibi.IB, dec: Decoder) -> None:
     req = ib.wrapper.requests.open(SingletonKey("currentTime"))
-    dec.interpret(["49", "1", "1700000000"])
+    message = CurrentTime_pb2.CurrentTime(currentTime=1700000000)
+    dec.processProtoBuf(49, message.SerializeToString())
     assert req.future.done() and req.future.result().timestamp() == 1700000000
 
 

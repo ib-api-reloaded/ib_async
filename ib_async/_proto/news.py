@@ -290,10 +290,9 @@ def createHistoricalNewsRequestProto(
 ) -> HistoricalNewsRequest_pb2.HistoricalNewsRequest:
     """Build a ``HistoricalNewsRequest`` envelope.
 
-    ``historicalNewsOptions`` is the documented TagValue trailer the
-    binary path sends after ``totalResults``. The proto wire spells it
-    ``historicalNewsOptions`` (a ``map<string, string>``); empty /
-    ``None`` leaves the field unset.
+    ``historicalNewsOptions`` is the documented TagValue list. The proto
+    carries it as ``historicalNewsOptions`` (a ``map<string, string>``);
+    empty / ``None`` leaves the field unset.
     """
     proto = HistoricalNewsRequest_pb2.HistoricalNewsRequest()
     if reqId != UNSET_INTEGER:

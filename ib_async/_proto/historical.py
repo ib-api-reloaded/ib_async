@@ -213,9 +213,9 @@ def createHistoricalDataBars(
 ) -> HistoricalDataBars:
     """Decode a HistoricalData proto into ``HistoricalDataBars(reqId, bars)``.
 
-    The wrapper's ``historicalData(reqId, bar)`` is called per-bar by
-    the binary path; the protobuf path delivers all bars in a single
-    repeated field. Caller iterates and dispatches.
+    The wrapper's ``historicalData(reqId, bar)`` takes one bar; the
+    message delivers all bars in a single repeated field. Caller
+    iterates and dispatches.
     """
     reqId = proto.reqId if proto.HasField("reqId") else -1
     bars = [createBarData(b) for b in proto.historicalDataBars]
@@ -615,9 +615,7 @@ def createCancelHistoricalTicksProto(
 def createCancelContractDataProto(
     reqId: int,
 ) -> CancelContractData_pb2.CancelContractData:
-    """Build a CancelContractData proto. Proto-only message family —
-    the binary path has no equivalent.
-    """
+    """Build a CancelContractData proto."""
     proto = CancelContractData_pb2.CancelContractData()
     if reqId != UNSET_INTEGER:
         proto.reqId = reqId

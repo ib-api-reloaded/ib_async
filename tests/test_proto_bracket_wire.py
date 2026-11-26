@@ -91,12 +91,9 @@ def _place_bracket() -> list[PlaceOrderRequest_pb2.PlaceOrderRequest]:
 
 
 def test_bracket_frames_leave_in_parent_then_child_order():
-    """The parent's frame must hit the socket before the child's.
-
-    ``Client.sendProto`` writes straight to the connection while
-    ``Client.sendMsg`` (binary path) drains a throttle queue; a bracket
-    whose legs took different paths could invert, and the server would
-    reject the child for referencing an unknown parent.
+    """The parent's frame must hit the socket before the child's; an
+    inverted bracket makes the server reject the child for referencing
+    an unknown parent.
     """
     parent_proto, child_proto = _place_bracket()
     assert parent_proto.orderId == _PARENT_ID

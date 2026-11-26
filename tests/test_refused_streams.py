@@ -61,7 +61,7 @@ def framesSent(session: Session) -> int:
     return len(session.conn.sent)
 
 
-def started(name: str, proto: bool) -> tuple[Session, Live, int]:
+def started(name: str) -> tuple[Session, Live, int]:
     session = Session()
     ready(session)
     live = STREAMS[name](session.ib)
@@ -76,13 +76,12 @@ def reqIdOf(session: Session) -> int:
     return sub.reqId
 
 
-@pytest.mark.parametrize("proto", [False, True])
 @pytest.mark.parametrize(("name", "code"), ENDED)
 def test_a_stream_ibkr_refuses_ends_and_can_be_requested_again(
-    name: str, code: int, proto: bool
+    name: str, code: int
 ) -> None:
-    session, live, sent = started(name, proto)
-    session.receive(errorFrame(reqIdOf(session), code, "refused", proto))
+    session, live, sent = started(name)
+    session.receive(errorFrame(reqIdOf(session), code, "refused"))
 
     assert len(session.ib.wrapper.subscriptions) == 0
     # No cancel for a stream IBKR never served.
@@ -97,17 +96,14 @@ def test_a_stream_ibkr_refuses_ends_and_can_be_requested_again(
         assert again.isUnset(again.last)
 
 
-@pytest.mark.parametrize("proto", [False, True])
-def test_a_stream_refused_with_321_is_an_error_that_ends_it(proto: bool) -> None:
+def test_a_stream_refused_with_321_is_an_error_that_ends_it() -> None:
     """321 is a warning for an accepted order and an error for a stream."""
-    session, _, _ = started("reqPnL", proto)
+    session, _, _ = started("reqPnL")
     seen: list[tuple[int, bool]] = []
     session.ib.streamErrorEvent += lambda stream, code, text, ended: seen.append(
         (code, ended)
     )
-    session.receive(
-        errorFrame(reqIdOf(session), 321, "Model name 'M' is incorrect", proto)
-    )
+    session.receive(errorFrame(reqIdOf(session), 321, "Model name 'M' is incorrect"))
 
     assert seen == [(321, True)]
     counters = session.ib.runtimeState().counters
@@ -115,9 +111,8 @@ def test_a_stream_refused_with_321_is_an_error_that_ends_it(proto: bool) -> None
     assert counters.subscriptionsRefused == 1
 
 
-@pytest.mark.parametrize("proto", [False, True])
 @pytest.mark.parametrize("code", PARTLY_SERVED)
-def test_a_snapshot_ibkr_serves_in_part_still_completes(code: int, proto: bool) -> None:
+def test_a_snapshot_ibkr_serves_in_part_still_completes(code: int) -> None:
     """IBKR sends what the account may see and says the rest is not
     subscribed. That is a notice: the snapshot goes on and ends with
     tickSnapshotEnd, as a full one does."""
@@ -129,9 +124,7 @@ def test_a_snapshot_ibkr_serves_in_part_still_completes(code: int, proto: bool) 
     session.run()
     reqId = reqIdOf(session)
 
-    session.receive(
-        errorFrame(reqId, code, "part of the data is not subscribed", proto)
-    )
+    session.receive(errorFrame(reqId, code, "part of the data is not subscribed"))
     assert not tickers.done()
     assert len(session.ib.wrapper.subscriptions) == 1
 
@@ -143,11 +136,10 @@ def test_a_snapshot_ibkr_serves_in_part_still_completes(code: int, proto: bool) 
     assert counters.warnings == (CodeCount(code, 1),) and counters.errors == ()
 
 
-@pytest.mark.parametrize("proto", [False, True])
 @pytest.mark.parametrize("code", CONTINUED)
-def test_a_stream_ibkr_goes_on_serving_stays(code: int, proto: bool) -> None:
-    session, live, sent = started("reqMktData", proto)
-    session.receive(errorFrame(reqIdOf(session), code, "notice", proto))
+def test_a_stream_ibkr_goes_on_serving_stays(code: int) -> None:
+    session, live, sent = started("reqMktData")
+    session.receive(errorFrame(reqIdOf(session), code, "notice"))
 
     assert len(session.ib.wrapper.subscriptions) == 1
     assert STREAMS["reqMktData"](session.ib) is live

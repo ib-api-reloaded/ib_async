@@ -27,16 +27,15 @@ Wire-shape notes:
   (``value`` → ``val`` is the legacy spelling).
 * ``SecDefOptParameter`` carries repeated scalar containers
   ``expirations: string`` and ``strikes: double`` — converted to plain
-  ``list[str]`` / ``list[float]`` so downstream call sites (``OptionChain``)
-  see the same shapes the binary path produces.
+  ``list[str]`` / ``list[float]`` for downstream call sites
+  (``OptionChain``).
 * ``ExerciseOptionsRequest`` has three optional fields (``manualOrderTime``,
   ``customerAccount``, ``professionalCustomer``); the factory takes
   ``str | None`` / ``bool | None`` so callers can leave them unset and
   the wire frame stays compatible with older TWS builds.
 * ``CalculateImpliedVolatilityRequest`` / ``CalculateOptionPriceRequest``
   each carry an options-string-map (``impliedVolatilityOptions`` /
-  ``optionPriceOptions``); the binary path always sends them empty, so
-  the factory leaves them empty too.
+  ``optionPriceOptions``), written from the caller's TagValue list.
 """
 
 from __future__ import annotations
@@ -164,8 +163,8 @@ class UserInfoArgs:
 class ErrorMessageArgs:
     """Args for ``Wrapper.error(reqId, errorCode, errorMsg, advancedOrderRejectJson, errorTime)``.
 
-    Wire field ``id`` is renamed to ``reqId`` because the canonical
-    binary path delivers the id to wrappers under that name. Every
+    Wire field ``id`` is renamed to ``reqId``, the name
+    ``Wrapper.error`` takes it under. Every
     field has a HasField-guarded default so a malformed frame still
     produces a callable args tuple.
     """
@@ -186,10 +185,10 @@ def createErrorArgs(proto: ErrorMessage_pb2.ErrorMessage) -> ErrorMessageArgs:
     """Decode an ``ErrorMessage`` proto into the wrapper's flat error args.
 
     Live trading hazard: rejected orders, margin warnings, and
-    connection-degraded notices all flow through here. The canonical
-    binary path's ``Wrapper.error`` carries ``reqId`` as the first
-    positional, so we keep that spelling on the args dataclass even
-    though the wire field is ``id``.
+    connection-degraded notices all flow through here.
+    ``Wrapper.error`` takes ``reqId`` as the first positional, so the
+    args dataclass keeps that spelling even though the wire field is
+    ``id``.
     """
     return ErrorMessageArgs(
         reqId=proto.id if proto.HasField("id") else 0,
