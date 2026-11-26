@@ -20,7 +20,7 @@ from tests._sim import CONTRACT, PlacedOrder, SimulatedTws
 # Each ends an order that was not modified after TWS acknowledged it.
 ENDS_UNMODIFIED_ORDER = [
     104, 109, 134, 160, 163, 201, 355, 382, 383, 388, 403, 422,
-    439, 440, 441, 442, 443, 444, 10240, 10241, 10242,
+    439, 440, 441, 442, 443, 444, 10240, 10241, 10242, 10311, 10329, 10341,
 ]  # fmt: skip
 
 # Warnings for any order.

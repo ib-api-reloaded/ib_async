@@ -534,7 +534,10 @@ are fixed in v3.0:
   checks a modification's terms as it does a new order's, and a refused
   modification leaves the order working on its old terms. They now end a
   new order and hold a modified one until TWS reports a status, as 201
-  and 134 do. (:issue:`259`, thanks to @lucafranco1994pot-cloud)
+  and 134 do. So do 10311 and 10329, which TWS sends for a directly
+  routed order while the API precautionary settings do not bypass the
+  redirect warning, and 10341, "Parent order id cannot be modified."
+  (:issue:`259`, thanks to @lucafranco1994pot-cloud)
 * **Dividends of 1,000 or more were lost.** IBKR's dividend tick separates
   its fields with commas and also groups a number's thousands with them,
   so ``',1,089.45,20261116,2.199'`` split into five fields, was logged as

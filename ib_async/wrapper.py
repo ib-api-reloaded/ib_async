@@ -303,6 +303,34 @@ class RequestError(Exception):
 #    acknowledged it (_ENDS_UNMODIFIED_ORDER_CODES).
 # 3. A refused cancel leaves the order as it was (_REFUSED_CANCEL_CODES).
 # 4. Any other error ends the order, including 202 (Order cancelled).
+#
+# Sources, most reliable first:
+#
+# a. IBKR's error code table, the current one. It lists codes the old page
+#    does not (10310 to 10347 among them):
+#      https://www.interactivebrokers.com/docs/tws-api/doc/error/codes
+#    It gives each code's text, not what the code does to the order. The
+#    site refuses automated fetches, so read it in a browser.
+# b. IBKR's old message code page, which IBKR has deprecated and which ends
+#    at 10284. The texts below are quoted from it unless a code names
+#    another source:
+#      https://interactivebrokers.github.io/tws-api/message_codes.html
+# c. Reports of what TWS did with an order after a code, cited at the code.
+#    A quoted IBKR rejection text ("New order rejected - ...") outweighs a
+#    forum reply's opinion.
+#
+# A code moves out of the default (4) only on evidence of what happens to
+# the order. Its wording alone is not enough. Reviewed on 2026-11-26 and
+# left at the default, since only their texts are known. The texts are
+# paraphrased from search excerpts of table a, except 10340's:
+#   10310 the Solicited field is for orders initiated or recommended by
+#         the broker or advisor and approved by the client.
+#   10331 a stop order warning.
+#   10332 a cryptocurrency volatility warning.
+#   10333 an option exercise at the money warning.
+#   10334 confirm the omnibus order account.
+#   10340 The following order attribute is not supported: %s
+#   10347 the security has limited liquidity.
 
 # Warnings are currently:
 # 105 - Order being modified does not match the original order. (?)
@@ -331,11 +359,13 @@ class RequestError(Exception):
 # 202 - Order cancelled - Reason:
 
 # Errors that end an order, except one modified after TWS acknowledged it
-# (``Trade.modifyUnconfirmed``). A refused modification leaves the order
+# (``Trade.modifyUnconfirmed``). This list only holds back an end: a code
+# not on any list ends every order, and a code here ends every order but a
+# modified one, which stays live. A refused modification leaves the order
 # working on its old terms and no status follows. TWS does not confirm a
 # modification, so a later error of this kind on a modified order also leaves
-# it live until TWS reports a status that ends it. Texts are from
-# https://interactivebrokers.github.io/tws-api/message_codes.html
+# it live until TWS reports a status that ends it. Texts are from source b
+# above unless a code names another.
 #
 # Reported on a modification:
 #   201   Order rejected - reason: (an invalid stop price; the order stayed
@@ -350,6 +380,7 @@ class RequestError(Exception):
 #   444   Volatility Combo order is not yet acknowledged. Cannot submit changes at this time.
 #   10241 Order Quantity is expressed in monetary terms. Modification is not supported via API.
 #   10242 Fractional-sized order cannot be modified via API.
+#   10341 Parent order id cannot be modified. (table a)
 # These check the same fields as 439. No report of them on a modification is
 # known:
 #   441   Algo attributes validation failed:
@@ -372,6 +403,27 @@ class RequestError(Exception):
 #   388   Order size is smaller than the minimum requirement.
 #   403   Invalid stop price.
 #   10240 You must enter a valid Price Cap.
+# The API precautionary settings (Global Configuration, API, Precautions).
+# TWS sends these only while the matching "Bypass ... for API Orders"
+# setting is off; with it on, the order goes out without a message.
+#   10311 This order will be directly routed to <exchange>. Direct routed
+#         orders may result in higher trade fees. Restriction is specified
+#         in Precautionary Settings of Global Configuration/API.
+#         A Sierra Chart user quotes it as "New order rejected - This order
+#         will be directly routed to ISLAND." Orders were rejected until
+#         "Bypass Redirect Order warning for Stock API Orders" was on:
+#         https://www.sierrachart.com/SupportBoard.php?ThreadID=81405
+#         The full text with the code:
+#         https://github.com/IbcAlpha/IBC/issues/222
+#   10329 This order will be directly routed to OVERNIGHT. Restriction is
+#         specified in Precautionary Settings of Global Configuration/API.
+#         https://www.elitetrader.com/et/threads/ib-api-and-overnight-orders.383142/
+#         The one report found. The poster's trades filled from TWS; a reply
+#         calls the code a notice; nothing shows whether the API order was
+#         rejected. It is here because a modified order stays live under
+#         either reading. Whether it ends a new order is unconfirmed: if it
+#         is a notice, it belongs in _WARNING_CODES. Settle it by placing an
+#         order TWS routes to OVERNIGHT with the redirect bypass off.
 _ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
     {
         104,
@@ -395,6 +447,9 @@ _ENDS_UNMODIFIED_ORDER_CODES: Final[frozenset[int]] = frozenset(
         10240,
         10241,
         10242,
+        10311,
+        10329,
+        10341,
     }
 )
 
