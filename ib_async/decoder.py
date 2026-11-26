@@ -130,6 +130,7 @@ if TYPE_CHECKING:
     from ._pb.WshMetaData_pb2 import WshMetaData as WshMetaDataProto
 
 from . import _proto as _converters
+from ._proto.safe import clear_unset_fields
 from ._requests import ReqIdKey
 from .objects import EmptyT
 from .runtime import Tally
@@ -385,6 +386,8 @@ class Decoder(Generic[EmptyT]):
         try:
             proto = entry.protoClass()
             proto.ParseFromString(payload)
+            # A field holding IBKR's unset value reads as absent.
+            clear_unset_fields(proto)
             entry.handle(proto)
         except Exception as exc:
             self.tally.decodeFailures += 1

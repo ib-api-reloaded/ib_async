@@ -703,10 +703,9 @@ def _decodeOrderComboLegs(
         return []
     out: list[OrderComboLeg] = []
     for legProto in contractProto.comboLegs:
-        leg = OrderComboLeg()
-        if legProto.HasField("perLegPrice"):
-            leg.price = legProto.perLegPrice
-        out.append(leg)
+        # Built with the price so OrderComboLeg makes it a Decimal.
+        price = legProto.perLegPrice if legProto.HasField("perLegPrice") else None
+        out.append(OrderComboLeg(price=price))
     return out
 
 
@@ -1319,11 +1318,10 @@ def createCommissionReport(
     if proto.HasField("bondYield"):
         report.yield_ = safe_decimal(proto.bondYield)
     if proto.HasField("yieldRedemptionDate"):
-        # Historic int domain field; wire ships YYYYMMDD as string.
-        try:
-            report.yieldRedemptionDate = int(proto.yieldRedemptionDate)
-        except ValueError:
-            report.yieldRedemptionDate = 0
+        # Historic int domain field; wire ships YYYYMMDD as string. An
+        # unset or unreadable date stays 0.
+        date = safe_decimal(proto.yieldRedemptionDate)
+        report.yieldRedemptionDate = int(date) if date is not None else 0
     return report
 
 

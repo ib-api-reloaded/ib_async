@@ -32,6 +32,7 @@ from ib_async.ordertypes.spec import (
     checkedValue,
     takesInfinity,
 )
+from ib_async.util import UNSET_DOUBLE
 from tests._property import examples
 
 numbers = st.one_of(
@@ -87,7 +88,9 @@ def test_finite_decimal_never_raises_and_is_finite_or_none(value):
     result = finiteDecimal(value)
     assert result is None or (isinstance(result, Decimal) and result.is_finite())
     if type(value) is float and math.isfinite(value):
-        assert result == Decimal(str(value))
+        # IBKR's unset double is unset.
+        expected = None if value == UNSET_DOUBLE else Decimal(str(value))
+        assert result == expected
     if type(value) is int:
         assert result == Decimal(value)
 

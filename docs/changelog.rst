@@ -484,6 +484,16 @@ are fixed in v3.0:
   registered, so the corrected request was deduplicated onto it and
   never updated. 321 now ends the stream it names, as the other
   stream-ending codes do.
+* **IBKR's unset values reached user objects.** A protobuf field that
+  arrives holding IBKR's unset value for its type (2147483647 in a
+  32-bit field, 9223372036854775807 in a 64-bit one,
+  1.7976931348623157e308 in a double) now reads as absent, so it
+  becomes the field's default, usually None, in every message. Before,
+  only Decimal fields were checked, and an order's ``volatilityType``,
+  a contract's ``strike``, a PnL or a margin could carry the magic
+  number. An order price equal to the unset double, also as a
+  ``Decimal``, is None and left off the wire. Combo leg prices on an
+  open order are Decimals, as their type says.
 * **A startup request that failed was dropped silently.** Connect
   reported only the startup requests that timed out. One that failed
   otherwise, such as a refusal raised as ``RequestError`` with

@@ -285,12 +285,13 @@ def finiteDecimal(
     ``Decimal('Infinity')``, a bool, and a non-numeric string all return
     ``None``. ``None`` means unset, so ``if order.lmtPrice:`` checks stay
     correct. A ``Decimal('NaN')`` would be truthy, pass that check, and
-    corrupt the wire message.
+    corrupt the wire message. IBKR's unset double (``UNSET_DOUBLE``)
+    returns ``None`` too, as in :func:`decimalOrInfinity`.
     """
     if value is None or value == "":
         return None
     if isinstance(value, Decimal):
-        return value if value.is_finite() else None
+        return value if _isDecimalValue(value) else None
     if isinstance(value, bool):
         return None  # True is no price
     if isinstance(value, numbers.Integral):
@@ -299,7 +300,12 @@ def finiteDecimal(
         result = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return None
-    return result if result.is_finite() else None
+    return result if _isDecimalValue(result) else None
+
+
+def _isDecimalValue(number: Decimal) -> bool:
+    """Whether ``number`` is a value: finite and not IBKR's unset double."""
+    return number.is_finite() and float(number) != UNSET_DOUBLE
 
 
 # competeAgainstBestOffset for a Pegged to Best order that competes up to the

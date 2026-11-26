@@ -18,6 +18,9 @@ from collections.abc import MutableMapping, Sequence
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Final, TypeGuard, TypeVar
 
+from google.protobuf.descriptor import FieldDescriptor
+from google.protobuf.message import Message
+
 from ..util import UNSET_DECIMAL, UNSET_DOUBLE, UNSET_INTEGER, UNSET_LONG
 
 if TYPE_CHECKING:
@@ -98,10 +101,11 @@ def is_valid_int(value: int | None) -> TypeGuard[int]:
 
 def is_valid_float(value: float | Decimal | None) -> TypeGuard[float | Decimal]:
     """Float / Decimal analogue of :func:`is_valid_int`. Rejects
-    ``None`` and the IBKR magic ``UNSET_DOUBLE`` sentinel."""
+    ``None`` and the IBKR magic ``UNSET_DOUBLE`` sentinel, also as a
+    Decimal, which ``float()`` would turn back into it on the wire."""
     if value is None:
         return False
-    return value != UNSET_DOUBLE
+    return float(value) != UNSET_DOUBLE
 
 
 def is_valid_long(value: int | None) -> TypeGuard[int]:
@@ -116,10 +120,57 @@ def is_valid_decimal(value: Decimal | None) -> TypeGuard[Decimal]:
     """Stringly-encoded Decimal analogue. Rejects ``None`` and the
     ``UNSET_DECIMAL`` sentinel. Use for proto string fields that carry
     a Decimal in IBKR's canonical wire form (e.g.
-    ``Order.totalQuantity``)."""
+    ``Order.totalQuantity``). Rejects ``UNSET_DOUBLE`` too."""
     if value is None:
         return False
-    return value != UNSET_DECIMAL
+    return value != UNSET_DECIMAL and float(value) != UNSET_DOUBLE
+
+
+# The value IBKR writes in a numeric field it did not set, by the field's
+# protobuf type. A 32-bit field can hold only UNSET_INTEGER, a 64-bit one
+# UNSET_LONG; 2147483647 in a 64-bit field (a permId, say) is a value.
+_UNSET_BY_CPPTYPE: Final[dict[int, int | float]] = {
+    FieldDescriptor.CPPTYPE_INT32: UNSET_INTEGER,
+    FieldDescriptor.CPPTYPE_UINT32: UNSET_INTEGER,
+    FieldDescriptor.CPPTYPE_INT64: UNSET_LONG,
+    FieldDescriptor.CPPTYPE_UINT64: UNSET_LONG,
+    FieldDescriptor.CPPTYPE_DOUBLE: UNSET_DOUBLE,
+}
+
+
+def clear_unset_fields(message: Message) -> None:
+    """Clear every numeric field of ``message``, nested ones included,
+    that holds IBKR's unset value for its type, and drop such values from
+    repeated fields.
+
+    IBKR's clients send an unset field as absent, so a field present with
+    the unset value means the same: after this, the converters' ``HasField``
+    checks give the field's default (None in the domain objects). NaN and
+    infinity stay; +Infinity is a value for ``competeAgainstBestOffset``.
+    """
+    for field, value in message.ListFields():
+        if field.cpp_type == FieldDescriptor.CPPTYPE_MESSAGE:
+            if field.message_type.GetOptions().map_entry:
+                mapped = field.message_type.fields_by_name["value"]
+                if mapped.cpp_type == FieldDescriptor.CPPTYPE_MESSAGE:
+                    for item in value.values():
+                        clear_unset_fields(item)
+            elif field.is_repeated:
+                for item in value:
+                    clear_unset_fields(item)
+            else:
+                clear_unset_fields(value)
+            continue
+        unset = _UNSET_BY_CPPTYPE.get(field.cpp_type)
+        if unset is None:
+            continue
+        if field.is_repeated:
+            kept = [item for item in value if item != unset]
+            if len(kept) != len(value):
+                del value[:]
+                value.extend(kept)
+        elif value == unset:
+            message.ClearField(field.name)
 
 
 def format_proto_double(value: float) -> str:
