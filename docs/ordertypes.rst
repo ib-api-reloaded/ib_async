@@ -653,31 +653,6 @@ A market order at the best price on BOX; any unfilled part becomes a limit order
 - Products: OPT
 - Exchanges: BOX
 
-Auction Limit (``LMT``)
-^^^^^^^^^^^^^^^^^^^^^^^
-
-A limit order in a BOX price improvement auction.
-
-.. code-block:: python
-
-    AuctionLimitOrder("BUY", 10, 2.50, 2)
-
-.. list-table::
-   :header-rows: 1
-
-   * - Parameter
-     - Order field
-     - Meaning
-   * - ``lmtPrice``
-     - ``lmtPrice``
-     - The limit price.
-   * - ``auctionStrategy``
-     - ``auctionStrategy``
-     - 1 match, 2 improvement, 3 transparent.
-
-- Products: OPT
-- Exchanges: BOX
-
 Pegged to Stock (``PEG STK``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -1655,7 +1630,7 @@ Built
    * - ``MKT`` (``MARKET``)
      - ``MarketOrder``, ``MarketOnOpenOrder``
    * - ``LMT`` (``LIMIT``)
-     - ``LimitOrder``, ``LimitOnOpenOrder``, ``DiscretionaryOrder``, ``SweepToFillOrder``, ``BlockOrder``, ``AuctionLimitOrder``, ``IbkrAtsLimitOrder``, ``ComboLegPricesOrder``
+     - ``LimitOrder``, ``LimitOnOpenOrder``, ``DiscretionaryOrder``, ``SweepToFillOrder``, ``BlockOrder``, ``IbkrAtsLimitOrder``, ``ComboLegPricesOrder``
    * - ``STP`` (``STOP``)
      - ``StopOrder``
    * - ``STP LMT`` (``STOP LIMIT``, ``STOPLIMIT``, ``STOPLMT``, ``STPLMT``)

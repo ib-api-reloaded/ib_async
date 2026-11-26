@@ -96,7 +96,7 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 * **``IB.exerciseOptions``** takes ``manualOrderTime``, ``customerAccount``
   and ``professionalCustomer``, which the request already carried.
   (:issue:`166`, thanks to @li-plus)
-* **39 order types** in ``ib_async.ordertypes``, one constructor each, from
+* **38 order types** in ``ib_async.ordertypes``, one constructor each, from
   Market on Close, Limit on Open and Trailing Stop to Midprice, the Snap
   types, the IBKR ATS pegs and the combo types, generated with their
   documentation from one catalog. Each validates its values (an action
@@ -446,6 +446,12 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   ``deltaNeutralValidation``, ``verifyAndAuthMessageAPI`` and
   ``verifyAndAuthCompleted`` are gone: only text messages reached
   them.
+* ``Order`` fields that never reached TWS: ``auctionStrategy``,
+  ``eTradeOnly``, ``firmQuoteOnly``, ``nbboPriceCap``, ``faProfile``,
+  ``basisPoints`` and ``basisPointsType``, and the ``AuctionLimitOrder``
+  constructor. IBKR's Order protobuf message has no field for them, so
+  their values were never sent or received, and an ``AuctionLimitOrder``
+  went out as a plain limit order.
 
 **Fixed (silent-data-loss and wire-protocol bugs)**
 

@@ -456,24 +456,6 @@ CATALOG: tuple[OrderTypeSpec, ...] = (
         example='"BUY", 10',
     ),
     OrderTypeSpec(
-        className="AuctionLimitOrder",
-        title="Auction Limit",
-        orderType="LMT",
-        summary="A limit order in a BOX price improvement auction.",
-        stability=VENUE,
-        params=(
-            LMT_PRICE,
-            Param(
-                "auctionStrategy",
-                "auctionStrategy",
-                "1 match, 2 improvement, 3 transparent.",
-            ),
-        ),
-        products=("OPT",),
-        exchanges=("BOX",),
-        example='"BUY", 10, 2.50, 2',
-    ),
-    OrderTypeSpec(
         className="PeggedToStockOrder",
         title="Pegged to Stock",
         orderType="PEG STK",

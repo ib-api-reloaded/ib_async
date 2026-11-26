@@ -22,7 +22,6 @@ __all__ = [
     "Adaptive",
     "ArrivalPrice",
     "AtAuctionOrder",
-    "AuctionLimitOrder",
     "BalanceImpactRisk",
     "BlockOrder",
     "BoxTopOrder",
@@ -1167,44 +1166,6 @@ def BoxTopOrder(
             action,
             totalQuantity,
             {},
-            kwargs,
-            algo,
-            routing,
-            adjust,
-        )
-    )
-
-
-def AuctionLimitOrder(
-    action: str,
-    totalQuantity: Decimal | float | str,
-    lmtPrice: Decimal | float | str,
-    auctionStrategy: int,
-    *,
-    algo: Algo | None = None,
-    routing: Routing | None = None,
-    adjust: Adjustment | None = None,
-    **kwargs: Any,
-) -> Order:
-    """
-    Auction Limit (``LMT``): A limit order in a BOX price improvement auction.
-
-    Products: OPT. Exchanges: BOX. Stability: venue.
-
-    Args:
-        lmtPrice: The limit price.
-        auctionStrategy: 1 match, 2 improvement, 3 transparent.
-
-    Example::
-
-        AuctionLimitOrder("BUY", 10, 2.50, 2)
-    """
-    return Order(
-        **build(
-            SPECS["AuctionLimitOrder"],
-            action,
-            totalQuantity,
-            {"lmtPrice": lmtPrice, "auctionStrategy": auctionStrategy},
             kwargs,
             algo,
             routing,

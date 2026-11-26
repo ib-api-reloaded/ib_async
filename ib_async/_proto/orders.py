@@ -123,9 +123,7 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
     (domain default ``True``) that stages the order instead of
     transmitting it.
 
-    Every Order field ``Order_pb2`` has is written; IBKR's ``Order_pb2``
-    has no ``auctionStrategy``, so an auction order's strategy is not sent
-    on this path. Compliance / origination fields (``customerAccount``,
+    Every Order field is written. Compliance / origination fields (``customerAccount``,
     ``professionalCustomer``, ``bondAccruedInterest``, ``includeOvernight``,
     ``submitter``) are written on send, so an order fetched and placed
     again keeps them. Specialized order-behavior flags (``allowPreOpen``,

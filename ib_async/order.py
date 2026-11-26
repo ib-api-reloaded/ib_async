@@ -70,7 +70,6 @@ class Order:
     trailStopPrice: Decimal | None = None
     trailingPercent: Decimal | None = None
     faGroup: str = ""
-    faProfile: str = ""  # obsolete
     faMethod: str = ""
     faPercentage: str = ""
     designatedLocation: str = ""
@@ -79,11 +78,7 @@ class Order:
     shortSaleSlot: int = 0
     exemptCode: int = -1
     discretionaryAmt: float = 0.0
-    eTradeOnly: bool = False
-    firmQuoteOnly: bool = False
-    nbboPriceCap: Decimal | None = None
     optOutSmartRouting: bool = False
-    auctionStrategy: int = 0
     startingPrice: Decimal | None = None
     stockRefPrice: Decimal | None = None
     delta: Decimal | None = None
@@ -105,8 +100,6 @@ class Order:
     deltaNeutralDesignatedLocation: str = ""
     continuousUpdate: bool = False
     referencePriceType: int | None = None
-    basisPoints: Decimal | None = None
-    basisPointsType: int | None = None
     scaleInitLevelSize: int | None = None
     scaleSubsLevelSize: int | None = None
     scalePriceIncrement: Decimal | None = None

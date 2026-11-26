@@ -57,6 +57,7 @@ from ib_async._proto.orders import (
 from ib_async.contract import Stock, TagValue
 from ib_async.objects import ExecutionFilter
 from ib_async.order import (
+    ORDER_FIELD_TYPES,
     ExecutionCondition,
     MarginCondition,
     Order,
@@ -716,6 +717,18 @@ def test_cancels_carry_the_cme_tagging_fields():
 # swallow the wire data; instead we drop the wire field intentionally
 # until the dataclass grows the matching attribute.
 # ---------------------------------------------------------------------------
+
+
+def test_every_scalar_order_field_has_a_wire_field():
+    """Every scalar Order field is a field of IBKR's Order proto or of the
+    AttachedOrders proto sent beside it. A field in neither could never
+    reach TWS."""
+    names = {
+        *Order_pb2.Order.DESCRIPTOR.fields_by_name,
+        *AttachedOrders_pb2.AttachedOrders.DESCRIPTOR.fields_by_name,
+    }
+    missing = [name for name in ORDER_FIELD_TYPES if name not in names]
+    assert not missing, missing
 
 
 def test_create_order_reads_every_order_field():

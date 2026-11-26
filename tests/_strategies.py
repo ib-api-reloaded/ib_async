@@ -20,7 +20,6 @@ quantities = st.decimals(Decimal("0.0001"), Decimal(1000000), places=4)
 # Order fields that the Order proto does not carry.
 NOT_ON_THE_WIRE = {
     "orderId",  # sent in the request envelope and passed to the decoder
-    "auctionStrategy",  # IBKR's Order proto has no such field
 }
 
 
