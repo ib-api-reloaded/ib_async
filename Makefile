@@ -9,7 +9,7 @@
 # bindings bundled into the package without needing ``protoc`` or
 # ``grpcio-tools``.
 
-.PHONY: help sync protos ordertypes datarequests twsapi-status twsapi-bump build release-check release publish-dry-run publish publish-test ruff typecheck prettier lint test test-report test-deep test-matrix test-repeat examples-check format clean
+.PHONY: help sync protos ordertypes datarequests twsapi-status twsapi-bump twsapi-unpack build release-check release publish-dry-run publish publish-test ruff typecheck prettier lint test test-report test-deep test-matrix test-repeat examples-check format clean
 
 PYTHON ?= uv run python
 PB_DIR := ib_async/_pb
@@ -48,7 +48,8 @@ help:
 	@echo "  ordertypes - regenerate the order type constructors and docs from the catalog"
 	@echo "  datarequests - regenerate the data request value types from the catalog"
 	@echo "  twsapi-status - pinned TWS API vs what IBKR still serves"
-	@echo "  twsapi-bump V=<version> - re-pin TWS API (fetch, verify, prime cache)"
+	@echo "  twsapi-bump V=<version> [FROM=<zip or installer>] - re-pin TWS API (fetch, verify, prime cache)"
+	@echo "  twsapi-unpack FROM=<zip or installer> DEST=<dir> - write the whole TWS API to DEST"
 	@echo "  build    - regenerate protos, then build sdist + wheel into dist/"
 	@echo "  release-check - every reason not to publish this version now"
 	@echo "  release  - protos + lint + test, build from HEAD, smoke install; no upload"
@@ -94,15 +95,22 @@ datarequests:
 
 # IBKR prunes old TWS API archives without notice. ``twsapi-status``
 # reports whether the pinned one is still downloadable alongside the
-# versions IBKR currently publishes; ``twsapi-bump`` re-pins to one of
-# them after checking the archive carries the .proto schemas the build
-# needs.
+# versions IBKR currently publishes and their installers; ``twsapi-bump``
+# re-pins to one of them after checking the archive carries the .proto
+# schemas the build needs. From 10.53 IBKR publishes only installers:
+# pass the Linux installer's URL as FROM. ``twsapi-unpack`` writes the
+# whole TWS API from a zip or installer to DEST, for reading IBKR's
+# client sources.
 twsapi-status:
 	$(PYTHON) scripts/twsapi.py status
 
 twsapi-bump:
-	@test -n "$(V)" || (echo "usage: make twsapi-bump V=<version>"; exit 2)
-	$(PYTHON) scripts/twsapi.py bump $(V)
+	@test -n "$(V)" || (echo "usage: make twsapi-bump V=<version> [FROM=<zip or installer path or URL>]"; exit 2)
+	$(PYTHON) scripts/twsapi.py bump $(V) $(if $(FROM),--from $(FROM))
+
+twsapi-unpack:
+	@test -n "$(FROM)" -a -n "$(DEST)" || (echo "usage: make twsapi-unpack FROM=<zip or installer path or URL> DEST=<dir>"; exit 2)
+	$(PYTHON) scripts/twsapi.py unpack $(FROM) $(DEST)
 
 # Wheel + sdist always bundle freshly-generated bindings. The
 # ``protos`` prerequisite guarantees ``ib_async/_pb/`` exists with

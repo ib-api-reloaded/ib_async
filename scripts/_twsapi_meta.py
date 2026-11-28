@@ -22,10 +22,13 @@ PYPROJECT = REPO_ROOT / "pyproject.toml"
 class TwsapiMeta:
     version: str
     archive_sha256: str
+    # Where the pinned archive is fetched from, when it is not IBKR's
+    # per-version zip (from 10.53 IBKR publishes only installers).
+    url: str = ""
 
     @property
     def archive_url(self) -> str:
-        return (
+        return self.url or (
             "https://interactivebrokers.github.io/downloads/"
             f"twsapi_macunix.{self.version}.zip"
         )
@@ -58,7 +61,11 @@ def load() -> TwsapiMeta:
     with PYPROJECT.open("rb") as f:
         cfg = tomllib.load(f)
     t = cfg["tool"]["ib_async"]["twsapi"]
-    return TwsapiMeta(version=t["version"], archive_sha256=t["archive_sha256"])
+    return TwsapiMeta(
+        version=t["version"],
+        archive_sha256=t["archive_sha256"],
+        url=t.get("archive_url", ""),
+    )
 
 
 _SECTION = "[tool.ib_async.twsapi]"
@@ -67,9 +74,11 @@ _SECTION = "[tool.ib_async.twsapi]"
 def save(meta: TwsapiMeta, pyproject: Path | None = None) -> None:
     """Rewrite the pin in place, leaving every other byte of the file alone.
 
-    Only the ``version`` and ``archive_sha256`` keys inside
-    ``[tool.ib_async.twsapi]`` change, so the section's comments and the
-    rest of ``pyproject.toml`` survive a bump untouched.
+    Only the ``version``, ``archive_sha256`` and ``archive_url`` keys
+    inside ``[tool.ib_async.twsapi]`` change, so the section's comments
+    and the rest of ``pyproject.toml`` survive a bump untouched.
+    ``archive_url`` is written after ``archive_sha256`` when the pin has
+    one and removed when it does not.
     """
     pyproject = pyproject or PYPROJECT
     text = pyproject.read_text(encoding="utf-8")
@@ -87,5 +96,14 @@ def save(meta: TwsapiMeta, pyproject: Path | None = None) -> None:
         )
         if count != 1:
             raise ValueError(f"expected one {key!r} key in {_SECTION}, found {count}")
+
+    section = re.sub(r'^archive_url = "[^"]*"\n', "", section, flags=re.MULTILINE)
+    if meta.url:
+        section = re.sub(
+            r'^(archive_sha256 = "[^"]*"\n)',
+            rf'\1archive_url = "{meta.url}"\n',
+            section,
+            flags=re.MULTILINE,
+        )
 
     pyproject.write_text(text[:start] + section + text[end:], encoding="utf-8")

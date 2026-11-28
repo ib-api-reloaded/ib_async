@@ -4,12 +4,14 @@ Shared by ``scripts/generate_protos.py`` (build-time fetch into the
 cache) and ``scripts/twsapi.py`` (operator status / pin bump), so both
 read the archive through one path with one set of failure messages.
 
-IBKR serves the archive as ``twsapi_macunix.<version>.zip`` but prunes
-old versions from that location without notice, and the replacement
-installer page only offers unversioned ``latest`` / ``stable``
-builds. A pinned build therefore has to notice when its archive has
-disappeared and say what to do about it, rather than surfacing a bare
-``HTTPError`` from deep inside ``urllib``.
+IBKR served the archive as ``twsapi_macunix.<version>.zip`` up to
+10.51 and prunes old versions from that location without notice. From
+10.53 its installer page offers only unversioned ``latest`` / ``stable``
+installers. An archive here is either a zip or IBKR's Linux installer,
+which ``_twsapi_installer`` reads into the zip's layout; the SHA256 pin
+covers the bytes as downloaded. A pinned build has to notice when its
+archive has disappeared and say what to do about it, rather than
+surfacing a bare ``HTTPError`` from deep inside ``urllib``.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
+
+import _twsapi_installer as installer
 
 ARCHIVE_ENV = "IB_TWSAPI_ARCHIVE"
 INDEX_URL = "https://download2.interactivebrokers.com/installers/tws-api/index.html"
@@ -92,9 +96,13 @@ def layout_problems(data: bytes, dotted_version: str) -> list[str]:
     marker matching the version it was fetched as.
     """
     try:
+        data = as_zip(data)
+    except installer.UnreadableInstaller as exc:
+        return [f"unreadable installer: {exc}"]
+    try:
         names = set(zipfile.ZipFile(io.BytesIO(data)).namelist())
     except zipfile.BadZipFile:
-        return ["not a zip archive"]
+        return ["not a zip archive or installer"]
 
     problems = []
     if not any(n.startswith(PROTO_PREFIX) and n.endswith(".proto") for n in names):
@@ -104,7 +112,7 @@ def layout_problems(data: bytes, dotted_version: str) -> list[str]:
     else:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             marker = zf.read(VERSION_MEMBER).decode().strip()
-        if marker != f"API_Version={dotted_version}":
+        if not marker_matches(marker, dotted_version):
             problems.append(
                 f"{VERSION_MEMBER} says {marker!r}, expected "
                 f"'API_Version={dotted_version}'"
@@ -120,13 +128,28 @@ def extract(data: bytes, dest: Path) -> None:
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
 
-    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+    with zipfile.ZipFile(io.BytesIO(as_zip(data))) as zf:
         keep = [
             m
             for m in zf.namelist()
             if m.startswith(PROTO_PREFIX) or m == VERSION_MEMBER
         ]
         zf.extractall(dest, keep)
+
+
+def marker_matches(marker: str, dotted_version: str) -> bool:
+    """Whether a version marker names ``dotted_version``. The zip writes
+    ``API_Version=10.51.01``, the installer ``API_Version=1053.01``."""
+    name, _, version = marker.partition("=")
+    return name == "API_Version" and (
+        version.replace(".", "") == dotted_version.replace(".", "")
+    )
+
+
+def as_zip(data: bytes) -> bytes:
+    """``data`` in IBKR's zip layout: a zip as it is, an installer read
+    into it."""
+    return installer.to_zip(data) if installer.is_installer(data) else data
 
 
 def published_versions(html: str) -> dict[str, str]:

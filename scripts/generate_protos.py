@@ -86,7 +86,7 @@ def _cache_is_valid(meta: TwsapiMeta) -> bool:
     if not meta.version_file.is_file():
         return False
     raw = meta.version_file.read_text(encoding="utf-8").strip()
-    return raw == f"API_Version={meta.dotted_version}"
+    return archive.marker_matches(raw, meta.dotted_version)
 
 
 def _fetch_and_extract(meta: TwsapiMeta) -> None:

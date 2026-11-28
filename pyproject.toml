@@ -91,9 +91,11 @@ examples = [
 # ``scripts/twsapi.py``, and CI — they all read these constants so
 # the proto bindings stay version-locked.
 #
-# To bump: ``make twsapi-bump V=<version>`` fetches and checks the
-# archive, then rewrites the two keys below; follow with ``make
-# protos`` + tests. ``make twsapi-status`` lists the versions
+# To bump: ``make twsapi-bump V=<version> [FROM=<zip or installer>]``
+# fetches and checks the archive, then rewrites the keys below; follow
+# with ``make protos`` + tests. ``archive_url`` is present only when the
+# archive is not IBKR's per-version zip, such as the Linux installer
+# IBKR publishes from 10.53. ``make twsapi-status`` lists the versions
 # IBKR still serves. The IBKR URL convention drops the first dot of
 # ``API_Version``, so 10.51.01 → 1051.01.
 version = "1051.01"

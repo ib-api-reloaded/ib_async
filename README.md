@@ -161,9 +161,16 @@ IBKR prunes old TWS API archives without notice. `make twsapi-status`
 shows whether the pinned archive is still downloadable next to the
 versions IBKR currently publishes, and `make twsapi-bump V=<version>`
 re-pins after checking the new archive carries the `.proto` schemas
-the build needs. To keep building a pruned
-pin, point `IB_TWSAPI_ARCHIVE` at a copy of its archive; the pinned
-SHA256 still applies.
+the build needs. From 10.53 IBKR publishes only installers, so pass
+the Linux installer's URL:
+`make twsapi-bump V=1053.01 FROM=https://download2.interactivebrokers.com/installers/tws-api/latest/tws-api-latest-linux-x64.sh`.
+The installer is read, never run. To keep building a pruned pin, point
+`IB_TWSAPI_ARCHIVE` at a copy of its archive; the pinned SHA256 still
+applies.
+
+`make twsapi-unpack FROM=<zip or installer> DEST=<dir>` writes the whole
+TWS API to a directory, IBKR's Python, Java and C++ clients included,
+to read how IBKR's own client handles a protocol change.
 
 `make help` lists every target. `make build` regenerates the bindings
 before building, so the wheel and sdist never depend on what is already
