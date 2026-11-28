@@ -1057,10 +1057,25 @@ OPTIONS: tuple[OptionSpec, ...] = (
     OptionSpec(
         title="Overnight session",
         fields=("includeOvernight",),
-        summary="Includes overnight trading.",
+        summary="Lets the order fill during the extended trading hours and "
+        "the overnight session.",
+        usage="IBKR marks includeOvernight deprecated in TWS API 10.53, in "
+        "favor of includeEarly (Early pre-session). TWS / IB Gateway older "
+        "than 10.53 takes only includeOvernight.",
         stability=VENUE,
         products=("STK",),
         example='LimitOrder("BUY", 100, 50.00, includeOvernight=True)',
+    ),
+    OptionSpec(
+        title="Early pre-session",
+        fields=("includeEarly",),
+        summary="Lets the order fill during the extended trading hours and "
+        "the early pre-session.",
+        usage="Needs TWS / IB Gateway 10.53 or later; placeOrder raises "
+        "ValueError on an older one, which has no field for it.",
+        stability=VENUE,
+        products=("STK",),
+        example='LimitOrder("BUY", 100, 50.00, includeEarly=True)',
     ),
     OptionSpec(
         title="Cash quantity",

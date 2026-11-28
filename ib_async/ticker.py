@@ -209,6 +209,10 @@ class Ticker(Generic[EmptyT]):
     oddLotAskSize: float | EmptyT | None = None
     oddLotBidExch: str = ""
     oddLotAskExch: str = ""
+    # A combo's bid and ask implied from its legs (TickType 112 and 113),
+    # with generic tick 760 on a combo, from TWS / IB Gateway 10.53.
+    comboImpliedBid: float | EmptyT | None = None
+    comboImpliedAsk: float | EmptyT | None = None
     dividends: Dividends | None = None
     ticks: list[TickData[EmptyT]] = field(default_factory=list)
     tickByTicks: list[
@@ -344,6 +348,8 @@ class Ticker(Generic[EmptyT]):
                 self.oddLotAsk = unset
                 self.oddLotBidSize = unset
                 self.oddLotAskSize = unset
+                self.comboImpliedBid = unset
+                self.comboImpliedAsk = unset
             self.created = True
 
     def __eq__(self, other):

@@ -98,8 +98,9 @@ examples = [
 # IBKR publishes from 10.53. ``make twsapi-status`` lists the versions
 # IBKR still serves. The IBKR URL convention drops the first dot of
 # ``API_Version``, so 10.51.01 → 1051.01.
-version = "1051.01"
-archive_sha256 = "50a459ed09f0030df25125a177e57b69bdf576ec3a89fcb1f81fdff95bbf6316"
+version = "1053.01"
+archive_sha256 = "900d44ca088b4d80deb9003bd5cc481e54d543d819201095563e741065aeb3bb"
+archive_url = "https://download2.interactivebrokers.com/installers/tws-api/latest/tws-api-latest-linux-x64.sh"
 
 [tool.mypy]
 ignore_missing_imports = true

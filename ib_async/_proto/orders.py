@@ -419,6 +419,8 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.conditionsIgnoreRth = order.conditionsIgnoreRth
     if order.conditionsIncludeOvernight:
         proto.conditionsIncludeOvernight = order.conditionsIncludeOvernight
+    if order.conditionsIncludeEarly:
+        proto.conditionsIncludeEarly = order.conditionsIncludeEarly
 
     if order.modelCode:
         proto.modelCode = order.modelCode
@@ -524,6 +526,8 @@ def createOrderProto(order: Order) -> Order_pb2.Order:
         proto.bondAccruedInterest = _decimalToWireString(order.bondAccruedInterest)
     if order.includeOvernight:
         proto.includeOvernight = order.includeOvernight
+    if order.includeEarly:
+        proto.includeEarly = order.includeEarly
     if order.submitter:
         proto.submitter = order.submitter
 
@@ -958,6 +962,8 @@ def createOrder(
         order.conditionsIgnoreRth = proto.conditionsIgnoreRth
     if proto.HasField("conditionsIncludeOvernight"):
         order.conditionsIncludeOvernight = proto.conditionsIncludeOvernight
+    if proto.HasField("conditionsIncludeEarly"):
+        order.conditionsIncludeEarly = proto.conditionsIncludeEarly
     if proto.HasField("conditionsCancelOrder"):
         order.conditionsCancelOrder = proto.conditionsCancelOrder
 
@@ -1073,6 +1079,8 @@ def createOrder(
         order.bondAccruedInterest = safe_decimal(proto.bondAccruedInterest)
     if proto.HasField("includeOvernight"):
         order.includeOvernight = proto.includeOvernight
+    if proto.HasField("includeEarly"):
+        order.includeEarly = proto.includeEarly
     if proto.HasField("manualOrderIndicator"):
         order.manualOrderIndicator = proto.manualOrderIndicator
     if proto.HasField("submitter"):
@@ -1230,6 +1238,33 @@ def createOrderState(proto: OrderState_pb2.OrderState) -> OrderState:
         state.completedTime = proto.completedTime
     if proto.HasField("completedStatus"):
         state.completedStatus = proto.completedStatus
+    # The order's working state, from TWS / IB Gateway 10.53.
+    if proto.HasField("averagePrice"):
+        state.averagePrice = safe_decimal(proto.averagePrice)
+    if proto.HasField("submittedQuantity"):
+        state.submittedQuantity = safe_decimal(proto.submittedQuantity)
+    if proto.HasField("currentPrice"):
+        state.currentPrice = safe_decimal(proto.currentPrice)
+    if proto.HasField("brokerToClientAssignedNumber"):
+        state.brokerToClientAssignedNumber = proto.brokerToClientAssignedNumber
+    if proto.HasField("exchangeToFund"):
+        state.exchangeToFund = proto.exchangeToFund
+    if proto.HasField("recentSubmitModifyTime"):
+        state.recentSubmitModifyTime = proto.recentSubmitModifyTime
+    if proto.HasField("submitTime"):
+        state.submitTime = proto.submitTime
+    if proto.HasField("routingStrategy"):
+        state.routingStrategy = proto.routingStrategy
+    if proto.HasField("assignedTo"):
+        state.assignedTo = proto.assignedTo
+    if proto.HasField("trailingKey"):
+        state.trailingKey = proto.trailingKey
+    if proto.HasField("crossType"):
+        state.crossType = proto.crossType
+    if proto.HasField("ticketOwnerSession"):
+        state.ticketOwnerSession = proto.ticketOwnerSession
+    if proto.HasField("scaleProgress"):
+        state.scaleProgress = proto.scaleProgress
     return state
 
 

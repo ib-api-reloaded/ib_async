@@ -9,7 +9,8 @@ Version 3.0.0 (Unreleased)
 
 The v3.0 release lands the protobuf wire-protocol migration, shifts
 financial numerics to ``Decimal | None`` end-to-end, and conforms to
-IBKR's protocol for TWS API 10.51 (TWS / Gateway server version 226).
+IBKR's protocol for TWS API 10.51 to 10.53 (TWS / Gateway server
+versions 226 to 228).
 The full upgrade guide with examples lives at ``docs/migration/v3.md``.
 
 **The most likely-to-hit changes**
@@ -195,6 +196,28 @@ The full upgrade guide with examples lives at ``docs/migration/v3.md``.
   order's conditions also evaluate during the overnight session. Sent
   and received on the protobuf order path; ``False`` stays off the
   wire.
+* **TWS API 10.53** (server version 228). TWS / IB Gateway 10.51
+  still connects, at 226; these need 10.53:
+
+  * ``Order.includeEarly`` and ``Order.conditionsIncludeEarly``, the
+    early pre-session. On an older TWS / IB Gateway, ``placeOrder``
+    raises ``ValueError`` for them and sends nothing, as IBKR's own
+    client does, because the older server has no field for them. IBKR
+    marks ``includeOvernight`` and ``conditionsIncludeOvernight``
+    deprecated in 10.53, in favor of these; both still work.
+  * ``Ticker.comboImpliedBid`` and ``Ticker.comboImpliedAsk``, a
+    combo's bid and ask implied from its legs (tick types 112 and
+    113), with generic tick ``760`` on a combo.
+  * ``OrderState`` fields describing the order's working state:
+    ``averagePrice``, ``submittedQuantity`` and ``currentPrice``
+    (``Decimal | None``), ``brokerToClientAssignedNumber``,
+    ``exchangeToFund``, ``recentSubmitModifyTime``, ``submitTime``,
+    ``routingStrategy``, ``assignedTo``, ``trailingKey``, ``crossType``,
+    ``ticketOwnerSession`` and ``scaleProgress``.
+
+  The build pins IBKR's 10.53.01 Linux installer, since IBKR no longer
+  publishes the TWS API as a zip; ``make twsapi-unpack`` writes the
+  whole TWS API from it.
 * **``ContractDetails.settlementMethod``** (TWS API 10.49): how the
   contract settles on expiry, ``"Physical"`` or ``"Cash"``.
 * **``Execution.submitter``** (server version 198+): the identity of

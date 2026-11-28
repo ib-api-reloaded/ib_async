@@ -142,9 +142,12 @@ class Order:
     conditions: list[OrderCondition] = field(default_factory=list)
     conditionsCancelOrder: bool = False
     conditionsIgnoreRth: bool = False
-    # Let conditions also evaluate during the overnight session. Only
-    # the protobuf order path carries it; the text wire has no slot.
+    # Let conditions also evaluate during the overnight session. IBKR
+    # marks it deprecated in 10.53, in favor of conditionsIncludeEarly.
     conditionsIncludeOvernight: bool = False
+    # Let conditions also evaluate during the early pre-session. Needs
+    # TWS / IB Gateway 10.53 (server version 228).
+    conditionsIncludeEarly: bool = False
     extOperator: str = ""
     # Attached-order (stop-loss / profit-take) cross-references. The wire
     # ships them on the ``PlaceOrderRequest.attachedOrders`` sub-message
@@ -181,14 +184,16 @@ class Order:
     competeAgainstBestOffset: Decimal | None = None
     midOffsetAtWhole: Decimal | None = None
     midOffsetAtHalf: Decimal | None = None
-    # Compliance / origination fields IBKR added in the 195-198 gate
-    # window. Read on receive (binary ``openOrder`` / protobuf
-    # ``OpenOrder``), written on send (binary ``placeOrder``) when the
-    # negotiated server supports the respective gate.
+    # Compliance / origination fields. Read on receive, written on send.
     customerAccount: str = ""
     professionalCustomer: bool = False
     bondAccruedInterest: Decimal | None = None
+    # Fill during the extended trading hours and the overnight session.
+    # IBKR marks it deprecated in 10.53, in favor of includeEarly.
     includeOvernight: bool = False
+    # Fill during the extended trading hours and the early pre-session.
+    # Needs TWS / IB Gateway 10.53 (server version 228).
+    includeEarly: bool = False
     # ``manualOrderIndicator`` pairs with ``extOperator`` for CME-tagged
     # placements. ``None`` means unset; the wire encoder skips the
     # field at send time.
@@ -517,6 +522,21 @@ class OrderState:
     orderAllocations: list[OrderAllocation] = field(default_factory=list)
     completedTime: str = ""
     completedStatus: str = ""
+    # The order's working state, sent by TWS / IB Gateway 10.53 and later.
+    # IBKR's schema describes each in a few words and no more.
+    averagePrice: Decimal | None = None  # the average fill price
+    submittedQuantity: Decimal | None = None  # the quantity submitted
+    currentPrice: Decimal | None = None  # the current price of the order
+    brokerToClientAssignedNumber: str = ""
+    exchangeToFund: str = ""
+    recentSubmitModifyTime: str = ""  # when last submitted or modified
+    submitTime: str = ""
+    routingStrategy: str = ""
+    assignedTo: str = ""  # the user or desk the order is assigned to
+    trailingKey: str = ""
+    crossType: str = ""
+    ticketOwnerSession: str = ""
+    scaleProgress: int | None = None  # the progress of a scale order
     # whatIf previews only: the broker's REFUSAL of the preview, which arrives
     # as an error reply instead of an openOrder answer (e.g. 201 "Order
     # rejected - reason:MARGIN CALCULATION IS NOT SUPPORTED FOR THIS

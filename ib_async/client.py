@@ -14,7 +14,11 @@ from google.protobuf.message import Message
 from . import _pb_msgids as _M
 from . import _proto as _converters
 from ._pb_msgids import PROTOBUF_MSG_ID
-from ._server_versions import MAX_CLIENT_VER, MIN_CLIENT_VER
+from ._server_versions import (
+    MAX_CLIENT_VER,
+    MIN_CLIENT_VER,
+    UNIFIED_VERSION_EARLY_SESSION,
+)
 from .connection import Connection
 from .decoder import Decoder
 from .objects import ConnectionStats, WshEventData
@@ -574,6 +578,24 @@ class Client:
         # order before the request is built; None leaves it out.
         if not order.orderType.startswith("VOL"):
             order.volatility = None
+
+        # A server below 228 has no field for these and would drop them.
+        # IBKR's own client refuses the order in the same case.
+        if self._serverVersion < UNIFIED_VERSION_EARLY_SESSION:
+            early = [
+                name
+                for name, value in (
+                    ("includeEarly", order.includeEarly),
+                    ("conditionsIncludeEarly", order.conditionsIncludeEarly),
+                )
+                if value
+            ]
+            if early:
+                raise ValueError(
+                    f"server version {self._serverVersion} has no field for "
+                    f"{' and '.join(early)}; TWS / IB Gateway 10.53 (server "
+                    f"version {UNIFIED_VERSION_EARLY_SESSION}) has"
+                )
 
         self._request(
             _M.PLACE_ORDER,

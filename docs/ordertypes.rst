@@ -983,13 +983,30 @@ Lets the order also trigger or fill outside regular trading hours.
 Overnight session
 ^^^^^^^^^^^^^^^^^
 
-Includes overnight trading.
+Lets the order fill during the extended trading hours and the overnight session.
+
+IBKR marks includeOvernight deprecated in TWS API 10.53, in favor of includeEarly (Early pre-session). TWS / IB Gateway older than 10.53 takes only includeOvernight.
 
 .. code-block:: python
 
     LimitOrder("BUY", 100, 50.00, includeOvernight=True)
 
 - Fields: ``includeOvernight``
+- Products: STK
+- Stability: venue
+
+Early pre-session
+^^^^^^^^^^^^^^^^^
+
+Lets the order fill during the extended trading hours and the early pre-session.
+
+Needs TWS / IB Gateway 10.53 or later; placeOrder raises ValueError on an older one, which has no field for it.
+
+.. code-block:: python
+
+    LimitOrder("BUY", 100, 50.00, includeEarly=True)
+
+- Fields: ``includeEarly``
 - Products: STK
 - Stability: venue
 

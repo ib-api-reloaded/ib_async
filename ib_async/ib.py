@@ -1320,6 +1320,11 @@ class IB(Generic[EmptyT]):
         Args:
             contract: Contract to use for order.
             order: The order to be placed.
+
+        Raises:
+            ValueError: ``includeEarly`` or ``conditionsIncludeEarly`` is
+                set and TWS / IB Gateway is older than 10.53, which has no
+                field for them. Nothing is sent.
         """
         orderId = order.orderId or self.client.getReqId()
         self.client.placeOrder(orderId, contract, order)
@@ -2061,6 +2066,9 @@ class IB(Generic[EmptyT]):
                 595    ``volumeRate3Min``, ``volumeRate5Min``,
                        ``volumeRate10Min`` (the volume traded in the last
                        3, 5 and 10 minutes)
+                760    ``comboImpliedBid``, ``comboImpliedAsk`` (for a
+                       combo, implied from its legs; TWS / IB Gateway
+                       10.53 and later)
                 =====  ================================================
 
             snapshot: If True then request a one-time snapshot, otherwise

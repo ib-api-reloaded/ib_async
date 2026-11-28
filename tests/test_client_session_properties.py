@@ -2,11 +2,11 @@
 
 The tests replace the socket with a recording connection and pass the
 server's frames to the client's data handler. The handshake property
-runs at server version 226, the only one the client accepts. It sends
-nextValidId and managedAccounts in either order as protobuf messages, and
-then connects a second session after a disconnect. The disconnect tests close the socket from
-the peer side and disconnect from the client side in each connection
-state.
+runs at the newest server version the client offers. It sends
+nextValidId and managedAccounts in either order as protobuf messages,
+and then connects a second session after a disconnect. The disconnect
+tests close the socket from the peer side and disconnect from the
+client side in each connection state.
 """
 
 from __future__ import annotations

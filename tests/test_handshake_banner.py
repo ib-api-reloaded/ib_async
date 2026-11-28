@@ -2,7 +2,8 @@
 
 TWS negotiates ``min(server max, client max)`` from the ``v{Min}..{Max}``
 banner, and IBKR has announced TWS API 10.51 (server version 226) as
-the minimum it will accept. Other tests rebuild the banner format by
+the minimum it will accept. The client offers up to 228, TWS API 10.53.
+Other tests rebuild the banner format by
 hand; these capture the bytes the real connect path sends, so a cap
 that drifts from the protocol IBKR publishes shows up here.
 """
@@ -52,7 +53,7 @@ def _sentBanner() -> bytes:
     return banner
 
 
-def test_banner_asks_for_ibkr_10_51_server_version():
-    body = b"v226..226"
+def test_banner_asks_for_server_versions_10_51_to_10_53():
+    body = b"v226..228"
 
     assert _sentBanner() == b"API\0" + struct.pack(">I", len(body)) + body

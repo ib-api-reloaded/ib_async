@@ -141,13 +141,14 @@ PRICE_TICK_MAP: Final[TickDict] = {
     99: "etfNavLow",
     101: "estimatedIpoMidpoint",
     102: "finalIpoLast",
-    # Odd-lot quotes (TickType 105 ODD_LOT_BID / 106 ODD_LOT_ASK).
-    # IBKR added the odd-lot generic-tick family for retail-sized prints
-    # that round-lot consolidated quotes hide. Without these mappings,
-    # the assert in :meth:`Wrapper.priceSizeTick` would fire mid-stream
-    # the moment a server delivers an odd-lot price.
+    # Odd-lot quotes (TickType 105 ODD_LOT_BID / 106 ODD_LOT_ASK), for
+    # retail-sized orders that round-lot consolidated quotes hide.
     105: "oddLotBid",
     106: "oddLotAsk",
+    # A combo's bid and ask implied from its legs (generic tick 760),
+    # from TWS / IB Gateway 10.53 (server version 227).
+    112: "comboImpliedBid",
+    113: "comboImpliedAsk",
 }
 
 

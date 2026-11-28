@@ -178,14 +178,18 @@ MIN_SERVER_VER_ODD_LOT_BID_ASK_QUOTES: Final = 225
 # IBKR switched gate naming from MIN_SERVER_VER_* to UNIFIED_VERSION_*
 # here; the name keeps IBKR's spelling so the two stay greppable.
 UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM: Final = 226
+# TWS / IB Gateway 10.53: tick types 112 and 113 (generic tick 760).
+UNIFIED_VERSION_COMBO_IMPLIED_BID_ASK: Final = 227
+# TWS / IB Gateway 10.53: Order.includeEarly and conditionsIncludeEarly.
+UNIFIED_VERSION_EARLY_SESSION: Final = 228
 
 # --- Client-side handshake bounds
 # The oldest server version this client accepts: TWS / IB Gateway 10.51,
 # the minimum IBKR accepts connections from. Every message has a protobuf
 # form there, so the client sends and reads protobuf only.
 MIN_CLIENT_VER: Final = UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM
-# MAX_CLIENT_VER tracks the latest IBKR feature gate the codebase has
-# audited and patched for. Bumping this ALSO requires patches to every
-# conditional read/write at the new gate — see ``client.py`` and
-# ``decoder.py``. Do not bump without sequencing those fixes.
-MAX_CLIENT_VER: Final = UNIFIED_VERSION_COND_ORDER_WITH_OVERNIGHT_PARAM
+# The newest server version this client speaks, that of TWS API 10.53.
+# TWS answers with the lower of its own and this, so a field added
+# above MIN_CLIENT_VER needs a check against the server's version where
+# it is sent (Client.placeOrder for the early session fields).
+MAX_CLIENT_VER: Final = UNIFIED_VERSION_EARLY_SESSION
